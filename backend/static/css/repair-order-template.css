@@ -1,0 +1,442 @@
+/* ===== BASE ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Segoe UI", Arial, sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  background: #f8f9fa;
+  min-height: 100vh;
+  color: #2d3748;
+  overflow-x: hidden;
+}
+
+/* ===== BACK BUTTON ===== */
+.back-btn {
+  padding: 12px 20px;
+  background: #4a5568;
+  color: #fff;
+  text-transform: uppercase;
+  border-radius: 8px;
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.back-btn::before {
+  content: "←";
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.back-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  background: #2d3748;
+}
+
+/* ===== REPAIR ORDER CONTAINER ===== */
+.repair-order-container {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* ===== HEADER ===== */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25px 30px;
+  background-color: #fff;
+  color: #2d3748;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.05);
+  transform: skewX(-15deg);
+}
+
+.logo {
+  width: 140px;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+  position: relative;
+  z-index: 1;
+}
+
+.repair-order-info {
+  text-align: right;
+  position: relative;
+  z-index: 1;
+}
+
+.repair-order-title {
+  font-size: 36px;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  color: black;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+
+.repair-order-id {
+  font-size: 18px;
+  font-weight: 700;
+  color: black;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+}
+
+.repair-order-date {
+  font-size: 14px;
+  color: black;
+}
+
+/* ===== CONTENT ===== */
+.content {
+  padding: 40px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== INFO SECTION ===== */
+.info-section {
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+  background: #ffffff;
+  padding: 25px;
+  margin-bottom: 30px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.info-box {
+  flex: 1;
+}
+
+.info-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: black;
+  text-transform: uppercase;
+  border-bottom: 2px solid black;
+  padding-bottom: 8px;
+  margin-bottom: 15px;
+  letter-spacing: 0.5px;
+}
+
+.info-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #2d3748;
+}
+
+.info-content span {
+  font-weight: 600;
+  color: black;
+}
+
+/* ===== SECTION TITLES ===== */
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: black;
+  text-transform: uppercase;
+  border-bottom: 2px solid #4a5568;
+  padding-bottom: 8px;
+  margin-bottom: 15px;
+  letter-spacing: 0.5px;
+}
+
+/* ===== PROBLEM SECTION ===== */
+.problem-section {
+  background: #f8f9fa;
+  padding: 20px;
+  margin-bottom: 25px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.problem-content {
+  background: white;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  min-height: 60px;
+  line-height: 1.6;
+  color: #2d3748;
+}
+
+/* ===== PARTS & LABOUR SECTIONS ===== */
+.parts-section,
+.labour-section {
+  margin-bottom: 25px;
+}
+
+.table-container {
+  width: 100%;
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 15px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th {
+  background: #4a5568;
+  color: white;
+  font-size: 14px;
+  padding: 15px 20px;
+  text-align: left;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+td {
+  font-size: 13px;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(74, 85, 104, 0.1);
+  color: #2d3748;
+}
+
+/* ===== ESTIMATE SECTION ===== */
+.estimate-section {
+  background: #f8f9fa;
+  padding: 20px;
+  margin-bottom: 25px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.estimate-details {
+  background: white;
+  padding: 20px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.estimate-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  margin-bottom: 8px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.estimate-row.total {
+  font-weight: 700;
+  font-size: 18px;
+  margin-bottom: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-top: 2px solid #4a5568;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.estimate-row span:last-child {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* ===== STATUS SECTION ===== */
+.status-section {
+  background: #f8f9fa;
+  padding: 20px;
+  margin-bottom: 25px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.status-timeline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 20px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  position: relative;
+}
+
+.status-timeline::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #e2e8f0;
+  z-index: 1;
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 2;
+  background: white;
+  padding: 10px;
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  justify-content: center;
+  border: 2px solid #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+.status-item.completed {
+  background: #48bb78;
+  border-color: #38a169;
+  color: white;
+}
+
+.status-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ===== ASSIGNED WORKER SECTION ===== */
+.assigned-worker-section {
+  background: #f8f9fa;
+  padding: 20px;
+  margin-bottom: 25px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.worker-info {
+  background: white;
+  padding: 20px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.worker-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2d3748;
+  text-align: center;
+  padding: 15px;
+  background: #f7fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+/* ===== FOOTER ===== */
+.footer {
+  background: #4a5568;
+  color: white;
+  padding: 25px 40px;
+  text-align: center;
+}
+
+.footer-content {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ===== RESPONSIVE BREAKPOINTS ===== */
+@media screen and (max-width: 768px) {
+  .repair-order-container {
+    margin: 0;
+    border-radius: 0;
+    width: 100%;
+  }
+
+  .header {
+    flex-direction: column;
+    text-align: center;
+    padding: 20px 15px;
+  }
+
+  .info-section {
+    flex-direction: column;
+  }
+
+  .status-timeline {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .status-timeline::before {
+    display: none;
+  }
+
+  .status-item {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .info-box,
+  th,
+  td,
+  .estimate-row {
+    text-align: center;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .back-btn {
+    padding: 8px 12px;
+    font-size: 11px;
+    top: 10px;
+    left: 10px;
+  }
+
+  th {
+    font-size: 12px;
+    padding: 8px 6px;
+  }
+
+  td {
+    font-size: 11px;
+    padding: 6px;
+  }
+}

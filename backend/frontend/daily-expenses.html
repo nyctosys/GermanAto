@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Daily Expenses & Cash Management - Auto Trader</title>
+    <link rel="stylesheet" href="static/css/dailyExpenses.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <h1>Daily Expenses & Cash Management</h1>
+        <p>Track and manage your daily expenses and cash received</p>
+      </header>
+
+      <!-- Add Expense Form -->
+      <div class="expense-form-section">
+        <h2>Add New Expense</h2>
+        <form id="expense-form" class="expense-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="expense-date">Date</label>
+              <input type="date" id="expense-date" name="date" required />
+            </div>
+            <div class="form-group">
+              <label for="expense-category">Category</label>
+              <select id="expense-category" name="category" required>
+                <option value="">Select Category</option>
+                <option value="Fuel">Fuel</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Parts">Parts</option>
+                <option value="Labor">Labor</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Office Supplies">Office Supplies</option>
+                <option value="Transportation">Transportation</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="expense-description">Description</label>
+              <input
+                type="text"
+                id="expense-description"
+                name="description"
+                placeholder="Enter expense description"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="expense-amount">Amount (PKR)</label>
+              <input
+                type="number"
+                id="expense-amount"
+                name="amount"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="expense-notes">Notes (Optional)</label>
+            <textarea
+              id="expense-notes"
+              name="notes"
+              placeholder="Additional notes about the expense"
+            ></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Add Expense</button>
+            <button type="button" id="clear-form" class="btn btn-secondary">
+              Clear Form
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Add Cash Received Form -->
+      <div class="cash-received-section">
+        <h2>Add Cash Received</h2>
+        <form id="cash-received-form" class="cash-received-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cash-date">Date</label>
+              <input type="date" id="cash-date" name="date" required />
+            </div>
+            <div class="form-group">
+              <label for="cash-amount">Amount (PKR)</label>
+              <input
+                type="number"
+                id="cash-amount"
+                name="amount"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cash-payment-method">Payment Method</label>
+              <select id="cash-payment-method" name="payment_method" required>
+                <option value="">Select Payment Method</option>
+                <option value="Cash">Cash</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Card Payment">Card Payment</option>
+                <option value="Cheque">Cheque</option>
+                <option value="Mobile Payment">Mobile Payment</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="cash-description">Description</label>
+              <input
+                type="text"
+                id="cash-description"
+                name="description"
+                placeholder="Enter description of cash received"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="grid-column: 1 / -1">
+              <label for="cash-notes">Notes (Optional)</label>
+              <input
+                type="text"
+                id="cash-notes"
+                name="notes"
+                placeholder="Additional notes"
+              />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-success">
+              Add Cash Received
+            </button>
+            <button
+              type="button"
+              id="clear-cash-form"
+              class="btn btn-secondary"
+            >
+              Clear Form
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Search and Filter Section -->
+      <div class="search-section">
+        <div class="search-row">
+          <div class="search-group">
+            <label for="search-keyword">Search by Description</label>
+            <input
+              type="text"
+              id="search-keyword"
+              placeholder="Search expenses..."
+            />
+          </div>
+          <div class="search-group">
+            <label for="search-category">Filter by Category</label>
+            <select id="search-category">
+              <option value="">All Categories</option>
+              <option value="Fuel">Fuel</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Parts">Parts</option>
+              <option value="Labor">Labor</option>
+              <option value="Utilities">Utilities</option>
+              <option value="Office Supplies">Office Supplies</option>
+              <option value="Transportation">Transportation</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="search-group">
+            <label for="search-date">Filter by Date</label>
+            <input type="date" id="search-date" />
+          </div>
+          <div class="search-group">
+            <button id="clear-search" class="btn btn-secondary">
+              Clear Search
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary Section -->
+      <div class="summary-section">
+        <div class="summary-card">
+          <h3>Today's Expenses</h3>
+          <p id="today-amount">PKR 0.00</p>
+        </div>
+        <div class="summary-card">
+          <h3>Today's Cash Received</h3>
+          <p id="today-cash-amount">PKR 0.00</p>
+        </div>
+        <div class="summary-card">
+          <h3>Balance (Cash - Expenses)</h3>
+          <p id="today-balance-amount">PKR 0.00</p>
+        </div>
+      </div>
+
+      <!-- Expenses Table -->
+      <div class="expenses-section">
+        <h2>Expenses List</h2>
+        <div class="table-container">
+          <table id="expenses-table" class="expenses-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="expenses-tbody">
+              <!-- Expenses will be loaded here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Cash Received Table -->
+      <div class="cash-received-list-section">
+        <h2>Cash Received List</h2>
+        <div class="table-container">
+          <table id="cash-received-table" class="cash-received-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Payment Method</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cash-received-tbody">
+              <!-- Cash received records will be loaded here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Back Button -->
+    <a href="#" id="back-btn" class="back-btn">
+      <span>Back</span>
+    </a>
+
+    <!-- Edit Expense Modal -->
+    <div id="edit-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Edit Expense</h3>
+          <span class="close">&times;</span>
+        </div>
+        <form id="edit-expense-form" class="expense-form">
+          <input type="hidden" id="edit-expense-id" name="id" />
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-expense-date">Date</label>
+              <input type="date" id="edit-expense-date" name="date" required />
+            </div>
+            <div class="form-group">
+              <label for="edit-expense-category">Category</label>
+              <select id="edit-expense-category" name="category" required>
+                <option value="">Select Category</option>
+                <option value="Fuel">Fuel</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Parts">Parts</option>
+                <option value="Labor">Labor</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Office Supplies">Office Supplies</option>
+                <option value="Transportation">Transportation</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-expense-description">Description</label>
+              <input
+                type="text"
+                id="edit-expense-description"
+                name="description"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="edit-expense-amount">Amount (PKR)</label>
+              <input
+                type="number"
+                id="edit-expense-amount"
+                name="amount"
+                step="0.01"
+                min="0"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="edit-expense-notes">Notes (Optional)</label>
+            <textarea id="edit-expense-notes" name="notes"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              Update Expense
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              onclick="closeEditModal()"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Cash Received Modal -->
+    <div id="edit-cash-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Edit Cash Received</h3>
+          <span class="close" onclick="closeEditCashModal()">&times;</span>
+        </div>
+        <form id="edit-cash-received-form" class="cash-received-form">
+          <input type="hidden" id="edit-cash-id" name="id" />
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-cash-date">Date</label>
+              <input type="date" id="edit-cash-date" name="date" required />
+            </div>
+            <div class="form-group">
+              <label for="edit-cash-amount">Amount (PKR)</label>
+              <input
+                type="number"
+                id="edit-cash-amount"
+                name="amount"
+                step="0.01"
+                min="0"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-cash-payment-method">Payment Method</label>
+              <select
+                id="edit-cash-payment-method"
+                name="payment_method"
+                required
+              >
+                <option value="">Select Payment Method</option>
+                <option value="Cash">Cash</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Card Payment">Card Payment</option>
+                <option value="Cheque">Cheque</option>
+                <option value="Mobile Payment">Mobile Payment</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-cash-description">Description</label>
+              <input
+                type="text"
+                id="edit-cash-description"
+                name="description"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="grid-column: 1 / -1">
+              <label for="edit-cash-notes">Notes (Optional)</label>
+              <input
+                type="text"
+                id="edit-cash-notes"
+                name="notes"
+                placeholder="Additional notes"
+              />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-success">
+              Update Cash Received
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              onclick="closeEditCashModal()"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="static/js/auth.js"></script>
+    <script src="static/js/dailyExpenses.js"></script>
+  </body>
+</html>

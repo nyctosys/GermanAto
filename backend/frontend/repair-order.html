@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Repair Order - GermanATO</title>
+    <link rel="stylesheet" href="static/css/repair-order.css" />
+  </head>
+  <body>
+    <a href="#" id="back-btn" class="back-btn"><span>Back</span></a>
+
+    <div class="container">
+      <div class="header">
+        <h1 id="page-title">Create Repair Order</h1>
+        <p id="page-description">Generate repair order from approved quote</p>
+      </div>
+
+      <form id="repair-order-form" class="repair-order-form">
+        <!-- Customer Information -->
+        <div class="form-section">
+          <h3>Customer Information</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="customer-name">Customer Name *</label>
+              <input
+                type="text"
+                id="customer-name"
+                name="customer_name"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="customer-phone">Phone Number *</label>
+              <input
+                type="tel"
+                id="customer-phone"
+                name="customer_phone"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="customer-address">Address *</label>
+              <input
+                type="text"
+                id="customer-address"
+                name="customer_address"
+                required
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Vehicle Information -->
+        <div class="form-section">
+          <h3>Vehicle Information</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="reg-number">Registration Number *</label>
+              <input
+                type="text"
+                id="reg-number"
+                name="customer_reg_no"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="made">Make/Model *</label>
+              <input type="text" id="made" name="customer_made" required />
+            </div>
+            <div class="form-group">
+              <label for="mileage">Mileage</label>
+              <input type="text" id="mileage" name="customer_mileage" />
+            </div>
+            <div class="form-group">
+              <label for="vin">VIN</label>
+              <input type="text" id="vin" name="customer_vin" />
+            </div>
+            <div class="form-group">
+              <label for="color">Color</label>
+              <input type="text" id="color" name="customer_color" />
+            </div>
+            <div class="form-group">
+              <label for="chasis">Chassis</label>
+              <input type="text" id="chasis" name="customer_chasis" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Problem Description -->
+        <div class="form-section">
+          <h3>Problem Description</h3>
+          <div class="form-group">
+            <label for="problem-description">Describe the problem *</label>
+            <textarea
+              id="problem-description"
+              name="problem_description"
+              rows="4"
+              required
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- Assigned Worker -->
+        <div class="form-section">
+          <h3>Assigned Worker</h3>
+          <div class="form-group">
+            <label for="worker-name">Worker Name</label>
+            <input type="text" id="worker-name" name="worker_name" />
+          </div>
+        </div>
+
+        <!-- Parts Section -->
+        <div class="form-section">
+          <h3>Parts Required</h3>
+          <div id="parts-container">
+            <!-- Parts will be added here dynamically -->
+          </div>
+          <button type="button" id="add-part-btn" class="add-btn">
+            + Add Part
+          </button>
+        </div>
+
+        <!-- Labour Section -->
+        <div class="form-section">
+          <h3>Labour Tasks</h3>
+          <div id="labour-container">
+            <!-- Labour tasks will be added here dynamically -->
+          </div>
+          <button type="button" id="add-labour-btn" class="add-btn">
+            + Add Labour Task
+          </button>
+        </div>
+
+        <!-- Estimate Summary -->
+        <div class="form-section">
+          <h3>Estimate Summary</h3>
+          <div class="estimate-summary">
+            <div class="estimate-row">
+              <span>Parts Total:</span>
+              <span id="parts-total">0.00 PKR</span>
+            </div>
+            <div class="estimate-row">
+              <span>Labour Total:</span>
+              <span id="labour-total">0.00 PKR</span>
+            </div>
+            <div class="estimate-row total">
+              <span>Total Estimate:</span>
+              <span id="total-estimate">0.00 PKR</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="form-actions">
+          <button type="submit" class="submit-btn" id="submit-btn">
+            Create Repair Order
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <script src="static/js/repairOrder.js"></script>
+  </body>
+</html>

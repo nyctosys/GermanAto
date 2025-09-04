@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Inventory Management</title>
+    <link rel="stylesheet" href="../static/css/inventory.css" />
+  </head>
+  <body>
+    <a href="#" id="back-btn" class="back-btn">
+      <span>Back</span>
+    </a>
+
+    <div class="container">
+      <div class="header">
+        <h1>Inventory Management</h1>
+        <p>Manage your product inventory and stock levels</p>
+      </div>
+
+      <div class="main-content">
+        <div class="controls-section">
+          <div class="controls-left">
+            <button class="add-btn" onclick="openAddModal()">
+              <span>+</span>
+              Add New Item
+            </button>
+            <button class="restock-btn" onclick="openRestockModal()">
+              <span>📦</span>
+              Restock Item
+            </button>
+            <button
+              class="nav-btn"
+              onclick="window.location.href='repair-orders-management.html?from=inventory'"
+            >
+              <span>🔧</span>
+              Repair Orders
+            </button>
+            <button class="low-stock-btn" onclick="toggleLowStockView()">
+              <span>⚠️</span>
+              Low Stock Items
+            </button>
+            <button class="print-btn" onclick="openPrintSheet()">
+              <span>🖨️</span>
+              Print Sheet
+            </button>
+          </div>
+          <div class="search-section">
+            <input
+              type="text"
+              id="search-input"
+              placeholder="Search inventory..."
+              class="search-input"
+            />
+            <button class="search-btn" onclick="searchInventory()">
+              Search
+            </button>
+          </div>
+        </div>
+
+        <!-- Low Stock Section -->
+        <div
+          id="low-stock-section"
+          class="low-stock-section"
+          style="display: none"
+        >
+          <!-- Urgent Items Section (Negative Stock) -->
+          <div class="urgent-section">
+            <div class="section-header urgent-header">
+              <h3>🚨 URGENT - Negative Stock Items</h3>
+              <p>Critical items with negative inventory levels</p>
+            </div>
+            <div class="urgent-grid" id="urgent-grid">
+              <!-- Urgent items will be loaded here -->
+            </div>
+          </div>
+
+          <!-- Regular Low Stock Section -->
+          <div class="low-stock-section-regular">
+            <div class="section-header">
+              <h3>⚠️ Low Stock Items</h3>
+              <p>Items that need to be reordered</p>
+            </div>
+            <div class="low-stock-grid" id="low-stock-grid">
+              <!-- Low stock items will be loaded here -->
+            </div>
+          </div>
+        </div>
+
+        <div class="inventory-grid" id="inventory-grid">
+          <!-- Inventory items will be loaded here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit Item Modal -->
+    <div id="item-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title">Add New Item</h2>
+          <span class="close" onclick="closeModal()">&times;</span>
+        </div>
+        <form id="item-form">
+          <div class="form-group">
+            <label for="item-name">Item Name</label>
+            <input type="text" id="item-name" name="name" required />
+          </div>
+          <div class="form-group">
+            <label for="item-category">Category</label>
+            <select id="item-category" name="category" required>
+              <option value="">Select Category</option>
+              <option value="parts">Auto Parts</option>
+              <option value="tools">Tools</option>
+              <option value="fluids">Fluids & Lubricants</option>
+              <option value="accessories">Accessories</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="item-quantity">Quantity</label>
+              <input
+                type="number"
+                id="item-quantity"
+                name="quantity"
+                min="0"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="item-price">Price (PKR)</label>
+              <input
+                type="number"
+                id="item-price"
+                name="price"
+                min="0"
+                step="0.01"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="item-reorder-level">Reorder Level</label>
+              <input
+                type="number"
+                id="item-reorder-level"
+                name="reorder_level"
+                min="0"
+                value="5"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="item-reorder-quantity">Reorder Quantity</label>
+              <input
+                type="number"
+                id="item-reorder-quantity"
+                name="reorder_quantity"
+                min="1"
+                value="10"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="item-description">Description</label>
+            <textarea
+              id="item-description"
+              name="description"
+              rows="3"
+            ></textarea>
+          </div>
+          <div class="form-group">
+            <label for="item-location">Storage Location</label>
+            <input
+              type="text"
+              id="item-location"
+              name="location"
+              placeholder="e.g., Shelf A1, Warehouse B"
+            />
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" onclick="closeModal()">
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Save Item</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Restock Item Modal -->
+    <div id="restock-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Restock Item</h2>
+          <span class="close" onclick="closeRestockModal()">&times;</span>
+        </div>
+        <form id="restock-form">
+          <div class="form-group">
+            <label for="restock-product">Select Product *</label>
+            <div class="searchable-select">
+              <input
+                type="text"
+                id="restock-product-search"
+                placeholder="Type to search products..."
+                autocomplete="off"
+                required
+              />
+              <div
+                id="restock-product-dropdown"
+                class="searchable-dropdown"
+                style="display: none"
+              >
+                <!-- Search results will be populated here -->
+              </div>
+              <input
+                type="hidden"
+                id="restock-product"
+                name="product_id"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="restock-quantity">Received Quantity *</label>
+            <input
+              type="number"
+              id="restock-quantity"
+              name="quantity"
+              min="1"
+              placeholder="Enter quantity received"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="restock-notes">Notes</label>
+            <textarea
+              id="restock-notes"
+              name="notes"
+              rows="3"
+              placeholder="Optional: Add notes about this restock (e.g., supplier, batch number, quality notes)"
+            ></textarea>
+          </div>
+          <div class="form-actions">
+            <button
+              type="button"
+              class="cancel-btn"
+              onclick="closeRestockModal()"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Restock Item</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <footer>
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="../static/js/auth.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Check authentication and page access
+        if (!auth.requirePageAccess("inventory")) {
+          return;
+        }
+      });
+    </script>
+    <script src="../static/js/inventory.js"></script>
+  </body>
+</html>

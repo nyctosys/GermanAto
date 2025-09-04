@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Car Management - GermanATO</title>
+    <link rel="stylesheet" href="/static/css/car.css" />
+  </head>
+  <body>
+    <!-- Back Button -->
+    <a href="#" id="back-btn" class="back-button">
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M19 12H5M12 19L5 12L12 5"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      Back
+    </a>
+
+    <div class="container">
+      <div class="header">
+        <h1>Car & Customer Management</h1>
+        <p>Manage cars and customers</p>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <button class="tab-button active" data-tab="cars">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19 17H5C3.89543 17 3 16.1046 3 15V7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V15C21 16.1046 20.1046 17 19 17Z"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+            <path
+              d="M7 9H17M7 13H13"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+          Cars
+        </button>
+        <button class="tab-button" data-tab="customers">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle
+              cx="12"
+              cy="7"
+              r="4"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+          </svg>
+          Customers
+        </button>
+      </div>
+
+      <!-- Cars Tab -->
+      <div class="tab-content active" id="cars-tab">
+        <div class="actions">
+          <div class="search-box">
+            <input type="text" id="car-search" placeholder="Search cars..." />
+            <button id="car-search-btn">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="8"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+                <path
+                  d="M21 21L16.65 16.65"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+          <button class="add-btn" id="add-car-btn">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 5V19M5 12H19"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            Add Car
+          </button>
+        </div>
+
+        <div class="table-container">
+          <table id="cars-table">
+            <thead>
+              <tr>
+                <th>Make</th>
+                <th>Model</th>
+                <th>Plate No.</th>
+                <th>Mileage</th>
+                <th>VIN</th>
+                <th>Color</th>
+                <th>Chassis #</th>
+                <th>Customer</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cars-tbody">
+              <!-- Cars will be loaded here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Customers Tab -->
+      <div class="tab-content" id="customers-tab">
+        <div class="actions">
+          <div class="search-box">
+            <input
+              type="text"
+              id="customer-search"
+              placeholder="Search customers..."
+            />
+            <button id="customer-search-btn">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="8"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+                <path
+                  d="M21 21L16.65 16.65"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+          <button class="add-btn" id="add-customer-btn">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 5V19M5 12H19"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            Add Customer
+          </button>
+        </div>
+
+        <div class="table-container">
+          <table id="customers-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Address</th>
+                <th>Cars</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="customers-tbody">
+              <!-- Customers will be loaded here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Car Modal -->
+    <div id="car-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="car-modal-title">Add Car</h2>
+          <button class="close-btn" id="close-car-modal">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6L6 18M6 6L18 18"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <form id="car-form">
+          <div class="form-group">
+            <label for="car-make">Make *</label>
+            <input type="text" id="car-make" required />
+          </div>
+          <div class="form-group">
+            <label for="car-model">Model *</label>
+            <input type="text" id="car-model" required />
+          </div>
+          <div class="form-group">
+            <label for="car-plate">Plate Number *</label>
+            <input type="text" id="car-plate" required />
+          </div>
+          <div class="form-group">
+            <label for="car-mileage">Mileage *</label>
+            <input type="text" id="car-mileage" required />
+          </div>
+          <div class="form-group">
+            <label for="car-vin">VIN (Optional)</label>
+            <input
+              type="text"
+              id="car-vin"
+              maxlength="17"
+              placeholder="17-character VIN"
+            />
+          </div>
+          <div class="form-group">
+            <label for="car-color">Color</label>
+            <input
+              type="text"
+              id="car-color"
+              placeholder="e.g. White, Black, Red"
+            />
+          </div>
+          <div class="form-group">
+            <label for="car-chasis">Chassis Number</label>
+            <input type="text" id="car-chasis" placeholder="Chassis #" />
+          </div>
+          <div class="form-group">
+            <label for="car-customer">Customer *</label>
+            <select id="car-customer" required>
+              <option value="">Select Customer</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" id="cancel-car">
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Customer Modal -->
+    <div id="customer-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="customer-modal-title">Add Customer</h2>
+          <button class="close-btn" id="close-customer-modal">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6L6 18M6 6L18 18"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <form id="customer-form">
+          <div class="form-group">
+            <label for="customer-name">Name *</label>
+            <input type="text" id="customer-name" required />
+          </div>
+          <div class="form-group">
+            <label for="customer-phone">Phone *</label>
+            <input type="tel" id="customer-phone" required />
+          </div>
+          <div class="form-group">
+            <label for="customer-address">Address *</label>
+            <textarea id="customer-address" required></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" id="cancel-customer">
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Customer Cars Modal -->
+    <div id="customer-cars-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="customer-cars-title">Customer Cars</h2>
+          <button class="close-btn" id="close-customer-cars-modal">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6L6 18M6 6L18 18"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <div class="customer-info">
+          <h3 id="customer-cars-name"></h3>
+          <p id="customer-cars-phone"></p>
+          <p id="customer-cars-address"></p>
+        </div>
+        <div class="table-container">
+          <table id="customer-cars-table">
+            <thead>
+              <tr>
+                <th>Make</th>
+                <th>Model</th>
+                <th>Plate No.</th>
+                <th>Mileage</th>
+                <th>VIN</th>
+                <th>Color</th>
+                <th>Chassis #</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="customer-cars-tbody">
+              <!-- Customer cars will be loaded here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="/static/js/car.js"></script>
+  </body>
+</html>

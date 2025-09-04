@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Admin Panel</title>
+    <link rel="stylesheet" href="../static/css/admin.css" />
+  </head>
+  <body>
+    <a href="#" id="back-btn" class="back-btn">
+      <span>Back</span>
+    </a>
+
+    <div class="container">
+      <div class="header">
+        <h1>Admin Panel</h1>
+        <p>System Management</p>
+      </div>
+
+      <div class="admin-navigation">
+        <div class="nav-section">
+          <h3>User Management</h3>
+          <div class="nav-buttons">
+            <button class="nav-btn active" onclick="showUserManagement()">
+              <span>👥</span>
+              Manage Users
+            </button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <h3>Document Management</h3>
+          <div class="nav-buttons">
+            <button
+              class="nav-btn"
+              onclick="window.location.href='finance-management.html?from=admin'"
+            >
+              <span>💰</span>
+              Finance Management
+            </button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <h3>System</h3>
+          <div class="nav-buttons">
+            <button
+              class="nav-btn"
+              onclick="window.location.href='inventory.html?from=admin'"
+            >
+              <span>📦</span>
+              Inventory Management
+            </button>
+            <button
+              class="nav-btn"
+              onclick="window.location.href='reports.html?from=admin'"
+            >
+              <span>📊</span>
+              Reports
+            </button>
+            <button
+              class="nav-btn"
+              onclick="window.location.href='whatsapp-notifications.html?from=admin'"
+            >
+              <span>📱</span>
+              WhatsApp Notifications
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="main-content" id="user-management-section">
+        <div class="controls-section">
+          <button class="add-btn" onclick="openAddUserModal()">
+            <span>+</span>
+            Add New User
+          </button>
+        </div>
+
+        <div class="users-table" id="users-table">
+          <!-- Users will be loaded here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit User Modal -->
+    <div id="user-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title">Add New User</h2>
+          <span class="close" onclick="closeModal()">&times;</span>
+        </div>
+        <form id="user-form">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required />
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required />
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required />
+          </div>
+          <div class="form-group">
+            <label for="role">Role</label>
+            <select id="role" name="role" required>
+              <option value="">Select Role</option>
+              <option value="admin">Admin</option>
+              <option value="accountant">Accountant</option>
+              <option value="inventory_manager">Inventory Manager</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" onclick="closeModal()">
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Save User</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <footer>
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="../static/js/auth.js"></script>
+    <script src="../static/js/admin.js"></script>
+  </body>
+</html>

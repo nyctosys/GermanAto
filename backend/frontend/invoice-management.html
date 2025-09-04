@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Invoice Management - GermanATO</title>
+    <link rel="stylesheet" href="static/css/search.css" />
+    <style>
+      .invoice-status-toggle {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        justify-content: center;
+      }
+      .invoice-status-btn {
+        background: #f8f9fa;
+        color: #0f0f0f;
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 2rem;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+      }
+      .invoice-status-btn.active#show-paid,
+      .invoice-status-btn#show-paid:focus,
+      .invoice-status-btn#show-paid:hover {
+        background: #28a745;
+        color: #fff;
+      }
+      .invoice-status-btn.active#show-partial,
+      .invoice-status-btn#show-partial:focus,
+      .invoice-status-btn#show-partial:hover {
+        background: #6c757d;
+        color: #fff;
+      }
+      .invoice-status-btn.active#show-unpaid,
+      .invoice-status-btn#show-unpaid:focus,
+      .invoice-status-btn#show-unpaid:hover {
+        background: #dc3545;
+        color: #fff;
+      }
+
+      /* Search Section Styles */
+      .search-section {
+        margin-bottom: 2rem;
+      }
+
+      .search-container {
+        display: flex;
+        max-width: 800px;
+        margin: 0 auto;
+        gap: 15px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+      }
+
+      .search-field-group {
+        flex: 1;
+        min-width: 200px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .search-field-group label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        text-align: left;
+      }
+
+      .search-input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 1rem;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+
+      .search-input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+
+      .search-buttons {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+      }
+
+      .search-btn {
+        padding: 12px 16px;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: background 0.2s;
+      }
+
+      .search-btn:hover {
+        background: #2563eb;
+      }
+
+      .clear-search-btn {
+        padding: 12px 16px;
+        background: #6b7280;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: background 0.2s;
+      }
+
+      .clear-search-btn:hover {
+        background: #4b5563;
+      }
+
+      .invoice-status-btn.active#show-all,
+      .invoice-status-btn#show-all:focus,
+      .invoice-status-btn#show-all:hover {
+        background: #6c757d;
+        color: #fff;
+      }
+
+      @media (max-width: 768px) {
+        .search-container {
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .search-field-group {
+          min-width: unset;
+          width: 100%;
+        }
+
+        .search-buttons {
+          width: 100%;
+          justify-content: center;
+        }
+
+        .search-btn,
+        .clear-search-btn {
+          flex: 1;
+          max-width: 120px;
+        }
+
+        /* Invoice status toggle buttons mobile styles */
+        .invoice-status-toggle {
+          flex-direction: column;
+          gap: 0.75rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .invoice-status-btn {
+          width: 100%;
+          padding: 0.875rem 1.5rem;
+          font-size: 0.9rem;
+          min-height: 44px; /* Better touch target */
+          justify-content: center;
+        }
+      }
+
+      @media (max-width: 480px) {
+        /* Invoice status toggle buttons small screen styles */
+        .invoice-status-toggle {
+          gap: 0.5rem;
+          margin-bottom: 1.25rem;
+        }
+
+        .invoice-status-btn {
+          padding: 0.75rem 1.25rem;
+          font-size: 0.85rem;
+          min-height: 40px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a href="#" id="back-btn" class="back-btn"><span>Back</span></a>
+    <div class="container">
+      <div class="header">
+        <h1>Invoice Management</h1>
+        <p>View and manage all invoices and their payment statuses</p>
+      </div>
+      <br />
+
+      <!-- Search Section -->
+      <div class="search-section">
+        <div class="search-container">
+          <div class="search-field-group">
+            <label for="keyword-search-input">Keyword Search</label>
+            <input
+              type="text"
+              id="keyword-search-input"
+              placeholder="Customer name, phone, reg number..."
+              class="search-input"
+            />
+          </div>
+          <div class="search-field-group">
+            <label for="id-search-input">ID Search</label>
+            <input
+              type="number"
+              id="id-search-input"
+              placeholder="Invoice ID"
+              class="search-input"
+              min="1"
+            />
+          </div>
+          <div class="search-buttons">
+            <button id="search-btn" class="search-btn">
+              <span>🔍</span>
+            </button>
+            <button
+              id="clear-search-btn"
+              class="clear-search-btn"
+              style="display: none"
+            >
+              <span>✕</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="invoice-status-toggle">
+        <button class="invoice-status-btn active" id="show-all">All</button>
+        <button class="invoice-status-btn" id="show-paid">Paid</button>
+        <button class="invoice-status-btn" id="show-partial">
+          Partially Paid
+        </button>
+        <button class="invoice-status-btn" id="show-unpaid">Unpaid</button>
+      </div>
+      <div id="invoice-management-results"></div>
+    </div>
+    <script src="static/js/auth.js"></script>
+    <script src="static/js/invoiceManagement.js"></script>
+  </body>
+</html>

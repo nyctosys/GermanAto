@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Invoice/Quote Generator</title>
+
+    <link rel="stylesheet" href="static/css/invoice.css" />
+  </head>
+  <body>
+    <a href="#" id="back-btn" class="back-btn">
+      <span>Back</span>
+    </a>
+
+    <div class="invoice-form">
+      <h1>Invoice/Quote Generator</h1>
+
+      <!-- Document Type Toggle -->
+      <div class="document-type-toggle">
+        <label class="toggle-label">
+          <input
+            type="checkbox"
+            id="direct-invoice-toggle"
+            class="toggle-checkbox"
+          />
+          <span class="toggle-slider"></span>
+          <span class="toggle-text">Direct Invoice Mode</span>
+        </label>
+        <div class="toggle-description">
+          <span id="toggle-description-text"
+            >Quote Mode: Generate quotes for customer approval</span
+          >
+        </div>
+      </div>
+
+      <form id="invoice-form" method="post">
+        <label for="customer-select">Customer Information</label>
+        <div class="select-with-button">
+          <div class="searchable-dropdown">
+            <input
+              type="text"
+              id="customer-select"
+              class="input-fields"
+              placeholder="Search customers..."
+              required
+              autocomplete="off"
+              inputmode="text"
+            />
+            <div
+              class="dropdown-options"
+              id="customer-dropdown-options"
+              style="display: none"
+            >
+              <!-- Customer options will be populated here -->
+            </div>
+          </div>
+          <button type="button" class="add-btn" id="add-customer-btn">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 5V19M5 12H19"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            Add Customer
+          </button>
+        </div>
+
+        <div id="customer-details" style="display: none">
+          <label for="customer_name">Name</label>
+          <input
+            type="text"
+            id="customer_name"
+            placeholder="Name"
+            class="input-fields"
+            readonly
+          />
+          <label for="customer_address">Address</label>
+          <input
+            type="text"
+            id="customer_address"
+            placeholder="Address"
+            class="input-fields"
+            readonly
+          />
+          <label for="customer_phone">Phone Number</label>
+          <input
+            type="tel"
+            id="customer_phone"
+            placeholder="Phone Number"
+            class="input-fields"
+            readonly
+          />
+        </div>
+
+        <label for="car-select">Car Information</label>
+        <div class="select-with-button">
+          <div class="searchable-dropdown">
+            <input
+              type="text"
+              id="car-select"
+              class="input-fields"
+              placeholder="Search cars..."
+              required
+              autocomplete="off"
+              inputmode="text"
+            />
+            <div
+              class="dropdown-options"
+              id="car-dropdown-options"
+              style="display: none"
+            >
+              <!-- Car options will be populated here -->
+            </div>
+          </div>
+          <button type="button" class="add-btn" id="add-car-btn">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 5V19M5 12H19"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            Add Car
+          </button>
+        </div>
+
+        <div id="car-details" style="display: none">
+          <label for="customer_reg">Registration Number</label>
+          <input
+            type="text"
+            id="customer_reg"
+            placeholder="Registration Number"
+            class="input-fields"
+            readonly
+          />
+          <label for="customer_made">Make & Model</label>
+          <input
+            type="text"
+            id="customer_made"
+            placeholder="Make & Model"
+            class="input-fields"
+            readonly
+          />
+          <label for="customer_mileage">Mileage</label>
+          <input
+            type="text"
+            id="customer_mileage"
+            placeholder="Mileage"
+            class="input-fields"
+            readonly
+          />
+          <label for="customer_vin">VIN (Vehicle Identification Number)</label>
+          <input
+            type="text"
+            id="customer_vin"
+            placeholder="VIN (Vehicle Identification Number)"
+            class="input-fields"
+            readonly
+          />
+          <label for="customer_color">Color</label>
+          <input
+            type="text"
+            id="customer_color"
+            placeholder="Color"
+            class="input-fields"
+            readonly
+          />
+          <label for="customer_chasis">Chassis Number</label>
+          <input
+            type="text"
+            id="customer_chasis"
+            placeholder="Chassis Number"
+            class="input-fields"
+            readonly
+          />
+        </div>
+
+        <h3>Invoice Items</h3>
+        <div id="items-container">
+          <!-- Items will be dynamically added here -->
+        </div>
+
+        <div id="total-amount">Net Total: 0.00 PKR</div>
+        <div class="btns">
+          <button type="button" class="wide-btn" id="add-item">Add Item</button>
+          <button type="button" class="wide-btn" id="add-labour">
+            Add Labour
+          </button>
+        </div>
+
+        <!-- Tax Toggle Section -->
+        <div class="tax-toggle-section">
+          <label class="tax-toggle-label">
+            <input
+              type="checkbox"
+              id="tax-toggle"
+              class="tax-toggle-checkbox"
+            />
+            <span class="tax-toggle-text">Include Tax (GST/PST 17%)</span>
+          </label>
+          <div id="tax-amount-display" style="display: none">
+            Tax Amount: <span id="tax-amount">0.00 PKR</span>
+          </div>
+        </div>
+
+        <label for="advance">Advance Payment</label>
+        <input
+          type="number"
+          placeholder="Advance"
+          class="advance input-fields"
+        />
+
+        <label for="discount">Discount</label>
+        <input
+          type="number"
+          id="discount"
+          placeholder="Discount Amount"
+          class="input-fields"
+          value="0"
+          min="0"
+          step="0.01"
+        />
+
+        <div id="total-balance">Balance: 0.00 PKR</div>
+
+        <!-- Inventory Deduction Section -->
+        <div class="inventory-deduction-section">
+          <button
+            type="button"
+            class="inventory-deduction-btn"
+            id="deduct-inventory-btn"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M20 12V8H6V4H4V8H2V10H4V12H6V16H20V12Z"
+                fill="currentColor"
+              />
+              <path d="M8 14V18H18V14H8Z" fill="currentColor" />
+            </svg>
+            Check & Deduct Inventory
+          </button>
+          <div class="inventory-deduction-info">
+            <span
+              >This will check stock availability and deduct items from
+              inventory. You'll be warned about insufficient stock.</span
+            >
+          </div>
+        </div>
+
+        <div class="btns-submit">
+          <button type="submit" class="wide-btn-submit" data-type="invoice">
+            Generate <br />
+            Invoice
+          </button>
+          <button type="submit" class="wide-btn-submit" data-type="quote">
+            Generate <br />
+            Quote
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Customer Modal -->
+    <div id="customer-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="customer-modal-title">Add Customer</h2>
+          <button class="close-btn" id="close-customer-modal">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6L6 18M6 6L18 18"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <form id="customer-form">
+          <div class="form-group">
+            <label for="modal-customer-name">Name</label>
+            <input type="text" id="modal-customer-name" />
+          </div>
+          <div class="form-group">
+            <label for="modal-customer-phone">Phone</label>
+            <input type="tel" id="modal-customer-phone" />
+          </div>
+          <div class="form-group">
+            <label for="modal-customer-address">Address</label>
+            <textarea id="modal-customer-address"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" id="cancel-customer">
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Car Modal -->
+    <div id="car-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="car-modal-title">Add Car</h2>
+          <button class="close-btn" id="close-car-modal">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6L6 18M6 6L18 18"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <form id="car-form">
+          <div class="form-group">
+            <label for="modal-car-customer">Customer</label>
+            <select id="modal-car-customer">
+              <option value="">Select Customer</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="modal-car-make">Make</label>
+            <input type="text" id="modal-car-make" />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-model">Model</label>
+            <input type="text" id="modal-car-model" />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-plate">Plate Number</label>
+            <input type="text" id="modal-car-plate" />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-mileage">Mileage</label>
+            <input type="text" id="modal-car-mileage" />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-vin">VIN (Optional)</label>
+            <input
+              type="text"
+              id="modal-car-vin"
+              maxlength="17"
+              placeholder="17-character VIN"
+            />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-color">Color</label>
+            <input
+              type="text"
+              id="modal-car-color"
+              placeholder="e.g. White, Black, Red"
+            />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-chasis">Chassis Number</label>
+            <input type="text" id="modal-car-chasis" placeholder="Chassis #" />
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" id="cancel-car">
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Footer Section -->
+    <footer>
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Set up smart back button logic
+        const backBtn = document.getElementById("back-btn");
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromPage =
+          urlParams.get("from") ||
+          localStorage.getItem("lastPage") ||
+          "invoiceSystem";
+
+        // Set back button destination based on where user came from
+        if (fromPage === "invoiceSystem") {
+          backBtn.href = "invoiceSystem.html";
+        } else if (fromPage === "admin") {
+          backBtn.href = "admin.html";
+        } else if (fromPage === "home") {
+          backBtn.href = "home.html";
+        } else {
+          backBtn.href = "invoiceSystem.html"; // Default fallback
+        }
+
+        // Track current page for back button logic
+        localStorage.setItem("lastPage", "invoice");
+      });
+    </script>
+    <script src="static/js/auth.js"></script>
+    <script type="module" src="static/js/editInvoiceUtils.js"></script>
+    <script type="module" src="static/js/script.js"></script>
+  </body>
+</html>

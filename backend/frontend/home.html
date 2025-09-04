@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Home</title>
+    <link rel="stylesheet" href="../static/css/home.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>GermanATO</h1>
+        <p>Business Management System</p>
+      </div>
+
+      <div class="main-content">
+        <div class="button-grid">
+          <a
+            href="finance-management.html?from=home"
+            class="nav-button invoice-btn"
+            data-role="admin,accountant"
+          >
+            <div class="button-icon">💰</div>
+            <h2>Finance Management</h2>
+            <p>Manage bills, payments, and track daily expenses</p>
+          </a>
+
+          <a
+            href="inventory.html?from=home"
+            class="nav-button inventory-btn"
+            data-role="admin,inventory_manager"
+          >
+            <div class="button-icon">📦</div>
+            <h2>Inventory Management</h2>
+            <p>Manage your product inventory and stock levels</p>
+          </a>
+
+          <a
+            href="car.html?from=home"
+            class="nav-button car-customer-btn"
+            data-role="admin,accountant"
+          >
+            <div class="button-icon">🚗👤</div>
+            <h2>Car & Customer Management</h2>
+            <p>Manage cars, customers, and their relationships</p>
+          </a>
+
+          <a
+            href="reports.html?from=home"
+            class="nav-button reports-btn"
+            data-role="admin"
+          >
+            <div class="button-icon">📊</div>
+            <h2>Reports & Analytics</h2>
+            <p>View business reports and performance analytics</p>
+          </a>
+
+          <a
+            href="admin.html?from=home"
+            class="nav-button admin-btn"
+            data-role="admin"
+          >
+            <div class="button-icon">⚙️</div>
+            <h2>Admin Panel</h2>
+            <p>Manage users and system settings</p>
+          </a>
+
+          <a
+            href="whatsapp-notifications.html?from=home"
+            class="nav-button whatsapp-btn"
+            data-role="admin,accountant"
+          >
+            <div class="button-icon">📱</div>
+            <h2>WhatsApp Notifications</h2>
+            <p>Manage and track automated customer notifications</p>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="../static/js/auth.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Check authentication and page access
+        if (!auth.requirePageAccess("home")) {
+          return;
+        }
+
+        // Show/hide buttons based on user role
+        const buttons = document.querySelectorAll(".nav-button");
+        buttons.forEach((button) => {
+          const allowedRoles = button.getAttribute("data-role").split(",");
+          const userRole = auth.getCurrentUser().role;
+
+          if (!allowedRoles.includes(userRole)) {
+            button.style.display = "none";
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

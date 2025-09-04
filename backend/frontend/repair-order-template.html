@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Repair Order</title>
+
+    <link rel="stylesheet" href="static/css/repair-order-template.css" />
+    <style>
+      @media (max-width: 600px) {
+        .download-button {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- ===== BACK BUTTON ===== -->
+    <a href="#" id="back-btn" class="back-btn">
+      <span>Back</span>
+    </a>
+
+    <!-- ===== REPAIR ORDER CONTAINER ===== -->
+    <div class="repair-order-container">
+      <!-- ===== HEADER ===== -->
+      <div class="header">
+        <img
+          src="static/images/logo-without-background.png"
+          alt="Auto Trader Logo"
+          class="logo"
+        />
+        <div class="repair-order-info">
+          <h1 class="repair-order-title">Repair Order</h1>
+          <p class="repair-order-id" id="repair-order-id">
+            RO #{REPAIR_ORDER_ID}
+          </p>
+          <p class="repair-order-date" id="repair-order-date">
+            {REPAIR_ORDER_DATE}
+          </p>
+        </div>
+      </div>
+
+      <!-- ===== CONTENT ===== -->
+      <div class="content">
+        <!-- ===== INFO SECTION ===== -->
+        <div class="info-section">
+          <div class="info-box">
+            <h3 class="info-title">WORKSHOP INFORMATION</h3>
+            <p class="info-content">
+              Address: 38-A, Kamahan Lidher Road, Lahore<br />
+              Email: service@germanato.com<br />
+              Phone#: +92 321 4854641
+            </p>
+          </div>
+          <div class="info-box">
+            <h3 class="info-title">CUSTOMER & VEHICLE INFORMATION</h3>
+            <p class="info-content">
+              Customer Name: <span id="customer-name">{CUSTOMER_NAME}</span
+              ><br />
+              Address: <span id="customer-address">{CUSTOMER_ADDRESS}</span
+              ><br />
+              Phone#: <span id="customer-phone">{CUSTOMER_PHONE}</span><br />
+              Reg#: <span id="reg-number">{REG_NUMBER}</span><br />
+              Made: <span id="made">{MADE}</span><br />
+              Mileage: <span id="mileage">{MILEAGE}</span><br />
+              VIN#: <span id="vin">{VIN}</span><br />
+              Color: <span id="color">{COLOR}</span><br />
+              Chassis#: <span id="chasis">{CHASIS}</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- ===== PROBLEM DESCRIPTION ===== -->
+        <div class="problem-section">
+          <h3 class="section-title">PROBLEM DESCRIPTION</h3>
+          <div class="problem-content" id="problem-description">
+            {PROBLEM_DESCRIPTION}
+          </div>
+        </div>
+
+        <!-- ===== PARTS REQUIRED ===== -->
+        <div class="parts-section">
+          <h3 class="section-title">PARTS REQUIRED</h3>
+          <div class="table-container">
+            <table id="parts-table">
+              <thead>
+                <tr>
+                  <th>Part Description</th>
+                  <th>Part Number</th>
+                  <th>Quantity</th>
+                  <th>Price</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="parts-table-body">
+                <!-- Table rows will be added dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== LABOUR TASKS ===== -->
+        <div class="labour-section">
+          <h3 class="section-title">LABOUR TASKS</h3>
+          <div class="table-container">
+            <table id="labour-table">
+              <thead>
+                <tr>
+                  <th>Task Description</th>
+                  <th>Rate</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="labour-table-body">
+                <!-- Labour tasks will be loaded here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== ESTIMATE SECTION ===== -->
+        <div class="estimate-section">
+          <h3 class="section-title">ESTIMATE</h3>
+          <div class="estimate-details">
+            <div class="estimate-row">
+              <span>Parts Total:</span>
+              <span id="parts-total">{PARTS_TOTAL}</span>
+            </div>
+            <div class="estimate-row">
+              <span>Labour Total:</span>
+              <span id="labour-total">{LABOUR_TOTAL}</span>
+            </div>
+            <div class="estimate-row">
+              <span>Tax (if applicable):</span>
+              <span id="tax-amount">{TAX_AMOUNT}</span>
+            </div>
+            <div class="estimate-row total">
+              <strong>Total Estimate:</strong>
+              <span id="total-estimate">{TOTAL_ESTIMATE}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== WORK STATUS ===== -->
+        <div class="status-section">
+          <h3 class="section-title">WORK STATUS</h3>
+          <div class="status-timeline">
+            <div class="status-item" id="status-received">
+              <span class="status-label">Received</span>
+            </div>
+            <div class="status-item" id="status-diagnosis">
+              <span class="status-label">Diagnosis</span>
+            </div>
+            <div class="status-item" id="status-repair">
+              <span class="status-label">Repair</span>
+            </div>
+            <div class="status-item" id="status-testing">
+              <span class="status-label">Testing</span>
+            </div>
+            <div class="status-item" id="status-complete">
+              <span class="status-label">Complete</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== ASSIGNED WORKER ===== -->
+        <div class="assigned-worker-section">
+          <h3 class="section-title">ASSIGNED WORKER</h3>
+          <div class="worker-info">
+            <div class="worker-name" id="worker-name">{WORKER_NAME}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== FOOTER ===== -->
+      <div class="footer">
+        <p class="footer-content">
+          <strong>Thank you for choosing GermanATO!</strong><br />
+          We appreciate your business and trust in our services. For any queries
+          or concerns, please don't hesitate to contact us.
+        </p>
+      </div>
+    </div>
+
+    <!-- ===== SCRIPTS ===== -->
+    <script src="static/js/repairOrderTemplateUtils.js"></script>
+
+    <script>
+      // Load repair order data from sessionStorage when page loads
+      document.addEventListener("DOMContentLoaded", function () {
+        // Set up smart back button logic
+        const backBtn = document.getElementById("back-btn");
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlFrom = urlParams.get("from");
+        const localStorageFrom = localStorage.getItem("lastPage");
+
+        // Prioritize URL parameter over localStorage
+        const fromPage =
+          urlFrom || localStorageFrom || "repair-orders-management";
+
+        // Set back button destination
+        if (fromPage === "repair-order") {
+          backBtn.href = "repair-order.html";
+        } else if (fromPage === "repair-orders-management") {
+          // Preserve the original navigation chain by checking localStorage
+          const originalFrom = localStorage.getItem("originalFrom") || "admin";
+          backBtn.href = `repair-orders-management.html?from=${originalFrom}`;
+        } else if (fromPage === "admin") {
+          backBtn.href = "admin.html";
+        } else if (fromPage === "home") {
+          backBtn.href = "home.html";
+        } else {
+          backBtn.href = "repair-orders-management.html"; // Default fallback
+        }
+
+        const repairOrderData = sessionStorage.getItem("repairOrderData");
+        const repairOrderId = sessionStorage.getItem("repairOrderId");
+
+        if (repairOrderData && repairOrderId) {
+          const data = JSON.parse(repairOrderData);
+
+          // Update header
+          document.getElementById(
+            "repair-order-id"
+          ).textContent = `RO #${repairOrderId}`;
+          document.getElementById("repair-order-date").textContent =
+            new Date().toLocaleDateString();
+
+          // Update customer and vehicle information
+          document.getElementById("customer-name").textContent =
+            data.customer_name || "N/A";
+          document.getElementById("customer-address").textContent =
+            data.customer_address || "N/A";
+          document.getElementById("customer-phone").textContent =
+            data.customer_phone || "N/A";
+          document.getElementById("reg-number").textContent =
+            data.customer_reg_no || "N/A";
+          document.getElementById("made").textContent =
+            data.customer_made || "N/A";
+          document.getElementById("mileage").textContent = data.customer_mileage
+            ? `${data.customer_mileage}km`
+            : "N/A";
+          document.getElementById("vin").textContent =
+            data.customer_vin || "N/A";
+          document.getElementById("color").textContent =
+            data.customer_color || "N/A";
+          document.getElementById("chasis").textContent =
+            data.customer_chasis || "N/A";
+
+          // Update problem description
+          document.getElementById("problem-description").textContent =
+            data.problem_description || "N/A";
+
+          // Update parts table
+          const partsTableBody = document.getElementById("parts-table-body");
+          partsTableBody.innerHTML = "";
+
+          if (data.parts && data.parts.length > 0) {
+            data.parts.forEach((part) => {
+              const newRow = document.createElement("tr");
+              newRow.innerHTML = `
+                <td>${part.description}</td>
+                <td>${part.part_number || "N/A"}</td>
+                <td>${part.quantity}</td>
+                <td>${part.price ? part.price.toFixed(2) : "0.00"} PKR</td>
+                <td>${part.status || "Pending"}</td>
+              `;
+              partsTableBody.appendChild(newRow);
+            });
+          }
+
+          // Update labour table
+          const labourTableBody = document.getElementById("labour-table-body");
+          labourTableBody.innerHTML = "";
+
+          if (data.labour && data.labour.length > 0) {
+            data.labour.forEach((task) => {
+              const newRow = document.createElement("tr");
+              newRow.innerHTML = `
+                <td>${task.description}</td>
+                <td>${task.rate ? task.rate.toFixed(2) : "0.00"} PKR</td>
+                <td>${task.status || "Pending"}</td>
+              `;
+              labourTableBody.appendChild(newRow);
+            });
+          }
+
+          // Update estimate
+          const partsTotal = data.parts_total || 0;
+          const labourTotal = data.labour_total || 0;
+          const taxAmount = data.tax_amount || 0;
+          const totalEstimate = partsTotal + labourTotal + taxAmount;
+
+          document.getElementById(
+            "parts-total"
+          ).textContent = `${partsTotal.toFixed(2)} PKR`;
+          document.getElementById(
+            "labour-total"
+          ).textContent = `${labourTotal.toFixed(2)} PKR`;
+          document.getElementById(
+            "tax-amount"
+          ).textContent = `${taxAmount.toFixed(2)} PKR`;
+          document.getElementById(
+            "total-estimate"
+          ).textContent = `${totalEstimate.toFixed(2)} PKR`;
+
+          // Update status timeline
+          if (data.status_timeline) {
+            Object.keys(data.status_timeline).forEach((status) => {
+              const statusElement = document.getElementById(`status-${status}`);
+              if (statusElement && data.status_timeline[status]) {
+                statusElement.classList.add("completed");
+              }
+            });
+          }
+
+          // Update assigned worker
+          document.getElementById("worker-name").textContent =
+            data.worker_name || "Not assigned";
+
+          // Clear sessionStorage after loading
+          sessionStorage.removeItem("repairOrderData");
+          sessionStorage.removeItem("repairOrderId");
+
+          // Track current page for back button logic
+          localStorage.setItem("lastPage", "repair-order-template");
+        }
+      });
+    </script>
+  </body>
+</html>

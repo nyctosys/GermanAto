@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Professional Invoice</title>
+
+    <link rel="stylesheet" href="static/css/invoice-template.css" />
+    <style>
+      @media (max-width: 600px) {
+        .download-button {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- ===== BACK BUTTON ===== -->
+    <a href="#" id="back-btn" class="back-btn">
+      <span>Back</span>
+    </a>
+
+    <!-- ===== INVOICE CONTAINER ===== -->
+    <div class="invoice-container">
+      <!-- ===== HEADER ===== -->
+      <div class="header">
+        <img
+          src="static/images/logo-without-background.png"
+          alt="Auto Trader Logo"
+          class="logo"
+        />
+        <div class="invoice-info">
+          <h1 class="invoice-title">Invoice</h1>
+          <p class="invoice-id" id="invoice-id">INVOICE #{INVOICE_ID}</p>
+          <p class="invoice-date" id="invoice-date">{INVOICE_DATE}</p>
+        </div>
+      </div>
+
+      <!-- ===== CONTENT ===== -->
+      <div class="content">
+        <!-- ===== INFO SECTION ===== -->
+        <div class="info-section">
+          <div class="info-box">
+            <h3 class="info-title">OUR INFORMATION</h3>
+            <p class="info-content">
+              Address: 38-A, Kamahan Lidher Road, Lahore<br />
+              Email: service@germanato.com<br />
+              Phone#: +92 321 4854641
+            </p>
+          </div>
+          <div class="info-box">
+            <h3 class="info-title">BILLING INFORMATION</h3>
+            <p class="info-content">
+              Customer Name: <span id="customer-name">{CUSTOMER_NAME}</span
+              ><br />
+              Address: <span id="customer-address">{CUSTOMER_ADDRESS}</span
+              ><br />
+              Phone#: <span id="customer-phone">{CUSTOMER_PHONE}</span><br />
+              Reg#: <span id="reg-number">{REG_NUMBER}</span><br />
+              Made: <span id="made">{MADE}</span><br />
+              Mileage: <span id="mileage">{MILEAGE}</span><br />
+              VIN#: <span id="vin">{VIN}</span><br />
+              Color: <span id="color">{COLOR}</span><br />
+              Chassis#: <span id="chasis">{CHASIS}</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- ===== TABLES SECTION ===== -->
+        <div class="tables-section">
+          <div class="table-container">
+            <table id="parts-table">
+              <thead>
+                <tr>
+                  <th>Part Desc./Lubricants</th>
+                  <th>Price</th>
+                  <th>Quantity</th>
+                  <th class="tax-column" style="display: none">GST (17%)</th>
+                  <th>Subtotal</th>
+                </tr>
+              </thead>
+              <tbody id="parts-table-body">
+                <!-- Table rows will be added dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="table-container">
+            <table id="labour-table">
+              <thead>
+                <tr>
+                  <th>Labour</th>
+                  <th>Price</th>
+                  <th class="tax-column" style="display: none">PST (17%)</th>
+                  <th>Subtotal</th>
+                </tr>
+              </thead>
+              <tbody id="labour-table-body">
+                <!-- Customer cars will be loaded here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TOTAL SECTION ===== -->
+      <div class="total-section">
+        <div class="total-row">
+          <span>Net Total:</span>
+          <span id="net-total">{NET_TOTAL}</span>
+        </div>
+        <!-- Tax Row (only shown if invoice has tax) -->
+        <div class="total-row" id="tax-row" style="display: none">
+          <span>Tax (GST/PST):</span>
+          <span id="tax-amount">0.00 PKR</span>
+        </div>
+        <!-- Discount Row (only shown if invoice has discount) -->
+        <div class="total-row" id="discount-row" style="display: none">
+          <span>Discount:</span>
+          <span id="discount-amount">0.00 PKR</span>
+        </div>
+        <div class="total-row" id="advance-row">
+          <span>Advance:</span>
+          <span id="advance">{ADVANCE}</span>
+        </div>
+        <div class="total-row">
+          <strong>Balance</strong>
+          <span id="balance">{BALANCE}</span>
+        </div>
+      </div>
+
+      <!-- ===== FOOTER & NOTES ===== -->
+      <div class="footer"></div>
+      <div class="notes-section">
+        <p class="notes-content">
+          <strong>Thank you for choosing GermanATO!</strong><br />
+          We appreciate your business and trust in our services. For any queries
+          or concerns, please don't hesitate to contact us.
+        </p>
+      </div>
+    </div>
+
+    <!-- ===== TERMS & CONDITIONS ===== -->
+    <div class="terms-container page-break">
+      <h2>TERMS & CONDITIONS</h2>
+      <ol class="terms-list">
+        <li>
+          A 60% DEPOSIT IS REQUIRED TO CONFIRM AND PLACE YOUR PARTS ORDER.
+        </li>
+        <li>THE REMAINING BALANCE IS DUE PRIOR TO COMMENCEMENT OF WORK.</li>
+        <li>
+          THE VEHICLE REPAIR PROCESS WILL ONLY COMMENCE AFTER WRITTEN
+          CONFIRMATION OF OUR ESTIMATE.
+        </li>
+        <li>
+          SPARE-PARTS DELIVERY: AIR-FREIGHT TRANSIT TIME IS 15–20 WORKING DAYS;
+          SEA-FREIGHT TRANSIT TIME IS 8–10 WEEKS (SUBJECT TO LC AND CUSTOMS
+          CLEARANCE), CALCULATED FROM THE DATE OF WRITTEN CONFIRMATION.
+        </li>
+        <li>
+          ALL PRICES HAVE BEEN CALCULATED BASED ON THE PREVAILING GOVERNMENT
+          DUTIES, FISCAL POLICIES, TARIFF STRUCTURES, IMPORT POLICY, FREIGHT
+          CHARGES AND AVERAGE PKR → € CONVERSION RATE. THE CUSTOMER HEREBY
+          AGREES TO PAY ANY ADDITIONAL CHARGES ARISING FROM CHANGES IN THESE
+          DUTIES, POLICIES OR EXCHANGE-RATE FLUCTUATIONS ON THE DATE OF CUSTOMS
+          ASSESSMENT, WHEN INVOICING.
+        </li>
+        <li>
+          ESTIMATES ARE BASED ON OUR INSPECTION AND DO NOT INCLUDE ANY
+          ADDITIONAL PARTS AND/OR LABOUR WHICH MAY BE REQUIRED ONCE WORK HAS
+          COMMENCED. OCCASIONALLY, DAMAGED OR BROKEN COMPONENTS ARE DISCOVERED
+          THAT WERE NOT EVIDENT ON INITIAL INSPECTION.
+        </li>
+        <li>
+          IF A VEHICLE IS BROUGHT IN FOR ESTIMATE AND/OR DIAGNOSIS BUT THE
+          CUSTOMER ELECTS NOT TO PROCEED WITH THE REPAIR, THE CUSTOMER REMAINS
+          LIABLE TO GERMANATO PVT LTD FOR ANY PARTS AND/OR LABOUR INCURRED
+          DURING THAT ESTIMATE/DIAGNOSIS.
+        </li>
+        <li>
+          GERMANATO PVT LTD IS NOT RESPONSIBLE FOR DELAYS CAUSED BY
+          UNAVAILABILITY OF PARTS OR SHIPMENT DELAYS BY SUPPLIERS OR
+          TRANSPORTERS.
+        </li>
+        <li>
+          SHOULD ANY PARTS—RELATED OR UNRELATED TO THE ORIGINAL ESTIMATE—INCUR
+          ADDITIONAL DAMAGE DURING THE REPAIR PROCESS, A SUPPLEMENTARY
+          ESTIMATE/INVOICE WILL BE PROVIDED AND MUST BE APPROVED AND PAID BY THE
+          CUSTOMER BEFORE PROCEEDING.
+        </li>
+        <li>
+          AFTER A COMPLIMENTARY FIVE-DAY PARKING PERIOD, A CHARGE OF PKR 1,000
+          PER DAY WILL APPLY.
+        </li>
+        <li>
+          REPAIR-SALVAGE PARTS (NON-WARRANTY) MUST BE COLLECTED WITHIN SEVEN
+          DAYS OF REPAIR COMPLETION; OTHERWISE THEY WILL BE DISCARDED AND NO
+          CLAIMS WILL BE ENTERTAINED.
+        </li>
+        <li>
+          THE CUSTOMER AGREES TO MAINTAIN FULL VEHICLE-LIABILITY INSURANCE AND
+          ACCEPTS RESPONSIBILITY FOR LOSS OR DAMAGE (FIRE, THEFT, ACCIDENTS)
+          WHILE THE VEHICLE IS IN OUR WORKSHOP.
+        </li>
+        <li>
+          THE CUSTOMER MUST REMOVE ALL PERSONAL ITEMS BEFORE WORK BEGINS AND
+          ASSUMES LIABILITY FOR ANY ITEMS LEFT BEHIND.
+        </li>
+        <li>
+          THE CUSTOMER AUTHORIZES GERMANATO PVT LTD TO OPERATE THE VEHICLE ON
+          STREETS, HIGHWAYS OR ELSEWHERE FOR TEST-DRIVE AND INSPECTION PURPOSES
+          AND AGREES TO DISCLOSE ANY PRE-EXISTING CONDITIONS THAT COULD RENDER
+          THE VEHICLE UNSAFE.
+        </li>
+        <li>
+          GERMANATO PVT LTD USES ONLY GENUINE PARTS AND ACCESSORIES UNLESS
+          OTHERWISE SPECIFIED. SPARE PARTS SUPPLIED BY CUSTOMERS WILL NOT BE
+          ACCEPTED FOR ANY REPAIR/INSTALLATION. ALL ESTIMATES AND INVOICES ARE
+          SUBJECT TO THESE TERMS AND CONDITIONS WITHOUT PRIOR NOTICE.
+        </li>
+      </ol>
+    </div>
+    <br /><br />
+    <!-- ===== ACTION BUTTONS ===== -->
+    <div class="button-container">
+      <button class="print-button" onclick="printInvoice()">Print</button>
+      <button class="download-button" onclick="downloadPDF()">
+        Download PDF
+      </button>
+      <button
+        class="convert-button"
+        id="convert-to-invoice-btn"
+        onclick="convertToInvoice()"
+        style="display: none"
+      >
+        Convert to Invoice
+      </button>
+    </div>
+
+    <!-- ===== SCRIPTS ===== -->
+    <script src="static/js/invoiceTemplateUtils.js?v=2.6"></script>
+    <script src="static/js/libs/html2canvas.min.js"></script>
+    <script src="static/js/libs/jspdf.umd.min.js"></script>
+
+    <script>
+      // Load invoice data from sessionStorage when page loads
+      document.addEventListener("DOMContentLoaded", function () {
+        // Set up smart back button logic
+        const backBtn = document.getElementById("back-btn");
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromPage =
+          urlParams.get("from") || localStorage.getItem("lastPage") || "search";
+
+        // Set back button destination
+        if (fromPage === "invoice") {
+          backBtn.href = "invoice.html";
+        } else if (fromPage === "invoice-management") {
+          backBtn.href = "invoice-management.html";
+        } else if (fromPage === "pending-quotes") {
+          backBtn.href = "pending-quotes.html";
+        } else {
+          backBtn.href = "invoiceSystem.html";
+        }
+
+        const invoiceData = sessionStorage.getItem("invoiceData");
+        const invoiceId = sessionStorage.getItem("invoiceId");
+        const documentType = sessionStorage.getItem("documentType");
+
+        if (invoiceData && invoiceId) {
+          const data = JSON.parse(invoiceData);
+          // Determine document type
+          let actualDocumentType = documentType;
+          if (data.type_of) {
+            actualDocumentType = data.type_of.toLowerCase();
+          }
+
+          // Update header
+          const idPrefix =
+            actualDocumentType === "invoice" ? "INVOICE" : "QUOTE";
+          const headerText =
+            actualDocumentType.charAt(0).toUpperCase() +
+            actualDocumentType.slice(1);
+          document.querySelector(".invoice-title").textContent = headerText;
+          document.getElementById(
+            "invoice-id"
+          ).textContent = `${idPrefix} #${invoiceId}`;
+          document.getElementById("invoice-date").textContent =
+            new Date().toLocaleDateString();
+
+          // Update billing information
+          document.getElementById("customer-name").textContent =
+            data.customer_name || "N/A";
+          document.getElementById("customer-address").textContent =
+            data.customer_address || "N/A";
+          document.getElementById("customer-phone").textContent =
+            data.customer_phone || "N/A";
+          document.getElementById("reg-number").textContent =
+            data.customer_reg_no || "N/A";
+          document.getElementById("made").textContent =
+            data.customer_made || "N/A";
+          document.getElementById("mileage").textContent =
+            data.customer_mileage && data.customer_mileage !== "N/A"
+              ? `${data.customer_mileage}km`
+              : "N/A";
+          document.getElementById("vin").textContent =
+            data.customer_vin || "N/A";
+          document.getElementById("color").textContent =
+            data.customer_color || "N/A";
+          document.getElementById("chasis").textContent =
+            data.customer_chasis || "N/A";
+
+          // Update totals heading for quotes
+          if (actualDocumentType === "quote") {
+            const balanceElement = document.querySelector(
+              ".total-row:last-of-type"
+            );
+            if (balanceElement) {
+              balanceElement.innerHTML = balanceElement.innerHTML.replace(
+                "Balance",
+                "Total Quotation"
+              );
+            }
+          }
+
+          // Use net_total from database if available, otherwise calculate from items
+          const netTotal = data.net_total || 0;
+          document.getElementById(
+            "net-total"
+          ).textContent = `${netTotal.toFixed(2)} PKR`;
+
+          // Show tax columns if invoice has tax
+          const taxColumns = document.querySelectorAll(".tax-column");
+          const showTaxColumns = data.include_tax && data.tax_amount > 0;
+
+          taxColumns.forEach((column) => {
+            column.style.display = showTaxColumns ? "table-cell" : "none";
+          });
+
+          // Insert Parts & Lubricants
+          const partsTableBody = document.getElementById("parts-table-body");
+          const labourTableBody = document.getElementById("labour-table-body");
+          partsTableBody.innerHTML = "";
+          labourTableBody.innerHTML = "";
+
+          data.items.forEach((item) => {
+            if (item.quantity) {
+              const baseSubtotal = item.quantity * item.price;
+              const gst = baseSubtotal * 0.17;
+              const newRow = document.createElement("tr");
+              newRow.innerHTML = `
+                  <td>${item.product_name}</td>
+                  <td>${item.price.toFixed(2)}</td>
+                  <td>${item.quantity}</td>
+                  <td class="tax-column" style="display: ${
+                    showTaxColumns ? "table-cell" : "none"
+                  };">${gst.toFixed(2)}</td>
+                  <td class="subtotal-cell">${baseSubtotal.toFixed(2)}</td>
+                `;
+              partsTableBody.appendChild(newRow);
+            }
+          });
+
+          data.labours.forEach((item) => {
+            const baseSubtotal = item.price;
+            const pst = baseSubtotal * 0.17;
+            const newRow = document.createElement("tr");
+            newRow.innerHTML = `
+                <td>${item.description}</td>
+                <td>${item.price.toFixed(2)}</td>
+                <td class="tax-column" style="display: ${
+                  showTaxColumns ? "table-cell" : "none"
+                };">${pst.toFixed(2)}</td>
+                <td class="subtotal-cell">${baseSubtotal.toFixed(2)}</td>
+              `;
+            labourTableBody.appendChild(newRow);
+          });
+
+          // Show tax row only if invoice has tax
+          const taxRow = document.getElementById("tax-row");
+          const taxAmount = document.getElementById("tax-amount");
+          if (data.include_tax && data.tax_amount > 0) {
+            taxRow.style.display = "flex";
+            taxAmount.textContent = `${data.tax_amount.toFixed(2)} PKR`;
+          } else {
+            taxRow.style.display = "none";
+          }
+
+          // Show discount row only if invoice has discount
+          const discountRow = document.getElementById("discount-row");
+          const discountAmount = document.getElementById("discount-amount");
+          if (data.discount && data.discount > 0 && data.discount !== "N/A") {
+            discountRow.style.display = "flex";
+            discountAmount.textContent = `${data.discount.toFixed(2)} PKR`;
+          } else {
+            discountRow.style.display = "none";
+          }
+
+          // Calculate balance (net total + tax - discount - advance)
+          let balance = netTotal;
+          if (showTaxColumns) {
+            balance += data.tax_amount || 0;
+          }
+          if (data.discount && data.discount > 0 && data.discount !== "N/A") {
+            balance -= data.discount;
+          }
+          if (data.advance && data.advance > 0 && data.advance !== "N/A") {
+            balance -= data.advance;
+          }
+
+          // Update balance
+          document.getElementById("balance").textContent = `${balance.toFixed(
+            2
+          )} PKR`;
+
+          // Advance
+          const advanceElement = document.getElementById("advance");
+          if (data.advance && data.advance > 0 && data.advance !== "N/A") {
+            advanceElement.textContent = `${data.advance.toFixed(2)} PKR`;
+          } else {
+            advanceElement.textContent = "N/A";
+          }
+
+          // Clear sessionStorage after loading
+          sessionStorage.removeItem("invoiceData");
+          sessionStorage.removeItem("invoiceId");
+          sessionStorage.removeItem("documentType");
+
+          // Show convert button only for quotes
+          const convertBtn = document.getElementById("convert-to-invoice-btn");
+          if (actualDocumentType === "quote") {
+            convertBtn.style.display = "inline-block";
+            // Store invoice ID for conversion
+            convertBtn.setAttribute("data-invoice-id", invoiceId);
+          }
+
+          // Handle terms and conditions visibility based on document type
+          const termsContainer = document.querySelector(".terms-container");
+          if (termsContainer) {
+            if (actualDocumentType === "invoice") {
+              // Hide terms and conditions for invoices
+              termsContainer.style.display = "none";
+            } else {
+              // Show terms and conditions for quotes
+              termsContainer.style.display = "block";
+            }
+          }
+
+          // Track current page for back button logic
+          localStorage.setItem("lastPage", "invoice-template");
+        }
+      });
+
+      // ===== CONVERT TO INVOICE FUNCTION =====
+      async function convertToInvoice() {
+        const convertBtn = document.getElementById("convert-to-invoice-btn");
+        const invoiceId = convertBtn.getAttribute("data-invoice-id");
+
+        if (!invoiceId) {
+          alert("Error: Invoice ID not found");
+          return;
+        }
+
+        if (
+          !confirm(
+            "Are you sure you want to convert this quote to an invoice? This will deduct inventory and cannot be undone."
+          )
+        ) {
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `http://127.0.0.1:5000/api/invoice/${invoiceId}/convert`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          const result = await response.json();
+
+          if (response.ok) {
+            alert("Quote successfully converted to invoice!");
+            // Update the page to reflect the change
+            document.querySelector(".invoice-title").textContent = "Invoice";
+            document.getElementById(
+              "invoice-id"
+            ).textContent = `INVOICE #${invoiceId}`;
+            // Hide the convert button
+            convertBtn.style.display = "none";
+            // Update the balance text back to "Balance"
+            const balanceElement = document.querySelector(
+              ".total-row:last-of-type"
+            );
+            if (balanceElement) {
+              balanceElement.innerHTML = balanceElement.innerHTML.replace(
+                "Total Quotation",
+                "Balance"
+              );
+            }
+
+            // Hide terms and conditions when converting to invoice
+            const termsContainer = document.querySelector(".terms-container");
+            if (termsContainer) {
+              termsContainer.style.display = "none";
+            }
+          } else {
+            alert(
+              "Error: " + (result.error || "Failed to convert quote to invoice")
+            );
+          }
+        } catch (error) {
+          console.error("Error converting quote to invoice:", error);
+          alert("Error: Failed to convert quote to invoice. Please try again.");
+        }
+      }
+
+      // ===== PRINT FUNCTION =====
+      function printInvoice() {
+        const printStyle = document.createElement("style");
+        printStyle.innerHTML = `
+                      @media print {
+                        /* Force colors to print */
+                        body {
+                          -webkit-print-color-adjust: exact !important;
+                          print-color-adjust: exact !important;
+                          color-adjust: exact !important;
+                        }
+
+                        /* Preserve colored elements */
+                        .header, th, .total-section {
+                          -webkit-print-color-adjust: exact !important;
+                          print-color-adjust: exact !important;
+                          color-adjust: exact !important;
+                        }
+
+                        /* Rest of your existing print styles... */
+                        @page { size: A4; margin: 10mm; }
+                        body { width: 210mm !important; height: 297mm !important; }
+                        .back-btn, .button-container { display: none !important; }
+                      }
+                    `;
+
+        document.head.appendChild(printStyle);
+        window.print();
+        setTimeout(() => printStyle.remove(), 1000);
+      }
+
+      // ===== DOWNLOAD PDF FUNCTION =====
+      function downloadPDF() {
+        // Add PDF capture mode class
+        document.body.classList.add("pdf-capture-mode");
+
+        // Set fixed dimensions for A4
+        const invoiceContainer = document.querySelector(".invoice-container");
+        const termsContainer = document.querySelector(".terms-container");
+
+        invoiceContainer.style.width = "210mm";
+        invoiceContainer.style.minHeight = "297mm";
+        invoiceContainer.style.margin = "0 auto";
+
+        termsContainer.style.width = "210mm";
+        termsContainer.style.minHeight = "180mm";
+        termsContainer.style.margin = "0 auto";
+
+        // Create PDF
+        const pdf = new jspdf.jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        });
+
+        // Capture invoice page
+        setTimeout(() => {
+          html2canvas(invoiceContainer, {
+            scale: 2, // Higher quality
+            useCORS: true,
+            backgroundColor: "#FFFFFF",
+            logging: false,
+            windowWidth: 794, // 210mm in pixels (96dpi)
+            windowHeight: 1123, // 297mm in pixels
+          }).then((invoiceCanvas) => {
+            const invoiceImgData = invoiceCanvas.toDataURL("image/png");
+
+            // Calculate image dimensions to fit A4
+            const imgWidth = 210; // A4 width in mm
+            const invoiceImgHeight =
+              (invoiceCanvas.height * imgWidth) / invoiceCanvas.width;
+
+            // Add invoice page
+            pdf.addImage(
+              invoiceImgData,
+              "PNG",
+              0,
+              0,
+              imgWidth,
+              invoiceImgHeight
+            );
+
+            // Capture terms page
+            html2canvas(termsContainer, {
+              scale: 2, // Higher quality
+              useCORS: true,
+              backgroundColor: "#FFFFFF",
+              logging: false,
+              windowWidth: 794, // 210mm in pixels (96dpi)
+              windowHeight: 1123, // 297mm in pixels
+            }).then((termsCanvas) => {
+              const termsImgData = termsCanvas.toDataURL("image/png");
+
+              // Calculate terms image dimensions
+              const termsImgHeight =
+                (termsCanvas.height * imgWidth) / termsCanvas.width;
+
+              // Add terms page
+              pdf.addPage();
+              pdf.addImage(termsImgData, "PNG", 0, 0, imgWidth, termsImgHeight);
+
+              // Generate filename
+              const invoiceTitle =
+                document.querySelector(".invoice-title").textContent;
+              const invoiceId =
+                document.getElementById("invoice-id").textContent;
+              const fileName = `${invoiceTitle}_${invoiceId}.pdf`.replace(
+                /\s+/g,
+                "_"
+              );
+
+              pdf.save(fileName);
+              document.body.classList.remove("pdf-capture-mode");
+            });
+          });
+        }, 500);
+      }
+    </script>
+  </body>
+</html>

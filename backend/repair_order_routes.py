@@ -1,0 +1,498 @@
+from flask import Blueprint, request, jsonify
+from models import db, RepairOrder, RepairOrderPart, RepairOrderLabour
+from sqlalchemy import desc
+from datetime import datetime
+import json
+from repair_order_inventory_utils import process_repair_order_parts, handle_repair_order_edit_inventory
+
+repair_order_bp = Blueprint('repair_order', __name__)
+
+# Get all repair orders with optional status filter
+@repair_order_bp.route('/repair-orders', methods=['GET'])
+def get_repair_orders():
+    try:
+        status = request.args.get('status')
+        keyword = request.args.get('keyword')
+        search_id = request.args.get('id')
+        
+        query = RepairOrder.query
+        
+        if status and status != 'all':
+            query = query.filter(RepairOrder.current_status == status)
+        
+        # Search by ID
+        if search_id:
+            try:
+                repair_order_id = int(search_id)
+                query = query.filter(RepairOrder.id == repair_order_id)
+            except ValueError:
+                # If ID is not a valid integer, return empty result
+                return jsonify({'repair_orders': []})
+        
+        # Search by keyword
+        if keyword:
+            keyword_filter = f"%{keyword}%"
+            query = query.filter(
+                db.or_(
+                    RepairOrder.customer_name.ilike(keyword_filter),
+                    RepairOrder.customer_phone.ilike(keyword_filter),
+                    RepairOrder.customer_address.ilike(keyword_filter),
+                    RepairOrder.customer_reg_no.ilike(keyword_filter),
+                    RepairOrder.customer_made.ilike(keyword_filter),
+                    RepairOrder.customer_vin.ilike(keyword_filter),
+                    RepairOrder.customer_color.ilike(keyword_filter),
+                    RepairOrder.customer_chasis.ilike(keyword_filter),
+                    RepairOrder.problem_description.ilike(keyword_filter),
+                    RepairOrder.worker_name.ilike(keyword_filter)
+                )
+            )
+        
+        repair_orders = query.order_by(desc(RepairOrder.created_at)).all()
+        
+        result = []
+        for ro in repair_orders:
+            # Get parts and labour for this repair order
+            parts = RepairOrderPart.query.filter_by(repair_order_id=ro.id).all()
+            labour = RepairOrderLabour.query.filter_by(repair_order_id=ro.id).all()
+            
+            repair_order_data = {
+                'id': ro.id,
+                'customer_name': ro.customer_name,
+                'customer_phone': ro.customer_phone,
+                'customer_address': ro.customer_address,
+                'customer_reg_no': ro.customer_reg_no,
+                'customer_made': ro.customer_made,
+                'customer_mileage': ro.customer_mileage,
+                'customer_vin': ro.customer_vin,
+                'customer_color': ro.customer_color,
+                'customer_chasis': ro.customer_chasis,
+                'problem_description': ro.problem_description,
+                'diagnosis_plan': ro.diagnosis_plan,
+                'worker_name': ro.worker_name,
+                'current_status': ro.current_status,
+                'status_timeline': json.loads(ro.status_timeline) if ro.status_timeline else {},
+                'vehicle_condition': json.loads(ro.vehicle_condition) if ro.vehicle_condition else {},
+                'parts_total': ro.parts_total,
+                'labour_total': ro.labour_total,
+                'tax_amount': ro.tax_amount,
+                'total_estimate': ro.total_estimate,
+                'notes': ro.notes,
+                'created_at': ro.created_at.isoformat() if ro.created_at else None,
+                'updated_at': ro.updated_at.isoformat() if ro.updated_at else None,
+                'parts': [
+                    {
+                        'id': part.id,
+                        'inventory_id': part.inventory_id,
+                        'description': part.description,
+                        'part_number': part.part_number,
+                        'quantity': part.quantity,
+                        'price': float(part.price),
+                        'status': part.status
+                    } for part in parts
+                ],
+                'labour': [
+                    {
+                        'id': labour_item.id,
+                        'description': labour_item.description,
+                        'rate': float(labour_item.rate),
+                        'status': labour_item.status
+                    } for labour_item in labour
+                ]
+            }
+            result.append(repair_order_data)
+        
+        return jsonify({'repair_orders': result})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Get a specific repair order by ID
+@repair_order_bp.route('/repair-orders/<int:repair_order_id>', methods=['GET'])
+def get_repair_order(repair_order_id):
+    try:
+        repair_order = RepairOrder.query.get(repair_order_id)
+        
+        if not repair_order:
+            return jsonify({'error': 'Repair order not found'}), 404
+        
+        # Get parts and labour for this repair order
+        parts = RepairOrderPart.query.filter_by(repair_order_id=repair_order_id).all()
+        labour = RepairOrderLabour.query.filter_by(repair_order_id=repair_order_id).all()
+        
+        repair_order_data = {
+            'id': repair_order.id,
+            'customer_name': repair_order.customer_name,
+            'customer_phone': repair_order.customer_phone,
+            'customer_address': repair_order.customer_address,
+            'customer_reg_no': repair_order.customer_reg_no,
+            'customer_made': repair_order.customer_made,
+            'customer_mileage': repair_order.customer_mileage,
+            'customer_vin': repair_order.customer_vin,
+            'customer_color': repair_order.customer_color,
+            'customer_chasis': repair_order.customer_chasis,
+            'problem_description': repair_order.problem_description,
+            'diagnosis_plan': repair_order.diagnosis_plan,
+            'worker_name': repair_order.worker_name,
+            'current_status': repair_order.current_status,
+            'status_timeline': json.loads(repair_order.status_timeline) if repair_order.status_timeline else {},
+            'vehicle_condition': json.loads(repair_order.vehicle_condition) if repair_order.vehicle_condition else {},
+            'parts_total': repair_order.parts_total,
+            'labour_total': repair_order.labour_total,
+            'tax_amount': repair_order.tax_amount,
+            'total_estimate': repair_order.total_estimate,
+            'notes': repair_order.notes,
+            'created_at': repair_order.created_at.isoformat() if repair_order.created_at else None,
+            'updated_at': repair_order.updated_at.isoformat() if repair_order.updated_at else None,
+            'parts': [
+                {
+                    'id': part.id,
+                    'inventory_id': part.inventory_id,
+                    'description': part.description,
+                    'part_number': part.part_number,
+                    'quantity': part.quantity,
+                    'price': float(part.price),
+                    'status': part.status
+                } for part in parts
+            ],
+            'labour': [
+                {
+                    'id': labour_item.id,
+                    'description': labour_item.description,
+                    'rate': float(labour_item.rate),
+                    'status': labour_item.status
+                } for labour_item in labour
+            ]
+        }
+        
+        return jsonify(repair_order_data)
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Create a new repair order
+@repair_order_bp.route('/repair-orders', methods=['POST'])
+def create_repair_order():
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('customer_name'):
+            return jsonify({'error': 'Customer name is required'}), 400
+        
+        # Create repair order
+        repair_order = RepairOrder(
+            customer_name=data['customer_name'],
+            customer_phone=data.get('customer_phone', ''),
+            customer_address=data.get('customer_address', ''),
+            customer_reg_no=data.get('customer_reg_no', ''),
+            customer_made=data.get('customer_made', ''),
+            customer_mileage=data.get('customer_mileage', ''),
+            customer_vin=data.get('customer_vin', ''),
+            customer_color=data.get('customer_color', ''),
+            customer_chasis=data.get('customer_chasis', ''),
+            problem_description=data.get('problem_description', ''),
+            worker_name=data.get('worker_name', ''),
+            current_status='received',
+            total_estimate=data.get('total_estimate', 0)
+        )
+        
+        db.session.add(repair_order)
+        db.session.flush()  # Get the ID
+        
+        # Process parts
+        if data.get('parts'):
+            success, processed_parts, inventory_errors = process_repair_order_parts(data['parts'])
+            
+            if not success:
+                db.session.rollback()
+                return jsonify({'error': 'Failed to process parts', 'details': inventory_errors}), 400
+            
+            for part_data in processed_parts:
+                part = RepairOrderPart(
+                    repair_order_id=repair_order.id,
+                    description=part_data['description'],
+                    quantity=part_data['quantity'],
+                    price=part_data['price'],
+                    inventory_id=part_data.get('inventory_id'),
+                    part_number=part_data.get('part_number', ''),
+                    status=part_data.get('status', 'pending')
+                )
+                db.session.add(part)
+        
+        # Process labour
+        if data.get('labour'):
+            for labour_data in data['labour']:
+                # Handle both 'price' and 'rate' field names for backward compatibility
+                labour_rate = labour_data.get('rate') or labour_data.get('price', 0)
+                labour = RepairOrderLabour(
+                    repair_order_id=repair_order.id,
+                    description=labour_data['description'],
+                    rate=labour_rate,
+                    status=labour_data.get('status', 'pending')
+                )
+                db.session.add(labour)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Repair order created successfully',
+            'repair_order_id': repair_order.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# Update repair order status
+@repair_order_bp.route('/repair-orders/<int:repair_order_id>/status', methods=['PUT'])
+def update_repair_order_status(repair_order_id):
+    try:
+        repair_order = RepairOrder.query.get(repair_order_id)
+        
+        if not repair_order:
+            return jsonify({'error': 'Repair order not found'}), 404
+        
+        data = request.get_json()
+        new_status = data.get('status')
+        timestamp = data.get('timestamp', datetime.now().isoformat())
+        
+        if not new_status:
+            return jsonify({'error': 'Status is required'}), 400
+        
+        # Update current status
+        repair_order.current_status = new_status
+        
+        # Update status timeline
+        timeline = json.loads(repair_order.status_timeline) if repair_order.status_timeline else {}
+        timeline[new_status] = {
+            'date': timestamp,
+            'time': datetime.fromisoformat(timestamp).strftime('%H:%M')
+        }
+        repair_order.status_timeline = json.dumps(timeline)
+        
+        repair_order.updated_at = datetime.now()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Status updated successfully',
+            'current_status': new_status,
+            'status_timeline': timeline
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# Update repair order
+@repair_order_bp.route('/repair-orders/<int:repair_order_id>', methods=['PUT'])
+def update_repair_order(repair_order_id):
+    try:
+        repair_order = RepairOrder.query.get(repair_order_id)
+        
+        if not repair_order:
+            return jsonify({'error': 'Repair order not found'}), 404
+        
+        data = request.get_json()
+        
+        # Update basic information (only if provided and not None)
+        if 'customer_name' in data and data['customer_name'] is not None:
+            repair_order.customer_name = data['customer_name']
+        if 'customer_phone' in data and data['customer_phone'] is not None:
+            repair_order.customer_phone = data['customer_phone']
+        if 'customer_address' in data and data['customer_address'] is not None:
+            repair_order.customer_address = data['customer_address']
+        if 'customer_reg_no' in data and data['customer_reg_no'] is not None:
+            repair_order.customer_reg_no = data['customer_reg_no']
+        if 'customer_made' in data and data['customer_made'] is not None:
+            repair_order.customer_made = data['customer_made']
+        if 'customer_mileage' in data and data['customer_mileage'] is not None:
+            repair_order.customer_mileage = data['customer_mileage']
+        if 'customer_vin' in data and data['customer_vin'] is not None:
+            repair_order.customer_vin = data['customer_vin']
+        if 'customer_color' in data and data['customer_color'] is not None:
+            repair_order.customer_color = data['customer_color']
+        if 'customer_chasis' in data and data['customer_chasis'] is not None:
+            repair_order.customer_chasis = data['customer_chasis']
+        if 'problem_description' in data:
+            repair_order.problem_description = data['problem_description']
+        if 'worker_name' in data:
+            repair_order.worker_name = data['worker_name']
+        if 'diagnosis_plan' in data:
+            repair_order.diagnosis_plan = data['diagnosis_plan']
+        if 'vehicle_condition' in data:
+            repair_order.vehicle_condition = json.dumps(data['vehicle_condition'])
+        if 'parts_total' in data and data['parts_total'] is not None:
+            repair_order.parts_total = data['parts_total']
+        if 'labour_total' in data and data['labour_total'] is not None:
+            repair_order.labour_total = data['labour_total']
+        if 'tax_amount' in data and data['tax_amount'] is not None:
+            repair_order.tax_amount = data['tax_amount']
+        if 'total_estimate' in data and data['total_estimate'] is not None:
+            repair_order.total_estimate = data['total_estimate']
+        if 'notes' in data:
+            repair_order.notes = data['notes']
+        
+        repair_order.updated_at = datetime.now()
+        
+        # Update parts if provided
+        if 'parts' in data:
+            # Get current parts for inventory comparison
+            current_parts = RepairOrderPart.query.filter_by(repair_order_id=repair_order_id).all()
+            current_parts_data = []
+            for part in current_parts:
+                current_parts_data.append({
+                    'id': part.id,
+                    'inventory_id': part.inventory_id,
+                    'description': part.description,
+                    'part_number': part.part_number,
+                    'quantity': part.quantity,
+                    'price': part.price,
+                    'status': part.status
+                })
+            
+            # Handle inventory changes
+            success, inventory_errors = handle_repair_order_edit_inventory(current_parts_data, data['parts'])
+            
+            if not success:
+                db.session.rollback()
+                return jsonify({'error': 'Failed to process inventory changes', 'inventory_errors': inventory_errors}), 400
+            
+            # Delete existing parts
+            RepairOrderPart.query.filter_by(repair_order_id=repair_order_id).delete()
+            
+            # Add new parts
+            for part_data in data['parts']:
+                part = RepairOrderPart(
+                    repair_order_id=repair_order_id,
+                    inventory_id=part_data.get('inventory_id'),
+                    description=part_data.get('description'),
+                    part_number=part_data.get('part_number'),
+                    quantity=part_data.get('quantity', 1),
+                    price=part_data.get('price', 0),
+                    status=part_data.get('status', 'pending')
+                )
+                db.session.add(part)
+            
+            # Add inventory warnings if any
+            if inventory_errors:
+                response_data = {'message': 'Repair order updated successfully with some inventory warnings', 'inventory_warnings': inventory_errors}
+            else:
+                response_data = {'message': 'Repair order updated successfully'}
+        
+        # Update labour if provided
+        if 'labour' in data:
+            # Delete existing labour
+            RepairOrderLabour.query.filter_by(repair_order_id=repair_order_id).delete()
+            
+            # Add new labour
+            for labour_data in data['labour']:
+                # Handle both 'price' and 'rate' field names for backward compatibility
+                labour_rate = labour_data.get('rate') or labour_data.get('price', 0)
+                labour = RepairOrderLabour(
+                    repair_order_id=repair_order_id,
+                    description=labour_data.get('description'),
+                    rate=labour_rate,
+                    status=labour_data.get('status', 'pending')
+                )
+                db.session.add(labour)
+        
+        db.session.commit()
+        
+        # Return appropriate response based on inventory warnings
+        if 'response_data' in locals():
+            return jsonify(response_data)
+        else:
+            return jsonify({'message': 'Repair order updated successfully'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# Delete repair order
+@repair_order_bp.route('/repair-orders/<int:repair_order_id>/delete', methods=['DELETE'])
+def delete_repair_order(repair_order_id):
+    try:
+        repair_order = RepairOrder.query.get(repair_order_id)
+        
+        if not repair_order:
+            return jsonify({'error': 'Repair order not found'}), 404
+        
+        # Get parts before deletion to restore inventory
+        parts_to_restore = RepairOrderPart.query.filter_by(repair_order_id=repair_order_id).all()
+        
+        # Restore inventory for all parts
+        for part in parts_to_restore:
+            if part.inventory_id and part.quantity > 0:
+                from models import Inventory
+                inventory_item = Inventory.query.get(part.inventory_id)
+                if inventory_item:
+                    inventory_item.quantity += part.quantity
+        
+        # Delete related parts and labour
+        RepairOrderPart.query.filter_by(repair_order_id=repair_order_id).delete()
+        RepairOrderLabour.query.filter_by(repair_order_id=repair_order_id).delete()
+        
+        # Delete the repair order
+        db.session.delete(repair_order)
+        db.session.commit()
+        
+        return jsonify({'message': 'Repair order deleted successfully'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# Update specific part status
+@repair_order_bp.route('/repair-orders/<int:repair_order_id>/parts/<int:part_id>/status', methods=['PUT'])
+def update_part_status(repair_order_id, part_id):
+    try:
+        part = RepairOrderPart.query.filter_by(
+            repair_order_id=repair_order_id, 
+            id=part_id
+        ).first()
+        
+        if not part:
+            return jsonify({'error': 'Part not found'}), 404
+        
+        data = request.get_json()
+        new_status = data.get('status')
+        
+        if not new_status:
+            return jsonify({'error': 'Status is required'}), 400
+        
+        part.status = new_status
+        db.session.commit()
+        
+        return jsonify({'message': 'Part status updated successfully'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# Update specific labour status
+@repair_order_bp.route('/repair-orders/<int:repair_order_id>/labour/<int:labour_id>/status', methods=['PUT'])
+def update_labour_status(repair_order_id, labour_id):
+    try:
+        labour = RepairOrderLabour.query.filter_by(
+            repair_order_id=repair_order_id, 
+            id=labour_id
+        ).first()
+        
+        if not labour:
+            return jsonify({'error': 'Labour item not found'}), 404
+        
+        data = request.get_json()
+        new_status = data.get('status')
+        
+        if not new_status:
+            return jsonify({'error': 'Status is required'}), 400
+        
+        labour.status = new_status
+        db.session.commit()
+        
+        return jsonify({'message': 'Labour status updated successfully'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500 

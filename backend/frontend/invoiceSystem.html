@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Invoice/Quote Management</title>
+
+    <link rel="stylesheet" href="static/css/invoiceSystem.css" />
+  </head>
+  <body>
+    <a href="#" id="back-btn" class="back-btn">
+      <span>Back</span>
+    </a>
+
+    <div class="homepage">
+      <h1>Bill Management</h1>
+      <p>Invoices, Quotes and Repair Orders</p>
+
+      <div class="menu-buttons">
+        <a href="invoice.html?from=invoiceSystem" class="menu-btn">
+          <span>Create Invoice / Quote</span>
+        </a>
+        <a href="pending-quotes.html?from=invoiceSystem" class="menu-btn">
+          <span>Manage Quotes</span>
+        </a>
+        <a href="invoice-management.html?from=invoiceSystem" class="menu-btn">
+          <span>Manage Invoices</span>
+        </a>
+        <a
+          href="repair-orders-management.html?from=invoiceSystem"
+          class="menu-btn"
+        >
+          <span>Manage Repair Orders</span>
+        </a>
+        <a href="repair-order.html?from=invoiceSystem" class="menu-btn">
+          <span>🔧 Create Repair Order</span>
+        </a>
+      </div>
+    </div>
+
+    <footer>
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="../static/js/auth.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Check authentication and page access
+        if (!auth.requirePageAccess("invoice")) {
+          return;
+        }
+
+        // Set up smart back button logic
+        const backBtn = document.getElementById("back-btn");
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromPage =
+          urlParams.get("from") || localStorage.getItem("lastPage") || "home";
+
+        // Set back button destination based on where user came from
+        if (fromPage === "home") {
+          backBtn.href = "home.html";
+        } else if (fromPage === "admin") {
+          backBtn.href = "admin.html";
+        } else {
+          backBtn.href = "home.html"; // Default fallback
+        }
+
+        // Track current page for back button logic
+        localStorage.setItem("lastPage", "invoiceSystem");
+      });
+    </script>
+  </body>
+</html>

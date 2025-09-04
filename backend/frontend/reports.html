@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reports & Analytics - GermanATO</title>
+    <link rel="stylesheet" href="/static/css/reports.css" />
+  </head>
+  <body>
+    <a href="#" id="back-btn" class="back-button">
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M19 12H5M12 19L5 12L12 5"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      Back
+    </a>
+    <div class="container">
+      <div class="header">
+        <h1>Reports & Analytics</h1>
+        <p>Business insights, statistics, and performance analytics</p>
+      </div>
+      <div class="analytics-section">
+        <div class="analytics-cards">
+          <div class="card">
+            <h2>Total Invoices</h2>
+            <div class="card-value" id="total-invoices">--</div>
+          </div>
+          <div class="card">
+            <h2>Net Revenue</h2>
+            <div class="card-value" id="total-revenue">--</div>
+            <div class="card-subtitle">(Invoices - Expenses)</div>
+          </div>
+          <div class="card">
+            <h2>Total Expenses</h2>
+            <div class="card-value" id="total-expenses">--</div>
+          </div>
+          <div class="card">
+            <h2>Total Inventory Value</h2>
+            <div class="card-value" id="total-inventory-value">--</div>
+          </div>
+          <div class="card">
+            <h2>Total Cars</h2>
+            <div class="card-value" id="total-cars">--</div>
+          </div>
+          <div class="card">
+            <h2>Total Customers</h2>
+            <div class="card-value" id="total-customers">--</div>
+          </div>
+        </div>
+        <div class="charts">
+          <div class="chart-block">
+            <h3>Invoices per Month</h3>
+            <canvas id="invoices-per-month-chart" height="120"></canvas>
+          </div>
+          <div class="chart-block">
+            <h3>Net Revenue per Month</h3>
+            <canvas id="revenue-per-month-chart" height="120"></canvas>
+          </div>
+          <div class="chart-block">
+            <h3>Inventory Value by Category</h3>
+            <canvas id="inventory-by-category-chart" height="120"></canvas>
+          </div>
+          <div class="chart-block">
+            <h3>Top-Selling Products</h3>
+            <canvas id="top-products-chart" height="120"></canvas>
+          </div>
+          <div class="chart-block">
+            <h3>Customer Growth</h3>
+            <canvas id="customer-growth-chart" height="120"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <p>&copy; 2024 GermanATO. All rights reserved.</p>
+    </footer>
+    <script src="static/js/libs/chart.js"></script>
+    <script src="/static/js/reports.js"></script>
+  </body>
+</html>
