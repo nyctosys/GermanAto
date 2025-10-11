@@ -30,19 +30,29 @@ def role_required(required_roles):
         @wraps(f)
         @jwt_required()
         def decorated_function(*args, **kwargs):
-            current_user_id = get_jwt_identity()
-            user = User.query.get(current_user_id)
-            
-            if not user or not user.is_active:
-                return jsonify({'error': 'User not found or inactive'}), 401
-            
-            # Convert to list if string
-            roles_list = [required_roles] if isinstance(required_roles, str) else required_roles
-            
-            if user.role not in roles_list:
-                return jsonify({'error': 'Insufficient permissions'}), 403
-            
-            return f(*args, **kwargs)
+            try:
+                current_user_id = get_jwt_identity()
+                if not current_user_id:
+                    return jsonify({'error': 'Invalid token'}), 401
+                
+                user = User.query.get(int(current_user_id))
+                
+                if not user or not user.is_active:
+                    return jsonify({'error': 'User not found or inactive'}), 401
+                
+                # Convert to list if string
+                roles_list = [required_roles] if isinstance(required_roles, str) else required_roles
+                
+                if user.role not in roles_list:
+                    return jsonify({'error': 'Insufficient permissions'}), 403
+                
+                return f(*args, **kwargs)
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error in role_required decorator: {e}")
+                return jsonify({'error': 'Invalid user ID format'}), 401
+            except Exception as e:
+                logger.error(f"Unexpected error in role_required decorator: {e}")
+                return jsonify({'error': 'Authentication error'}), 500
         return decorated_function
     return decorator
 
@@ -67,6 +77,8 @@ def get_workers():
         search_query = request.args.get('search', '').strip()
         status_filter = request.args.get('status', '').strip()
         department_filter = request.args.get('department', '').strip()
+        
+        logger.info(f"Fetching workers with filters - search: '{search_query}', status: '{status_filter}', department: '{department_filter}'")
         
         query = Worker.query
 
@@ -93,6 +105,8 @@ def get_workers():
 
         # Order by hire date (newest first)
         workers = query.order_by(Worker.hire_date.desc()).all()
+        
+        logger.info(f"Successfully fetched {len(workers)} workers")
 
         return jsonify({
             'workers': [worker.to_dict() for worker in workers],
@@ -100,7 +114,7 @@ def get_workers():
         })
 
     except Exception as e:
-        logger.error(f"Error fetching workers: {e}")
+        logger.error(f"Error fetching workers: {e}", exc_info=True)
         return jsonify({'error': 'Failed to fetch workers'}), 500
 
 @hr_bp.route('/api/workers/<int:worker_id>', methods=['GET'])
@@ -298,3 +312,51 @@ def get_positions():
     except Exception as e:
         logger.error(f"Error fetching positions: {e}")
         return jsonify({'error': 'Failed to fetch positions'}), 500
+
+@hr_bp.route('/api/workers/debug', methods=['GET'])
+@role_required(['admin'])
+def debug_workers():
+    """Debug endpoint to help diagnose worker endpoint issues"""
+    try:
+        debug_info = {}
+        
+        # Test database connection
+        try:
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
+            debug_info['database_connection'] = 'OK'
+        except Exception as e:
+            debug_info['database_connection'] = f'ERROR: {str(e)}'
+        
+        # Test Worker model
+        try:
+            worker_count = Worker.query.count()
+            debug_info['worker_count'] = worker_count
+            debug_info['worker_model'] = 'OK'
+        except Exception as e:
+            debug_info['worker_model'] = f'ERROR: {str(e)}'
+        
+        # Test JWT token
+        try:
+            current_user_id = get_jwt_identity()
+            debug_info['jwt_user_id'] = current_user_id
+            debug_info['jwt_token'] = 'OK'
+        except Exception as e:
+            debug_info['jwt_token'] = f'ERROR: {str(e)}'
+        
+        # Test user lookup
+        try:
+            current_user_id = get_jwt_identity()
+            user = User.query.get(int(current_user_id))
+            if user:
+                debug_info['user_lookup'] = f'OK - User: {user.username}, Role: {user.role}'
+            else:
+                debug_info['user_lookup'] = 'ERROR: User not found'
+        except Exception as e:
+            debug_info['user_lookup'] = f'ERROR: {str(e)}'
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {e}", exc_info=True)
+        return jsonify({'error': f'Debug failed: {str(e)}'}), 500
