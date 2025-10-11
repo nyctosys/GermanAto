@@ -10,14 +10,15 @@ DB_NAME="germanato_db"
 DB_USER="root"
 DB_HOST="localhost"
 DB_PORT="3306"
+DB_PASSWORD="germanato_password_2024"
 BACKUP_DIR="./db_backups"
 LOG_FILE="./migration.log"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="${BACKUP_DIR}/germanato_db_backup_${TIMESTAMP}.sql"
 
 # MySQL connection options
-MYSQL_OPTS="-h $DB_HOST -P $DB_PORT -u $DB_USER"
-MYSQLDUMP_OPTS="-h $DB_HOST -P $DB_PORT -u $DB_USER --single-transaction --routines --triggers --add-drop-database"
+MYSQL_OPTS="-h $DB_HOST -P $DB_PORT -u $DB_USER -p$DB_PASSWORD"
+MYSQLDUMP_OPTS="-h $DB_HOST -P $DB_PORT -u $DB_USER -p$DB_PASSWORD --single-transaction --routines --triggers --add-drop-database"
 
 # Colors for output
 RED='\033[0;31m'
@@ -46,7 +47,7 @@ warning() {
 # Function to check if MySQL is running
 check_mysql() {
     log "Checking MySQL connection..."
-    if ! mysql $MYSQL_OPTS -p -e "SELECT 1;" > /dev/null 2>&1; then
+    if ! mysql $MYSQL_OPTS -e "SELECT 1;" > /dev/null 2>&1; then
         error "Cannot connect to MySQL. Please check your credentials and ensure MySQL is running."
         exit 1
     fi
@@ -108,7 +109,7 @@ check_current_schema() {
     local missing_tables=()
     
     for table in "${tables[@]}"; do
-        if ! mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE $table;" > /dev/null 2>&1; then
+        if ! mysql $MYSQL_OPTS -e "USE $DB_NAME; DESCRIBE $table;" > /dev/null 2>&1; then
             missing_tables+=("$table")
         fi
     done
@@ -228,7 +229,7 @@ SELECT 'Migration completed successfully' as status;
 EOF
 
     # Execute the migration
-    if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p "$DB_NAME" < "$sql_file"; then
+    if mysql $MYSQL_OPTS "$DB_NAME" < "$sql_file"; then
         success "Schema changes applied successfully"
         rm -f "$sql_file"
     else
@@ -243,21 +244,21 @@ validate_schema_changes() {
     log "Validating schema changes..."
     
     # Check if new columns were added
-    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE invoice;" | grep -q "paid_amount"; then
+    if mysql $MYSQL_OPTS -e "USE $DB_NAME; DESCRIBE invoice;" | grep -q "paid_amount"; then
         success "invoice.paid_amount column added"
     else
         error "invoice.paid_amount column not found"
         return 1
     fi
     
-    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE inventory;" | grep -q "image_path"; then
+    if mysql $MYSQL_OPTS -e "USE $DB_NAME; DESCRIBE inventory;" | grep -q "image_path"; then
         success "inventory.image_path column added"
     else
         error "inventory.image_path column not found"
         return 1
     fi
     
-    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE repair_order;" | grep -q "worker_id"; then
+    if mysql $MYSQL_OPTS -e "USE $DB_NAME; DESCRIBE repair_order;" | grep -q "worker_id"; then
         success "repair_order.worker_id column added"
     else
         error "repair_order.worker_id column not found"
@@ -265,13 +266,13 @@ validate_schema_changes() {
     fi
     
     # Check if new tables were created
-    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; SHOW TABLES LIKE 'vendors';" | grep -q "vendors"; then
+    if mysql $MYSQL_OPTS -e "USE $DB_NAME; SHOW TABLES LIKE 'vendors';" | grep -q "vendors"; then
         success "vendors table created"
     else
         warning "vendors table not created (optional)"
     fi
     
-    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; SHOW TABLES LIKE 'workers';" | grep -q "workers"; then
+    if mysql $MYSQL_OPTS -e "USE $DB_NAME; SHOW TABLES LIKE 'workers';" | grep -q "workers"; then
         success "workers table created"
     else
         warning "workers table not created (optional)"
@@ -300,7 +301,7 @@ rollback() {
     read -p "Are you sure you want to rollback? (yes/no): " confirm
     
     if [ "$confirm" = "yes" ]; then
-        if mysql $MYSQL_OPTS -p < "$backup_file"; then
+        if mysql $MYSQL_OPTS < "$backup_file"; then
             success "Database rollback completed successfully"
         else
             error "Database rollback failed"
@@ -357,19 +358,19 @@ run_validation() {
     # Check for expected columns
     log "Checking for expected columns..."
     
-    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE invoice;" | grep -q "paid_amount"; then
+    if mysql $MYSQL_OPTS -e "USE $DB_NAME; DESCRIBE invoice;" | grep -q "paid_amount"; then
         success "invoice.paid_amount exists"
     else
         warning "invoice.paid_amount missing"
     fi
     
-    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE inventory;" | grep -q "image_path"; then
+    if mysql $MYSQL_OPTS -e "USE $DB_NAME; DESCRIBE inventory;" | grep -q "image_path"; then
         success "inventory.image_path exists"
     else
         warning "inventory.image_path missing"
     fi
     
-    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE repair_order;" | grep -q "worker_id"; then
+    if mysql $MYSQL_OPTS -e "USE $DB_NAME; DESCRIBE repair_order;" | grep -q "worker_id"; then
         success "repair_order.worker_id exists"
     else
         warning "repair_order.worker_id missing"
