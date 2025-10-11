@@ -15,6 +15,10 @@ LOG_FILE="./migration.log"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="${BACKUP_DIR}/germanato_db_backup_${TIMESTAMP}.sql"
 
+# MySQL connection options
+MYSQL_OPTS="-h $DB_HOST -P $DB_PORT -u $DB_USER"
+MYSQLDUMP_OPTS="-h $DB_HOST -P $DB_PORT -u $DB_USER --single-transaction --routines --triggers --add-drop-database"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -42,7 +46,7 @@ warning() {
 # Function to check if MySQL is running
 check_mysql() {
     log "Checking MySQL connection..."
-    if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "SELECT 1;" > /dev/null 2>&1; then
+    if ! mysql $MYSQL_OPTS -p -e "SELECT 1;" > /dev/null 2>&1; then
         error "Cannot connect to MySQL. Please check your credentials and ensure MySQL is running."
         exit 1
     fi
@@ -62,9 +66,7 @@ create_backup() {
     log "Creating database backup..."
     create_backup_dir
     
-    if mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p \
-        --routines --triggers --single-transaction \
-        --add-drop-database --databases "$DB_NAME" > "$BACKUP_FILE" 2>/dev/null; then
+    if mysqldump $MYSQLDUMP_OPTS --databases "$DB_NAME" > "$BACKUP_FILE" 2>/dev/null; then
         success "Backup created successfully: $BACKUP_FILE"
         echo "$BACKUP_FILE" > .last_backup
     else
@@ -106,7 +108,7 @@ check_current_schema() {
     local missing_tables=()
     
     for table in "${tables[@]}"; do
-        if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "USE $DB_NAME; DESCRIBE $table;" > /dev/null 2>&1; then
+        if ! mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE $table;" > /dev/null 2>&1; then
             missing_tables+=("$table")
         fi
     done
@@ -130,35 +132,35 @@ apply_schema_changes() {
 -- Safe Database Migration for Germanato App
 -- Adding missing columns and indexes
 
--- 1) Add missing columns expected by the app
+-- 1) Add missing columns expected by the app (MySQL 8.0 compatible)
 ALTER TABLE invoice
-  ADD COLUMN IF NOT EXISTS paid_amount FLOAT NULL DEFAULT 0 AFTER tax_amount;
+  ADD COLUMN paid_amount FLOAT NULL DEFAULT 0 AFTER tax_amount;
 
 ALTER TABLE inventory
-  ADD COLUMN IF NOT EXISTS image_path VARCHAR(255) NULL AFTER reorder_quantity;
+  ADD COLUMN image_path VARCHAR(255) NULL AFTER reorder_quantity;
 
 ALTER TABLE repair_order
-  ADD COLUMN IF NOT EXISTS worker_id INT NULL AFTER diagnosis_plan;
+  ADD COLUMN worker_id INT NULL AFTER diagnosis_plan;
 
 -- 2) Make columns safe to omit on insert (set defaults)
 ALTER TABLE repair_order_part
-  MODIFY price FLOAT NOT NULL DEFAULT 0;
+  MODIFY COLUMN price FLOAT NOT NULL DEFAULT 0;
 
 ALTER TABLE repair_order_labour
-  MODIFY rate FLOAT NOT NULL DEFAULT 0;
+  MODIFY COLUMN rate FLOAT NOT NULL DEFAULT 0;
 
--- 3) Add performance indexes
-CREATE INDEX IF NOT EXISTS idx_invoice_type_status_date ON invoice (type_of, status, created_at);
-CREATE INDEX IF NOT EXISTS idx_invoice_created_at ON invoice (created_at);
-CREATE INDEX IF NOT EXISTS idx_inventory_name ON inventory (name);
-CREATE INDEX IF NOT EXISTS idx_repair_order_status ON repair_order (current_status);
-CREATE INDEX IF NOT EXISTS idx_repair_order_created_at ON repair_order (created_at);
-CREATE INDEX IF NOT EXISTS idx_expense_date ON expense (date);
-CREATE INDEX IF NOT EXISTS idx_customer_created_at ON customer (created_at);
-CREATE INDEX IF NOT EXISTS idx_car_created_at ON car (created_at);
+-- 3) Add performance indexes (MySQL 8.0 compatible)
+CREATE INDEX idx_invoice_type_status_date ON invoice (type_of, status, created_at);
+CREATE INDEX idx_invoice_created_at ON invoice (created_at);
+CREATE INDEX idx_inventory_name ON inventory (name);
+CREATE INDEX idx_repair_order_status ON repair_order (current_status);
+CREATE INDEX idx_repair_order_created_at ON repair_order (created_at);
+CREATE INDEX idx_expense_date ON expense (date);
+CREATE INDEX idx_customer_created_at ON customer (created_at);
+CREATE INDEX idx_car_created_at ON car (created_at);
 
 -- 4) Create optional tables for Vendors/HR features
-CREATE TABLE IF NOT EXISTS vendors (
+CREATE TABLE vendors (
   id INT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(255) NOT NULL,
   company_name VARCHAR(255) NOT NULL,
@@ -171,7 +173,7 @@ CREATE TABLE IF NOT EXISTS vendors (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS vendor_ledger (
+CREATE TABLE vendor_ledger (
   id INT PRIMARY KEY AUTO_INCREMENT,
   vendor_id INT NOT NULL,
   date DATE NOT NULL,
@@ -185,7 +187,7 @@ CREATE TABLE IF NOT EXISTS vendor_ledger (
   CONSTRAINT fk_vendor_ledger_vendor FOREIGN KEY (vendor_id) REFERENCES vendors(id)
 );
 
-CREATE TABLE IF NOT EXISTS vendor_consignments (
+CREATE TABLE vendor_consignments (
   id INT PRIMARY KEY AUTO_INCREMENT,
   vendor_id INT NOT NULL,
   date DATE NOT NULL,
@@ -200,7 +202,7 @@ CREATE TABLE IF NOT EXISTS vendor_consignments (
   CONSTRAINT fk_vendor_consignments_vendor FOREIGN KEY (vendor_id) REFERENCES vendors(id)
 );
 
-CREATE TABLE IF NOT EXISTS workers (
+CREATE TABLE workers (
   id INT PRIMARY KEY AUTO_INCREMENT,
   employee_id VARCHAR(20) NOT NULL UNIQUE,
   first_name VARCHAR(100) NOT NULL,
@@ -241,21 +243,21 @@ validate_schema_changes() {
     log "Validating schema changes..."
     
     # Check if new columns were added
-    if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "USE $DB_NAME; DESCRIBE invoice;" | grep -q "paid_amount"; then
+    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE invoice;" | grep -q "paid_amount"; then
         success "invoice.paid_amount column added"
     else
         error "invoice.paid_amount column not found"
         return 1
     fi
     
-    if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "USE $DB_NAME; DESCRIBE inventory;" | grep -q "image_path"; then
+    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE inventory;" | grep -q "image_path"; then
         success "inventory.image_path column added"
     else
         error "inventory.image_path column not found"
         return 1
     fi
     
-    if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "USE $DB_NAME; DESCRIBE repair_order;" | grep -q "worker_id"; then
+    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE repair_order;" | grep -q "worker_id"; then
         success "repair_order.worker_id column added"
     else
         error "repair_order.worker_id column not found"
@@ -263,13 +265,13 @@ validate_schema_changes() {
     fi
     
     # Check if new tables were created
-    if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "USE $DB_NAME; SHOW TABLES LIKE 'vendors';" | grep -q "vendors"; then
+    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; SHOW TABLES LIKE 'vendors';" | grep -q "vendors"; then
         success "vendors table created"
     else
         warning "vendors table not created (optional)"
     fi
     
-    if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "USE $DB_NAME; SHOW TABLES LIKE 'workers';" | grep -q "workers"; then
+    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; SHOW TABLES LIKE 'workers';" | grep -q "workers"; then
         success "workers table created"
     else
         warning "workers table not created (optional)"
@@ -298,7 +300,7 @@ rollback() {
     read -p "Are you sure you want to rollback? (yes/no): " confirm
     
     if [ "$confirm" = "yes" ]; then
-        if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p < "$backup_file"; then
+        if mysql $MYSQL_OPTS -p < "$backup_file"; then
             success "Database rollback completed successfully"
         else
             error "Database rollback failed"
@@ -355,19 +357,19 @@ run_validation() {
     # Check for expected columns
     log "Checking for expected columns..."
     
-    if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "USE $DB_NAME; DESCRIBE invoice;" | grep -q "paid_amount"; then
+    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE invoice;" | grep -q "paid_amount"; then
         success "invoice.paid_amount exists"
     else
         warning "invoice.paid_amount missing"
     fi
     
-    if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "USE $DB_NAME; DESCRIBE inventory;" | grep -q "image_path"; then
+    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE inventory;" | grep -q "image_path"; then
         success "inventory.image_path exists"
     else
         warning "inventory.image_path missing"
     fi
     
-    if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p -e "USE $DB_NAME; DESCRIBE repair_order;" | grep -q "worker_id"; then
+    if mysql $MYSQL_OPTS -p -e "USE $DB_NAME; DESCRIBE repair_order;" | grep -q "worker_id"; then
         success "repair_order.worker_id exists"
     else
         warning "repair_order.worker_id missing"
