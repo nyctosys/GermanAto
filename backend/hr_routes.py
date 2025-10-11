@@ -360,3 +360,25 @@ def debug_workers():
     except Exception as e:
         logger.error(f"Error in debug endpoint: {e}", exc_info=True)
         return jsonify({'error': f'Debug failed: {str(e)}'}), 500
+
+@hr_bp.route('/api/workers/test-auth', methods=['GET'])
+@jwt_required()
+def test_auth():
+    """Simple test endpoint to check JWT authentication"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(int(current_user_id))
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+            
+        return jsonify({
+            'message': 'Authentication successful',
+            'user_id': current_user_id,
+            'username': user.username,
+            'role': user.role
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in test auth endpoint: {e}", exc_info=True)
+        return jsonify({'error': f'Auth test failed: {str(e)}'}), 500
