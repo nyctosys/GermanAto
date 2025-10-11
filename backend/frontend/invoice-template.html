@@ -124,6 +124,10 @@
           <span>Advance:</span>
           <span id="advance">{ADVANCE}</span>
         </div>
+        <div class="total-row" id="paid-row">
+          <span>Paid Amount:</span>
+          <span id="paid-amount">{PAID_AMOUNT}</span>
+        </div>
         <div class="total-row">
           <strong>Balance</strong>
           <span id="balance">{BALANCE}</span>
@@ -285,8 +289,12 @@
           document.getElementById(
             "invoice-id"
           ).textContent = `${idPrefix} #${invoiceId}`;
+          // Format the creation date and time
+          const createdDate = data.created_at
+            ? new Date(data.created_at)
+            : new Date();
           document.getElementById("invoice-date").textContent =
-            new Date().toLocaleDateString();
+            createdDate.toLocaleString();
 
           // Update billing information
           document.getElementById("customer-name").textContent =
@@ -396,7 +404,7 @@
             discountRow.style.display = "none";
           }
 
-          // Calculate balance (net total + tax - discount - advance)
+          // Calculate balance (net total + tax - discount - advance - paid_amount)
           let balance = netTotal;
           if (showTaxColumns) {
             balance += data.tax_amount || 0;
@@ -407,6 +415,15 @@
           if (data.advance && data.advance > 0 && data.advance !== "N/A") {
             balance -= data.advance;
           }
+          if (data.paid_amount && data.paid_amount > 0) {
+            balance -= data.paid_amount;
+          }
+
+          // Update paid amount
+          const paidAmount = data.paid_amount || 0;
+          document.getElementById(
+            "paid-amount"
+          ).textContent = `${paidAmount.toFixed(2)} PKR`;
 
           // Update balance
           document.getElementById("balance").textContent = `${balance.toFixed(

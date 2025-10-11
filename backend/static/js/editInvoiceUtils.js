@@ -1,4 +1,4 @@
-import { addItem } from "./script.js";
+// addItem function will be available globally
 
 // Function to check if invoice is older than 1 day
 function isInvoiceOlderThanOneDay(createdAtStr) {
@@ -37,17 +37,15 @@ function canUserEditInvoice(invoice) {
 
 export async function loadInvoiceForEdit(invoiceId) {
   try {
-    const res = await fetch(`/api/invoice/${invoiceId}`);
-    if (!res.ok) {
-      alert("Failed to fetch invoice for editing.");
+    const data = await APIHelper.get(`/api/invoice/${invoiceId}`);
+    if (!data) {
+      showError("Failed to fetch invoice for editing.");
       return;
     }
 
-    const data = await res.json();
-
     // Check if user can edit this invoice based on role and time restrictions
     if (!canUserEditInvoice(data)) {
-      alert(
+      showError(
         "You cannot edit invoices older than 1 day. Please contact an administrator."
       );
       window.history.back();
@@ -147,7 +145,6 @@ export async function loadInvoiceForEdit(invoiceId) {
     });
 
     // Show only Update button
-    console.log("Document type from API:", data.type_of); // Debug log
     prepareUpdateButton(data.type_of);
 
     // Hide the document type toggle when editing
@@ -222,42 +219,7 @@ function prepareUpdateButton(docType) {
   buttonContainer.appendChild(updateButton);
 }
 
-// Function to update total cost
-function updateTotal() {
-  let total = 0;
-
-  document.querySelectorAll(".item").forEach((item) => {
-    const quantityInput = item.querySelector(".quantity");
-    const priceInput = item.querySelector(".price");
-    const price = parseFloat(priceInput?.value) || 0;
-
-    if (quantityInput && quantityInput.classList.contains("quantity")) {
-      const quantity = parseInt(quantityInput.value) || 0;
-      total += quantity * price;
-    } else {
-      total += price; // Labour has only price
-    }
-  });
-
-  document.getElementById(
-    "total-amount"
-  ).innerText = `Net Total: ${total.toFixed(2)} PKR`;
-
-  updateBalance();
-}
-
-// Function to update balance
-function updateBalance() {
-  const totalText = document.getElementById("total-amount").innerText;
-  const total = parseFloat(totalText.replace(/[^\d.-]/g, "")) || 0;
-  const advance = parseFloat(document.querySelector(".advance").value) || 0;
-  const discount = parseFloat(document.getElementById("discount").value) || 0;
-  const balance = total - advance - discount;
-
-  document.getElementById(
-    "total-balance"
-  ).innerText = `Balance: ${balance.toFixed(2)} PKR`;
-}
+// Using global updateTotal and updateBalance functions from script.js
 
 // Function to update tax display
 function updateTaxDisplay() {
@@ -275,6 +237,19 @@ function updateTaxDisplay() {
   } else {
     taxAmountDisplay.style.display = "none";
   }
+}
+
+// Update balance function
+function updateBalance() {
+  const totalText = document.getElementById("total-amount").innerText;
+  const total = parseFloat(totalText.replace(/[^\d.-]/g, ""));
+  const advance = parseFloat(document.querySelector(".advance").value) || 0;
+  const discount = parseFloat(document.getElementById("discount").value) || 0;
+  const balance = total - advance - discount;
+
+  document.getElementById(
+    "total-balance"
+  ).innerText = `Balance: ${balance.toFixed(2)} PKR`;
 }
 
 // Attach event listener to advance field AFTER DOM loaded

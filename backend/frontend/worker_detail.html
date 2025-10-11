@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Worker Details</title>
+    <link rel="stylesheet" href="../static/css/worker_detail.css" />
+    <script src="../static/js/notification-utils.js"></script>
+    <script src="../static/js/auth_jwt.js"></script>
+    <script src="../static/js/api-helper.js"></script>
+  </head>
+  <body>
+    <a href="#" id="back-btn" class="back-btn">
+      <span>Back</span>
+    </a>
+
+    <div class="container">
+      <div class="header">
+        <h1>Worker Details</h1>
+        <p id="workerName">Loading worker information...</p>
+      </div>
+
+      <div class="main-content">
+        <div class="worker-info-card">
+          <div class="worker-header">
+            <div class="worker-basic-info">
+              <h2 id="workerFullName">Loading...</h2>
+              <p id="workerPosition">Loading...</p>
+              <p id="workerDepartment">Loading...</p>
+            </div>
+            <div class="action-buttons">
+              <button class="action-btn edit-btn" onclick="editWorker()">
+                <span>✏️</span>
+                Edit
+              </button>
+              <button class="action-btn delete-btn" onclick="deleteWorker()">
+                <span>🗑️</span>
+                Delete
+              </button>
+            </div>
+          </div>
+
+          <div class="worker-details-grid">
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">Employee ID:</span>
+              <span class="worker-detail-value" id="workerEmployeeId">-</span>
+            </div>
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">Phone:</span>
+              <span class="worker-detail-value" id="workerPhone">-</span>
+            </div>
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">Email:</span>
+              <span class="worker-detail-value" id="workerEmail">-</span>
+            </div>
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">CNIC:</span>
+              <span class="worker-detail-value" id="workerCnic">-</span>
+            </div>
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">Date of Birth:</span>
+              <span class="worker-detail-value" id="workerDateOfBirth">-</span>
+            </div>
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">Hire Date:</span>
+              <span class="worker-detail-value" id="workerHireDate">-</span>
+            </div>
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">Salary:</span>
+              <span class="worker-detail-value" id="workerSalary">-</span>
+            </div>
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">Status:</span>
+              <span class="worker-detail-value" id="workerStatus">-</span>
+            </div>
+            <div class="worker-detail-item full-width">
+              <span class="worker-detail-label">Address:</span>
+              <span class="worker-detail-value" id="workerAddress">-</span>
+            </div>
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">Emergency Contact:</span>
+              <span class="worker-detail-value" id="workerEmergencyContact"
+                >-</span
+              >
+            </div>
+            <div class="worker-detail-item">
+              <span class="worker-detail-label">Emergency Phone:</span>
+              <span class="worker-detail-value" id="workerEmergencyPhone"
+                >-</span
+              >
+            </div>
+            <div class="worker-detail-item full-width">
+              <span class="worker-detail-label">Notes:</span>
+              <span class="worker-detail-value" id="workerNotes">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Worker Modal -->
+    <div id="editWorkerModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Edit Worker</h2>
+          <button class="close" onclick="closeEditWorkerModal()">
+            &times;
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="editWorkerForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="editEmployeeId">Employee ID *</label>
+                <input
+                  type="text"
+                  id="editEmployeeId"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="editCnic">CNIC *</label>
+                <input
+                  type="text"
+                  id="editCnic"
+                  class="input-fields"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="editFirstName">First Name *</label>
+                <input
+                  type="text"
+                  id="editFirstName"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="editLastName">Last Name *</label>
+                <input
+                  type="text"
+                  id="editLastName"
+                  class="input-fields"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="editEmail">Email</label>
+                <input type="email" id="editEmail" class="input-fields" />
+              </div>
+              <div class="form-group">
+                <label for="editPhone">Phone *</label>
+                <input
+                  type="text"
+                  id="editPhone"
+                  class="input-fields"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="editAddress">Address *</label>
+              <textarea
+                id="editAddress"
+                class="input-fields"
+                rows="3"
+                required
+              ></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="editDateOfBirth">Date of Birth *</label>
+                <input
+                  type="date"
+                  id="editDateOfBirth"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="editHireDate">Hire Date *</label>
+                <input
+                  type="date"
+                  id="editHireDate"
+                  class="input-fields"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="editPosition">Position *</label>
+                <input
+                  type="text"
+                  id="editPosition"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="editDepartment">Department *</label>
+                <input
+                  type="text"
+                  id="editDepartment"
+                  class="input-fields"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="editSalary">Salary</label>
+                <input
+                  type="number"
+                  id="editSalary"
+                  class="input-fields"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+              <div class="form-group">
+                <label for="editStatus">Status</label>
+                <select id="editStatus" class="input-fields">
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="terminated">Terminated</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="editEmergencyContactName"
+                  >Emergency Contact Name</label
+                >
+                <input
+                  type="text"
+                  id="editEmergencyContactName"
+                  class="input-fields"
+                />
+              </div>
+              <div class="form-group">
+                <label for="editEmergencyContactPhone"
+                  >Emergency Contact Phone</label
+                >
+                <input
+                  type="text"
+                  id="editEmergencyContactPhone"
+                  class="input-fields"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="editNotes">Notes</label>
+              <textarea id="editNotes" class="input-fields" rows="3"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeEditWorkerModal()">
+            Cancel
+          </button>
+          <button class="btn-primary" onclick="saveWorker()">
+            Update Worker
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Confirm Delete</h2>
+          <button class="close" onclick="closeDeleteModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to delete this worker?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeDeleteModal()">
+            Cancel
+          </button>
+          <button class="btn-danger" onclick="confirmDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../static/js/worker_detail.js"></script>
+  </body>
+</html>

@@ -58,6 +58,50 @@ body {
   font-weight: 400;
 }
 
+/* ===== HEADER LAYOUT ===== */
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.header-text {
+  text-align: left;
+}
+
+.logout-btn {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+.logout-btn:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+}
+
+.logout-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+.logout-btn span {
+  font-size: 18px;
+}
+
 /* ===== MAIN CONTENT ===== */
 .main-content {
   flex: 1;
@@ -72,15 +116,49 @@ body {
   gap: 30px;
   width: 100%;
   max-width: 800px;
+  justify-items: center;
 }
 
-/* Center the last button when there are odd number of buttons (desktop only) */
-@media screen and (min-width: 769px) {
-  .button-grid .nav-button:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-    justify-self: center;
-    max-width: 300px;
-  }
+/* Dynamic grid layouts based on visible button count */
+.button-grid.grid-1 {
+  grid-template-columns: 1fr;
+}
+
+.button-grid.grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.button-grid.grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.button-grid.grid-4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.button-grid.grid-5 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.button-grid.grid-5 .nav-button:last-child {
+  grid-column: 2;
+  justify-self: center;
+}
+
+.button-grid.grid-6 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.button-grid.grid-7 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.button-grid.grid-8 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.button-grid.grid-9 {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 /* ===== NAVIGATION BUTTONS ===== */
@@ -179,6 +257,15 @@ body {
 }
 
 .car-customer-btn:hover .button-icon {
+  transform: scale(1.1);
+  transition: transform 0.3s ease;
+}
+
+.vendor-btn:hover {
+  border-color: #f59e0b;
+}
+
+.vendor-btn:hover .button-icon {
   transform: scale(1.1);
   transition: transform 0.3s ease;
 }
@@ -284,6 +371,21 @@ body {
   }
 
   .header p {
+    font-size: 14px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    gap: 20px;
+    text-align: center;
+  }
+
+  .header-text {
+    text-align: center;
+  }
+
+  .logout-btn {
+    padding: 10px 16px;
     font-size: 14px;
   }
 

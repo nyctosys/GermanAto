@@ -5,12 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GermanATO - Home</title>
     <link rel="stylesheet" href="../static/css/home.css" />
+    <script src="../static/js/notification-utils.js"></script>
   </head>
   <body>
     <div class="container">
       <div class="header">
-        <h1>GermanATO</h1>
-        <p>Business Management System</p>
+        <div class="header-content">
+          <div class="header-text">
+            <h1>GermanATO</h1>
+            <p>Business Management System</p>
+          </div>
+          <button class="logout-btn" onclick="handleLogout()">
+            <span>🚪</span>
+            Logout
+          </button>
+        </div>
       </div>
 
       <div class="main-content">
@@ -46,6 +55,36 @@
           </a>
 
           <a
+            href="/vendors?from=home"
+            class="nav-button vendor-btn"
+            data-role="admin,accountant"
+          >
+            <div class="button-icon">🏢</div>
+            <h2>Vendor Management</h2>
+            <p>Manage vendors, ledger entries, and consignments</p>
+          </a>
+
+          <a
+            href="/hr?from=home"
+            class="nav-button hr-btn"
+            data-role="admin,accountant"
+          >
+            <div class="button-icon">👥</div>
+            <h2>HR Management</h2>
+            <p>Manage worker information and roles</p>
+          </a>
+
+          <a
+            href="repair-orders-management.html?from=home"
+            class="nav-button repair-orders-btn"
+            data-role="admin,accountant,inventory_manager"
+          >
+            <div class="button-icon">🔧</div>
+            <h2>Repair Orders</h2>
+            <p>Manage repair orders, status updates, and work progress</p>
+          </a>
+
+          <a
             href="reports.html?from=home"
             class="nav-button reports-btn"
             data-role="admin"
@@ -61,7 +100,7 @@
             data-role="admin"
           >
             <div class="button-icon">⚙️</div>
-            <h2>Admin Panel</h2>
+            <h2>Users Management</h2>
             <p>Manage users and system settings</p>
           </a>
 
@@ -82,8 +121,25 @@
       <p>&copy; 2025 GermanATO. All rights reserved.</p>
     </footer>
 
-    <script src="../static/js/auth.js"></script>
+    <script src="../static/js/auth_jwt.js"></script>
+    <script src="../static/js/api-helper.js"></script>
     <script>
+      // Handle logout function
+      function handleLogout() {
+        if (typeof auth !== "undefined" && auth.logout) {
+          auth.logout();
+          // Immediately redirect to login page after logout
+          window.location.href = "login.html";
+        } else {
+          console.error("Auth not available");
+          // Fallback: clear tokens and redirect to login page
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("refreshToken");
+          localStorage.removeItem("user");
+          window.location.href = "login.html";
+        }
+      }
+
       document.addEventListener("DOMContentLoaded", function () {
         // Check authentication and page access
         if (!auth.requirePageAccess("home")) {
@@ -92,14 +148,40 @@
 
         // Show/hide buttons based on user role
         const buttons = document.querySelectorAll(".nav-button");
+        const buttonGrid = document.querySelector(".button-grid");
+        let visibleButtonCount = 0;
+
         buttons.forEach((button) => {
           const allowedRoles = button.getAttribute("data-role").split(",");
           const userRole = auth.getCurrentUser().role;
 
           if (!allowedRoles.includes(userRole)) {
             button.style.display = "none";
+          } else {
+            visibleButtonCount++;
           }
         });
+
+        // Apply appropriate grid layout based on visible button count
+        if (buttonGrid) {
+          // Remove any existing grid classes
+          buttonGrid.classList.remove(
+            "grid-1",
+            "grid-2",
+            "grid-3",
+            "grid-4",
+            "grid-5",
+            "grid-6",
+            "grid-7",
+            "grid-8",
+            "grid-9"
+          );
+
+          // Add the appropriate grid class
+          if (visibleButtonCount > 0) {
+            buttonGrid.classList.add(`grid-${visibleButtonCount}`);
+          }
+        }
       });
     </script>
   </body>

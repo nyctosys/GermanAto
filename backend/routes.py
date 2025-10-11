@@ -340,6 +340,7 @@ def get_invoice(invoice_id):
             "type_of": invoice.type_of,
             "include_tax": invoice.include_tax,
             "tax_amount": float(invoice.tax_amount),
+            "paid_amount": float(invoice.paid_amount or 0),
             "status": invoice.status,
             "items": [
                 {
@@ -596,6 +597,7 @@ def search_invoices():
                 "discount": float(invoice.discount),
                 "include_tax": invoice.include_tax,
                 "tax_amount": float(invoice.tax_amount),
+                "paid_amount": float(invoice.paid_amount or 0),
                 "status": invoice.status
             }
             invoice_list.append(invoice_data)
@@ -673,4 +675,57 @@ def update_invoice_status(invoice_id):
         return jsonify({'message': 'Status updated', 'status': invoice.status}), 200
     except Exception as e:
         logger.error(f"Error updating invoice status {invoice_id}: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@bp.route('/invoice/<int:invoice_id>/update-balance', methods=['PUT'])
+def update_invoice_balance(invoice_id):
+    """Add to the paid amount and update status of an invoice"""
+    try:
+        data = request.get_json()
+        if not data or 'paid_amount' not in data:
+            return jsonify({'error': 'No paid_amount provided'}), 400
+        
+        invoice = Invoice.query.get(invoice_id)
+        if not invoice:
+            return jsonify({'error': 'Invoice not found'}), 404
+        
+        additional_amount = float(data['paid_amount'])
+        if additional_amount < 0:
+            return jsonify({'error': 'Additional amount cannot be negative'}), 400
+        
+        # Add to existing paid amount
+        current_paid = invoice.paid_amount or 0
+        invoice.paid_amount = current_paid + additional_amount
+        
+        # Calculate balance
+        balance = invoice.net_total
+        if invoice.include_tax and invoice.tax_amount:
+            balance += invoice.tax_amount
+        if invoice.discount:
+            balance -= invoice.discount
+        if invoice.advance:
+            balance -= invoice.advance
+        balance -= invoice.paid_amount
+        
+        # Update status based on total paid amount
+        if invoice.paid_amount == 0:
+            invoice.status = 'unpaid'
+        elif balance <= 0:
+            invoice.status = 'paid'
+        else:
+            invoice.status = 'partially_paid'
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Added {additional_amount:.2f} PKR to paid amount. Total paid: {invoice.paid_amount:.2f} PKR',
+            'paid_amount': invoice.paid_amount,
+            'balance': balance,
+            'status': invoice.status
+        }), 200
+        
+    except ValueError as e:
+        return jsonify({'error': 'Invalid paid_amount value'}), 400
+    except Exception as e:
+        logger.error(f"Error updating invoice balance {invoice_id}: {e}")
         return jsonify({'error': 'Internal server error'}), 500

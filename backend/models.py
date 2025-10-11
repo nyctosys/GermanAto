@@ -1,6 +1,8 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+import hashlib
+import secrets
 
 db = SQLAlchemy()
 
@@ -15,16 +17,46 @@ class User(db.Model):
     last_login = db.Column(db.DateTime)
     
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        # Use pbkdf2_sha256 instead of scrypt for better compatibility
+        self.password_hash = generate_password_hash(password, method='pbkdf2:sha256')
     
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        try:
+            return check_password_hash(self.password_hash, password)
+        except AttributeError:
+            # Fallback for scrypt compatibility issues
+            return self._fallback_check_password(password)
+    
+    def _fallback_check_password(self, password):
+        """Fallback password checking method for scrypt compatibility issues"""
+        try:
+            # Try to parse the hash format
+            if self.password_hash.startswith('pbkdf2:sha256:'):
+                # Extract salt and hash from the stored password
+                parts = self.password_hash.split(':')
+                if len(parts) == 4:
+                    salt = parts[2]
+                    stored_hash = parts[3]
+                    
+                    # Generate hash with the same salt
+                    import hashlib
+                    import base64
+                    salt_bytes = base64.b64decode(salt)
+                    password_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt_bytes, 260000)
+                    password_hash_b64 = base64.b64encode(password_hash).decode('ascii')
+                    
+                    return password_hash_b64 == stored_hash
+        except Exception:
+            pass
+        
+        # If all else fails, return False
+        return False
     
     def has_permission(self, required_role):
         role_hierarchy = {
-            'admin': ['admin', 'accountant', 'inventory_manager'],
-            'accountant': ['accountant'],
-            'inventory_manager': ['inventory_manager']
+            'admin': ['admin', 'accountant', 'inventory_manager', 'repair_orders', 'repair-order', 'repair-orders-management'],
+            'accountant': ['accountant', 'repair_orders', 'repair-order', 'repair-orders-management'],
+            'inventory_manager': ['inventory_manager', 'repair_orders', 'repair-order', 'repair-orders-management']
         }
         return required_role in role_hierarchy.get(self.role, [])
 
@@ -48,6 +80,7 @@ class Invoice(db.Model):
     type_of = db.Column(db.String(50), nullable=False)
     include_tax = db.Column(db.Boolean, default=False, nullable=False)
     tax_amount = db.Column(db.Float, default=0.0, nullable=False)
+    paid_amount = db.Column(db.Float, default=0.0, nullable=True)  # Amount paid by customer
     status = db.Column(db.String(20), default='pending', nullable=False)  # pending for quotes, unpaid for invoices
 
     items = db.relationship('InvoiceItem', backref='invoice', cascade='all, delete-orphan', lazy=True)
@@ -81,6 +114,7 @@ class Inventory(db.Model):
     location = db.Column(db.String(255))
     reorder_level = db.Column(db.Integer, default=5, nullable=False)  # Minimum stock level before reorder
     reorder_quantity = db.Column(db.Integer, default=10, nullable=False)  # Quantity to reorder
+    image_path = db.Column(db.String(255), nullable=True)  # Path to uploaded image
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -147,6 +181,7 @@ class RepairOrder(db.Model):
     customer_chasis = db.Column(db.String(50), nullable=True)
     problem_description = db.Column(db.Text, nullable=True)
     diagnosis_plan = db.Column(db.Text, nullable=True)
+    worker_id = db.Column(db.Integer, db.ForeignKey('workers.id'), nullable=True)
     worker_name = db.Column(db.String(255), nullable=True)
     current_status = db.Column(db.String(20), default='received', nullable=False)
     status_timeline = db.Column(db.Text, nullable=True)  # JSON string for timeline
@@ -154,7 +189,6 @@ class RepairOrder(db.Model):
     parts_total = db.Column(db.Float, default=0.0, nullable=False)
     labour_total = db.Column(db.Float, default=0.0, nullable=False)
     tax_amount = db.Column(db.Float, default=0.0, nullable=False)
-    total_estimate = db.Column(db.Float, default=0.0, nullable=False)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -170,7 +204,6 @@ class RepairOrderPart(db.Model):
     description = db.Column(db.String(255), nullable=False)
     part_number = db.Column(db.String(100), nullable=True)
     quantity = db.Column(db.Integer, default=1, nullable=False)
-    price = db.Column(db.Float, default=0.0, nullable=False)
     status = db.Column(db.String(20), default='pending', nullable=False)  # pending, ordered, received, installed
 
 
@@ -178,7 +211,6 @@ class RepairOrderLabour(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     repair_order_id = db.Column(db.Integer, db.ForeignKey('repair_order.id'), nullable=False)
     description = db.Column(db.String(255), nullable=False)
-    rate = db.Column(db.Float, default=0.0, nullable=False)
     status = db.Column(db.String(20), default='pending', nullable=False)  # pending, in_progress, completed
 
 
@@ -228,3 +260,159 @@ class WhatsAppNotification(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     sent_at = db.Column(db.DateTime, nullable=True)
     delivered_at = db.Column(db.DateTime, nullable=True)
+
+
+# ===== VENDOR MANAGEMENT MODELS =====
+
+class Vendor(db.Model):
+    """Vendor model for managing suppliers and vendors"""
+    __tablename__ = 'vendors'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    company_name = db.Column(db.String(255), nullable=False)
+    contact_person = db.Column(db.String(255), nullable=False)
+    phone = db.Column(db.String(20), nullable=False)
+    email = db.Column(db.String(255), nullable=True)
+    address = db.Column(db.Text, nullable=False)
+    cnic = db.Column(db.String(20), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    ledger_entries = db.relationship('VendorLedger', backref='vendor', lazy=True, cascade='all, delete-orphan')
+    consignments = db.relationship('VendorConsignment', backref='vendor', lazy=True, cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<Vendor {self.name} - {self.company_name}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'company_name': self.company_name,
+            'contact_person': self.contact_person,
+            'phone': self.phone,
+            'email': self.email,
+            'address': self.address,
+            'cnic': self.cnic,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+
+class VendorLedger(db.Model):
+    """Vendor ledger entries for tracking financial transactions"""
+    __tablename__ = 'vendor_ledger'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    description = db.Column(db.String(500), nullable=False)
+    folio = db.Column(db.String(100), nullable=True)
+    debit = db.Column(db.Numeric(10, 2), default=0.00, nullable=False)
+    credit = db.Column(db.Numeric(10, 2), default=0.00, nullable=False)
+    balance = db.Column(db.Numeric(10, 2), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<VendorLedger {self.vendor_id} - {self.description}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'vendor_id': self.vendor_id,
+            'date': self.date.strftime('%Y-%m-%d'),
+            'description': self.description,
+            'folio': self.folio,
+            'debit': float(self.debit),
+            'credit': float(self.credit),
+            'balance': float(self.balance),
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+
+class VendorConsignment(db.Model):
+    """Vendor consignment records for tracking goods received"""
+    __tablename__ = 'vendor_consignments'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    invoice_no = db.Column(db.String(100), nullable=False)
+    item_name = db.Column(db.String(255), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    rate = db.Column(db.Numeric(10, 2), nullable=False)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    remarks = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<VendorConsignment {self.vendor_id} - {self.item_name}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'vendor_id': self.vendor_id,
+            'date': self.date.strftime('%Y-%m-%d'),
+            'invoice_no': self.invoice_no,
+            'item_name': self.item_name,
+            'quantity': self.quantity,
+            'rate': float(self.rate),
+            'amount': float(self.amount),
+            'remarks': self.remarks,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+
+# ===== HR MANAGEMENT MODELS =====
+
+class Worker(db.Model):
+    """Worker model for HR management"""
+    __tablename__ = 'workers'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.String(20), unique=True, nullable=False)
+    first_name = db.Column(db.String(100), nullable=False)
+    last_name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(255), nullable=True)
+    phone = db.Column(db.String(20), nullable=False)
+    address = db.Column(db.Text, nullable=False)
+    cnic = db.Column(db.String(20), unique=True, nullable=False)
+    date_of_birth = db.Column(db.Date, nullable=False)
+    hire_date = db.Column(db.Date, nullable=False)
+    position = db.Column(db.String(100), nullable=False)
+    department = db.Column(db.String(100), nullable=False)
+    salary = db.Column(db.Numeric(10, 2), nullable=True)
+    status = db.Column(db.String(20), default='active', nullable=False)  # active, inactive, terminated
+    emergency_contact_name = db.Column(db.String(100), nullable=True)
+    emergency_contact_phone = db.Column(db.String(20), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Worker {self.employee_id} - {self.first_name} {self.last_name}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'employee_id': self.employee_id,
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'email': self.email,
+            'phone': self.phone,
+            'address': self.address,
+            'cnic': self.cnic,
+            'date_of_birth': self.date_of_birth.strftime('%Y-%m-%d') if self.date_of_birth else None,
+            'hire_date': self.hire_date.strftime('%Y-%m-%d') if self.hire_date else None,
+            'position': self.position,
+            'department': self.department,
+            'salary': float(self.salary) if self.salary else None,
+            'status': self.status,
+            'emergency_contact_name': self.emergency_contact_name,
+            'emergency_contact_phone': self.emergency_contact_phone,
+            'notes': self.notes,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        }

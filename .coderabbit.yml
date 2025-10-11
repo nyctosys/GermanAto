@@ -1,0 +1,43 @@
+version: 1
+
+filters:
+  include:
+    - backend/**/*
+  exclude:
+    - backend/static/js/libs/**        # vendored libs
+    - backend/static/images/**         # assets
+    - backend/env/**                   # virtualenv
+    - **/*.min.js
+
+review:
+  languages: [python, javascript, html, css]
+  focus:
+    - security
+    - correctness
+    - maintainability
+    - performance
+    - readability
+  comment_mode: suggestions            # inline suggestions
+  summarize: true                      # PR summary comment
+  max_comments: 50
+  severity_threshold: warning          # report warnings+ (tune if noisy)
+  fail_on:                             # optional: block on these
+    - security:high
+    - bugs:high
+
+prs:
+  on: [opened, synchronize, reopened]
+  drafts: false                        # skip drafts
+  wip: false                           # skip WIP (if you use WIP prefixes)
+
+conventions:
+  python:
+    min_version: "3.9"
+    style: pep8
+  javascript:
+    style: standard
+
+# Optional: linter hints; CodeRabbit won’t run them, but will align feedback
+linters:
+  python: flake8
+  js: eslint

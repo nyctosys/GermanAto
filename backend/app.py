@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv  
 load_dotenv() 
 from flask import Flask, send_from_directory
+from flask_jwt_extended import JWTManager
 from config import Config
 from models import db
 from routes import bp as invoice_bp
@@ -9,11 +10,14 @@ from inventory_routes import inventory_bp
 from car_routes import car_bp
 from reports_routes import reports_bp
 from whatsapp_routes import whatsapp_bp
-from auth_routes import auth_bp
+from auth_routes_jwt import auth_bp
 from repair_order_routes import repair_order_bp
 from expense_routes import expense_routes
 from cash_received_routes import cash_received_routes
+from vendor_routes import vendor_bp
+from hr_routes import hr_bp
 from flask_cors import CORS
+from flask_compress import Compress
 import webbrowser
 import threading
 from werkzeug.middleware.proxy_fix import ProxyFix 
@@ -52,6 +56,12 @@ CORS(app, resources={
 # Initialize the database
 db.init_app(app)
 
+# Initialize JWT
+jwt = JWTManager(app)
+
+# Initialize compression
+Compress(app)
+
 # Create all database tables
 with app.app_context():
     db.create_all()
@@ -82,6 +92,12 @@ app.register_blueprint(expense_routes, url_prefix='/api')
 
 # Register the blueprint for cash received routes
 app.register_blueprint(cash_received_routes, url_prefix='/api')
+
+# Register the blueprint for vendor routes
+app.register_blueprint(vendor_bp, url_prefix='')
+
+# Register the blueprint for HR routes
+app.register_blueprint(hr_bp, url_prefix='')
 # Helper function to get the frontend directory
 def get_frontend_dir():
     return os.path.join(os.path.dirname(__file__), './frontend')
@@ -94,6 +110,13 @@ def serve_home():
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
+
+# Handle favicon requests to eliminate 404 errors
+@app.route('/favicon.ico')
+@app.route('/apple-touch-icon.png')
+@app.route('/apple-touch-icon-precomposed.png')
+def favicon():
+    return '', 204  # Return empty response with 204 No Content
 
 # Route to serve home.html page at /home.html
 @app.route('/home.html')
@@ -200,6 +223,8 @@ def serve_repair_orders_management():
     response.headers['Expires'] = '0'
     return response
 
+
+
 # Route to serve finance-management.html page
 @app.route('/finance-management.html')
 def serve_finance_management():
@@ -239,6 +264,16 @@ def serve_transaction_history():
 @app.route('/static/<path:path>')
 def serve_static(path):
     response = send_from_directory(os.path.join(get_frontend_dir(), 'static'), path)
+    
+    # Add proper caching headers for static assets
+    if path.endswith(('.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.woff', '.woff2', '.ttf', '.eot')):
+        response.headers['Cache-Control'] = 'public, max-age=31536000'  # 1 year
+        response.headers['Expires'] = 'Thu, 31 Dec 2025 23:59:59 GMT'
+    elif path.endswith(('.html', '.htm')):
+        response.headers['Cache-Control'] = 'public, max-age=3600'  # 1 hour
+    else:
+        response.headers['Cache-Control'] = 'public, max-age=86400'  # 1 day
+    
     return response
 
 def open_browser():

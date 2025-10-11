@@ -114,6 +114,20 @@ def create_customer():
         phone = str(data.get('phone')).strip()
         address = str(data.get('address')).strip()
         
+        # Check for duplicate customer (same name + phone + address)
+        existing_customer = Customer.query.filter_by(
+            name=name,
+            phone=phone,
+            address=address
+        ).first()
+        
+        if existing_customer:
+            return jsonify({
+                'error': 'Customer already exists',
+                'details': f'A customer with the same name ({name}), phone ({phone}), and address ({address}) already exists.',
+                'existing_customer_id': existing_customer.id
+            }), 409
+        
         # Create customer
         try:
             customer = Customer(
@@ -338,6 +352,16 @@ def create_car():
         vin = str(data.get('vin', '')).strip() if data.get('vin') else None
         color = str(data.get('color', '')).strip() if data.get('color') else None
         chasis_no = str(data.get('chasis_no', '')).strip() if data.get('chasis_no') else None
+        
+        # Check for duplicate VIN if provided
+        if vin:
+            existing_car = Car.query.filter_by(vin=vin).first()
+            if existing_car:
+                return jsonify({
+                    'error': 'Car with this VIN already exists',
+                    'details': f'A car with VIN {vin} already exists.',
+                    'existing_car_id': existing_car.id
+                }), 409
         
         # Create car
         try:

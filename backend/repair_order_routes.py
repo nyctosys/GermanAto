@@ -1,14 +1,18 @@
 from flask import Blueprint, request, jsonify
 from models import db, RepairOrder, RepairOrderPart, RepairOrderLabour
 from sqlalchemy import desc
+from sqlalchemy.orm import joinedload
 from datetime import datetime
 import json
 from repair_order_inventory_utils import process_repair_order_parts, handle_repair_order_edit_inventory
+from auth_routes_jwt import login_required, role_required
 
 repair_order_bp = Blueprint('repair_order', __name__)
 
 # Get all repair orders with optional status filter
 @repair_order_bp.route('/repair-orders', methods=['GET'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def get_repair_orders():
     try:
         status = request.args.get('status')
@@ -47,13 +51,17 @@ def get_repair_orders():
                 )
             )
         
-        repair_orders = query.order_by(desc(RepairOrder.created_at)).all()
+        # Use joinedload to fetch related data in one query (fixes N+1 problem)
+        repair_orders = query.options(
+            joinedload(RepairOrder.parts),
+            joinedload(RepairOrder.labour)
+        ).order_by(desc(RepairOrder.created_at)).all()
         
         result = []
         for ro in repair_orders:
-            # Get parts and labour for this repair order
-            parts = RepairOrderPart.query.filter_by(repair_order_id=ro.id).all()
-            labour = RepairOrderLabour.query.filter_by(repair_order_id=ro.id).all()
+            # Parts and labour are now already loaded via joinedload
+            parts = ro.parts
+            labour = ro.labour
             
             repair_order_data = {
                 'id': ro.id,
@@ -68,6 +76,7 @@ def get_repair_orders():
                 'customer_chasis': ro.customer_chasis,
                 'problem_description': ro.problem_description,
                 'diagnosis_plan': ro.diagnosis_plan,
+                'worker_id': ro.worker_id,
                 'worker_name': ro.worker_name,
                 'current_status': ro.current_status,
                 'status_timeline': json.loads(ro.status_timeline) if ro.status_timeline else {},
@@ -75,7 +84,6 @@ def get_repair_orders():
                 'parts_total': ro.parts_total,
                 'labour_total': ro.labour_total,
                 'tax_amount': ro.tax_amount,
-                'total_estimate': ro.total_estimate,
                 'notes': ro.notes,
                 'created_at': ro.created_at.isoformat() if ro.created_at else None,
                 'updated_at': ro.updated_at.isoformat() if ro.updated_at else None,
@@ -86,7 +94,6 @@ def get_repair_orders():
                         'description': part.description,
                         'part_number': part.part_number,
                         'quantity': part.quantity,
-                        'price': float(part.price),
                         'status': part.status
                     } for part in parts
                 ],
@@ -94,7 +101,6 @@ def get_repair_orders():
                     {
                         'id': labour_item.id,
                         'description': labour_item.description,
-                        'rate': float(labour_item.rate),
                         'status': labour_item.status
                     } for labour_item in labour
                 ]
@@ -108,16 +114,22 @@ def get_repair_orders():
 
 # Get a specific repair order by ID
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>', methods=['GET'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def get_repair_order(repair_order_id):
     try:
-        repair_order = RepairOrder.query.get(repair_order_id)
+        # Use joinedload to fetch related data in one query
+        repair_order = RepairOrder.query.options(
+            joinedload(RepairOrder.parts),
+            joinedload(RepairOrder.labour)
+        ).get(repair_order_id)
         
         if not repair_order:
             return jsonify({'error': 'Repair order not found'}), 404
         
-        # Get parts and labour for this repair order
-        parts = RepairOrderPart.query.filter_by(repair_order_id=repair_order_id).all()
-        labour = RepairOrderLabour.query.filter_by(repair_order_id=repair_order_id).all()
+        # Parts and labour are now already loaded via joinedload
+        parts = repair_order.parts
+        labour = repair_order.labour
         
         repair_order_data = {
             'id': repair_order.id,
@@ -132,6 +144,7 @@ def get_repair_order(repair_order_id):
             'customer_chasis': repair_order.customer_chasis,
             'problem_description': repair_order.problem_description,
             'diagnosis_plan': repair_order.diagnosis_plan,
+            'worker_id': repair_order.worker_id,
             'worker_name': repair_order.worker_name,
             'current_status': repair_order.current_status,
             'status_timeline': json.loads(repair_order.status_timeline) if repair_order.status_timeline else {},
@@ -139,7 +152,6 @@ def get_repair_order(repair_order_id):
             'parts_total': repair_order.parts_total,
             'labour_total': repair_order.labour_total,
             'tax_amount': repair_order.tax_amount,
-            'total_estimate': repair_order.total_estimate,
             'notes': repair_order.notes,
             'created_at': repair_order.created_at.isoformat() if repair_order.created_at else None,
             'updated_at': repair_order.updated_at.isoformat() if repair_order.updated_at else None,
@@ -150,7 +162,6 @@ def get_repair_order(repair_order_id):
                     'description': part.description,
                     'part_number': part.part_number,
                     'quantity': part.quantity,
-                    'price': float(part.price),
                     'status': part.status
                 } for part in parts
             ],
@@ -158,7 +169,6 @@ def get_repair_order(repair_order_id):
                 {
                     'id': labour_item.id,
                     'description': labour_item.description,
-                    'rate': float(labour_item.rate),
                     'status': labour_item.status
                 } for labour_item in labour
             ]
@@ -171,6 +181,8 @@ def get_repair_order(repair_order_id):
 
 # Create a new repair order
 @repair_order_bp.route('/repair-orders', methods=['POST'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def create_repair_order():
     try:
         data = request.get_json()
@@ -191,9 +203,9 @@ def create_repair_order():
             customer_color=data.get('customer_color', ''),
             customer_chasis=data.get('customer_chasis', ''),
             problem_description=data.get('problem_description', ''),
+            worker_id=int(data.get('worker_id')) if data.get('worker_id') and data.get('worker_id').strip() else None,
             worker_name=data.get('worker_name', ''),
             current_status='received',
-            total_estimate=data.get('total_estimate', 0)
         )
         
         db.session.add(repair_order)
@@ -212,7 +224,6 @@ def create_repair_order():
                     repair_order_id=repair_order.id,
                     description=part_data['description'],
                     quantity=part_data['quantity'],
-                    price=part_data['price'],
                     inventory_id=part_data.get('inventory_id'),
                     part_number=part_data.get('part_number', ''),
                     status=part_data.get('status', 'pending')
@@ -222,12 +233,9 @@ def create_repair_order():
         # Process labour
         if data.get('labour'):
             for labour_data in data['labour']:
-                # Handle both 'price' and 'rate' field names for backward compatibility
-                labour_rate = labour_data.get('rate') or labour_data.get('price', 0)
                 labour = RepairOrderLabour(
                     repair_order_id=repair_order.id,
                     description=labour_data['description'],
-                    rate=labour_rate,
                     status=labour_data.get('status', 'pending')
                 )
                 db.session.add(labour)
@@ -245,6 +253,8 @@ def create_repair_order():
 
 # Update repair order status
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>/status', methods=['PUT'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def update_repair_order_status(repair_order_id):
     try:
         repair_order = RepairOrder.query.get(repair_order_id)
@@ -264,9 +274,20 @@ def update_repair_order_status(repair_order_id):
         
         # Update status timeline
         timeline = json.loads(repair_order.status_timeline) if repair_order.status_timeline else {}
+        
+        # Parse timestamp safely
+        try:
+            parsed_timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            time_str = parsed_timestamp.strftime('%H:%M')
+        except (ValueError, AttributeError):
+            # Fallback to current time if timestamp parsing fails
+            parsed_timestamp = datetime.now()
+            time_str = parsed_timestamp.strftime('%H:%M')
+            timestamp = parsed_timestamp.isoformat()
+        
         timeline[new_status] = {
             'date': timestamp,
-            'time': datetime.fromisoformat(timestamp).strftime('%H:%M')
+            'time': time_str
         }
         repair_order.status_timeline = json.dumps(timeline)
         
@@ -286,6 +307,8 @@ def update_repair_order_status(repair_order_id):
 
 # Update repair order
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>', methods=['PUT'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def update_repair_order(repair_order_id):
     try:
         repair_order = RepairOrder.query.get(repair_order_id)
@@ -316,6 +339,8 @@ def update_repair_order(repair_order_id):
             repair_order.customer_chasis = data['customer_chasis']
         if 'problem_description' in data:
             repair_order.problem_description = data['problem_description']
+        if 'worker_id' in data:
+            repair_order.worker_id = int(data['worker_id']) if data['worker_id'] and str(data['worker_id']).strip() else None
         if 'worker_name' in data:
             repair_order.worker_name = data['worker_name']
         if 'diagnosis_plan' in data:
@@ -328,8 +353,6 @@ def update_repair_order(repair_order_id):
             repair_order.labour_total = data['labour_total']
         if 'tax_amount' in data and data['tax_amount'] is not None:
             repair_order.tax_amount = data['tax_amount']
-        if 'total_estimate' in data and data['total_estimate'] is not None:
-            repair_order.total_estimate = data['total_estimate']
         if 'notes' in data:
             repair_order.notes = data['notes']
         
@@ -347,7 +370,6 @@ def update_repair_order(repair_order_id):
                     'description': part.description,
                     'part_number': part.part_number,
                     'quantity': part.quantity,
-                    'price': part.price,
                     'status': part.status
                 })
             
@@ -369,7 +391,6 @@ def update_repair_order(repair_order_id):
                     description=part_data.get('description'),
                     part_number=part_data.get('part_number'),
                     quantity=part_data.get('quantity', 1),
-                    price=part_data.get('price', 0),
                     status=part_data.get('status', 'pending')
                 )
                 db.session.add(part)
@@ -387,12 +408,9 @@ def update_repair_order(repair_order_id):
             
             # Add new labour
             for labour_data in data['labour']:
-                # Handle both 'price' and 'rate' field names for backward compatibility
-                labour_rate = labour_data.get('rate') or labour_data.get('price', 0)
                 labour = RepairOrderLabour(
                     repair_order_id=repair_order_id,
                     description=labour_data.get('description'),
-                    rate=labour_rate,
                     status=labour_data.get('status', 'pending')
                 )
                 db.session.add(labour)
@@ -411,6 +429,8 @@ def update_repair_order(repair_order_id):
 
 # Delete repair order
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>/delete', methods=['DELETE'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def delete_repair_order(repair_order_id):
     try:
         repair_order = RepairOrder.query.get(repair_order_id)
@@ -445,6 +465,8 @@ def delete_repair_order(repair_order_id):
 
 # Update specific part status
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>/parts/<int:part_id>/status', methods=['PUT'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def update_part_status(repair_order_id, part_id):
     try:
         part = RepairOrderPart.query.filter_by(
@@ -472,6 +494,8 @@ def update_part_status(repair_order_id, part_id):
 
 # Update specific labour status
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>/labour/<int:labour_id>/status', methods=['PUT'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def update_labour_status(repair_order_id, labour_id):
     try:
         labour = RepairOrderLabour.query.filter_by(

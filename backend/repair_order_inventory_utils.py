@@ -71,7 +71,6 @@ def process_repair_order_parts(parts_data):
         for part_data in parts_data:
             description = part_data.get('description', '').strip()
             quantity = int(part_data.get('quantity', 0))
-            price = float(part_data.get('price', 0))
             inventory_id = part_data.get('inventory_id')
             part_number = part_data.get('part_number', '').strip()
             

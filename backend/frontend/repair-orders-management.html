@@ -190,6 +190,7 @@
 
       .view-btn,
       .edit-btn,
+      .generate-invoice-btn,
       .delete-btn {
         padding: 8px 16px;
         border: none;
@@ -218,6 +219,15 @@
 
       .edit-btn:hover {
         background: #2f855a;
+      }
+
+      .generate-invoice-btn {
+        background: #3182ce;
+        color: white;
+      }
+
+      .generate-invoice-btn:hover {
+        background: #2c5aa0;
       }
 
       .delete-btn {
@@ -253,13 +263,13 @@
         transition: all 0.3s ease;
       }
 
-      .timeline-step.completed {
-        color: #28a745;
-        font-weight: 600;
+      .timeline-step {
+        color: #6b7280;
+        font-weight: 400;
       }
 
       .timeline-step.current {
-        color: #ffc107;
+        color: #1f2937;
         font-weight: 600;
       }
 
@@ -267,15 +277,11 @@
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #cbd5e0;
-      }
-
-      .timeline-step.completed .timeline-dot {
-        background: #28a745;
+        background: #d1d5db;
       }
 
       .timeline-step.current .timeline-dot {
-        background: #ffc107;
+        background: #3b82f6;
       }
 
       /* Search Section Styles */
@@ -534,6 +540,9 @@
 
       <div id="repair-orders-management-results"></div>
     </div>
+    <script src="static/js/notification-utils.js"></script>
+    <script src="static/js/auth_jwt.js"></script>
+    <script src="static/js/api-helper.js"></script>
     <script src="static/js/repairOrdersManagement.js"></script>
   </body>
 </html>

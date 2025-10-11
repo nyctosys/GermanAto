@@ -1,5 +1,5 @@
+// Import functions will be loaded via script tags in HTML
 import { loadInvoiceForEdit } from "./editInvoiceUtils.js";
-import { openInvoiceTemplate } from "./invoiceTemplateUtils.js";
 
 let editId = 0;
 let customers = [];
@@ -18,6 +18,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (editId) {
     loadInvoiceForEdit(editId);
+  }
+
+  // Check if we're coming from a repair order
+  const urlParams = new URLSearchParams(window.location.search);
+  const fromRepairOrder = urlParams.get("from") === "repair-order";
+  if (fromRepairOrder) {
+    // Clear editId when coming from repair order to ensure we create new invoice
+    editId = 0;
+    window.editingInvoiceId = null;
+
+    // Set to invoice mode when coming from repair order
+    const directInvoiceToggle = document.getElementById(
+      "direct-invoice-toggle"
+    );
+    if (directInvoiceToggle) {
+      directInvoiceToggle.checked = true;
+      // Update the toggle description and button visibility
+      updateDocumentTypeToggle();
+    }
+
+    // Wait for customers and cars to be loaded before loading repair order data
+    setTimeout(() => {
+      loadRepairOrderData();
+    }, 1000);
   }
 
   // Add event listeners for searchable dropdowns
@@ -103,16 +127,12 @@ document.addEventListener("DOMContentLoaded", () => {
 // Load customers from database
 async function loadCustomers() {
   try {
-    const response = await fetch("/api/customers");
-    const data = await response.json();
+    const data = await APIHelper.get("/api/customers");
+    if (!data) return;
 
-    if (response.ok) {
       customers = data;
       window.customers = data; // Make available globally for edit functionality
       populateCustomerSelect();
-    } else {
-      console.error("Failed to load customers:", data.error);
-    }
   } catch (error) {
     console.error("Error loading customers:", error);
   }
@@ -121,16 +141,12 @@ async function loadCustomers() {
 // Load cars from database
 async function loadCars() {
   try {
-    const response = await fetch("/api/cars");
-    const data = await response.json();
+    const data = await APIHelper.get("/api/cars");
+    if (!data) return;
 
-    if (response.ok) {
       cars = data;
       window.cars = data; // Make available globally for edit functionality
       populateCarSelect();
-    } else {
-      console.error("Failed to load cars:", data.error);
-    }
   } catch (error) {
     console.error("Error loading cars:", error);
   }
@@ -139,15 +155,11 @@ async function loadCars() {
 // Load inventory items from database
 async function loadInventory() {
   try {
-    const response = await fetch("/api/inventory");
-    const data = await response.json();
+    const data = await APIHelper.get("/api/inventory");
+    if (!data) return;
 
-    if (response.ok) {
       inventoryItems = data;
       window.inventoryItems = data; // Make available globally for edit functionality
-    } else {
-      console.error("Failed to load inventory:", data.error);
-    }
   } catch (error) {
     console.error("Error loading inventory:", error);
   }
@@ -399,7 +411,7 @@ document.getElementById("add-item").addEventListener("click", function () {
   addItem("item");
 });
 
-export function addItem(type) {
+function addItem(type) {
   counter++;
   const itemContainer = document.createElement("div");
   itemContainer.classList.add("item");
@@ -539,6 +551,9 @@ export function addItem(type) {
   });
 }
 
+// Make addItem globally available for editInvoiceUtils.js
+window.addItem = addItem;
+
 // Update total cost
 function updateTotal() {
   let total = 0;
@@ -663,24 +678,15 @@ async function handleInventoryDeduction() {
     });
 
     if (items.length === 0) {
-      alert("No items found to deduct from inventory.");
+      showError("No items found to deduct from inventory.");
       return;
     }
 
-    const stockCheckResponse = await fetch("/api/inventory/check-stock", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ items: items }),
-    });
-
-    const stockCheckResult = await stockCheckResponse.json();
-
-    if (!stockCheckResponse.ok) {
-      alert(`Error checking inventory: ${stockCheckResult.error}`);
-      return;
-    }
+    const stockCheckResult = await APIHelper.post(
+      "/api/inventory/check-stock",
+      { items: items }
+    );
+    if (!stockCheckResult) return;
 
     const { insufficient_items, available_items } = stockCheckResult;
 
@@ -745,22 +751,13 @@ async function handleInventoryDeduction() {
       }
     }
 
-    const deductionResponse = await fetch("/api/inventory/deduct-items", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const deductionResult = await APIHelper.post(
+      "/api/inventory/deduct-items",
+      {
         items: items, // Always use original items list to ensure all items are attempted
-      }),
-    });
-
-    const deductionResult = await deductionResponse.json();
-
-    if (!deductionResponse.ok) {
-      alert(`Error deducting inventory: ${deductionResult.error}`);
-      return;
-    }
+      }
+    );
+    if (!deductionResult) return;
 
     // Show success message
     let successMessage = "✅ Inventory deduction completed!\n\n";
@@ -980,25 +977,18 @@ document
     };
 
     try {
-      let response;
+      let result;
       if (editId) {
-        response = await fetch(`/api/invoice/${editId}/update`, {
-          method: "PUT",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(invoiceData),
-        });
+        result = await APIHelper.put(
+          `/api/invoice/${editId}/update`,
+          invoiceData
+        );
       } else {
-        response = await fetch("/api/add", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(invoiceData),
-        });
+        result = await APIHelper.post("/api/add", invoiceData);
       }
 
-      const result = await response.json();
-      if (response.ok) {
+      if (!result) return;
+
         // Store invoice data in sessionStorage for the template page
         sessionStorage.setItem("invoiceData", JSON.stringify(invoiceData));
         sessionStorage.setItem("invoiceId", result.invoice_id);
@@ -1008,10 +998,8 @@ document
         window.location.href = "invoice-template.html?from=invoice";
 
         document.getElementById("invoice-form").reset();
-        document.getElementById("total-amount").innerText =
-          "Net Total: 0.00 PKR";
-        document.getElementById("total-balance").innerText =
-          "Balance: 0.00 PKR";
+      document.getElementById("total-amount").innerText = "Net Total: 0.00 PKR";
+      document.getElementById("total-balance").innerText = "Balance: 0.00 PKR";
         document.getElementById("items-container").innerHTML = ``;
         counter = 0;
 
@@ -1019,18 +1007,202 @@ document
         document.getElementById("customer-details").style.display = "none";
         document.getElementById("car-details").style.display = "none";
         selectedCustomerId = null;
-      } else {
-        if (result.details && Array.isArray(result.details)) {
-          alert("Validation failed:\n" + result.details.join("\n"));
-        } else {
-          alert("Error: " + result.error);
-        }
-      }
     } catch (error) {
       console.error("Error:", error);
       alert("Failed to create document.");
     }
   });
+
+// ===== REPAIR ORDER DATA LOADING =====
+
+// Load repair order data for invoice generation
+function loadRepairOrderData() {
+  try {
+    const repairOrderData = JSON.parse(
+      sessionStorage.getItem("repairOrderForInvoice")
+    );
+    if (repairOrderData) {
+      // Populate customer information
+      document.getElementById("customer_name").value =
+        repairOrderData.customer_name || "";
+      document.getElementById("customer_address").value =
+        repairOrderData.customer_address || "";
+      document.getElementById("customer_phone").value =
+        repairOrderData.customer_phone || "";
+
+      // Populate vehicle information
+      document.getElementById("customer_reg").value =
+        repairOrderData.customer_reg_no || "";
+      document.getElementById("customer_made").value =
+        repairOrderData.customer_made || "";
+      document.getElementById("customer_mileage").value =
+        repairOrderData.customer_mileage || "";
+      document.getElementById("customer_vin").value =
+        repairOrderData.customer_vin || "";
+      document.getElementById("customer_color").value =
+        repairOrderData.customer_color || "";
+      document.getElementById("customer_chasis").value =
+        repairOrderData.customer_chasis || "";
+
+      // Find and select the correct customer
+      const customer = customers.find(
+        (c) =>
+          c.name === repairOrderData.customer_name &&
+          c.phone === repairOrderData.customer_phone
+      );
+      if (customer) {
+        const customerDisplayText = `${customer.name} - ${customer.phone}`;
+        document.getElementById("customer-select").value = customerDisplayText;
+        handleCustomerChange(customer.id);
+      } else {
+        // If customer not found, just set the display text
+        const customerDisplayText = `${repairOrderData.customer_name} - ${repairOrderData.customer_phone}`;
+        document.getElementById("customer-select").value = customerDisplayText;
+      }
+
+      // Find and select the correct car
+      const car = cars.find(
+        (c) => c.plate_no === repairOrderData.customer_reg_no
+      );
+      if (car) {
+        const carDisplayText = `${car.make} - ${car.plate_no}`;
+        document.getElementById("car-select").value = carDisplayText;
+        handleCarChange(car.id);
+        } else {
+        // If car not found, just set the display text
+        const carDisplayText = `${repairOrderData.customer_made} - ${repairOrderData.customer_reg_no}`;
+        document.getElementById("car-select").value = carDisplayText;
+      }
+
+      // Clear existing items before adding repair order parts
+      const itemsContainer = document.getElementById("items-container");
+      if (itemsContainer) {
+        itemsContainer.innerHTML = "";
+      }
+
+      // Reset the counter for proper item numbering
+      counter = 0;
+
+      // Populate parts from repair order
+      if (repairOrderData.parts && repairOrderData.parts.length > 0) {
+        repairOrderData.parts.forEach((part, index) => {
+          addItem("item");
+          const items = document.querySelectorAll(".item");
+          const lastItem = items[items.length - 1];
+
+          // Set the product name (description)
+          const productNameInput = lastItem.querySelector(".product-name");
+          if (productNameInput) {
+            productNameInput.value = part.description || "";
+            console.log(`Set product name to: ${part.description}`);
+          }
+
+          // Set part number
+          const partNumberInput = lastItem.querySelector(".part-number");
+          if (partNumberInput) {
+            partNumberInput.value = part.part_number || "";
+            console.log(`Set part number to: ${part.part_number}`);
+          }
+
+          // Set quantity
+          const quantityInput = lastItem.querySelector(".quantity");
+          if (quantityInput) {
+            quantityInput.value = part.quantity || "";
+            console.log(`Set quantity to: ${part.quantity}`);
+          }
+
+          // Clear price field - repair order parts don't have prices
+          const priceInput = lastItem.querySelector(".price");
+          if (priceInput) {
+            priceInput.value = "";
+          }
+
+          // Note: Price is not available in repair order parts, user will need to add it
+        });
+
+        // Recalculate total after clearing prices
+        updateTotal();
+      }
+
+      // Populate labour from repair order
+      if (repairOrderData.labour && repairOrderData.labour.length > 0) {
+        repairOrderData.labour.forEach((labour, index) => {
+          addItem("labour");
+
+          // Add a small delay to ensure DOM is updated
+          setTimeout(() => {
+            const items = document.querySelectorAll(".item");
+            const lastItem = items[items.length - 1];
+
+            // Set the labour description
+            const labourDescriptionInput = lastItem.querySelector(
+              ".labour-description"
+            );
+            console.log(
+              "Labour description input found:",
+              labourDescriptionInput
+            );
+            if (labourDescriptionInput) {
+              labourDescriptionInput.value = labour.description || "";
+              console.log(`Set labour description to: ${labour.description}`);
+              console.log(
+                "Labour description input value after setting:",
+                labourDescriptionInput.value
+              );
+            } else {
+              console.error("Labour description input not found!");
+              console.log(
+                "Available inputs in last item:",
+                lastItem.querySelectorAll("input")
+              );
+            }
+
+            // Clear price field - repair order labour doesn't have prices
+            const priceInput = lastItem.querySelector(".price");
+            if (priceInput) {
+              priceInput.value = "";
+            }
+
+            // Note: Price is not available in repair order labour, user will need to add it
+          }, 100); // 100ms delay to ensure DOM is updated
+        });
+
+        // Recalculate total after clearing prices (with delay to ensure all items are processed)
+        setTimeout(() => {
+          updateTotal();
+        }, 200);
+      }
+
+      // Clear the repair order data from session storage
+      sessionStorage.removeItem("repairOrderForInvoice");
+
+      // Debug: Check net total after loading data
+      setTimeout(() => {
+        const netTotalElement = document.getElementById("total-amount");
+        if (netTotalElement) {
+          console.log(
+            "Net total after loading repair order data:",
+            netTotalElement.textContent
+          );
+        }
+
+        // Check if there are any items with prices
+        const items = document.querySelectorAll(".item");
+        items.forEach((item, index) => {
+          const priceInput = item.querySelector(".price");
+          if (priceInput && priceInput.value) {
+            console.log(`Item ${index + 1} has price:`, priceInput.value);
+          }
+        });
+      }, 500);
+
+      alert("Repair order data loaded successfully!");
+    }
+  } catch (error) {
+    console.error("Error loading repair order data:", error);
+    alert("Error loading repair order data.");
+  }
+}
 
 // ===== MODAL FUNCTIONS =====
 
@@ -1059,17 +1231,9 @@ async function handleCustomerSubmit(e) {
   };
 
   try {
-    const response = await fetch("/api/customers", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(customerData),
-    });
+    const data = await APIHelper.post("/api/customers", customerData);
+    if (!data) return;
 
-    const data = await response.json();
-
-    if (response.ok) {
       alert("Customer created successfully!");
       closeCustomerModal();
       await loadCustomers(); // Reload customers
@@ -1081,12 +1245,6 @@ async function handleCustomerSubmit(e) {
 
       // Trigger customer change with the correct ID
       handleCustomerChange(newCustomer.id);
-    } else {
-      alert(
-        "Failed to create customer: " +
-          (data.details ? data.details.join(", ") : data.error)
-      );
-    }
   } catch (error) {
     alert("Error creating customer: " + error.message);
   }
@@ -1133,17 +1291,9 @@ async function handleCarSubmit(e) {
   };
 
   try {
-    const response = await fetch("/api/cars", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(carData),
-    });
+    const data = await APIHelper.post("/api/cars", carData);
+    if (!data) return;
 
-    const data = await response.json();
-
-    if (response.ok) {
       alert("Car created successfully!");
       closeCarModal();
       await loadCars(); // Reload cars
@@ -1161,12 +1311,6 @@ async function handleCarSubmit(e) {
           // Trigger car change with the correct ID
           handleCarChange(newCar.id);
         }
-      }
-    } else {
-      alert(
-        "Failed to create car: " +
-          (data.details ? data.details.join(", ") : data.error)
-      );
     }
   } catch (error) {
     alert("Error creating car: " + error.message);

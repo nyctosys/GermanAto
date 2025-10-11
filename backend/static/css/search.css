@@ -460,7 +460,8 @@ body {
 /* ===== BUTTON STYLES ===== */
 .wide-btn-submit,
 .wide-btn-delete,
-.wide-btn-edit {
+.wide-btn-edit,
+.wide-btn-update {
   background: linear-gradient(135deg, #6c757d, #5a6268);
   color: white;
   padding: 0.75rem 1.5rem;
@@ -479,7 +480,8 @@ body {
 
 .wide-btn-submit::before,
 .wide-btn-delete::before,
-.wide-btn-edit::before {
+.wide-btn-edit::before,
+.wide-btn-update::before {
   content: "";
   position: absolute;
   top: 0;
@@ -497,20 +499,23 @@ body {
 
 .wide-btn-submit:hover::before,
 .wide-btn-delete:hover::before,
-.wide-btn-edit:hover::before {
+.wide-btn-edit:hover::before,
+.wide-btn-update:hover::before {
   left: 100%;
 }
 
 .wide-btn-submit:hover,
 .wide-btn-delete:hover,
-.wide-btn-edit:hover {
+.wide-btn-edit:hover,
+.wide-btn-update:hover {
   transform: translateY(-2px) scale(1.05);
   box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
 }
 
 .wide-btn-submit:active,
 .wide-btn-delete:active,
-.wide-btn-edit:active {
+.wide-btn-edit:active,
+.wide-btn-update:active {
   transform: translateY(0);
 }
 
@@ -554,6 +559,17 @@ body {
 
 .wide-btn-edit.disabled::before {
   display: none;
+}
+
+.wide-btn-update {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
+}
+
+.wide-btn-update:hover {
+  background: linear-gradient(135deg, #218838, #1ea085);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
 }
 
 .wide-btn-approve,

@@ -9,56 +9,59 @@ function formatCurrency(amount) {
   }).format(amount);
 }
 
-// Format dates
+// Format dates with time
 function formatDate(dateString) {
   if (!dateString) return "N/A";
   const date = new Date(dateString);
-  return date.toLocaleDateString("en-PK", {
+  return date.toLocaleString("en-PK", {
     year: "numeric",
     month: "short",
     day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
-// Update status timeline
-function updateStatusTimeline(statusData) {
+// Update status timeline - only highlight current status
+function updateStatusTimeline(statusData, currentStatus = "received") {
   const statuses = ["received", "diagnosis", "repair", "testing", "complete"];
 
   statuses.forEach((status) => {
     const statusElement = document.getElementById(`status-${status}`);
     const dateElement = document.getElementById(`${status}-date`);
 
-    if (statusElement && dateElement) {
-      if (statusData[status] && statusData[status].date) {
-        dateElement.textContent = formatDate(statusData[status].date);
-        statusElement.classList.add("completed");
+    if (statusElement) {
+      // Remove all status classes first
+      statusElement.classList.remove("completed", "current");
 
-        // Add completion time if available
-        if (statusData[status].time) {
-          dateElement.textContent += ` ${statusData[status].time}`;
+      // Only add current class to the current status
+      if (status === currentStatus) {
+        statusElement.classList.add("current");
+      }
+
+      // Update date if available
+      if (dateElement) {
+        if (statusData[status] && statusData[status].date) {
+          dateElement.textContent = formatDate(statusData[status].date);
+
+          // Add completion time if available
+          if (statusData[status].time) {
+            dateElement.textContent += ` ${statusData[status].time}`;
+          }
+        } else {
+          dateElement.textContent = "Pending";
         }
-      } else {
-        dateElement.textContent = "Pending";
-        statusElement.classList.remove("completed");
       }
     }
   });
 }
 
-// Calculate totals from parts and labour
+// Calculate totals from parts and labour (now always 0 since pricing removed)
 function calculateTotals(parts, labour) {
-  const partsTotal = parts.reduce((sum, part) => {
-    return sum + part.price * part.quantity;
-  }, 0);
-
-  const labourTotal = labour.reduce((sum, task) => {
-    return sum + task.rate;
-  }, 0);
-
   return {
-    partsTotal,
-    labourTotal,
-    total: partsTotal + labourTotal,
+    partsTotal: 0,
+    labourTotal: 0,
+    total: 0,
   };
 }
 
@@ -72,7 +75,7 @@ function populatePartsTable(parts) {
   if (!parts || parts.length === 0) {
     const emptyRow = document.createElement("tr");
     emptyRow.innerHTML =
-      '<td colspan="5" style="text-align: center; color: #666;">No parts required</td>';
+      '<td colspan="4" style="text-align: center; color: #666;">No parts required</td>';
     tableBody.appendChild(emptyRow);
     return;
   }
@@ -308,7 +311,7 @@ function initializeRepairOrderTemplate() {
 
   // Update status timeline
   if (data.status_timeline) {
-    updateStatusTimeline(data.status_timeline);
+    updateStatusTimeline(data.status_timeline, data.current_status);
   }
 
   // Update notes

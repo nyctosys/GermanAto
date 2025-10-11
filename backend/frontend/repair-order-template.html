@@ -89,7 +89,6 @@
                   <th>Part Description</th>
                   <th>Part Number</th>
                   <th>Quantity</th>
-                  <th>Price</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -108,7 +107,6 @@
               <thead>
                 <tr>
                   <th>Task Description</th>
-                  <th>Rate</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -116,29 +114,6 @@
                 <!-- Labour tasks will be loaded here -->
               </tbody>
             </table>
-          </div>
-        </div>
-
-        <!-- ===== ESTIMATE SECTION ===== -->
-        <div class="estimate-section">
-          <h3 class="section-title">ESTIMATE</h3>
-          <div class="estimate-details">
-            <div class="estimate-row">
-              <span>Parts Total:</span>
-              <span id="parts-total">{PARTS_TOTAL}</span>
-            </div>
-            <div class="estimate-row">
-              <span>Labour Total:</span>
-              <span id="labour-total">{LABOUR_TOTAL}</span>
-            </div>
-            <div class="estimate-row">
-              <span>Tax (if applicable):</span>
-              <span id="tax-amount">{TAX_AMOUNT}</span>
-            </div>
-            <div class="estimate-row total">
-              <strong>Total Estimate:</strong>
-              <span id="total-estimate">{TOTAL_ESTIMATE}</span>
-            </div>
           </div>
         </div>
 
@@ -224,8 +199,12 @@
           document.getElementById(
             "repair-order-id"
           ).textContent = `RO #${repairOrderId}`;
+          // Format the creation date
+          const createdDate = data.created_at
+            ? new Date(data.created_at)
+            : new Date();
           document.getElementById("repair-order-date").textContent =
-            new Date().toLocaleDateString();
+            createdDate.toLocaleString();
 
           // Update customer and vehicle information
           document.getElementById("customer-name").textContent =
@@ -263,7 +242,6 @@
                 <td>${part.description}</td>
                 <td>${part.part_number || "N/A"}</td>
                 <td>${part.quantity}</td>
-                <td>${part.price ? part.price.toFixed(2) : "0.00"} PKR</td>
                 <td>${part.status || "Pending"}</td>
               `;
               partsTableBody.appendChild(newRow);
@@ -279,41 +257,34 @@
               const newRow = document.createElement("tr");
               newRow.innerHTML = `
                 <td>${task.description}</td>
-                <td>${task.rate ? task.rate.toFixed(2) : "0.00"} PKR</td>
                 <td>${task.status || "Pending"}</td>
               `;
               labourTableBody.appendChild(newRow);
             });
           }
 
-          // Update estimate
-          const partsTotal = data.parts_total || 0;
-          const labourTotal = data.labour_total || 0;
-          const taxAmount = data.tax_amount || 0;
-          const totalEstimate = partsTotal + labourTotal + taxAmount;
+          // Update status timeline - only highlight current status
+          const currentStatus = data.current_status || "received";
+          const statuses = [
+            "received",
+            "diagnosis",
+            "repair",
+            "testing",
+            "complete",
+          ];
 
-          document.getElementById(
-            "parts-total"
-          ).textContent = `${partsTotal.toFixed(2)} PKR`;
-          document.getElementById(
-            "labour-total"
-          ).textContent = `${labourTotal.toFixed(2)} PKR`;
-          document.getElementById(
-            "tax-amount"
-          ).textContent = `${taxAmount.toFixed(2)} PKR`;
-          document.getElementById(
-            "total-estimate"
-          ).textContent = `${totalEstimate.toFixed(2)} PKR`;
+          statuses.forEach((status) => {
+            const statusElement = document.getElementById(`status-${status}`);
+            if (statusElement) {
+              // Remove all status classes first
+              statusElement.classList.remove("completed", "current");
 
-          // Update status timeline
-          if (data.status_timeline) {
-            Object.keys(data.status_timeline).forEach((status) => {
-              const statusElement = document.getElementById(`status-${status}`);
-              if (statusElement && data.status_timeline[status]) {
-                statusElement.classList.add("completed");
+              // Only add current class to the current status
+              if (status === currentStatus) {
+                statusElement.classList.add("current");
               }
-            });
-          }
+            }
+          });
 
           // Update assigned worker
           document.getElementById("worker-name").textContent =

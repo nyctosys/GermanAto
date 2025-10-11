@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GermanATO - Admin Panel</title>
+    <title>GermanATO - Users Management</title>
     <link rel="stylesheet" href="../static/css/admin.css" />
   </head>
   <body>
@@ -13,60 +13,8 @@
 
     <div class="container">
       <div class="header">
-        <h1>Admin Panel</h1>
-        <p>System Management</p>
-      </div>
-
-      <div class="admin-navigation">
-        <div class="nav-section">
-          <h3>User Management</h3>
-          <div class="nav-buttons">
-            <button class="nav-btn active" onclick="showUserManagement()">
-              <span>👥</span>
-              Manage Users
-            </button>
-          </div>
-        </div>
-
-        <div class="nav-section">
-          <h3>Document Management</h3>
-          <div class="nav-buttons">
-            <button
-              class="nav-btn"
-              onclick="window.location.href='finance-management.html?from=admin'"
-            >
-              <span>💰</span>
-              Finance Management
-            </button>
-          </div>
-        </div>
-
-        <div class="nav-section">
-          <h3>System</h3>
-          <div class="nav-buttons">
-            <button
-              class="nav-btn"
-              onclick="window.location.href='inventory.html?from=admin'"
-            >
-              <span>📦</span>
-              Inventory Management
-            </button>
-            <button
-              class="nav-btn"
-              onclick="window.location.href='reports.html?from=admin'"
-            >
-              <span>📊</span>
-              Reports
-            </button>
-            <button
-              class="nav-btn"
-              onclick="window.location.href='whatsapp-notifications.html?from=admin'"
-            >
-              <span>📱</span>
-              WhatsApp Notifications
-            </button>
-          </div>
-        </div>
+        <h1>Users Management</h1>
+        <p>Manage users and system settings</p>
       </div>
 
       <div class="main-content" id="user-management-section">
@@ -126,7 +74,9 @@
       <p>&copy; 2025 GermanATO. All rights reserved.</p>
     </footer>
 
-    <script src="../static/js/auth.js"></script>
+    <script src="../static/js/notification-utils.js"></script>
+    <script src="../static/js/auth_jwt.js"></script>
+    <script src="../static/js/api-helper.js"></script>
     <script src="../static/js/admin.js"></script>
   </body>
 </html>

@@ -37,8 +37,12 @@ function openInvoiceTemplate(
         invoiceWindow.document.getElementById(
           "invoice-id"
         ).textContent = `${idPrefix} #${documentId}`;
+        // Format the creation date and time
+        const createdDate = invoiceData.created_at
+          ? new Date(invoiceData.created_at)
+          : new Date();
         invoiceWindow.document.getElementById("invoice-date").textContent =
-          new Date().toLocaleDateString();
+          createdDate.toLocaleString();
 
         // Update billing information
         invoiceWindow.document.getElementById("customer-name").textContent =
@@ -167,4 +171,5 @@ function openInvoiceTemplate(
     });
 }
 
-export { openInvoiceTemplate };
+// Make function globally available
+window.openInvoiceTemplate = openInvoiceTemplate;

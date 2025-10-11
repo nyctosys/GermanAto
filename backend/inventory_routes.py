@@ -3,12 +3,48 @@ from models import db, Inventory
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 import logging
+import os
+import uuid
+from werkzeug.utils import secure_filename
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 inventory_bp = Blueprint('inventory', __name__)
+
+# Configuration for file uploads
+UPLOAD_FOLDER = 'static/uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def save_uploaded_file(file):
+    """Save uploaded file and return the relative path"""
+    if not file or not file.filename:
+        return None
+    
+    if not allowed_file(file.filename):
+        raise ValueError("Invalid file type. Only image files are allowed.")
+    
+    # Generate unique filename
+    file_extension = file.filename.rsplit('.', 1)[1].lower()
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    secure_name = secure_filename(unique_filename)
+    
+    # Ensure upload directory exists
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    
+    # Save file
+    file_path = os.path.join(UPLOAD_FOLDER, secure_name)
+    file.save(file_path)
+    
+    # Return relative path for database storage
+    return f"uploads/{secure_name}"
 
 def validate_inventory_data(data):
     """Validate inventory data"""
@@ -55,9 +91,43 @@ def validate_inventory_data(data):
 
 @inventory_bp.route('/inventory', methods=['GET'])
 def get_inventory():
-    """Get all inventory items"""
+    """Get inventory items with pagination"""
     try:
-        inventory_items = Inventory.query.all()
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        # Limit per_page to prevent excessive memory usage
+        per_page = min(per_page, 200)
+        
+        # Get search parameters
+        search = request.args.get('search', '').strip()
+        category = request.args.get('category', '').strip()
+        
+        # Build query
+        query = Inventory.query
+        
+        if search:
+            search_filter = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    Inventory.name.ilike(search_filter),
+                    Inventory.part_number.ilike(search_filter),
+                    Inventory.description.ilike(search_filter)
+                )
+            )
+        
+        if category:
+            query = query.filter(Inventory.category == category)
+        
+        # Apply pagination
+        pagination = query.paginate(
+            page=page, 
+            per_page=per_page, 
+            error_out=False
+        )
+        
+        inventory_items = pagination.items
         items_data = []
         
         for item in inventory_items:
@@ -72,11 +142,22 @@ def get_inventory():
                 'location': item.location,
                 'reorder_level': item.reorder_level,
                 'reorder_quantity': item.reorder_quantity,
+                'image_path': item.image_path,
                 'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
             })
         
-        return jsonify(items_data), 200
+        return jsonify({
+            'items': items_data,
+            'pagination': {
+                'page': pagination.page,
+                'per_page': pagination.per_page,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'has_next': pagination.has_next,
+                'has_prev': pagination.has_prev
+            }
+        }), 200
         
     except Exception as e:
         logger.error(f"Error fetching inventory: {e}")
@@ -104,6 +185,7 @@ def get_inventory_item(item_id):
             'location': item.location,
             'reorder_level': item.reorder_level,
             'reorder_quantity': item.reorder_quantity,
+            'image_path': item.image_path,
             'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -118,10 +200,25 @@ def get_inventory_item(item_id):
 def create_inventory_item():
     """Create a new inventory item"""
     try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
+        # Check if request is form data (with file upload) or JSON
+        if request.form:
+            # Handle form data with potential file upload
+            data = request.form.to_dict()
+            
+            # Handle image upload
+            image_path = None
+            if 'image' in request.files:
+                file = request.files['image']
+                if file and file.filename:
+                    try:
+                        image_path = save_uploaded_file(file)
+                    except ValueError as e:
+                        return jsonify({'error': str(e)}), 400
+        else:
+            # Handle JSON data (for API calls)
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
         
         # Validate input data
         validation_errors = validate_inventory_data(data)
@@ -148,7 +245,8 @@ def create_inventory_item():
                 description=description,
                 location=location,
                 reorder_level=reorder_level,
-                reorder_quantity=reorder_quantity
+                reorder_quantity=reorder_quantity,
+                image_path=image_path
             )
             db.session.add(inventory_item)
             db.session.commit()
@@ -167,6 +265,7 @@ def create_inventory_item():
                     'location': inventory_item.location,
                     'reorder_level': inventory_item.reorder_level,
                     'reorder_quantity': inventory_item.reorder_quantity,
+                    'image_path': inventory_item.image_path,
                     'created_at': inventory_item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                     'updated_at': inventory_item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
                 }
@@ -188,15 +287,51 @@ def update_inventory_item(item_id):
         if not item_id or item_id <= 0:
             return jsonify({'error': 'Invalid item ID'}), 400
         
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-        
         # Find the inventory item first
         item = Inventory.query.get(item_id)
         if not item:
             return jsonify({'error': 'Inventory item not found'}), 404
+        
+        # Check if request is form data (with file upload) or JSON
+        if request.form:
+            # Handle form data with potential file upload
+            data = request.form.to_dict()
+            logger.info(f"Update form data received: {data}")
+            logger.info(f"remove_image in data: {'remove_image' in data}")
+            if 'remove_image' in data:
+                logger.info(f"remove_image value: {data['remove_image']}")
+            
+            # Handle image upload - prioritize remove_image flag over new upload
+            image_path = item.image_path  # Keep existing image by default
+            
+            if 'remove_image' in data and data['remove_image'] == 'true':
+                # Remove existing image (this takes priority)
+                logger.info("Removing existing image")
+                if item.image_path:
+                    old_image_path = os.path.join('static', item.image_path)
+                    if os.path.exists(old_image_path):
+                        os.remove(old_image_path)
+                        logger.info(f"Deleted old image: {old_image_path}")
+                image_path = None
+            elif 'image' in request.files:
+                file = request.files['image']
+                if file and file.filename:
+                    try:
+                        # Delete old image if it exists
+                        if item.image_path:
+                            old_image_path = os.path.join('static', item.image_path)
+                            if os.path.exists(old_image_path):
+                                os.remove(old_image_path)
+                        
+                        image_path = save_uploaded_file(file)
+                    except ValueError as e:
+                        return jsonify({'error': str(e)}), 400
+        else:
+            # Handle JSON data (for API calls)
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            image_path = item.image_path  # Keep existing image for JSON updates
         
         # Validate input data
         validation_errors = validate_inventory_data(data)
@@ -223,6 +358,7 @@ def update_inventory_item(item_id):
             item.location = location
             item.reorder_level = reorder_level
             item.reorder_quantity = reorder_quantity
+            item.image_path = image_path
             
             db.session.commit()
             
@@ -240,6 +376,7 @@ def update_inventory_item(item_id):
                     'location': item.location,
                     'reorder_level': item.reorder_level,
                     'reorder_quantity': item.reorder_quantity,
+                    'image_path': item.image_path,
                     'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                     'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
                 }

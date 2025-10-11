@@ -21,6 +21,36 @@
           <h3>Customer Information</h3>
           <div class="form-grid">
             <div class="form-group">
+              <label for="customer-select">Select Customer</label>
+              <div class="select-with-button">
+                <div class="searchable-dropdown">
+                  <input
+                    type="text"
+                    id="customer-select"
+                    class="input-fields"
+                    placeholder="Search customers..."
+                    autocomplete="off"
+                    inputmode="text"
+                  />
+                  <div
+                    class="dropdown-options"
+                    id="customer-dropdown-options"
+                    style="display: none"
+                  >
+                    <!-- Customer options will be populated here -->
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="add-btn"
+                  onclick="openCustomerModal()"
+                  title="Add New Customer"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
               <label for="customer-name">Customer Name *</label>
               <input
                 type="text"
@@ -54,6 +84,36 @@
         <div class="form-section">
           <h3>Vehicle Information</h3>
           <div class="form-grid">
+            <div class="form-group">
+              <label for="car-select">Select Vehicle</label>
+              <div class="select-with-button">
+                <div class="searchable-dropdown">
+                  <input
+                    type="text"
+                    id="car-select"
+                    class="input-fields"
+                    placeholder="Search vehicles..."
+                    autocomplete="off"
+                    inputmode="text"
+                  />
+                  <div
+                    class="dropdown-options"
+                    id="car-dropdown-options"
+                    style="display: none"
+                  >
+                    <!-- Vehicle options will be populated here -->
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="add-btn"
+                  onclick="openCarModal()"
+                  title="Add New Vehicle"
+                >
+                  +
+                </button>
+              </div>
+            </div>
             <div class="form-group">
               <label for="reg-number">Registration Number *</label>
               <input
@@ -104,8 +164,26 @@
         <div class="form-section">
           <h3>Assigned Worker</h3>
           <div class="form-group">
-            <label for="worker-name">Worker Name</label>
-            <input type="text" id="worker-name" name="worker_name" />
+            <label for="worker-select">Select Worker</label>
+            <div class="searchable-dropdown">
+              <input
+                type="text"
+                id="worker-select"
+                class="input-fields"
+                placeholder="Search workers..."
+                autocomplete="off"
+                inputmode="text"
+              />
+              <div
+                class="dropdown-options"
+                id="worker-dropdown-options"
+                style="display: none"
+              >
+                <!-- Worker options will be populated here -->
+              </div>
+            </div>
+            <input type="hidden" id="worker-id" name="worker_id" />
+            <input type="hidden" id="worker-name" name="worker_name" />
           </div>
         </div>
 
@@ -131,25 +209,6 @@
           </button>
         </div>
 
-        <!-- Estimate Summary -->
-        <div class="form-section">
-          <h3>Estimate Summary</h3>
-          <div class="estimate-summary">
-            <div class="estimate-row">
-              <span>Parts Total:</span>
-              <span id="parts-total">0.00 PKR</span>
-            </div>
-            <div class="estimate-row">
-              <span>Labour Total:</span>
-              <span id="labour-total">0.00 PKR</span>
-            </div>
-            <div class="estimate-row total">
-              <span>Total Estimate:</span>
-              <span id="total-estimate">0.00 PKR</span>
-            </div>
-          </div>
-        </div>
-
         <!-- Submit Button -->
         <div class="form-actions">
           <button type="submit" class="submit-btn" id="submit-btn">
@@ -159,6 +218,149 @@
       </form>
     </div>
 
+    <!-- Customer Modal -->
+    <div id="customer-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="customer-modal-title">Add Customer</h2>
+          <button class="close-btn" id="close-customer-modal">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6L6 18M6 6L18 18"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <form id="customer-form">
+          <div class="form-group">
+            <label for="modal-customer-name">Name</label>
+            <input
+              type="text"
+              id="modal-customer-name"
+              name="modal-customer-name"
+            />
+          </div>
+          <div class="form-group">
+            <label for="modal-customer-phone">Phone</label>
+            <input
+              type="tel"
+              id="modal-customer-phone"
+              name="modal-customer-phone"
+            />
+          </div>
+          <div class="form-group">
+            <label for="modal-customer-address">Address</label>
+            <textarea
+              id="modal-customer-address"
+              name="modal-customer-address"
+            ></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" id="cancel-customer">
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Car Modal -->
+    <div id="car-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="car-modal-title">Add Vehicle</h2>
+          <button class="close-btn" id="close-car-modal">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6L6 18M6 6L18 18"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <form id="car-form">
+          <div class="form-group">
+            <label for="modal-car-customer">Customer</label>
+            <select id="modal-car-customer" name="modal-car-customer">
+              <option value="">Select Customer</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="modal-car-plate">Registration Number *</label>
+            <input
+              type="text"
+              id="modal-car-plate"
+              name="modal-car-plate"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-make">Make/Model *</label>
+            <input
+              type="text"
+              id="modal-car-make"
+              name="modal-car-make"
+              placeholder="e.g., Toyota Corolla"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-mileage">Mileage</label>
+            <input
+              type="text"
+              id="modal-car-mileage"
+              name="modal-car-mileage"
+            />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-vin">VIN</label>
+            <input type="text" id="modal-car-vin" name="modal-car-vin" />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-color">Color</label>
+            <input type="text" id="modal-car-color" name="modal-car-color" />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-chassis">Chassis</label>
+            <input
+              type="text"
+              id="modal-car-chassis"
+              name="modal-car-chassis"
+            />
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" id="cancel-car">
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="static/js/notification-utils.js"></script>
+    <script src="static/js/auth_jwt.js"></script>
+    <script src="static/js/api-helper.js"></script>
     <script src="static/js/repairOrder.js"></script>
   </body>
 </html>

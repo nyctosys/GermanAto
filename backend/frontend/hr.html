@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - HR Management</title>
+    <link rel="stylesheet" href="../static/css/hr.css" />
+    <script src="../static/js/notification-utils.js"></script>
+  </head>
+  <body>
+    <a href="#" id="back-btn" class="back-btn">
+      <span>Back</span>
+    </a>
+
+    <div class="container">
+      <div class="header">
+        <h1>HR Management</h1>
+        <p>Manage worker information and roles</p>
+      </div>
+
+      <div class="main-content">
+        <div class="controls-section">
+          <button class="add-btn" onclick="openAddWorkerModal()">
+            <span>+</span>
+            Add Worker
+          </button>
+        </div>
+
+        <div class="search-section">
+          <div class="search-group">
+            <input
+              type="text"
+              id="searchInput"
+              class="search-input"
+              placeholder="Search workers..."
+            />
+            <button class="search-btn" onclick="searchWorkers()">
+              <span>🔍</span>
+            </button>
+          </div>
+          <div class="filter-group">
+            <select id="statusFilter" class="filter-select">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="terminated">Terminated</option>
+            </select>
+            <select id="departmentFilter" class="filter-select">
+              <option value="">All Departments</option>
+            </select>
+            <button class="clear-filter-btn" onclick="clearFilters()">
+              Clear Filters
+            </button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="workersTable">
+            <thead>
+              <tr>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Position</th>
+                <th>Department</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>Hire Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="workersTableBody">
+              <tr>
+                <td colspan="8" class="loading-cell">
+                  <div class="loading-spinner"></div>
+                  <span>Loading workers...</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit Worker Modal -->
+    <div id="workerModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalTitle">Add Worker</h2>
+          <button class="close" onclick="closeWorkerModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="workerForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="employeeId">Employee ID *</label>
+                <input
+                  type="text"
+                  id="employeeId"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="cnic">CNIC *</label>
+                <input type="text" id="cnic" class="input-fields" required />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="firstName">First Name *</label>
+                <input
+                  type="text"
+                  id="firstName"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="lastName">Last Name *</label>
+                <input
+                  type="text"
+                  id="lastName"
+                  class="input-fields"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" class="input-fields" />
+              </div>
+              <div class="form-group">
+                <label for="phone">Phone *</label>
+                <input type="text" id="phone" class="input-fields" required />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="address">Address *</label>
+              <textarea
+                id="address"
+                class="input-fields"
+                rows="3"
+                required
+              ></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="dateOfBirth">Date of Birth *</label>
+                <input
+                  type="date"
+                  id="dateOfBirth"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="hireDate">Hire Date *</label>
+                <input
+                  type="date"
+                  id="hireDate"
+                  class="input-fields"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="position">Position *</label>
+                <input
+                  type="text"
+                  id="position"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="department">Department *</label>
+                <input
+                  type="text"
+                  id="department"
+                  class="input-fields"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="salary">Salary</label>
+                <input
+                  type="number"
+                  id="salary"
+                  class="input-fields"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+              <div class="form-group">
+                <label for="status">Status</label>
+                <select id="status" class="input-fields">
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="terminated">Terminated</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="emergencyContactName">Emergency Contact Name</label>
+                <input
+                  type="text"
+                  id="emergencyContactName"
+                  class="input-fields"
+                />
+              </div>
+              <div class="form-group">
+                <label for="emergencyContactPhone"
+                  >Emergency Contact Phone</label
+                >
+                <input
+                  type="text"
+                  id="emergencyContactPhone"
+                  class="input-fields"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="notes">Notes</label>
+              <textarea id="notes" class="input-fields" rows="3"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeWorkerModal()">
+            Cancel
+          </button>
+          <button class="btn-primary" onclick="saveWorker()">
+            Save Worker
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Confirm Delete</h2>
+          <button class="close" onclick="closeDeleteModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p id="deleteMessage">Are you sure you want to delete this worker?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeDeleteModal()">
+            Cancel
+          </button>
+          <button class="btn-danger" onclick="confirmDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../static/js/notification-utils.js"></script>
+    <script src="../static/js/auth_jwt.js"></script>
+    <script src="../static/js/api-helper.js"></script>
+    <script src="../static/js/hr.js"></script>
+  </body>
+</html>

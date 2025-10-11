@@ -4,6 +4,24 @@ let users = [];
 
 // Initialize the page
 document.addEventListener("DOMContentLoaded", function () {
+  // Wait for auth to be available
+  if (typeof auth === "undefined" || !auth.requirePageAccess) {
+    console.error("Auth not available, retrying...");
+    setTimeout(() => {
+      if (typeof auth !== "undefined" && auth.requirePageAccess) {
+        initializeAdmin();
+      } else {
+        console.error("Auth still not available after retry");
+        window.location.href = "login.html";
+      }
+    }, 100);
+    return;
+  }
+
+  initializeAdmin();
+});
+
+function initializeAdmin() {
   // Check authentication and admin access
   if (!auth.requirePageAccess("admin")) {
     return;
@@ -29,7 +47,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   loadUsers();
   setupEventListeners();
-});
+}
 
 // Setup event listeners
 function setupEventListeners() {
@@ -49,17 +67,11 @@ function setupEventListeners() {
 // Load users
 async function loadUsers() {
   try {
-    const response = await fetch("/api/auth/users");
-    if (response.ok) {
-      users = await response.json();
-      renderUsers();
-    } else {
-      console.error("Failed to load users");
-      alert("Failed to load users. Please try again.");
-    }
+    users = await APIHelper.get("/api/auth/users");
+    renderUsers();
   } catch (error) {
     console.error("Error loading users:", error);
-    alert("Error loading users. Please check your connection.");
+    showError("Error loading users. Please check your connection.");
   }
 }
 
@@ -186,46 +198,18 @@ async function handleFormSubmit(e) {
     loadUsers();
   } catch (error) {
     console.error("Error saving user:", error);
-    alert("Error saving user. Please try again.");
+    showError("Error saving user. Please try again.");
   }
 }
 
 // Add user
 async function addUser(userData) {
-  const response = await fetch("/api/auth/register", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(userData),
-  });
-
-  if (response.ok) {
-    const newUser = await response.json();
-    return newUser;
-  } else {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to add user");
-  }
+  return await APIHelper.post("/api/auth/register", userData);
 }
 
 // Update user
 async function updateUser(id, userData) {
-  const response = await fetch(`/api/auth/users/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(userData),
-  });
-
-  if (response.ok) {
-    const updatedUser = await response.json();
-    return updatedUser;
-  } else {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to update user");
-  }
+  return await APIHelper.put(`/api/auth/users/${id}`, userData);
 }
 
 // Delete user
@@ -235,20 +219,12 @@ async function deleteUser(id) {
   }
 
   try {
-    const response = await fetch(`/api/auth/users/${id}`, {
-      method: "DELETE",
-    });
-
-    if (response.ok) {
-      users = users.filter((user) => user.id !== id);
-      renderUsers();
-    } else {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to delete user");
-    }
+    await APIHelper.delete(`/api/auth/users/${id}`);
+    users = users.filter((user) => user.id !== id);
+    renderUsers();
   } catch (error) {
     console.error("Error deleting user:", error);
-    alert("Error deleting user. Please try again.");
+    showError("Error deleting user. Please try again.");
   }
 }
 

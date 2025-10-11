@@ -325,9 +325,15 @@ td {
   transition: all 0.3s ease;
 }
 
-.status-item.completed {
-  background: #48bb78;
-  border-color: #38a169;
+.status-item {
+  background: #f7fafc;
+  border-color: #e2e8f0;
+  color: #718096;
+}
+
+.status-item.current {
+  background: #3b82f6;
+  border-color: #2563eb;
   color: white;
 }
 

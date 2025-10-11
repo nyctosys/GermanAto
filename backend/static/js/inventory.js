@@ -1,6 +1,48 @@
 // Global variables
 let currentEditId = null;
 let inventoryItems = [];
+let currentPage = 1;
+let totalPages = 1;
+let isLoading = false;
+
+// Fallback PerformanceUtils if not available
+const FallbackUtils = {
+  showLoading: (elementId, message = "Loading...") => {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.innerHTML = `<div style="text-align: center; padding: 2rem;">${message}</div>`;
+    }
+  },
+  hideLoading: (elementId) => {
+    const element = document.getElementById(elementId);
+    if (element && element.innerHTML.includes("Loading")) {
+      element.innerHTML = "";
+    }
+  },
+  showError: (elementId, message, retryCallback = null) => {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: #dc3545;">
+          <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+          <div>${message}</div>
+          ${
+            retryCallback
+              ? `<button onclick="${retryCallback.name}()" style="background: #007bff; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: 1rem;">Retry</button>`
+              : ""
+          }
+        </div>
+      `;
+    }
+  },
+  fetchWithRetry: async (url, options = {}) => {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return response.json();
+  },
+};
 
 // Initialize the page
 document.addEventListener("DOMContentLoaded", function () {
@@ -26,6 +68,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   loadInventory();
   setupEventListeners();
+  setupPagination();
 });
 
 // Setup event listeners
@@ -40,14 +83,23 @@ function setupEventListeners() {
     .getElementById("restock-form")
     .addEventListener("submit", handleRestockSubmit);
 
-  // Search input
-  document
-    .getElementById("search-input")
-    .addEventListener("keyup", function (e) {
+  // Search input with debounced search
+  const searchInput = document.getElementById("search-input");
+  if (searchInput) {
+    let searchTimeout;
+    const debouncedSearch = () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(searchInventory, 500);
+    };
+
+    searchInput.addEventListener("keyup", function (e) {
       if (e.key === "Enter") {
         searchInventory();
+      } else {
+        debouncedSearch();
       }
     });
+  }
 
   // Modal close on outside click
   document.getElementById("item-modal").addEventListener("click", function (e) {
@@ -66,23 +118,122 @@ function setupEventListeners() {
     });
 }
 
-// Load inventory items
-async function loadInventory() {
+// Load inventory items with pagination and performance optimization
+async function loadInventory(page = 1, search = "") {
+  if (isLoading) return;
+
+  isLoading = true;
+
+  // Get utils once at the beginning of the function
+  const utils = window.PerformanceUtils || FallbackUtils;
+
   try {
-    const response = await fetch("/api/inventory");
-    if (response.ok) {
-      inventoryItems = await response.json();
+    // Show loading state
+    utils.showLoading("inventory-grid", "Loading inventory...");
+
+    // Build URL with pagination and search parameters
+    const params = new URLSearchParams({
+      page: page,
+      per_page: 50,
+      search: search,
+    });
+
+    // Use PerformanceUtils if available, otherwise use fallback
+    const data = await utils.fetchWithRetry(
+      `/api/inventory?${params.toString()}`
+    );
+
+    if (data.items) {
+      // Handle paginated response
+      inventoryItems = data.items;
+      currentPage = data.pagination.page;
+      totalPages = data.pagination.pages;
+
       renderInventory();
+      updatePaginationControls();
     } else {
-      console.error("Failed to load inventory");
-      // For demo purposes, load sample data
-      loadSampleData();
+      // Handle legacy response format
+      inventoryItems = data;
+      renderInventory();
     }
   } catch (error) {
     console.error("Error loading inventory:", error);
-    // For demo purposes, load sample data
-    loadSampleData();
+    utils.showError(
+      "inventory-grid",
+      "Failed to load inventory. Please try again.",
+      () => loadInventory(currentPage, search)
+    );
+  } finally {
+    isLoading = false;
+    utils.hideLoading("inventory-grid");
   }
+}
+
+// Setup pagination controls
+function setupPagination() {
+  // Add pagination controls to the page
+  const inventoryContainer = document.querySelector(".inventory-container");
+  if (inventoryContainer && !document.getElementById("pagination-controls")) {
+    const paginationHTML = `
+      <div id="pagination-controls" class="pagination-controls" style="
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 1rem 0;
+        gap: 0.5rem;
+      ">
+        <button id="prev-page" class="btn btn-sm btn-outline-primary" disabled>
+          ← Previous
+        </button>
+        <span id="page-info" class="page-info">
+          Page 1 of 1
+        </span>
+        <button id="next-page" class="btn btn-sm btn-outline-primary" disabled>
+          Next →
+        </button>
+      </div>
+    `;
+
+    inventoryContainer.insertAdjacentHTML("beforeend", paginationHTML);
+
+    // Add event listeners
+    document.getElementById("prev-page").addEventListener("click", () => {
+      if (currentPage > 1) {
+        loadInventory(currentPage - 1, getCurrentSearch());
+      }
+    });
+
+    document.getElementById("next-page").addEventListener("click", () => {
+      if (currentPage < totalPages) {
+        loadInventory(currentPage + 1, getCurrentSearch());
+      }
+    });
+  }
+}
+
+// Update pagination controls
+function updatePaginationControls() {
+  const prevBtn = document.getElementById("prev-page");
+  const nextBtn = document.getElementById("next-page");
+  const pageInfo = document.getElementById("page-info");
+
+  if (prevBtn) {
+    prevBtn.disabled = currentPage <= 1;
+  }
+
+  if (nextBtn) {
+    nextBtn.disabled = currentPage >= totalPages;
+  }
+
+  if (pageInfo) {
+    pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+  }
+}
+
+// Get current search term
+function getCurrentSearch() {
+  const searchInput = document.getElementById("search-input");
+  return searchInput ? searchInput.value.trim() : "";
 }
 
 // Load sample data for demonstration
@@ -169,7 +320,7 @@ function loadSampleData() {
   renderInventory();
 }
 
-// Render inventory items
+// Render inventory items grouped by category with collapsible sections
 function renderInventory() {
   const grid = document.getElementById("inventory-grid");
   grid.innerHTML = "";
@@ -184,9 +335,41 @@ function renderInventory() {
     return;
   }
 
-  inventoryItems.forEach((item) => {
-    const itemElement = createInventoryItemElement(item);
-    grid.appendChild(itemElement);
+  // Group items by category
+  const groupedItems = groupItemsByCategory(inventoryItems);
+
+  // Define category order for consistent display
+  const categoryOrder = ["parts", "tools", "fluids", "accessories", "other"];
+
+  // Render each category section
+  categoryOrder.forEach((category) => {
+    if (groupedItems[category] && groupedItems[category].length > 0) {
+      // Create category wrapper
+      const categoryWrapper = document.createElement("div");
+      categoryWrapper.className = "category-wrapper";
+      categoryWrapper.setAttribute("data-category-wrapper", category);
+
+      // Create category section header
+      const categoryHeader = createCategoryHeader(
+        category,
+        groupedItems[category].length
+      );
+      categoryWrapper.appendChild(categoryHeader);
+
+      // Create category container
+      const categoryContainer = document.createElement("div");
+      categoryContainer.className = "category-section";
+      categoryContainer.setAttribute("data-category", category);
+
+      // Add items to category container
+      groupedItems[category].forEach((item) => {
+        const itemElement = createInventoryItemElement(item);
+        categoryContainer.appendChild(itemElement);
+      });
+
+      categoryWrapper.appendChild(categoryContainer);
+      grid.appendChild(categoryWrapper);
+    }
   });
 }
 
@@ -196,7 +379,14 @@ function createInventoryItemElement(item) {
   div.className = "inventory-item";
   div.innerHTML = `
         <div class="item-header">
-            <div>
+            <div class="item-image-container">
+                ${
+                  item.image_path
+                    ? `<img src="/static/${item.image_path}" alt="${item.name}" class="item-image" onerror="this.style.display='none'">`
+                    : `<div class="item-image-placeholder">📦</div>`
+                }
+            </div>
+            <div class="item-info">
                 <div class="item-id">${
                   item.part_number || `Product #${item.id}`
                 }</div>
@@ -273,11 +463,91 @@ function getCategoryDisplayName(category) {
   return categories[category] || category;
 }
 
+// Group items by category
+function groupItemsByCategory(items) {
+  const grouped = {};
+  items.forEach((item) => {
+    const category = item.category || "other";
+    if (!grouped[category]) {
+      grouped[category] = [];
+    }
+    grouped[category].push(item);
+  });
+  return grouped;
+}
+
+// Create category header element with collapsible functionality
+function createCategoryHeader(category, itemCount) {
+  const header = document.createElement("div");
+  header.className = "category-header";
+  header.innerHTML = `
+    <div class="category-title" onclick="toggleCategory('${category}')">
+      <div class="category-info">
+        <div class="category-icon">${getCategoryIcon(category)}</div>
+        <div class="category-details">
+          <h3>${getCategoryDisplayName(category)}</h3>
+          <span class="category-count">${itemCount} item${
+    itemCount !== 1 ? "s" : ""
+  }</span>
+        </div>
+      </div>
+      <div class="category-toggle">
+        <span class="toggle-icon">▼</span>
+      </div>
+    </div>
+  `;
+  return header;
+}
+
+// Get category icon
+function getCategoryIcon(category) {
+  const icons = {
+    parts: "🔧",
+    tools: "🛠️",
+    fluids: "🛢️",
+    accessories: "🎨",
+    other: "📦",
+  };
+  return icons[category] || "📦";
+}
+
+// Toggle category section
+function toggleCategory(category) {
+  const categorySection = document.querySelector(
+    `[data-category="${category}"]`
+  );
+  const toggleIcon = document.querySelector(
+    `[onclick="toggleCategory('${category}')"] .toggle-icon`
+  );
+
+  if (categorySection.style.display === "none") {
+    categorySection.style.display = "grid";
+    toggleIcon.textContent = "▼";
+    categorySection.parentElement.classList.remove("collapsed");
+  } else {
+    categorySection.style.display = "none";
+    toggleIcon.textContent = "▶";
+    categorySection.parentElement.classList.add("collapsed");
+  }
+}
+
 // Open add modal
 function openAddModal() {
   currentEditId = null;
   document.getElementById("modal-title").textContent = "Add New Item";
   document.getElementById("item-form").reset();
+
+  // Reset image display
+  const currentImageContainer = document.getElementById(
+    "current-image-container"
+  );
+  const fileInput = document.getElementById("item-image");
+  const removeImageFlag = document.getElementById("remove-image-flag");
+
+  currentImageContainer.style.display = "none";
+  fileInput.value = "";
+  removeImageFlag.value = "false";
+
   document.getElementById("item-modal").style.display = "block";
 }
 
@@ -300,6 +570,28 @@ function editItem(id) {
   document.getElementById("item-reorder-quantity").value =
     item.reorder_quantity || 10;
 
+  // Handle current image display
+  const currentImageContainer = document.getElementById(
+    "current-image-container"
+  );
+  const currentImagePreview = document.getElementById("current-image-preview");
+  const removeImageFlag = document.getElementById("remove-image-flag");
+  const fileInput = document.getElementById("item-image");
+
+  if (item.image_path) {
+    // Show current image
+    currentImagePreview.src = `/static/${item.image_path}`;
+    currentImageContainer.style.display = "block";
+    removeImageFlag.value = "false";
+  } else {
+    // Hide current image section
+    currentImageContainer.style.display = "none";
+    removeImageFlag.value = "false";
+  }
+
+  // Clear file input
+  fileInput.value = "";
+
   document.getElementById("item-modal").style.display = "block";
 }
 
@@ -307,6 +599,49 @@ function editItem(id) {
 function closeModal() {
   document.getElementById("item-modal").style.display = "none";
   currentEditId = null;
+
+  // Reset image display
+  const currentImageContainer = document.getElementById(
+    "current-image-container"
+  );
+  const fileInput = document.getElementById("item-image");
+  const removeImageFlag = document.getElementById("remove-image-flag");
+
+  currentImageContainer.style.display = "none";
+  fileInput.value = "";
+  removeImageFlag.value = "false";
+}
+
+// Preview new image when file is selected
+function previewNewImage(input) {
+  const currentImageContainer = document.getElementById(
+    "current-image-container"
+  );
+  const currentImagePreview = document.getElementById("current-image-preview");
+  const removeImageFlag = document.getElementById("remove-image-flag");
+
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      currentImagePreview.src = e.target.result;
+      currentImageContainer.style.display = "block";
+      removeImageFlag.value = "false"; // Reset remove flag when new image is selected
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+// Remove current image
+function removeCurrentImage() {
+  const currentImageContainer = document.getElementById(
+    "current-image-container"
+  );
+  const fileInput = document.getElementById("item-image");
+  const removeImageFlag = document.getElementById("remove-image-flag");
+
+  currentImageContainer.style.display = "none";
+  fileInput.value = ""; // Clear the file input
+  removeImageFlag.value = "true"; // Set flag to remove image
 }
 
 // Open restock modal
@@ -519,26 +854,17 @@ async function handleFormSubmit(e) {
   e.preventDefault();
 
   const formData = new FormData(e.target);
-  const itemData = {
-    name: formData.get("name"),
-    category: formData.get("category"),
-    quantity: parseInt(formData.get("quantity")),
-    price: parseFloat(formData.get("price")),
-    description: formData.get("description"),
-    location: formData.get("location"),
-    reorder_level: parseInt(formData.get("reorder_level")),
-    reorder_quantity: parseInt(formData.get("reorder_quantity")),
-  };
 
   try {
     if (currentEditId) {
-      // Update existing item
-      await updateInventoryItem(currentEditId, itemData);
+      // Update existing item - send FormData for file upload support
+      await updateInventoryItem(currentEditId, formData);
     } else {
-      // Add new item
-      await addInventoryItem(itemData);
+      // Add new item - send FormData for file upload
+      await addInventoryItem(formData);
     }
 
+    // Only close modal and reload after successful API call
     closeModal();
     loadInventory();
   } catch (error) {
@@ -552,58 +878,47 @@ async function addInventoryItem(itemData) {
   try {
     const response = await fetch("/api/inventory", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(itemData),
+      body: itemData, // FormData object
     });
 
     if (response.ok) {
-      const newItem = await response.json();
-      inventoryItems.push(newItem);
-      return newItem;
+      const result = await response.json();
+      inventoryItems.push(result.item);
+      return result.item;
     } else {
-      throw new Error("Failed to add item");
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to add item");
     }
   } catch (error) {
-    // For demo purposes, add to local array
-    const newItem = {
-      id: Date.now(),
-      ...itemData,
-    };
-    inventoryItems.push(newItem);
-    return newItem;
+    console.error("Error adding item:", error);
+    throw error;
   }
 }
 
 // Update inventory item
-async function updateInventoryItem(id, itemData) {
+async function updateInventoryItem(id, formData) {
   try {
     const response = await fetch(`/api/inventory/${id}`, {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(itemData),
+      body: formData, // Send FormData directly for file upload support
     });
 
     if (response.ok) {
-      const updatedItem = await response.json();
+      const result = await response.json();
+      const updatedItem = result.item;
       const index = inventoryItems.findIndex((item) => item.id === id);
       if (index !== -1) {
         inventoryItems[index] = updatedItem;
       }
       return updatedItem;
     } else {
+      const errorText = await response.text();
+      console.error("Update failed:", response.status, errorText);
       throw new Error("Failed to update item");
     }
   } catch (error) {
-    // For demo purposes, update local array
-    const index = inventoryItems.findIndex((item) => item.id === id);
-    if (index !== -1) {
-      inventoryItems[index] = { ...inventoryItems[index], ...itemData };
-    }
-    return inventoryItems[index];
+    console.error("Error updating item:", error);
+    throw error;
   }
 }
 
@@ -631,43 +946,15 @@ async function deleteItem(id) {
   }
 }
 
-// Search inventory
+// Search inventory with server-side search
 function searchInventory() {
-  const searchTerm = document
-    .getElementById("search-input")
-    .value.toLowerCase();
+  const searchTerm = getCurrentSearch();
 
-  if (!searchTerm) {
-    renderInventory();
-    return;
-  }
+  // Reset to first page when searching
+  currentPage = 1;
 
-  const filteredItems = inventoryItems.filter(
-    (item) =>
-      item.part_number?.toLowerCase().includes(searchTerm) ||
-      item.name.toLowerCase().includes(searchTerm) ||
-      item.description?.toLowerCase().includes(searchTerm) ||
-      item.location?.toLowerCase().includes(searchTerm) ||
-      getCategoryDisplayName(item.category).toLowerCase().includes(searchTerm)
-  );
-
-  const grid = document.getElementById("inventory-grid");
-  grid.innerHTML = "";
-
-  if (filteredItems.length === 0) {
-    grid.innerHTML = `
-            <div class="empty-state">
-                <h3>No items found</h3>
-                <p>Try adjusting your search terms</p>
-            </div>
-        `;
-    return;
-  }
-
-  filteredItems.forEach((item) => {
-    const itemElement = createInventoryItemElement(item);
-    grid.appendChild(itemElement);
-  });
+  // Load inventory with search term
+  loadInventory(currentPage, searchTerm);
 }
 
 // Toggle low stock view

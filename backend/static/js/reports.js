@@ -1,288 +1,521 @@
+// ===== GLOBAL VARIABLES =====
+let reportsData = null;
+let salesChart = null;
+let profitChart = null;
+let growthChart = null;
+
+// ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", function () {
-  // Set up smart back button logic
-  const backBtn = document.getElementById("back-btn");
-  const urlParams = new URLSearchParams(window.location.search);
-  const fromPage =
-    urlParams.get("from") || localStorage.getItem("lastPage") || "admin";
-
-  // Set back button destination based on where user came from
-  if (fromPage === "admin") {
-    backBtn.href = "admin.html";
-  } else if (fromPage === "home") {
-    backBtn.href = "home.html";
-  } else if (fromPage === "invoiceSystem") {
-    backBtn.href = "invoiceSystem.html";
-  } else {
-    backBtn.href = "admin.html"; // Default fallback
+  // Check authentication
+  if (!auth.requirePageAccess("reports")) {
+    return;
   }
 
-  // Track current page for back button logic
-  localStorage.setItem("lastPage", "reports");
-
-  // Load summary data
-  loadSummaryData();
-
-  // Update summary cards
-  async function loadSummaryData() {
-    try {
-      const response = await fetch("/api/reports/summary");
-      if (response.ok) {
-        const data = await response.json();
-
-        // Update summary cards
-        document.getElementById("total-invoices").textContent =
-          data.total_invoices || 0;
-        document.getElementById("total-cars").textContent =
-          data.total_cars || 0;
-        document.getElementById("total-customers").textContent =
-          data.total_customers || 0;
-        document.getElementById("total-inventory-value").textContent =
-          data.total_inventory_value
-            ? `${data.total_inventory_value.toLocaleString()} PKR`
-            : "0 PKR";
-
-        // Handle revenue display with NaN checks
-        const totalRevenue = data.total_revenue;
-        if (isNaN(totalRevenue) || totalRevenue < 0) {
-          document.getElementById("total-revenue").textContent = "0 PKR";
-        } else {
-          document.getElementById(
-            "total-revenue"
-          ).textContent = `${totalRevenue.toLocaleString()} PKR`;
-        }
-
-        // Handle expenses display with NaN checks
-        const totalExpenses = data.total_expenses;
-        if (isNaN(totalExpenses) || totalExpenses < 0) {
-          document.getElementById("total-expenses").textContent = "0 PKR";
-        } else {
-          document.getElementById(
-            "total-expenses"
-          ).textContent = `${totalExpenses.toLocaleString()} PKR`;
-        }
-      } else {
-        console.error("Failed to load summary data");
-      }
-    } catch (error) {
-      console.error("Error loading summary data:", error);
-    }
+  // Wait for Chart.js to load
+  if (typeof Chart === "undefined") {
+    console.error("Chart.js not loaded");
+    showErrorState("Chart library not loaded. Please refresh the page.");
+    return;
   }
 
-  // Invoices per Month Chart (real data)
-  fetch("/api/reports/invoices_per_month")
-    .then((res) => res.json())
-    .then((chartData) => {
-      const ctx = document
-        .getElementById("invoices-per-month-chart")
-        .getContext("2d");
-      new Chart(ctx, {
-        type: "bar",
-        data: {
-          labels: chartData.labels,
-          datasets: [
-            {
-              label: "Invoices",
-              data: chartData.data,
-              backgroundColor: "#3b82f6",
-              borderRadius: 6,
-              maxBarThickness: 32,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            title: { display: false },
-          },
-          scales: {
-            y: { beginAtZero: true, ticks: { stepSize: 1 } },
-          },
-        },
-      });
-    });
+  // Initialize charts
+  initializeCharts();
 
-  // Revenue per Month Chart (real data)
-  fetch("/api/reports/revenue_per_month")
-    .then((res) => res.json())
-    .then((chartData) => {
-      const ctx = document
-        .getElementById("revenue-per-month-chart")
-        .getContext("2d");
-      new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: chartData.labels,
-          datasets: [
-            {
-              label: "Net Revenue (PKR)",
-              data: chartData.data,
-              fill: false,
-              borderColor: "#10b981",
-              backgroundColor: "#10b981",
-              tension: 0.3,
-              pointRadius: 4,
-              pointBackgroundColor: "#10b981",
-              pointBorderColor: "#fff",
-              pointHoverRadius: 6,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            title: { display: false },
-            tooltip: {
-              callbacks: {
-                label: function (context) {
-                  let label = context.label || "";
-                  let value = context.parsed.y || 0;
-                  return `${label}: ${Number(
-                    value
-                  ).toLocaleString()} PKR (Net)`;
-                },
-              },
-            },
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                callback: function (value) {
-                  return Number(value).toLocaleString() + " PKR";
-                },
-              },
-            },
-          },
-        },
-      });
-    });
+  // Load initial data
+  loadReports();
 
-  // Inventory Value by Category Chart (real data)
-  fetch("/api/reports/inventory_by_category")
-    .then((res) => res.json())
-    .then((chartData) => {
-      const ctx = document
-        .getElementById("inventory-by-category-chart")
-        .getContext("2d");
-      new Chart(ctx, {
-        type: "doughnut",
-        data: {
-          labels: chartData.labels,
-          datasets: [
-            {
-              label: "Inventory Value (PKR)",
-              data: chartData.data,
-              backgroundColor: [
-                "#3b82f6",
-                "#10b981",
-                "#f59e42",
-                "#a78bfa",
-                "#f43f5e",
-                "#6366f1",
-                "#fbbf24",
-                "#14b8a6",
-              ],
-              borderWidth: 1,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { position: "bottom" },
-            title: { display: false },
-            tooltip: {
-              callbacks: {
-                label: function (context) {
-                  let label = context.label || "";
-                  let value = context.parsed || 0;
-                  return `${label}: ${Number(value).toLocaleString()} PKR`;
-                },
-              },
-            },
-          },
-        },
-      });
-    });
-
-  // Top-Selling Products Chart
-  fetch("/api/reports/top_products")
-    .then((res) => res.json())
-    .then((chartData) => {
-      const ctx = document
-        .getElementById("top-products-chart")
-        .getContext("2d");
-      new Chart(ctx, {
-        type: "bar",
-        data: {
-          labels: chartData.labels,
-          datasets: [
-            {
-              label: "Quantity Sold",
-              data: chartData.data,
-              backgroundColor: "#f59e42",
-              borderRadius: 6,
-              maxBarThickness: 32,
-            },
-          ],
-        },
-        options: {
-          indexAxis: "y",
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            title: { display: false },
-          },
-          scales: {
-            x: { beginAtZero: true, ticks: { stepSize: 1 } },
-          },
-        },
-      });
-    });
-
-  // Customer Growth Chart
-  fetch("/api/reports/customer_growth")
-    .then((res) => res.json())
-    .then((chartData) => {
-      const ctx = document
-        .getElementById("customer-growth-chart")
-        .getContext("2d");
-      new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: chartData.labels,
-          datasets: [
-            {
-              label: "New Customers",
-              data: chartData.data,
-              fill: false,
-              borderColor: "#10b981",
-              backgroundColor: "#10b981",
-              tension: 0.3,
-              pointRadius: 4,
-              pointBackgroundColor: "#10b981",
-              pointBorderColor: "#fff",
-              pointHoverRadius: 6,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            title: { display: false },
-          },
-          scales: {
-            y: { beginAtZero: true, ticks: { stepSize: 1 } },
-          },
-        },
-      });
-    });
+  // Setup back button
+  setupBackButton();
 });
+
+// ===== DATA LOADING =====
+async function loadReports() {
+  try {
+    showLoadingState();
+
+    const period = document.getElementById("period-select").value;
+    const startDate = document.getElementById("start-date").value;
+    const endDate = document.getElementById("end-date").value;
+
+    const params = new URLSearchParams({
+      period: period,
+      start_date: startDate,
+      end_date: endDate,
+    });
+
+    const data = await APIHelper.get(`/api/reports?${params}`);
+
+    if (data) {
+      reportsData = data;
+      updateDashboard();
+      hideLoadingState();
+    } else {
+      throw new Error("No data received");
+    }
+  } catch (error) {
+    console.error("Error loading reports:", error);
+    showErrorState("Failed to load reports. Please try again.");
+  }
+}
+
+// ===== UI STATE MANAGEMENT =====
+function showLoadingState() {
+  document.getElementById("loading-state").style.display = "flex";
+  document.getElementById("error-state").style.display = "none";
+  document.getElementById("dashboard-content").style.display = "none";
+}
+
+function hideLoadingState() {
+  document.getElementById("loading-state").style.display = "none";
+  document.getElementById("error-state").style.display = "none";
+  document.getElementById("dashboard-content").style.display = "block";
+}
+
+function showErrorState(message) {
+  document.getElementById("loading-state").style.display = "none";
+  document.getElementById("error-state").style.display = "flex";
+  document.getElementById("dashboard-content").style.display = "none";
+  document.getElementById("error-message").textContent = message;
+}
+
+// ===== DASHBOARD UPDATE =====
+function updateDashboard() {
+  if (!reportsData) return;
+
+  updateKPICards();
+  updateCharts();
+  updateAlerts();
+  updateTables();
+}
+
+function updateKPICards() {
+  const { sales, expenses, profit, receivables, period } = reportsData;
+
+  // Update sales
+  document.getElementById("sales-total").textContent = formatCurrency(
+    sales.total || 0
+  );
+  document.getElementById("sales-period").textContent = getPeriodText(period);
+
+  // Update expenses
+  document.getElementById("expenses-total").textContent = formatCurrency(
+    expenses.total || 0
+  );
+  document.getElementById("expenses-period").textContent =
+    getPeriodText(period);
+
+  // Update profit
+  document.getElementById("profit-total").textContent = formatCurrency(
+    profit.total || 0
+  );
+  document.getElementById("profit-period").textContent = getPeriodText(period);
+
+  // Update receivables
+  document.getElementById("receivables-total").textContent = formatCurrency(
+    receivables || 0
+  );
+}
+
+function updateCharts() {
+  const { sales, profit, customer_growth, invoice_growth, car_growth } =
+    reportsData;
+
+  // Update sales chart
+  updateSalesChart(sales);
+
+  // Update profit chart
+  updateProfitChart(profit);
+
+  // Update growth chart
+  updateGrowthChart(customer_growth, invoice_growth, car_growth);
+}
+
+function updateAlerts() {
+  const { low_stock, open_repairs, pending_quotes } = reportsData;
+
+  // Update low stock alerts
+  updateLowStockAlerts(low_stock);
+
+  // Update open repairs
+  updateOpenRepairs(open_repairs);
+
+  // Update pending quotes
+  updatePendingQuotes(pending_quotes);
+}
+
+function updateTables() {
+  const { vendor_balances, completed_today } = reportsData;
+
+  // Update vendors table
+  updateVendorsTable(vendor_balances);
+
+  // Update completed today table
+  updateCompletedTodayTable(completed_today);
+}
+
+// ===== CHART FUNCTIONS =====
+function initializeCharts() {
+  // Sales Chart
+  const salesCtx = document.getElementById("sales-chart").getContext("2d");
+  salesChart = new Chart(salesCtx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "Sales",
+          data: [],
+          borderColor: "#10b981",
+          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4,
+        },
+      ],
+    },
+    options: getChartOptions("Sales Trend"),
+  });
+
+  // Profit Chart
+  const profitCtx = document.getElementById("profit-chart").getContext("2d");
+  profitChart = new Chart(profitCtx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "Profit",
+          data: [],
+          borderColor: "#3b82f6",
+          backgroundColor: "rgba(59, 130, 246, 0.1)",
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4,
+        },
+      ],
+    },
+    options: getChartOptions("Profit Trend"),
+  });
+
+  // Growth Chart
+  const growthCtx = document.getElementById("growth-chart").getContext("2d");
+  growthChart = new Chart(growthCtx, {
+    type: "bar",
+    data: {
+      labels: ["Customers", "Invoices", "Cars"],
+      datasets: [
+        {
+          label: "Growth",
+          data: [0, 0, 0],
+          backgroundColor: [
+            "rgba(139, 92, 246, 0.8)",
+            "rgba(16, 185, 129, 0.8)",
+            "rgba(59, 130, 246, 0.8)",
+          ],
+          borderColor: ["#8b5cf6", "#10b981", "#3b82f6"],
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: getGrowthChartOptions("Growth Metrics"),
+  });
+}
+
+function updateSalesChart(salesData) {
+  const labels = salesData.daily.map((item) => formatDate(item.date));
+  const data = salesData.daily.map((item) => item.total);
+
+  salesChart.data.labels = labels;
+  salesChart.data.datasets[0].data = data;
+  salesChart.update();
+}
+
+function updateProfitChart(profitData) {
+  const labels = profitData.daily.map((item) => formatDate(item.date));
+  const data = profitData.daily.map((item) => item.total);
+
+  profitChart.data.labels = labels;
+  profitChart.data.datasets[0].data = data;
+  profitChart.update();
+}
+
+function updateGrowthChart(customerGrowth, invoiceGrowth, carGrowth) {
+  growthChart.data.datasets[0].data = [
+    customerGrowth.total || 0,
+    invoiceGrowth.total || 0,
+    carGrowth.total || 0,
+  ];
+  growthChart.update();
+}
+
+function getChartOptions(title) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      title: {
+        display: false,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: "rgba(0, 0, 0, 0.1)",
+        },
+        ticks: {
+          callback: function (value) {
+            return formatCurrency(value);
+          },
+        },
+      },
+      x: {
+        grid: {
+          color: "rgba(0, 0, 0, 0.1)",
+        },
+      },
+    },
+    elements: {
+      point: {
+        radius: 4,
+        hoverRadius: 6,
+      },
+    },
+  };
+}
+
+function getGrowthChartOptions(title) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      title: {
+        display: false,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: "rgba(0, 0, 0, 0.1)",
+        },
+        ticks: {
+          callback: function (value) {
+            return value; // Show numbers without currency formatting
+          },
+        },
+      },
+      x: {
+        grid: {
+          color: "rgba(0, 0, 0, 0.1)",
+        },
+      },
+    },
+    elements: {
+      point: {
+        radius: 4,
+        hoverRadius: 6,
+      },
+    },
+  };
+}
+
+// ===== ALERT FUNCTIONS =====
+function updateLowStockAlerts(lowStockData) {
+  const container = document.getElementById("low-stock-list");
+  const countElement = document.getElementById("low-stock-count");
+
+  countElement.textContent = lowStockData.length;
+
+  if (lowStockData.length === 0) {
+    container.innerHTML = '<p class="no-alerts">No low stock items</p>';
+    return;
+  }
+
+  container.innerHTML = lowStockData
+    .map(
+      (item) => `
+        <div class="alert-item">
+            <span class="alert-item-name">${item.item_name}</span>
+            <span class="alert-item-value">${item.quantity} / ${item.reorder_level}</span>
+        </div>
+    `
+    )
+    .join("");
+}
+
+function updateOpenRepairs(openRepairsData) {
+  const container = document.getElementById("open-repairs-list");
+  const countElement = document.getElementById("open-repairs-count");
+
+  countElement.textContent = openRepairsData.length;
+
+  if (openRepairsData.length === 0) {
+    container.innerHTML = '<p class="no-alerts">No open repair orders</p>';
+    return;
+  }
+
+  container.innerHTML = openRepairsData
+    .slice(0, 5)
+    .map(
+      (repair) => `
+        <div class="alert-item">
+            <span class="alert-item-name">#${repair.id} - ${repair.customer_name}</span>
+            <span class="alert-item-value">${repair.status}</span>
+        </div>
+    `
+    )
+    .join("");
+}
+
+function updatePendingQuotes(pendingQuotesData) {
+  const container = document.getElementById("pending-quotes-list");
+  const countElement = document.getElementById("pending-quotes-count");
+
+  countElement.textContent = pendingQuotesData.length;
+
+  if (pendingQuotesData.length === 0) {
+    container.innerHTML = '<p class="no-alerts">No pending quotes</p>';
+    return;
+  }
+
+  container.innerHTML = pendingQuotesData
+    .slice(0, 5)
+    .map(
+      (quote) => `
+        <div class="alert-item">
+            <span class="alert-item-name">#${quote.id} - ${
+        quote.customer_name
+      }</span>
+            <span class="alert-item-value">${formatCurrency(
+              quote.total_amount
+            )}</span>
+        </div>
+    `
+    )
+    .join("");
+}
+
+// ===== TABLE FUNCTIONS =====
+function updateVendorsTable(vendorBalancesData) {
+  const tbody = document.querySelector("#vendors-table tbody");
+
+  if (vendorBalancesData.length === 0) {
+    tbody.innerHTML =
+      '<tr><td colspan="2" class="no-data">No vendors with outstanding balance</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = vendorBalancesData
+    .map(
+      (vendor) => `
+        <tr>
+            <td>${vendor.vendor_name}</td>
+            <td>${formatCurrency(vendor.closing_balance)}</td>
+        </tr>
+    `
+    )
+    .join("");
+}
+
+function updateCompletedTodayTable(completedTodayData) {
+  const tbody = document.querySelector("#completed-today-table tbody");
+
+  if (completedTodayData.length === 0) {
+    tbody.innerHTML =
+      '<tr><td colspan="4" class="no-data">No repair orders completed today</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = completedTodayData
+    .map(
+      (repair) => `
+        <tr>
+            <td>#${repair.id}</td>
+            <td>${repair.customer_name}</td>
+            <td>${repair.customer_phone || "N/A"}</td>
+            <td><span class="status-badge completed">${
+              repair.status
+            }</span></td>
+        </tr>
+    `
+    )
+    .join("");
+}
+
+// ===== UTILITY FUNCTIONS =====
+function formatCurrency(amount) {
+  return new Intl.NumberFormat("en-PK", {
+    style: "currency",
+    currency: "PKR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount || 0);
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-PK", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function getPeriodText(period) {
+  const periodMap = {
+    day: "Today",
+    week: "This Week",
+    month: "This Month",
+    year: "This Year",
+  };
+  return periodMap[period] || "This Month";
+}
+
+// ===== EVENT LISTENERS =====
+document
+  .getElementById("period-select")
+  .addEventListener("change", loadReports);
+document.getElementById("start-date").addEventListener("change", loadReports);
+document.getElementById("end-date").addEventListener("change", loadReports);
+
+// ===== EXPORT FUNCTIONS =====
+function exportToPDF() {
+  // This would implement PDF export functionality
+  showInfo("PDF export feature coming soon!");
+}
+
+function exportToExcel() {
+  // This would implement Excel export functionality
+  showInfo("Excel export feature coming soon!");
+}
+
+// ===== REFRESH FUNCTION =====
+function refreshData() {
+  loadReports();
+}
+
+// ===== BACK BUTTON FUNCTIONALITY =====
+function setupBackButton() {
+  const backBtn = document.getElementById("back-btn");
+  if (backBtn) {
+    backBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      // Check if we came from home page
+      const urlParams = new URLSearchParams(window.location.search);
+      const from = urlParams.get("from");
+
+      if (from === "home") {
+        window.location.href = "home.html";
+      } else {
+        // Default to home page
+        window.location.href = "home.html";
+      }
+    });
+  }
+}

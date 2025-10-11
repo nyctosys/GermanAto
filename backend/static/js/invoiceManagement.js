@@ -157,12 +157,18 @@ document.addEventListener("DOMContentLoaded", () => {
             <p><strong>Net Total:</strong> ${invoice.total.toFixed(2)} PKR</p>
             ${taxDisplay}
             <p><strong>Advance:</strong> ${invoice.advance.toFixed(2)} PKR</p>
-            <p><strong>Balance:</strong> ${totalWithTax.toFixed(2)} PKR</p>
+            <p><strong>Paid Amount:</strong> ${(
+              invoice.paid_amount || 0
+            ).toFixed(2)} PKR</p>
+            <p><strong>Balance:</strong> ${(
+              totalWithTax - (invoice.paid_amount || 0)
+            ).toFixed(2)} PKR</p>
             <p><strong>Created:</strong> ${invoice.created_at}</p>
             ${statusDisplay}
             <div class="invoice-actions">
               <button class="wide-btn-submit view-btn">View</button>
               <button class="${editButtonClass}" ${editButtonDisabled}>${editButtonText}</button>
+              <button class="wide-btn-update update-balance-btn">Update Balance</button>
               <button class="wide-btn-delete delete-btn">Delete</button>
               ${statusDropdown}
             </div>
@@ -238,6 +244,69 @@ document.addEventListener("DOMContentLoaded", () => {
               return;
             }
             window.location.href = `invoice.html?id=${invoice.id}`;
+          });
+        }
+        const updateBalanceBtn = document.querySelector(
+          `#invoice-card-${invoice.id} .update-balance-btn`
+        );
+        if (updateBalanceBtn) {
+          updateBalanceBtn.addEventListener("click", async () => {
+            // Calculate total with tax for this specific invoice
+            let totalWithTax = invoice.total;
+            if (invoice.include_tax && invoice.tax_amount) {
+              totalWithTax += invoice.tax_amount;
+            }
+            if (invoice.discount) {
+              totalWithTax -= invoice.discount;
+            }
+            if (invoice.advance) {
+              totalWithTax -= invoice.advance;
+            }
+
+            const currentBalance = totalWithTax - (invoice.paid_amount || 0);
+            const currentPaidAmount = invoice.paid_amount || 0;
+            const paidAmount = prompt(
+              `Enter additional amount to pay for invoice ${
+                invoice.id
+              }:\nCurrent paid: ${currentPaidAmount.toFixed(
+                2
+              )} PKR\nCurrent balance: ${currentBalance.toFixed(
+                2
+              )} PKR\n\nEnter amount to add:`
+            );
+            if (paidAmount === null) return; // User cancelled
+
+            const paid = parseFloat(paidAmount);
+            if (isNaN(paid) || paid < 0) {
+              alert("Please enter a valid positive number.");
+              return;
+            }
+
+            try {
+              const res = await fetch(
+                `/api/invoice/${invoice.id}/update-balance`,
+                {
+                  method: "PUT",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ paid_amount: paid }),
+                }
+              );
+
+              if (res.ok) {
+                const result = await res.json();
+                alert(result.message || "Balance updated successfully!");
+                loadInvoices(); // Reload invoices to show updated data
+              } else {
+                const error = await res.json();
+                alert(
+                  `Failed to update balance: ${error.error || "Unknown error"}`
+                );
+              }
+            } catch (err) {
+              alert("Error occurred while updating balance.");
+            }
           });
         }
         const deleteBtn = document.querySelector(

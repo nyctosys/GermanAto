@@ -46,6 +46,10 @@ class AuthManager {
       reports: ["admin"], // Removed accountant access
       admin: ["admin"],
       "daily-expenses": ["admin", "accountant"],
+      vendors: ["admin", "accountant"],
+      "vendor-detail": ["admin", "accountant"],
+      hr: ["admin", "accountant"],
+      "worker-detail": ["admin", "accountant"],
     };
 
     return (

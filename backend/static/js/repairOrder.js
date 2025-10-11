@@ -1,6 +1,19 @@
 // ===== REPAIR ORDER FORM JAVASCRIPT =====
 
+// Global variables
+let customers = [];
+let cars = [];
+let workers = [];
+let selectedCustomerId = null;
+let selectedCarId = null;
+let selectedWorkerId = null;
+
 document.addEventListener("DOMContentLoaded", function () {
+  // Check authentication and page access
+  if (!auth.requirePageAccess("repair-order")) {
+    return;
+  }
+
   // Set up smart back button logic
   const backBtn = document.getElementById("back-btn");
   const urlParams = new URLSearchParams(window.location.search);
@@ -69,13 +82,20 @@ document.addEventListener("DOMContentLoaded", function () {
   // Form submit event listener
   form.addEventListener("submit", handleFormSubmit);
 
+  // Load customers and setup customer selection
+  loadCustomers();
+  loadCars();
+  loadWorkers();
+  setupSearchableDropdowns();
+  setupCustomerModal();
+  setupCarModal();
+
   // ===== FUNCTIONS =====
 
   async function loadQuoteData(quoteId) {
     try {
-      const response = await fetch(`/api/invoice/${quoteId}`);
-      if (response.ok) {
-        const quoteData = await response.json();
+      const quoteData = await APIHelper.get(`/api/invoice/${quoteId}`);
+      if (quoteData) {
         populateFormWithQuoteData(quoteData);
       } else {
         console.error("Failed to load quote data");
@@ -124,14 +144,10 @@ document.addEventListener("DOMContentLoaded", function () {
       quoteData.labours.forEach((labour, index) => {
         addLabourItem({
           description: labour.description,
-          rate: labour.price,
           status: "Pending",
         });
       });
     }
-
-    // Update totals
-    updateTotals();
   }
 
   function addPartItem(existingData = null) {
@@ -167,10 +183,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     <input type="number" id="part-quantity-${partCounter}" name="parts[${partCounter}][quantity]" min="1" step="1" required>
                 </div>
                 <div class="form-group">
-                    <label for="part-price-${partCounter}">Price (PKR) *</label>
-                    <input type="number" id="part-price-${partCounter}" name="parts[${partCounter}][price]" min="0" step="0.01" required>
-                </div>
-                <div class="form-group">
                     <label for="part-status-${partCounter}">Status</label>
                     <select id="part-status-${partCounter}" name="parts[${partCounter}][status]">
                         <option value="Pending">Pending</option>
@@ -195,8 +207,6 @@ document.addEventListener("DOMContentLoaded", function () {
         existingData.part_number || "";
       document.getElementById(`part-quantity-${partCounter}`).value =
         existingData.quantity || "";
-      document.getElementById(`part-price-${partCounter}`).value =
-        existingData.price || "";
       document.getElementById(`part-status-${partCounter}`).value =
         existingData.status || "Pending";
 
@@ -211,14 +221,10 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
-    // Add event listeners for price calculation
+    // Add event listeners for quantity calculation
     const quantityInput = document.getElementById(
       `part-quantity-${partCounter}`
     );
-    const priceInput = document.getElementById(`part-price-${partCounter}`);
-
-    quantityInput.addEventListener("input", updateTotals);
-    priceInput.addEventListener("input", updateTotals);
   }
 
   function addLabourItem(existingData = null) {
@@ -234,11 +240,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 <div class="form-group">
                     <label for="labour-description-${labourCounter}">Description *</label>
                     <input type="text" id="labour-description-${labourCounter}" name="labour[${labourCounter}][description]" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="labour-rate-${labourCounter}">Rate (PKR) *</label>
-                    <input type="number" id="labour-rate-${labourCounter}" name="labour[${labourCounter}][rate]" min="0" step="0.01" required>
                 </div>
                 <div class="form-group">
                     <label for="labour-status-${labourCounter}">Status</label>
@@ -258,69 +259,26 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById(`labour-description-${labourCounter}`).value =
         existingData.description || "";
 
-      document.getElementById(`labour-rate-${labourCounter}`).value =
-        existingData.rate || "";
       document.getElementById(`labour-status-${labourCounter}`).value =
         existingData.status || "Pending";
     }
 
-    // Add event listeners for price calculation
-    const rateInput = document.getElementById(`labour-rate-${labourCounter}`);
-
-    rateInput.addEventListener("input", updateTotals);
+    // No event listeners needed for labour items without pricing
   }
 
   function removeItem(itemId) {
     const item = document.getElementById(itemId);
     if (item) {
       item.remove();
-      updateTotals();
     }
-  }
-
-  function updateTotals() {
-    let partsTotal = 0;
-    let labourTotal = 0;
-
-    // Calculate parts total
-    for (let i = 1; i <= partCounter; i++) {
-      const quantityElement = document.getElementById(`part-quantity-${i}`);
-      const priceElement = document.getElementById(`part-price-${i}`);
-
-      if (quantityElement && priceElement) {
-        const quantity = parseFloat(quantityElement.value) || 0;
-        const price = parseFloat(priceElement.value) || 0;
-        partsTotal += quantity * price;
-      }
-    }
-
-    // Calculate labour total
-    for (let i = 1; i <= labourCounter; i++) {
-      const rateElement = document.getElementById(`labour-rate-${i}`);
-
-      if (rateElement) {
-        const rate = parseFloat(rateElement.value) || 0;
-        labourTotal += rate;
-      }
-    }
-
-    // Update display
-    document.getElementById("parts-total").textContent = `${partsTotal.toFixed(
-      2
-    )} PKR`;
-    document.getElementById(
-      "labour-total"
-    ).textContent = `${labourTotal.toFixed(2)} PKR`;
-    document.getElementById("total-estimate").textContent = `${(
-      partsTotal + labourTotal
-    ).toFixed(2)} PKR`;
   }
 
   async function loadRepairOrderData(repairOrderId) {
     try {
-      const response = await fetch(`/api/repair-orders/${repairOrderId}`);
-      if (response.ok) {
-        const repairOrderData = await response.json();
+      const repairOrderData = await APIHelper.get(
+        `/api/repair-orders/${repairOrderId}`
+      );
+      if (repairOrderData) {
         setEditMode();
 
         // Ensure inventory items are loaded before populating form
@@ -343,7 +301,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function populateFormWithRepairOrderData(repairOrderData) {
-    // Populate customer information (read-only in edit mode)
+    // Populate customer information (now editable in edit mode)
     const customerNameField = document.getElementById("customer-name");
     const customerPhoneField = document.getElementById("customer-phone");
     const customerAddressField = document.getElementById("customer-address");
@@ -374,10 +332,34 @@ document.addEventListener("DOMContentLoaded", function () {
     if (problemDescField)
       problemDescField.value = repairOrderData.problem_description || "";
 
-    // Populate worker name
-    const workerNameField = document.getElementById("worker-name");
-    if (workerNameField)
-      workerNameField.value = repairOrderData.worker_name || "";
+    // Populate worker selection
+    if (repairOrderData.worker_id && workers.length > 0) {
+      const worker = workers.find((w) => w.id === repairOrderData.worker_id);
+      if (worker) {
+        const workerSelect = document.getElementById("worker-select");
+        const workerIdField = document.getElementById("worker-id");
+        const workerNameField = document.getElementById("worker-name");
+
+        if (workerSelect) {
+          workerSelect.value = `${worker.first_name} ${worker.last_name} - ${
+            worker.position || "Worker"
+          }`;
+        }
+        if (workerIdField) {
+          workerIdField.value = worker.id;
+        }
+        if (workerNameField) {
+          workerNameField.value = `${worker.first_name} ${worker.last_name}`;
+        }
+        selectedWorkerId = worker.id;
+      }
+    } else {
+      // Fallback to worker name if worker_id is not available
+      const workerNameField = document.getElementById("worker-name");
+      if (workerNameField) {
+        workerNameField.value = repairOrderData.worker_name || "";
+      }
+    }
 
     // Populate parts
     if (repairOrderData.parts && repairOrderData.parts.length > 0) {
@@ -386,7 +368,6 @@ document.addEventListener("DOMContentLoaded", function () {
           description: part.description,
           part_number: part.part_number || "",
           quantity: part.quantity,
-          price: part.price,
           status: part.status || "Pending",
           inventory_id: part.inventory_id || null,
         });
@@ -403,14 +384,10 @@ document.addEventListener("DOMContentLoaded", function () {
       repairOrderData.labour.forEach((labour) => {
         addLabourItem({
           description: labour.description,
-          rate: labour.rate,
           status: labour.status || "Pending",
         });
       });
     }
-
-    // Update totals
-    updateTotals();
   }
 
   function setEditMode() {
@@ -420,26 +397,8 @@ document.addEventListener("DOMContentLoaded", function () {
       "Update repair order details";
     document.getElementById("submit-btn").textContent = "Update Repair Order";
 
-    // Disable customer and vehicle information fields
-    const customerFields = [
-      "customer-name",
-      "customer-phone",
-      "customer-address",
-      "reg-number",
-      "made",
-      "mileage",
-      "vin",
-      "color",
-      "chasis",
-    ];
-
-    customerFields.forEach((fieldId) => {
-      const field = document.getElementById(fieldId);
-      if (field) {
-        field.disabled = true;
-        field.classList.add("disabled-field");
-      }
-    });
+    // Keep customer and vehicle information fields editable in edit mode
+    // Removed the code that disabled these fields
   }
 
   async function handleFormSubmit(event) {
@@ -464,7 +423,8 @@ document.addEventListener("DOMContentLoaded", function () {
       customer_color: formData.get("customer_color"),
       customer_chasis: formData.get("customer_chasis"),
       problem_description: formData.get("problem_description"),
-      worker_name: formData.get("worker_name"),
+      worker_id: formData.get("worker_id") || null,
+      worker_name: formData.get("worker_name") || null,
       parts: [],
       labour: [],
     };
@@ -513,8 +473,6 @@ document.addEventListener("DOMContentLoaded", function () {
           quantity:
             parseFloat(document.getElementById(`part-quantity-${i}`).value) ||
             0,
-          price:
-            parseFloat(document.getElementById(`part-price-${i}`).value) || 0,
           status: document.getElementById(`part-status-${i}`).value,
         };
         repairOrderData.parts.push(partData);
@@ -529,23 +487,15 @@ document.addEventListener("DOMContentLoaded", function () {
       if (descriptionElement && descriptionElement.value.trim()) {
         const labourData = {
           description: descriptionElement.value,
-          rate:
-            parseFloat(document.getElementById(`labour-rate-${i}`).value) || 0,
           status: document.getElementById(`labour-status-${i}`).value,
         };
         repairOrderData.labour.push(labourData);
       }
     }
 
-    // Calculate totals
-    const partsTotal = repairOrderData.parts.reduce(
-      (sum, part) => sum + part.quantity * part.price,
-      0
-    );
-    const labourTotal = repairOrderData.labour.reduce(
-      (sum, labour) => sum + labour.rate,
-      0
-    );
+    // Calculate totals (now 0 since we removed pricing)
+    const partsTotal = 0;
+    const labourTotal = 0;
 
     repairOrderData.parts_total = partsTotal;
     repairOrderData.labour_total = labourTotal;
@@ -557,16 +507,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
       if (repairOrderId) {
         // Update existing repair order
-        response = await fetch(`/api/repair-orders/${repairOrderId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(repairOrderData),
-        });
-        result = await response.json();
+        result = await APIHelper.put(
+          `/api/repair-orders/${repairOrderId}`,
+          repairOrderData
+        );
 
-        if (response.ok) {
+        if (result) {
           // Check for inventory warnings
           if (
             result.inventory_warnings &&
@@ -596,16 +542,9 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       } else {
         // Create new repair order
-        response = await fetch("/api/repair-orders", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(repairOrderData),
-        });
-        result = await response.json();
+        result = await APIHelper.post("/api/repair-orders", repairOrderData);
 
-        if (response.ok) {
+        if (result) {
           // Check for inventory warnings
           if (
             result.inventory_warnings &&
@@ -655,9 +594,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Load inventory items for dropdowns
   async function loadInventoryItems() {
     try {
-      const response = await fetch("/api/inventory");
-      if (response.ok) {
-        inventoryItems = await response.json();
+      const data = await APIHelper.get("/api/inventory");
+      if (data) {
+        inventoryItems = data;
         populateInventoryDropdowns();
       } else {
         console.error("Failed to load inventory items");
@@ -706,7 +645,6 @@ document.addEventListener("DOMContentLoaded", function () {
         item.name;
       document.getElementById(`part-number-${partCounter}`).value =
         item.part_number;
-      document.getElementById(`part-price-${partCounter}`).value = item.price;
 
       // Preserve existing quantity if it's already set (for edit mode)
       const quantityField = document.getElementById(
@@ -718,13 +656,10 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       // Update totals
-      updateTotals();
     } else {
       // Clear form fields if no item selected
       document.getElementById(`part-description-${partCounter}`).value = "";
       document.getElementById(`part-number-${partCounter}`).value = "";
-      document.getElementById(`part-price-${partCounter}`).value = "";
-      updateTotals();
     }
   };
 
@@ -805,7 +740,6 @@ document.addEventListener("DOMContentLoaded", function () {
         item.name;
       document.getElementById(`part-number-${partCounter}`).value =
         item.part_number;
-      document.getElementById(`part-price-${partCounter}`).value = item.price;
 
       // Preserve the original quantity from the repair order
       if (existingPartData && existingPartData.quantity) {
@@ -814,7 +748,6 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       // Update totals
-      updateTotals();
     }
   }
 
@@ -991,7 +924,6 @@ document.addEventListener("DOMContentLoaded", function () {
         item.name;
       document.getElementById(`part-number-${partCounter}`).value =
         item.part_number;
-      document.getElementById(`part-price-${partCounter}`).value = item.price;
 
       // Set quantity to 1 if not already set
       const quantityField = document.getElementById(
@@ -1005,7 +937,6 @@ document.addEventListener("DOMContentLoaded", function () {
       optionsContainer.style.display = "none";
 
       // Update totals
-      updateTotals();
     }
   }
 
@@ -1016,10 +947,523 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Load inventory items when page loads and wait for it to complete
   loadInventoryItems()
-    .then(() => {
-      console.log("Inventory items loaded successfully");
-    })
+    .then(() => {})
     .catch((error) => {
       console.error("Failed to load inventory items:", error);
     });
+
+  // ===== CUSTOMER FUNCTIONS =====
+
+  // Load customers from API
+  async function loadCustomers() {
+    try {
+      const data = await APIHelper.get("/api/customers");
+      if (data) {
+        customers = data;
+        populateCustomerSelect();
+        // Also update car modal customer dropdown
+        updateCarModalCustomerDropdown();
+      }
+    } catch (error) {
+      console.error("Error loading customers:", error);
+    }
+  }
+
+  // Populate customer dropdown
+  function populateCustomerSelect() {
+    const customerInput = document.getElementById("customer-select");
+    const customerDropdown = document.getElementById(
+      "customer-dropdown-options"
+    );
+
+    customerDropdown.innerHTML = "";
+
+    customers.forEach((customer) => {
+      const option = document.createElement("div");
+      option.className = "dropdown-option";
+      option.setAttribute("data-value", customer.id);
+      option.textContent = `${customer.name} - ${customer.phone}`;
+      customerDropdown.appendChild(option);
+    });
+  }
+
+  // Set up searchable dropdowns
+  function setupSearchableDropdowns() {
+    // Customer dropdown
+    const customerInput = document.getElementById("customer-select");
+    const customerDropdown = document.getElementById(
+      "customer-dropdown-options"
+    );
+
+    // Show dropdown when input is clicked
+    customerInput.addEventListener("click", function () {
+      customerDropdown.style.display = "block";
+      this.readOnly = false;
+    });
+
+    // Hide dropdown when clicking outside
+    document.addEventListener("click", function (e) {
+      if (
+        !customerInput.contains(e.target) &&
+        !customerDropdown.contains(e.target)
+      ) {
+        customerDropdown.style.display = "none";
+      }
+    });
+
+    // Handle search functionality for customers
+    customerInput.addEventListener("input", function () {
+      const searchTerm = this.value.toLowerCase();
+      const options = customerDropdown.querySelectorAll(".dropdown-option");
+
+      options.forEach((option) => {
+        const text = option.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+          option.style.display = "block";
+        } else {
+          option.style.display = "none";
+        }
+      });
+    });
+
+    // Handle option selection
+    customerDropdown.addEventListener("click", function (e) {
+      if (e.target.classList.contains("dropdown-option")) {
+        const selectedValue = e.target.getAttribute("data-value");
+        const selectedText = e.target.textContent;
+
+        customerInput.value = selectedText;
+        customerDropdown.style.display = "none";
+        customerInput.readOnly = false;
+        customerInput.removeAttribute("readonly");
+
+        // Trigger customer change
+        handleCustomerChange(parseInt(selectedValue));
+      }
+    });
+
+    // Car dropdown
+    const carInput = document.getElementById("car-select");
+    const carDropdown = document.getElementById("car-dropdown-options");
+
+    if (carInput && carDropdown) {
+      // Show dropdown when input is clicked
+      carInput.addEventListener("click", function () {
+        carDropdown.style.display = "block";
+        this.readOnly = false;
+      });
+
+      // Handle search functionality for cars
+      carInput.addEventListener("input", function () {
+        const searchTerm = this.value.toLowerCase();
+        const options = carDropdown.querySelectorAll(".dropdown-option");
+
+        options.forEach((option) => {
+          const text = option.textContent.toLowerCase();
+          if (text.includes(searchTerm)) {
+            option.style.display = "block";
+          } else {
+            option.style.display = "none";
+          }
+        });
+      });
+
+      // Handle option selection
+      carDropdown.addEventListener("click", function (e) {
+        if (e.target.classList.contains("dropdown-option")) {
+          const selectedValue = e.target.getAttribute("data-value");
+          const selectedText = e.target.textContent;
+
+          carInput.value = selectedText;
+          carDropdown.style.display = "none";
+          carInput.readOnly = false;
+          carInput.removeAttribute("readonly");
+
+          // Trigger car change
+          handleCarChange(parseInt(selectedValue));
+        }
+      });
+    }
+
+    // Worker dropdown
+    const workerInput = document.getElementById("worker-select");
+    const workerDropdown = document.getElementById("worker-dropdown-options");
+
+    if (workerInput && workerDropdown) {
+      // Show dropdown when input is clicked
+      workerInput.addEventListener("click", function () {
+        workerDropdown.style.display = "block";
+        this.readOnly = false;
+      });
+
+      // Handle search functionality for workers
+      workerInput.addEventListener("input", function () {
+        const searchTerm = this.value.toLowerCase();
+        const options = workerDropdown.querySelectorAll(".dropdown-option");
+
+        options.forEach((option) => {
+          const text = option.textContent.toLowerCase();
+          if (text.includes(searchTerm)) {
+            option.style.display = "block";
+          } else {
+            option.style.display = "none";
+          }
+        });
+      });
+
+      // Handle option selection
+      workerDropdown.addEventListener("click", function (e) {
+        if (e.target.classList.contains("dropdown-option")) {
+          const selectedValue = e.target.getAttribute("data-value");
+          const selectedText = e.target.textContent;
+
+          workerInput.value = selectedText;
+          workerDropdown.style.display = "none";
+          workerInput.readOnly = false;
+          workerInput.removeAttribute("readonly");
+
+          // Trigger worker change
+          handleWorkerChange(parseInt(selectedValue));
+        }
+      });
+    }
+
+    // Hide dropdowns when clicking outside
+    document.addEventListener("click", function (e) {
+      if (
+        !customerInput.contains(e.target) &&
+        !customerDropdown.contains(e.target)
+      ) {
+        customerDropdown.style.display = "none";
+      }
+      if (
+        carInput &&
+        !carInput.contains(e.target) &&
+        carDropdown &&
+        !carDropdown.contains(e.target)
+      ) {
+        carDropdown.style.display = "none";
+      }
+      if (
+        workerInput &&
+        !workerInput.contains(e.target) &&
+        workerDropdown &&
+        !workerDropdown.contains(e.target)
+      ) {
+        workerDropdown.style.display = "none";
+      }
+    });
+  }
+
+  // Handle customer selection change
+  function handleCustomerChange(customerId) {
+    selectedCustomerId = customerId;
+
+    if (customerId) {
+      const customer = customers.find((c) => c.id === customerId);
+      if (customer) {
+        // Populate customer fields
+        document.getElementById("customer-name").value = customer.name;
+        document.getElementById("customer-phone").value = customer.phone;
+        document.getElementById("customer-address").value =
+          customer.address || "";
+      }
+    }
+  }
+
+  // Set up customer modal
+  function setupCustomerModal() {
+    const customerModal = document.getElementById("customer-modal");
+    const closeBtn = document.getElementById("close-customer-modal");
+    const cancelBtn = document.getElementById("cancel-customer");
+    const customerForm = document.getElementById("customer-form");
+
+    // Open modal
+    window.openCustomerModal = function () {
+      customerModal.style.display = "block";
+    };
+
+    // Close modal
+    function closeModal() {
+      customerModal.style.display = "none";
+      customerForm.reset();
+    }
+
+    closeBtn.addEventListener("click", closeModal);
+    cancelBtn.addEventListener("click", closeModal);
+
+    // Close modal when clicking outside
+    customerModal.addEventListener("click", function (e) {
+      if (e.target === customerModal) {
+        closeModal();
+      }
+    });
+
+    // Handle form submission
+    customerForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(customerForm);
+      const customerData = {
+        name: formData.get("modal-customer-name"),
+        phone: formData.get("modal-customer-phone"),
+        address: formData.get("modal-customer-address"),
+      };
+
+      // Validate required fields
+      if (!customerData.name || !customerData.phone) {
+        alert("Please fill in all required fields (Name and Phone).");
+        return;
+      }
+
+      try {
+        const data = await APIHelper.post("/api/customers", customerData);
+
+        if (data) {
+          const newCustomer = data.customer;
+          const customerDisplayText = `${newCustomer.name} - ${newCustomer.phone}`;
+          document.getElementById("customer-select").value =
+            customerDisplayText;
+
+          // Add to customers array
+          customers.push(newCustomer);
+          populateCustomerSelect();
+
+          // Trigger customer change with the correct ID
+          handleCustomerChange(newCustomer.id);
+
+          // Update car modal customer dropdown if it exists
+          updateCarModalCustomerDropdown();
+
+          closeModal();
+        } else {
+          const errorData = await response.json();
+          alert(
+            "Failed to create customer: " +
+              (errorData.details || errorData.error)
+          );
+        }
+      } catch (error) {
+        console.error("Error creating customer:", error);
+        alert("Error creating customer. Please try again.");
+      }
+    });
+  }
+
+  // ===== CAR FUNCTIONS =====
+
+  // Load cars from API
+  async function loadCars() {
+    try {
+      const data = await APIHelper.get("/api/cars");
+      if (data) {
+        cars = data;
+        populateCarSelect();
+      }
+    } catch (error) {
+      console.error("Error loading cars:", error);
+    }
+  }
+
+  // Load workers from API
+  async function loadWorkers() {
+    try {
+      const data = await APIHelper.get("/api/workers");
+      if (!data) return;
+
+      workers = data.workers || data;
+      populateWorkerSelect();
+    } catch (error) {
+      console.error("Error loading workers:", error);
+    }
+  }
+
+  // Populate car dropdown
+  function populateCarSelect() {
+    const carInput = document.getElementById("car-select");
+    const carDropdown = document.getElementById("car-dropdown-options");
+
+    if (!carInput || !carDropdown) return;
+
+    carDropdown.innerHTML = "";
+
+    cars.forEach((car) => {
+      const option = document.createElement("div");
+      option.className = "dropdown-option";
+      option.setAttribute("data-value", car.id);
+      option.textContent = `${car.make} - ${car.plate_no}`;
+      carDropdown.appendChild(option);
+    });
+  }
+
+  // Populate worker dropdown
+  function populateWorkerSelect() {
+    const workerInput = document.getElementById("worker-select");
+    const workerDropdown = document.getElementById("worker-dropdown-options");
+
+    if (!workerInput || !workerDropdown) return;
+
+    workerDropdown.innerHTML = "";
+
+    workers.forEach((worker) => {
+      const option = document.createElement("div");
+      option.className = "dropdown-option";
+      option.setAttribute("data-value", worker.id);
+      option.textContent = `${worker.first_name} ${worker.last_name} - ${
+        worker.position || "Worker"
+      }`;
+      workerDropdown.appendChild(option);
+    });
+  }
+
+  // Handle car selection change
+  function handleCarChange(carId) {
+    selectedCarId = carId;
+
+    if (carId) {
+      const car = cars.find((c) => c.id === carId);
+      if (car) {
+        // Populate car fields
+        document.getElementById("reg-number").value = car.plate_no || "";
+        document.getElementById("made").value = car.make || "";
+        document.getElementById("mileage").value = car.mileage || "";
+        document.getElementById("vin").value = car.vin || "";
+        document.getElementById("color").value = car.color || "";
+        document.getElementById("chasis").value = car.chasis_no || "";
+
+        // Debug logging
+      }
+    }
+  }
+
+  // Handle worker selection change
+  function handleWorkerChange(workerId) {
+    selectedWorkerId = workerId;
+
+    if (workerId) {
+      const worker = workers.find((w) => w.id === workerId);
+      if (worker) {
+        // Set the hidden fields
+        document.getElementById("worker-id").value = worker.id;
+        document.getElementById(
+          "worker-name"
+        ).value = `${worker.first_name} ${worker.last_name}`;
+      }
+    } else {
+      // Clear the hidden fields
+      document.getElementById("worker-id").value = "";
+      document.getElementById("worker-name").value = "";
+    }
+  }
+
+  // Set up car modal
+  function setupCarModal() {
+    const carModal = document.getElementById("car-modal");
+    const closeBtn = document.getElementById("close-car-modal");
+    const cancelBtn = document.getElementById("cancel-car");
+    const carForm = document.getElementById("car-form");
+    const customerSelect = document.getElementById("modal-car-customer");
+
+    // Function to populate customer dropdown
+    function populateCustomerDropdown() {
+      if (customerSelect) {
+        customerSelect.innerHTML = '<option value="">Select Customer</option>';
+        customers.forEach((customer) => {
+          const option = document.createElement("option");
+          option.value = customer.id;
+          option.textContent = `${customer.name} - ${customer.phone}`;
+          customerSelect.appendChild(option);
+        });
+      }
+    }
+
+    // Open modal
+    window.openCarModal = function () {
+      // Populate customer dropdown when opening modal
+      populateCustomerDropdown();
+      carModal.style.display = "block";
+    };
+
+    // Close modal
+    function closeModal() {
+      carModal.style.display = "none";
+      carForm.reset();
+    }
+
+    closeBtn.addEventListener("click", closeModal);
+    cancelBtn.addEventListener("click", closeModal);
+
+    // Close modal when clicking outside
+    carModal.addEventListener("click", function (e) {
+      if (e.target === carModal) {
+        closeModal();
+      }
+    });
+
+    // Handle form submission
+    carForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(carForm);
+      const carData = {
+        customer_id: formData.get("modal-car-customer"),
+        plate_no: formData.get("modal-car-plate"),
+        make: formData.get("modal-car-make"),
+        mileage: formData.get("modal-car-mileage"),
+        vin: formData.get("modal-car-vin"),
+        color: formData.get("modal-car-color"),
+        chasis_no: formData.get("modal-car-chassis"),
+      };
+
+      // Validate required fields
+      if (!carData.customer_id || !carData.make || !carData.plate_no) {
+        alert(
+          "Please fill in all required fields (Customer, Registration Number, and Make/Model)."
+        );
+        return;
+      }
+
+      try {
+        const data = await APIHelper.post("/api/cars", carData);
+
+        if (data) {
+          const newCar = data.car;
+          const carDisplayText = `${newCar.make} - ${newCar.plate_no}`;
+          document.getElementById("car-select").value = carDisplayText;
+
+          // Add to cars array
+          cars.push(newCar);
+          populateCarSelect();
+
+          // Trigger car change with the correct ID
+          handleCarChange(newCar.id);
+
+          closeModal();
+        } else {
+          const errorData = await response.json();
+          alert(
+            "Failed to create vehicle: " +
+              (errorData.details || errorData.error)
+          );
+        }
+      } catch (error) {
+        console.error("Error creating vehicle:", error);
+        alert("Error creating vehicle. Please try again.");
+      }
+    });
+  }
+
+  // Update car modal customer dropdown
+  function updateCarModalCustomerDropdown() {
+    const customerSelect = document.getElementById("modal-car-customer");
+    if (customerSelect) {
+      customerSelect.innerHTML = '<option value="">Select Customer</option>';
+      customers.forEach((customer) => {
+        const option = document.createElement("option");
+        option.value = customer.id;
+        option.textContent = `${customer.name} - ${customer.phone}`;
+        customerSelect.appendChild(option);
+      });
+    }
+  }
 });

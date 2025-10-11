@@ -1,4 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
+  // Check authentication and page access
+  if (!auth.requirePageAccess("repair-orders-management")) {
+    return;
+  }
+
   // Set up smart back button logic
   const backBtn = document.getElementById("back-btn");
   const urlParams = new URLSearchParams(window.location.search);
@@ -72,12 +77,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
+      // Add cache-busting parameter
+      params.append("_t", Date.now());
+
       if (params.toString()) {
         url += `?${params.toString()}`;
       }
 
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await APIHelper.get(url);
+      if (!data) return;
       const repairOrders = data.repair_orders || [];
 
       if (repairOrders.length === 0) {
@@ -102,17 +110,17 @@ document.addEventListener("DOMContentLoaded", () => {
             currentStatus
           );
 
+          // Get last changed status information
+          const lastChanged = getLastChangedStatus(repairOrder.status_timeline);
+          const lastChangedDisplay = lastChanged.date
+            ? formatDate(lastChanged.date)
+            : "N/A";
+
           // Calculate totals
-          const partsTotal = (repairOrder.parts || []).reduce(
-            (sum, part) => sum + part.price * part.quantity,
-            0
-          );
-          const labourTotal = (repairOrder.labour || []).reduce(
-            (sum, task) => sum + task.rate,
-            0
-          );
-          const totalEstimate =
-            partsTotal + labourTotal + (repairOrder.tax_amount || 0);
+          // Since we removed pricing, totals are now 0
+          const partsTotal = 0;
+          const labourTotal = 0;
+          const totalEstimate = 0;
 
           return `
           <div class="repair-order-card" id="repair-order-card-${
@@ -149,10 +157,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 )}</div>
               </div>
               <div class="info-group">
-                <div class="info-label">Total Estimate</div>
-                <div class="info-value">${formatCurrency(totalEstimate)}</div>
-              </div>
-              <div class="info-group">
                 <div class="info-label">Problem</div>
                 <div class="info-value">${truncateText(
                   repairOrder.problem_description || "N/A",
@@ -165,6 +169,13 @@ document.addEventListener("DOMContentLoaded", () => {
                   repairOrder.worker_name || "Not assigned"
                 }</div>
               </div>
+                <div class="info-group">
+                  <div class="info-label">Last Status Change</div>
+                  <div class="info-value">${
+                    lastChanged.status.charAt(0).toUpperCase() +
+                    lastChanged.status.slice(1)
+                  } - ${lastChangedDisplay}</div>
+                </div>
             </div>
             
             ${timelineHtml}
@@ -173,6 +184,11 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="action-buttons">
                 <button class="view-btn">View</button>
                 <button class="edit-btn">Edit</button>
+                ${
+                  currentStatus === "complete"
+                    ? '<button class="generate-invoice-btn">Generate Invoice</button>'
+                    : ""
+                }
                 <button class="delete-btn">Delete</button>
               </div>
               <select class="status-dropdown" data-id="${repairOrder.id}">
@@ -201,143 +217,196 @@ document.addEventListener("DOMContentLoaded", () => {
       html += "</div></div>";
       resultsDiv.innerHTML = html;
 
-      // Attach event listeners
-      repairOrders.forEach((repairOrder) => {
-        // Status dropdown
-        const statusDropdown = document.querySelector(
-          `#repair-order-card-${repairOrder.id} .status-dropdown`
-        );
-        if (statusDropdown) {
-          statusDropdown.addEventListener("change", async (e) => {
-            const newStatus = e.target.value;
-            try {
-              const res = await fetch(
-                `/api/repair-orders/${repairOrder.id}/status`,
-                {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
+      // Attach event listeners after DOM is updated
+      setTimeout(() => {
+        repairOrders.forEach((repairOrder) => {
+          // Status dropdown
+          const statusDropdown = document.querySelector(
+            `#repair-order-card-${repairOrder.id} .status-dropdown`
+          );
+          if (statusDropdown) {
+            statusDropdown.addEventListener("change", async (e) => {
+              const newStatus = e.target.value;
+              const repairOrderId = parseInt(repairOrder.id); // Ensure ID is integer
+
+              try {
+                const res = await APIHelper.put(
+                  `/api/repair-orders/${repairOrderId}/status`,
+                  {
                     status: newStatus,
                     timestamp: new Date().toISOString(),
-                  }),
-                }
-              );
-
-              if (res.ok) {
-                // Update the status display
-                const statusElement = document.querySelector(
-                  `#repair-order-card-${repairOrder.id} .repair-order-status`
+                  }
                 );
-                if (statusElement) {
-                  statusElement.textContent = newStatus.toUpperCase();
-                  statusElement.className = `repair-order-status status-${newStatus}`;
-                }
 
-                // Update timeline
-                const timelineElement = document.querySelector(
-                  `#repair-order-card-${repairOrder.id} .timeline-preview`
-                );
-                if (timelineElement) {
-                  const updatedTimeline = { ...repairOrder.status_timeline };
-                  updatedTimeline[newStatus] = {
-                    date: new Date().toISOString(),
-                  };
-                  timelineElement.innerHTML = generateTimelinePreview(
-                    updatedTimeline,
-                    newStatus
+                if (res) {
+                  // Update the status display
+                  const statusElement = document.querySelector(
+                    `#repair-order-card-${repairOrder.id} .repair-order-status`
+                  );
+                  if (statusElement) {
+                    statusElement.textContent = newStatus.toUpperCase();
+                    statusElement.className = `repair-order-status status-${newStatus}`;
+                  }
+
+                  // Update timeline
+                  const timelineElement = document.querySelector(
+                    `#repair-order-card-${repairOrder.id} .timeline-preview`
+                  );
+                  if (timelineElement) {
+                    const updatedTimeline = { ...repairOrder.status_timeline };
+                    updatedTimeline[newStatus] = {
+                      date: new Date().toISOString(),
+                      time: new Date().toLocaleTimeString("en-PK", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }),
+                    };
+                    timelineElement.innerHTML = generateTimelinePreview(
+                      updatedTimeline,
+                      newStatus
+                    );
+                  }
+
+                  // Update last changed status display
+                  const lastChangedElement = document.querySelector(
+                    `#repair-order-card-${repairOrder.id} .info-group:last-child .info-value`
+                  );
+                  if (lastChangedElement) {
+                    const now = new Date();
+                    const formattedDateTime = formatDate(now.toISOString());
+                    lastChangedElement.textContent = `${
+                      newStatus.charAt(0).toUpperCase() + newStatus.slice(1)
+                    } - ${formattedDateTime}`;
+                  }
+
+                  // Show success message
+                  showNotification("Status updated successfully!", "success");
+                } else {
+                  const errorText = await res.text();
+                  showNotification(
+                    `Failed to update status: ${res.status}`,
+                    "error"
                   );
                 }
-
-                // Show success message
-                showNotification("Status updated successfully!", "success");
-              } else {
-                showNotification("Failed to update status.", "error");
+              } catch (err) {
+                showNotification("Error updating status.", "error");
               }
-            } catch (err) {
-              showNotification("Error updating status.", "error");
-            }
-          });
-        }
+            });
+          }
 
-        // View button
-        const viewBtn = document.querySelector(
-          `#repair-order-card-${repairOrder.id} .view-btn`
-        );
-        if (viewBtn) {
-          viewBtn.addEventListener("click", async () => {
-            try {
-              const res = await fetch(`/api/repair-orders/${repairOrder.id}`);
-              if (res.ok) {
-                const fullRepairOrderData = await res.json();
-                sessionStorage.setItem(
-                  "repairOrderData",
-                  JSON.stringify(fullRepairOrderData)
+          // View button
+          const viewBtn = document.querySelector(
+            `#repair-order-card-${repairOrder.id} .view-btn`
+          );
+          if (viewBtn) {
+            viewBtn.addEventListener("click", async () => {
+              try {
+                const fullRepairOrderData = await APIHelper.get(
+                  `/api/repair-orders/${repairOrder.id}`
                 );
-                sessionStorage.setItem("repairOrderId", repairOrder.id);
-                window.location.href =
-                  "repair-order-template.html?from=repair-orders-management";
-              } else {
-                showNotification("Repair order not found", "error");
-              }
-            } catch (err) {
-              showNotification("Failed to load repair order data", "error");
-            }
-          });
-        }
-
-        // Edit button
-        const editBtn = document.querySelector(
-          `#repair-order-card-${repairOrder.id} .edit-btn`
-        );
-        if (editBtn) {
-          editBtn.addEventListener("click", () => {
-            // Navigate to repair order edit page (to be created)
-            window.location.href = `repair-order.html?id=${repairOrder.id}&from=repair-orders-management`;
-          });
-        }
-
-        // Delete button
-        const deleteBtn = document.querySelector(
-          `#repair-order-card-${repairOrder.id} .delete-btn`
-        );
-        if (deleteBtn) {
-          deleteBtn.addEventListener("click", async () => {
-            if (
-              !confirm(
-                "Are you sure you want to delete this repair order? This action cannot be undone."
-              )
-            ) {
-              return;
-            }
-
-            try {
-              const res = await fetch(
-                `/api/repair-orders/${repairOrder.id}/delete`,
-                {
-                  method: "DELETE",
+                if (fullRepairOrderData) {
+                  sessionStorage.setItem(
+                    "repairOrderData",
+                    JSON.stringify(fullRepairOrderData)
+                  );
+                  sessionStorage.setItem("repairOrderId", repairOrder.id);
+                  window.location.href =
+                    "repair-order-template.html?from=repair-orders-management";
+                } else {
+                  showNotification("Repair order not found", "error");
                 }
-              );
-
-              if (res.ok) {
-                document
-                  .getElementById(`repair-order-card-${repairOrder.id}`)
-                  .remove();
-                showNotification(
-                  "Repair order deleted successfully!",
-                  "success"
-                );
-              } else {
-                showNotification("Failed to delete repair order.", "error");
+              } catch (err) {
+                showNotification("Failed to load repair order data", "error");
               }
-            } catch (err) {
-              showNotification(
-                "Error occurred while deleting repair order.",
-                "error"
-              );
-            }
-          });
-        }
-      });
+            });
+          }
+
+          // Edit button
+          const editBtn = document.querySelector(
+            `#repair-order-card-${repairOrder.id} .edit-btn`
+          );
+          if (editBtn) {
+            editBtn.addEventListener("click", () => {
+              // Navigate to repair order edit page (to be created)
+              window.location.href = `repair-order.html?id=${repairOrder.id}&from=repair-orders-management`;
+            });
+          }
+
+          // Generate Invoice button (only for completed repair orders)
+          const generateInvoiceBtn = document.querySelector(
+            `#repair-order-card-${repairOrder.id} .generate-invoice-btn`
+          );
+          if (generateInvoiceBtn) {
+            generateInvoiceBtn.addEventListener("click", async () => {
+              try {
+                // Get full repair order data
+                const repairOrderData = await APIHelper.get(
+                  `/api/repair-orders/${repairOrder.id}`
+                );
+                if (repairOrderData) {
+                  // Store repair order data in session storage for invoice generation
+                  sessionStorage.setItem(
+                    "repairOrderForInvoice",
+                    JSON.stringify(repairOrderData)
+                  );
+
+                  // Navigate to invoice generator with repair order data
+                  window.location.href = `invoice.html?from=repair-order`;
+                } else {
+                  showNotification(
+                    "Failed to load repair order data.",
+                    "error"
+                  );
+                }
+              } catch (err) {
+                showNotification(
+                  "Error occurred while loading repair order data.",
+                  "error"
+                );
+              }
+            });
+          }
+
+          // Delete button
+          const deleteBtn = document.querySelector(
+            `#repair-order-card-${repairOrder.id} .delete-btn`
+          );
+          if (deleteBtn) {
+            deleteBtn.addEventListener("click", async () => {
+              if (
+                !confirm(
+                  "Are you sure you want to delete this repair order? This action cannot be undone."
+                )
+              ) {
+                return;
+              }
+
+              try {
+                const res = await APIHelper.delete(
+                  `/api/repair-orders/${repairOrder.id}`
+                );
+
+                if (res) {
+                  document
+                    .getElementById(`repair-order-card-${repairOrder.id}`)
+                    .remove();
+                  showNotification(
+                    "Repair order deleted successfully!",
+                    "success"
+                  );
+                } else {
+                  showNotification("Failed to delete repair order.", "error");
+                }
+              } catch (err) {
+                showNotification(
+                  "Error occurred while deleting repair order.",
+                  "error"
+                );
+              }
+            });
+          }
+        });
+      }, 100); // Small delay to ensure DOM is updated
     } catch (err) {
       resultsDiv.innerHTML = `<p>Error fetching repair orders: ${err.message}</p>`;
     }
@@ -348,9 +417,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let html = '<div class="timeline-preview">';
 
     statusOrder.forEach((status, index) => {
-      const isCompleted = statusTimeline[status] && statusTimeline[status].date;
       const isCurrent = status === currentStatus;
-      const stepClass = isCompleted ? "completed" : isCurrent ? "current" : "";
+      const stepClass = isCurrent ? "current" : "";
 
       html += `
         <div class="timeline-step ${stepClass}">
@@ -364,14 +432,16 @@ document.addEventListener("DOMContentLoaded", () => {
     return html;
   }
 
-  // Format date
+  // Format date with time
   function formatDate(dateString) {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
-    return date.toLocaleDateString("en-PK", {
+    return date.toLocaleString("en-PK", {
       year: "numeric",
       month: "short",
       day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
@@ -382,6 +452,32 @@ document.addEventListener("DOMContentLoaded", () => {
       currency: "PKR",
       minimumFractionDigits: 2,
     }).format(amount || 0);
+  }
+
+  // Get last changed status and its date/time
+  function getLastChangedStatus(statusTimeline) {
+    if (!statusTimeline || Object.keys(statusTimeline).length === 0) {
+      return { status: "received", date: null, time: null };
+    }
+
+    let lastStatus = "received";
+    let lastDate = null;
+    let lastTime = null;
+
+    // Find the most recent status change
+    Object.keys(statusTimeline).forEach((status) => {
+      const statusData = statusTimeline[status];
+      if (statusData && statusData.date) {
+        const statusDate = new Date(statusData.date);
+        if (!lastDate || statusDate > new Date(lastDate)) {
+          lastStatus = status;
+          lastDate = statusData.date;
+          lastTime = statusData.time;
+        }
+      }
+    });
+
+    return { status: lastStatus, date: lastDate, time: lastTime };
   }
 
   // Truncate text
