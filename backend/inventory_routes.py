@@ -6,6 +6,7 @@ import logging
 import os
 import uuid
 from werkzeug.utils import secure_filename
+from jwt_auth import login_required, role_required, admin_required
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -90,6 +91,7 @@ def validate_inventory_data(data):
     return errors
 
 @inventory_bp.route('/inventory', methods=['GET'])
+@login_required
 def get_inventory():
     """Get inventory items with pagination"""
     try:
@@ -164,6 +166,7 @@ def get_inventory():
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/by-category', methods=['GET'])
+@login_required
 def get_inventory_by_category():
     """Get inventory items grouped by category with pagination for each category"""
     try:
@@ -239,6 +242,7 @@ def get_inventory_by_category():
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/<int:item_id>', methods=['GET'])
+@login_required
 def get_inventory_item(item_id):
     """Get specific inventory item by ID"""
     try:
@@ -272,6 +276,7 @@ def get_inventory_item(item_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory', methods=['POST'])
+@role_required(['admin', 'inventory_manager'])
 def create_inventory_item():
     """Create a new inventory item"""
     try:
@@ -356,6 +361,7 @@ def create_inventory_item():
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/<int:item_id>', methods=['PUT'])
+@role_required(['admin', 'inventory_manager'])
 def update_inventory_item(item_id):
     """Update an existing inventory item"""
     try:
@@ -467,6 +473,7 @@ def update_inventory_item(item_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/<int:item_id>', methods=['DELETE'])
+@admin_required
 def delete_inventory_item(item_id):
     """Delete an inventory item"""
     try:
@@ -500,6 +507,7 @@ def delete_inventory_item(item_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/search', methods=['GET'])
+@login_required
 def search_inventory():
     """Search inventory items"""
     try:
@@ -545,6 +553,7 @@ def search_inventory():
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/stats', methods=['GET'])
+@login_required
 def get_inventory_stats():
     """Get inventory statistics"""
     try:
@@ -579,6 +588,7 @@ def get_inventory_stats():
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/low-stock', methods=['GET'])
+@login_required
 def get_low_stock_items():
     """Get inventory items that are below reorder level, separated by urgency"""
     try:
@@ -629,6 +639,7 @@ def get_low_stock_items():
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/check-stock', methods=['POST'])
+@login_required
 def check_inventory_stock():
     """Check if items have sufficient stock"""
     try:
@@ -696,6 +707,7 @@ def check_inventory_stock():
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/deduct-items', methods=['POST'])
+@role_required(['admin', 'inventory_manager'])
 def deduct_inventory_items():
     """Deduct items from inventory"""
     try:
@@ -786,6 +798,7 @@ def deduct_inventory_items():
         return jsonify({'error': 'Internal server error'}), 500 
 
 @inventory_bp.route('/inventory/restock', methods=['POST'])
+@role_required(['admin', 'inventory_manager'])
 def restock_inventory():
     """Restock inventory items by increasing quantity"""
     try:

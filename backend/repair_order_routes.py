@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload
 from datetime import datetime
 import json
 from repair_order_inventory_utils import process_repair_order_parts, handle_repair_order_edit_inventory
-from auth_routes_jwt import login_required, role_required
+from jwt_auth import login_required, role_required, admin_required
 
 repair_order_bp = Blueprint('repair_order', __name__)
 

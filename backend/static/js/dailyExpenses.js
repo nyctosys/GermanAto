@@ -104,11 +104,10 @@ async function loadExpenses() {
     if (category) params.append("category", category);
     if (keyword) params.append("keyword", keyword);
 
-    const response = await fetch(`/api/expenses?${params.toString()}`, {
-      credentials: "include",
-    });
-    if (response.ok) {
-      const expenses = await response.json();
+    const expenses = await APIHelper.request(
+      `/api/expenses?${params.toString()}`
+    );
+    if (expenses) {
       displayExpenses(expenses);
       updateSummary(expenses);
     } else {
@@ -185,10 +184,7 @@ function updateSummary(expenses = null) {
       new Date().toISOString().split("T")[0];
     const params = new URLSearchParams();
     if (selectedDate) params.append("date", selectedDate);
-    fetch(`/api/expenses?${params.toString()}`, {
-      credentials: "include",
-    })
-      .then((response) => response.json())
+    APIHelper.request(`/api/expenses?${params.toString()}`)
       .then((expenses) => updateSummary(expenses))
       .catch((error) => console.error("Error updating summary:", error));
     return;
@@ -223,22 +219,17 @@ async function handleAddExpense(event) {
   };
 
   try {
-    const response = await fetch("/api/expenses", {
+    const result = await APIHelper.request("/api/expenses", {
       method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify(expenseData),
     });
 
-    if (response.ok) {
+    if (result) {
       showToast("Expense added successfully", "success");
       clearForm();
       loadExpenses();
     } else {
-      const error = await response.json();
-      showToast(error.message || "Error adding expense", "error");
+      showToast("Error adding expense", "error");
     }
   } catch (error) {
     console.error("Error adding expense:", error);

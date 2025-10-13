@@ -9,12 +9,14 @@ from models import db, WhatsAppNotification
 from sqlalchemy import desc, func
 from datetime import datetime, timedelta
 import logging
+from jwt_auth import login_required, role_required, admin_required
 
 logger = logging.getLogger(__name__)
 
 whatsapp_bp = Blueprint('whatsapp', __name__)
 
 @whatsapp_bp.route('/whatsapp/notifications', methods=['GET'])
+@login_required
 def get_notifications():
     """Get all WhatsApp notifications with optional filters"""
     try:
@@ -78,6 +80,7 @@ def get_notifications():
         return jsonify({'error': 'Failed to fetch notifications'}), 500
 
 @whatsapp_bp.route('/whatsapp/notifications/<int:notification_id>', methods=['GET'])
+@login_required
 def get_notification(notification_id):
     """Get a specific notification by ID"""
     try:
@@ -93,6 +96,7 @@ def get_notification(notification_id):
         return jsonify({'error': 'Failed to fetch notification'}), 500
 
 @whatsapp_bp.route('/whatsapp/notifications/<int:notification_id>/resend', methods=['POST'])
+@role_required(['admin', 'accountant'])
 def resend_notification(notification_id):
     """Resend a failed notification"""
     try:
@@ -147,6 +151,7 @@ def resend_notification(notification_id):
         return jsonify({'error': 'Failed to resend notification'}), 500
 
 @whatsapp_bp.route('/whatsapp/stats', methods=['GET'])
+@login_required
 def get_notification_stats():
     """Get notification statistics"""
     try:
@@ -228,6 +233,7 @@ def calculate_notification_stats():
         }
 
 @whatsapp_bp.route('/whatsapp/test', methods=['POST'])
+@admin_required
 def test_whatsapp_connection():
     """Test WhatsApp API connection"""
     try:

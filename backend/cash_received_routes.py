@@ -3,40 +3,50 @@ from models import db, CashReceived, User
 from datetime import datetime, timedelta
 from sqlalchemy import desc
 from functools import wraps
+from jwt_auth import login_required, role_required, admin_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 cash_received_routes = Blueprint('cash_received_routes', __name__)
 
 # Decorator to check if user can edit cash received based on role and time
 def can_edit_cash_received(f):
     @wraps(f)
+    @jwt_required()
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        user = User.query.get(session['user_id'])
-        if not user or not user.is_active:
-            return jsonify({'error': 'User not found or inactive'}), 401
-        
-        # Admins can always edit
-        if user.role == 'admin':
-            return f(*args, **kwargs)
-        
-        # For other roles, check if cash received is older than 1 day
-        cash_id = kwargs.get('cash_id')
-        if cash_id:
-            cash_received = CashReceived.query.get(cash_id)
-            if not cash_received:
-                return jsonify({'error': 'Cash received record not found'}), 404
+        try:
+            current_user_id = get_jwt_identity()
+            if not current_user_id:
+                return jsonify({'error': 'Authentication required'}), 401
             
-            # Check if cash received is older than 1 day
-            one_day_ago = datetime.utcnow() - timedelta(days=1)
-            if cash_received.created_at < one_day_ago:
-                return jsonify({'error': 'Cannot edit cash received records older than 1 day'}), 403
-        
-        return f(*args, **kwargs)
+            user = User.query.get(int(current_user_id))
+            if not user or not user.is_active:
+                return jsonify({'error': 'User not found or inactive'}), 401
+            
+            # Admins can always edit
+            if user.role == 'admin':
+                return f(*args, **kwargs)
+            
+            # For other roles, check if cash received is older than 1 day
+            cash_id = kwargs.get('cash_id')
+            if cash_id:
+                cash_received = CashReceived.query.get(cash_id)
+                if not cash_received:
+                    return jsonify({'error': 'Cash received record not found'}), 404
+                
+                # Check if cash received is older than 1 day
+                one_day_ago = datetime.utcnow() - timedelta(days=1)
+                if cash_received.created_at < one_day_ago:
+                    return jsonify({'error': 'Cannot edit cash received records older than 1 day'}), 403
+            
+            return f(*args, **kwargs)
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': 'Invalid user ID format'}), 401
+        except Exception as e:
+            return jsonify({'error': 'Authentication error'}), 500
     return decorated_function
 
 @cash_received_routes.route('/cash-received', methods=['GET'])
+@login_required
 def get_cash_received():
     """Get all cash received records with optional filtering"""
     try:
@@ -86,6 +96,7 @@ def get_cash_received():
         return jsonify({'error': str(e)}), 500
 
 @cash_received_routes.route('/cash-received/<int:cash_id>', methods=['GET'])
+@login_required
 def get_cash_received_by_id(cash_id):
     """Get a specific cash received record by ID"""
     try:
@@ -108,6 +119,7 @@ def get_cash_received_by_id(cash_id):
         return jsonify({'error': str(e)}), 500
 
 @cash_received_routes.route('/cash-received', methods=['POST'])
+@role_required(['admin', 'accountant'])
 def create_cash_received():
     """Create a new cash received record"""
     try:
@@ -236,6 +248,7 @@ def delete_cash_received(cash_id):
         return jsonify({'error': str(e)}), 500
 
 @cash_received_routes.route('/cash-received/summary', methods=['GET'])
+@login_required
 def get_cash_received_summary():
     """Get cash received summary statistics"""
     try:

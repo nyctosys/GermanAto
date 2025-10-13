@@ -7,6 +7,8 @@ import re
 from datetime import datetime, timedelta
 from functools import wraps
 from whatsapp_notifications import whatsapp_notifier
+from jwt_auth import login_required, role_required, admin_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -103,36 +105,44 @@ def validate_invoice_data(data):
 # Decorator to check if user can edit invoice based on role and time
 def can_edit_invoice(f):
     @wraps(f)
+    @jwt_required()
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        user = User.query.get(session['user_id'])
-        if not user or not user.is_active:
-            return jsonify({'error': 'User not found or inactive'}), 401
-        
-        # Admins can always edit
-        if user.role == 'admin':
-            return f(*args, **kwargs)
-        
-        # For other roles, check if invoice is older than 1 day (only for invoices, not quotes)
-        invoice_id = kwargs.get('invoice_id')
-        if invoice_id:
-            invoice = Invoice.query.get(invoice_id)
-            if not invoice:
-                return jsonify({'error': 'Invoice not found'}), 404
+        try:
+            current_user_id = get_jwt_identity()
+            if not current_user_id:
+                return jsonify({'error': 'Authentication required'}), 401
             
-            # Only apply time restriction to invoices, not quotes
-            if invoice.type_of.lower() == 'invoice':
-                # Check if invoice is older than 1 day
-                one_day_ago = datetime.utcnow() - timedelta(days=1)
-                if invoice.created_at < one_day_ago:
-                    return jsonify({'error': 'Cannot edit invoices older than 1 day'}), 403
-        
-        return f(*args, **kwargs)
+            user = User.query.get(int(current_user_id))
+            if not user or not user.is_active:
+                return jsonify({'error': 'User not found or inactive'}), 401
+            
+            # Admins can always edit
+            if user.role == 'admin':
+                return f(*args, **kwargs)
+            
+            # For other roles, check if invoice is older than 1 day (only for invoices, not quotes)
+            invoice_id = kwargs.get('invoice_id')
+            if invoice_id:
+                invoice = Invoice.query.get(invoice_id)
+                if not invoice:
+                    return jsonify({'error': 'Invoice not found'}), 404
+                
+                # Only apply time restriction to invoices, not quotes
+                if invoice.type_of.lower() == 'invoice':
+                    # Check if invoice is older than 1 day
+                    one_day_ago = datetime.utcnow() - timedelta(days=1)
+                    if invoice.created_at < one_day_ago:
+                        return jsonify({'error': 'Cannot edit invoices older than 1 day'}), 403
+            
+            return f(*args, **kwargs)
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': 'Invalid user ID format'}), 401
+        except Exception as e:
+            return jsonify({'error': 'Authentication error'}), 500
     return decorated_function
 
 @bp.route('/add', methods=['POST'])
+@role_required(['admin', 'accountant'])
 def create_invoice():
     """Create a new invoice"""
     try:
@@ -313,6 +323,7 @@ def create_invoice():
         return jsonify({'error': 'Internal server error'}), 500
 
 @bp.route('/invoice/<int:invoice_id>', methods=['GET'])
+@login_required
 def get_invoice(invoice_id):
     """Get invoice by ID"""
     try:
@@ -382,6 +393,7 @@ def get_invoice(invoice_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @bp.route('/invoice/<int:invoice_id>/delete', methods=['DELETE'])
+@admin_required
 def delete_invoice(invoice_id):
     """Delete invoice by ID"""
     try:
@@ -525,6 +537,7 @@ def update_invoice(invoice_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @bp.route('/search', methods=['GET'])
+@login_required
 def search_invoices():
     """Search invoices by various criteria"""
     try:
@@ -627,6 +640,7 @@ def health_check():
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
 @bp.route('/invoice/<int:invoice_id>/convert', methods=['POST'])
+@role_required(['admin', 'accountant'])
 def convert_quote_to_invoice(invoice_id):
     """Convert a quote to an invoice (in-place, same ID)"""
     try:
@@ -661,6 +675,7 @@ def convert_quote_to_invoice(invoice_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @bp.route('/invoice/<int:invoice_id>/status', methods=['PUT'])
+@role_required(['admin', 'accountant'])
 def update_invoice_status(invoice_id):
     """Update the status of a quote/invoice"""
     try:
@@ -678,6 +693,7 @@ def update_invoice_status(invoice_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @bp.route('/invoice/<int:invoice_id>/update-balance', methods=['PUT'])
+@role_required(['admin', 'accountant'])
 def update_invoice_balance(invoice_id):
     """Add to the paid amount and update status of an invoice"""
     try:

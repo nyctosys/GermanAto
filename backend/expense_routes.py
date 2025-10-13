@@ -3,40 +3,50 @@ from models import db, Expense, User
 from datetime import datetime, timedelta
 from sqlalchemy import desc
 from functools import wraps
+from jwt_auth import login_required, role_required, admin_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 expense_routes = Blueprint('expense_routes', __name__)
 
 # Decorator to check if user can edit expense based on role and time
 def can_edit_expense(f):
     @wraps(f)
+    @jwt_required()
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        user = User.query.get(session['user_id'])
-        if not user or not user.is_active:
-            return jsonify({'error': 'User not found or inactive'}), 401
-        
-        # Admins can always edit
-        if user.role == 'admin':
-            return f(*args, **kwargs)
-        
-        # For other roles, check if expense is older than 1 day
-        expense_id = kwargs.get('expense_id')
-        if expense_id:
-            expense = Expense.query.get(expense_id)
-            if not expense:
-                return jsonify({'error': 'Expense not found'}), 404
+        try:
+            current_user_id = get_jwt_identity()
+            if not current_user_id:
+                return jsonify({'error': 'Authentication required'}), 401
             
-            # Check if expense is older than 1 day
-            one_day_ago = datetime.utcnow() - timedelta(days=1)
-            if expense.created_at < one_day_ago:
-                return jsonify({'error': 'Cannot edit expenses older than 1 day'}), 403
-        
-        return f(*args, **kwargs)
+            user = User.query.get(int(current_user_id))
+            if not user or not user.is_active:
+                return jsonify({'error': 'User not found or inactive'}), 401
+            
+            # Admins can always edit
+            if user.role == 'admin':
+                return f(*args, **kwargs)
+            
+            # For other roles, check if expense is older than 1 day
+            expense_id = kwargs.get('expense_id')
+            if expense_id:
+                expense = Expense.query.get(expense_id)
+                if not expense:
+                    return jsonify({'error': 'Expense not found'}), 404
+                
+                # Check if expense is older than 1 day
+                one_day_ago = datetime.utcnow() - timedelta(days=1)
+                if expense.created_at < one_day_ago:
+                    return jsonify({'error': 'Cannot edit expenses older than 1 day'}), 403
+            
+            return f(*args, **kwargs)
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': 'Invalid user ID format'}), 401
+        except Exception as e:
+            return jsonify({'error': 'Authentication error'}), 500
     return decorated_function
 
 @expense_routes.route('/expenses', methods=['GET'])
+@login_required
 def get_expenses():
     """Get all expenses with optional filtering"""
     try:
@@ -86,6 +96,7 @@ def get_expenses():
         return jsonify({'error': str(e)}), 500
 
 @expense_routes.route('/expenses/<int:expense_id>', methods=['GET'])
+@login_required
 def get_expense(expense_id):
     """Get a specific expense by ID"""
     try:
@@ -108,6 +119,7 @@ def get_expense(expense_id):
         return jsonify({'error': str(e)}), 500
 
 @expense_routes.route('/expenses', methods=['POST'])
+@role_required(['admin', 'accountant'])
 def create_expense():
     """Create a new expense"""
     try:
@@ -236,6 +248,7 @@ def delete_expense(expense_id):
         return jsonify({'error': str(e)}), 500
 
 @expense_routes.route('/expenses/summary', methods=['GET'])
+@login_required
 def get_expense_summary():
     """Get expense summary statistics"""
     try:

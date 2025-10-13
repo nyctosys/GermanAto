@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from models import db, Car, Customer
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+from jwt_auth import login_required, role_required, admin_required
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -73,6 +74,7 @@ def validate_customer_data(data):
 
 # Customer routes
 @car_bp.route('/customers', methods=['GET'])
+@login_required
 def get_customers():
     """Get all customers"""
     try:
@@ -96,6 +98,7 @@ def get_customers():
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/customers', methods=['POST'])
+@role_required(['admin', 'accountant'])
 def create_customer():
     """Create a new customer"""
     try:
@@ -162,6 +165,7 @@ def create_customer():
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/customers/<int:customer_id>', methods=['PUT'])
+@role_required(['admin', 'accountant'])
 def update_customer(customer_id):
     """Update an existing customer"""
     try:
@@ -220,6 +224,7 @@ def update_customer(customer_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/customers/<int:customer_id>', methods=['DELETE'])
+@admin_required
 def delete_customer(customer_id):
     """Delete a customer"""
     try:
@@ -254,6 +259,7 @@ def delete_customer(customer_id):
 
 # Car routes
 @car_bp.route('/cars', methods=['GET'])
+@login_required
 def get_cars():
     """Get all cars with customer information"""
     try:
@@ -284,6 +290,7 @@ def get_cars():
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/cars/<int:car_id>', methods=['GET'])
+@login_required
 def get_car(car_id):
     """Get specific car by ID"""
     try:
@@ -317,6 +324,7 @@ def get_car(car_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/cars', methods=['POST'])
+@role_required(['admin', 'accountant'])
 def create_car():
     """Create a new car"""
     try:
@@ -413,6 +421,7 @@ def create_car():
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/cars/<int:car_id>', methods=['PUT'])
+@role_required(['admin', 'accountant'])
 def update_car(car_id):
     """Update an existing car"""
     try:
@@ -505,6 +514,7 @@ def update_car(car_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/cars/<int:car_id>', methods=['DELETE'])
+@admin_required
 def delete_car(car_id):
     """Delete a car"""
     try:
@@ -538,6 +548,7 @@ def delete_car(car_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/cars/search', methods=['GET'])
+@login_required
 def search_cars():
     """Search cars"""
     try:
@@ -582,6 +593,7 @@ def search_cars():
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/cars/customer/<int:customer_id>', methods=['GET'])
+@login_required
 def get_cars_by_customer(customer_id):
     """Get all cars for a specific customer"""
     try:

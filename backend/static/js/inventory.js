@@ -1021,17 +1021,12 @@ async function handleRestockSubmit(e) {
 
   try {
     // Call the restock API endpoint
-    const response = await fetch("/api/inventory/restock", {
+    const result = await APIHelper.request("/api/inventory/restock", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify(restockData),
     });
 
-    if (response.ok) {
-      const result = await response.json();
-
+    if (result) {
       // Show success message
       alert(
         `Successfully restocked ${result.quantity_added} units of ${result.product_name}.\n\nOld quantity: ${result.old_quantity}\nNew quantity: ${result.new_quantity}`
@@ -1083,18 +1078,16 @@ async function handleFormSubmit(e) {
 // Add inventory item
 async function addInventoryItem(itemData) {
   try {
-    const response = await fetch("/api/inventory", {
+    const result = await APIHelper.request("/api/inventory", {
       method: "POST",
       body: itemData, // FormData object
     });
 
-    if (response.ok) {
-      const result = await response.json();
+    if (result) {
       inventoryItems.push(result.item);
       return result.item;
     } else {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to add item");
+      throw new Error("Failed to add item");
     }
   } catch (error) {
     console.error("Error adding item:", error);
@@ -1105,13 +1098,12 @@ async function addInventoryItem(itemData) {
 // Update inventory item
 async function updateInventoryItem(id, formData) {
   try {
-    const response = await fetch(`/api/inventory/${id}`, {
+    const result = await APIHelper.request(`/api/inventory/${id}`, {
       method: "PUT",
       body: formData, // Send FormData directly for file upload support
     });
 
-    if (response.ok) {
-      const result = await response.json();
+    if (result) {
       const updatedItem = result.item;
       const index = inventoryItems.findIndex((item) => item.id === id);
       if (index !== -1) {
@@ -1119,8 +1111,6 @@ async function updateInventoryItem(id, formData) {
       }
       return updatedItem;
     } else {
-      const errorText = await response.text();
-      console.error("Update failed:", response.status, errorText);
       throw new Error("Failed to update item");
     }
   } catch (error) {
@@ -1136,11 +1126,11 @@ async function deleteItem(id) {
   }
 
   try {
-    const response = await fetch(`/api/inventory/${id}`, {
+    const result = await APIHelper.request(`/api/inventory/${id}`, {
       method: "DELETE",
     });
 
-    if (response.ok) {
+    if (result) {
       inventoryItems = inventoryItems.filter((item) => item.id !== id);
       renderInventory();
     } else {
@@ -1202,9 +1192,8 @@ function toggleLowStockView() {
 // Load low stock items
 async function loadLowStockItems() {
   try {
-    const response = await fetch("/api/inventory/low-stock");
-    if (response.ok) {
-      const data = await response.json();
+    const data = await APIHelper.request("/api/inventory/low-stock");
+    if (data) {
       renderLowStockItems(data);
     } else {
       console.error("Failed to load low stock items");
@@ -1355,9 +1344,8 @@ function createLowStockItemElement(item, urgencyLevel = "low-stock") {
 async function openPrintSheet() {
   try {
     // Fetch latest low stock items from server
-    const response = await fetch("/api/inventory/low-stock");
-    if (response.ok) {
-      const lowStockItems = await response.json();
+    const lowStockItems = await APIHelper.request("/api/inventory/low-stock");
+    if (lowStockItems) {
       sessionStorage.setItem("lowStockItems", JSON.stringify(lowStockItems));
     } else {
       // Fallback to current inventory data
