@@ -384,13 +384,24 @@ body {
 }
 
 .category-section {
-  display: grid;
+  display: none; /* Hidden by default */
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
   padding: 25px;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
+/* Show category section when wrapper is not collapsed */
+.category-wrapper:not(.collapsed) .category-section {
+  display: grid;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Smooth transition for new items */
 .inventory-item {
   background: #ffffff;
   border: 2px solid #e9ecef;
@@ -401,6 +412,16 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   position: relative;
   overflow: hidden;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: slideInItem 0.4s ease forwards;
+}
+
+@keyframes slideInItem {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .inventory-item::before {
@@ -1740,7 +1761,7 @@ footer p {
 }
 
 .show-more-btn {
-  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -1749,7 +1770,7 @@ footer p {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
   position: relative;
   overflow: hidden;
 }
@@ -1772,8 +1793,8 @@ footer p {
 
 .show-more-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
-  background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+  box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
+  background: linear-gradient(135deg, #5a6268 0%, #495057 100%);
 }
 
 .show-more-btn:hover::before {
@@ -1782,7 +1803,7 @@ footer p {
 
 .show-more-btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
 }
 
 .show-more-btn:disabled {
@@ -1790,6 +1811,7 @@ footer p {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+  opacity: 0.7;
 }
 
 .show-more-btn:disabled:hover {
