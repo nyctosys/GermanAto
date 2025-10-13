@@ -34,7 +34,7 @@ def check_dependencies():
 
 def check_environment():
     """Check if environment is properly configured"""
-    required_vars = ['DATABASE_URL', 'SECRET_KEY']  # FLASK_APP is optional for local dev
+    required_vars = ['DATABASE_URL', 'SECRET_KEY', 'JWT_SECRET_KEY']  # FLASK_APP is optional for local dev
     missing_vars = []
     
     for var in required_vars:

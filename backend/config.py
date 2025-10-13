@@ -10,6 +10,11 @@ class Config:
     
     # JWT Configuration - Production Optimized
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "jwt-secret-key-change-in-production")
+    
+    # Ensure JWT_SECRET_KEY is set
+    if JWT_SECRET_KEY == "jwt-secret-key-change-in-production":
+        import warnings
+        warnings.warn("JWT_SECRET_KEY is using default value. Please set JWT_SECRET_KEY environment variable for production.")
     JWT_ACCESS_TOKEN_EXPIRES = 86400  # 24 hours (was 15 minutes)
     JWT_REFRESH_TOKEN_EXPIRES = 604800  # 7 days
     JWT_ALGORITHM = "HS256"

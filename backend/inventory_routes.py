@@ -163,6 +163,81 @@ def get_inventory():
         logger.error(f"Error fetching inventory: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@inventory_bp.route('/inventory/by-category', methods=['GET'])
+def get_inventory_by_category():
+    """Get inventory items grouped by category with pagination for each category"""
+    try:
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        category = request.args.get('category', '').strip()
+        
+        # Limit per_page to prevent excessive memory usage
+        per_page = min(per_page, 200)
+        
+        # Get search parameters
+        search = request.args.get('search', '').strip()
+        
+        if not category:
+            return jsonify({'error': 'Category parameter is required'}), 400
+        
+        # Build query for specific category
+        query = Inventory.query.filter(Inventory.category == category)
+        
+        if search:
+            search_filter = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    Inventory.name.ilike(search_filter),
+                    Inventory.part_number.ilike(search_filter),
+                    Inventory.description.ilike(search_filter)
+                )
+            )
+        
+        # Apply pagination
+        pagination = query.paginate(
+            page=page, 
+            per_page=per_page, 
+            error_out=False
+        )
+        
+        inventory_items = pagination.items
+        items_data = []
+        
+        for item in inventory_items:
+            items_data.append({
+                'id': item.id,
+                'part_number': item.part_number,
+                'name': item.name,
+                'category': item.category,
+                'quantity': item.quantity,
+                'price': float(item.price),
+                'description': item.description,
+                'location': item.location,
+                'reorder_level': item.reorder_level,
+                'reorder_quantity': item.reorder_quantity,
+                'image_path': item.image_path,
+                'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+            })
+        
+        return jsonify({
+            'items': items_data,
+            'category': category,
+            'pagination': {
+                'page': pagination.page,
+                'per_page': pagination.per_page,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'has_next': pagination.has_next,
+                'has_prev': pagination.has_prev
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching inventory by category: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 @inventory_bp.route('/inventory/<int:item_id>', methods=['GET'])
 def get_inventory_item(item_id):
     """Get specific inventory item by ID"""

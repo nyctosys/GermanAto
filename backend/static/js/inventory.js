@@ -5,6 +5,21 @@ let currentPage = 1;
 let totalPages = 1;
 let isLoading = false;
 
+// Category pagination state
+let categoryPagination = {
+  parts: { page: 1, totalPages: 1, hasMore: false, items: [], totalItems: 0 },
+  tools: { page: 1, totalPages: 1, hasMore: false, items: [], totalItems: 0 },
+  fluids: { page: 1, totalPages: 1, hasMore: false, items: [], totalItems: 0 },
+  accessories: {
+    page: 1,
+    totalPages: 1,
+    hasMore: false,
+    items: [],
+    totalItems: 0,
+  },
+  other: { page: 1, totalPages: 1, hasMore: false, items: [], totalItems: 0 },
+};
+
 // Fallback PerformanceUtils if not available
 const FallbackUtils = {
   showLoading: (elementId, message = "Loading...") => {
@@ -166,6 +181,61 @@ async function loadInventory(page = 1, search = "") {
   } finally {
     isLoading = false;
     utils.hideLoading("inventory-grid");
+  }
+}
+
+// Load inventory items by category with pagination
+async function loadInventoryByCategory(category, page = 1, search = "") {
+  if (isLoading) return;
+
+  isLoading = true;
+
+  // Get utils once at the beginning of the function
+  const utils = window.PerformanceUtils || FallbackUtils;
+
+  try {
+    // Build URL with pagination and search parameters
+    const params = new URLSearchParams({
+      page: page,
+      per_page: 50,
+      search: search,
+      category: category,
+    });
+
+    // Use PerformanceUtils if available, otherwise use fallback
+    const data = await utils.fetchWithRetry(
+      `/api/inventory/by-category?${params.toString()}`
+    );
+
+    if (data.items) {
+      // Update category pagination state
+      categoryPagination[category].page = data.pagination.page;
+      categoryPagination[category].totalPages = data.pagination.pages;
+      categoryPagination[category].hasMore = data.pagination.has_next;
+      categoryPagination[category].totalItems = data.pagination.total;
+
+      // If it's the first page, replace items; otherwise append
+      if (page === 1) {
+        categoryPagination[category].items = data.items;
+      } else {
+        categoryPagination[category].items = [
+          ...categoryPagination[category].items,
+          ...data.items,
+        ];
+      }
+
+      // Re-render the specific category
+      renderCategorySection(category);
+    }
+  } catch (error) {
+    console.error(`Error loading inventory for category ${category}:`, error);
+    utils.showError(
+      "inventory-grid",
+      `Failed to load ${category} inventory. Please try again.`,
+      () => loadInventoryByCategory(category, page, search)
+    );
+  } finally {
+    isLoading = false;
   }
 }
 
@@ -344,33 +414,74 @@ function renderInventory() {
   // Render each category section
   categoryOrder.forEach((category) => {
     if (groupedItems[category] && groupedItems[category].length > 0) {
-      // Create category wrapper
-      const categoryWrapper = document.createElement("div");
-      categoryWrapper.className = "category-wrapper";
-      categoryWrapper.setAttribute("data-category-wrapper", category);
+      // Initialize category pagination if not already done
+      if (categoryPagination[category].items.length === 0) {
+        categoryPagination[category].items = groupedItems[category].slice(
+          0,
+          50
+        );
+        categoryPagination[category].hasMore =
+          groupedItems[category].length > 50;
+        categoryPagination[category].totalPages = Math.ceil(
+          groupedItems[category].length / 50
+        );
+        categoryPagination[category].totalItems = groupedItems[category].length;
+      }
 
-      // Create category section header
-      const categoryHeader = createCategoryHeader(
-        category,
-        groupedItems[category].length
-      );
-      categoryWrapper.appendChild(categoryHeader);
-
-      // Create category container
-      const categoryContainer = document.createElement("div");
-      categoryContainer.className = "category-section";
-      categoryContainer.setAttribute("data-category", category);
-
-      // Add items to category container
-      groupedItems[category].forEach((item) => {
-        const itemElement = createInventoryItemElement(item);
-        categoryContainer.appendChild(itemElement);
-      });
-
-      categoryWrapper.appendChild(categoryContainer);
-      grid.appendChild(categoryWrapper);
+      renderCategorySection(category);
     }
   });
+}
+
+// Render a specific category section
+function renderCategorySection(category) {
+  const grid = document.getElementById("inventory-grid");
+
+  // Remove existing category wrapper if it exists
+  const existingWrapper = document.querySelector(
+    `[data-category-wrapper="${category}"]`
+  );
+  if (existingWrapper) {
+    existingWrapper.remove();
+  }
+
+  const categoryData = categoryPagination[category];
+  if (!categoryData.items || categoryData.items.length === 0) {
+    return;
+  }
+
+  // Create category wrapper
+  const categoryWrapper = document.createElement("div");
+  categoryWrapper.className = "category-wrapper";
+  categoryWrapper.setAttribute("data-category-wrapper", category);
+
+  // Create category section header
+  const categoryHeader = createCategoryHeader(
+    category,
+    categoryData.totalItems,
+    categoryData.hasMore
+  );
+  categoryWrapper.appendChild(categoryHeader);
+
+  // Create category container
+  const categoryContainer = document.createElement("div");
+  categoryContainer.className = "category-section";
+  categoryContainer.setAttribute("data-category", category);
+
+  // Add items to category container
+  categoryData.items.forEach((item) => {
+    const itemElement = createInventoryItemElement(item);
+    categoryContainer.appendChild(itemElement);
+  });
+
+  // Add Show More button if there are more items
+  if (categoryData.hasMore) {
+    const showMoreButton = createShowMoreButton(category);
+    categoryContainer.appendChild(showMoreButton);
+  }
+
+  categoryWrapper.appendChild(categoryContainer);
+  grid.appendChild(categoryWrapper);
 }
 
 // Create inventory item element
@@ -477,18 +588,27 @@ function groupItemsByCategory(items) {
 }
 
 // Create category header element with collapsible functionality
-function createCategoryHeader(category, itemCount) {
+function createCategoryHeader(category, totalItems, hasMore = false) {
   const header = document.createElement("div");
   header.className = "category-header";
+
+  // Get currently displayed items count
+  const categoryData = categoryPagination[category];
+  const displayedItems = categoryData ? categoryData.items.length : 0;
+
+  // Create count text
+  let countText = `${totalItems} item${totalItems !== 1 ? "s" : ""}`;
+  if (hasMore && displayedItems < totalItems) {
+    countText += ` (showing ${displayedItems})`;
+  }
+
   header.innerHTML = `
     <div class="category-title" onclick="toggleCategory('${category}')">
       <div class="category-info">
         <div class="category-icon">${getCategoryIcon(category)}</div>
         <div class="category-details">
           <h3>${getCategoryDisplayName(category)}</h3>
-          <span class="category-count">${itemCount} item${
-    itemCount !== 1 ? "s" : ""
-  }</span>
+          <span class="category-count">${countText}</span>
         </div>
       </div>
       <div class="category-toggle">
@@ -497,6 +617,32 @@ function createCategoryHeader(category, itemCount) {
     </div>
   `;
   return header;
+}
+
+// Create Show More button
+function createShowMoreButton(category) {
+  const buttonContainer = document.createElement("div");
+  buttonContainer.className = "show-more-container";
+
+  const button = document.createElement("button");
+  button.className = "show-more-btn";
+  button.textContent = "Show More";
+  button.onclick = () => showMoreItems(category);
+
+  buttonContainer.appendChild(button);
+  return buttonContainer;
+}
+
+// Show more items for a specific category
+async function showMoreItems(category) {
+  const categoryData = categoryPagination[category];
+  const nextPage = categoryData.page + 1;
+
+  // Get current search term
+  const searchInput = document.getElementById("search-input");
+  const searchTerm = searchInput ? searchInput.value : "";
+
+  await loadInventoryByCategory(category, nextPage, searchTerm);
 }
 
 // Get category icon
@@ -952,6 +1098,17 @@ function searchInventory() {
 
   // Reset to first page when searching
   currentPage = 1;
+
+  // Reset category pagination state
+  Object.keys(categoryPagination).forEach((category) => {
+    categoryPagination[category] = {
+      page: 1,
+      totalPages: 1,
+      hasMore: false,
+      items: [],
+      totalItems: 0,
+    };
+  });
 
   // Load inventory with search term
   loadInventory(currentPage, searchTerm);
