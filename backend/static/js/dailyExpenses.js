@@ -34,10 +34,14 @@ function initializeDailyExpenses() {
   // Set default date to today
   const today = new Date().toISOString().split("T")[0];
   document.getElementById("expense-date").value = today;
-  // Ensure search date defaults to today if empty
-  const searchDateInput = document.getElementById("search-date");
-  if (searchDateInput && !searchDateInput.value) {
-    searchDateInput.value = today;
+  // Set default date range to today if empty
+  const searchFromDateInput = document.getElementById("search-from-date");
+  const searchToDateInput = document.getElementById("search-to-date");
+  if (searchFromDateInput && !searchFromDateInput.value) {
+    searchFromDateInput.value = today;
+  }
+  if (searchToDateInput && !searchToDateInput.value) {
+    searchToDateInput.value = today;
   }
 
   // Load expenses
@@ -67,7 +71,10 @@ function setupEventListeners() {
     .getElementById("search-category")
     .addEventListener("change", performSearch);
   document
-    .getElementById("search-date")
+    .getElementById("search-from-date")
+    .addEventListener("change", performSearch);
+  document
+    .getElementById("search-to-date")
     .addEventListener("change", performSearch);
   document
     .getElementById("clear-search")
@@ -95,12 +102,16 @@ async function loadExpenses() {
     const keywordRaw =
       (document.getElementById("search-keyword") || {}).value || "";
     const keyword = keywordRaw.trim();
-    const selectedDate =
-      (document.getElementById("search-date") || {}).value ||
+    const fromDate =
+      (document.getElementById("search-from-date") || {}).value ||
+      new Date().toISOString().split("T")[0];
+    const toDate =
+      (document.getElementById("search-to-date") || {}).value ||
       new Date().toISOString().split("T")[0];
 
     const params = new URLSearchParams();
-    if (selectedDate) params.append("date", selectedDate);
+    if (fromDate) params.append("start_date", fromDate);
+    if (toDate) params.append("end_date", toDate);
     if (category) params.append("category", category);
     if (keyword) params.append("keyword", keyword);
 
@@ -179,24 +190,38 @@ function updateBalanceCard() {
 
 function updateSummary(expenses = null) {
   if (!expenses) {
-    const selectedDate =
-      (document.getElementById("search-date") || {}).value ||
+    const fromDate =
+      (document.getElementById("search-from-date") || {}).value ||
+      new Date().toISOString().split("T")[0];
+    const toDate =
+      (document.getElementById("search-to-date") || {}).value ||
       new Date().toISOString().split("T")[0];
     const params = new URLSearchParams();
-    if (selectedDate) params.append("date", selectedDate);
+    if (fromDate) params.append("start_date", fromDate);
+    if (toDate) params.append("end_date", toDate);
     APIHelper.request(`/api/expenses?${params.toString()}`)
       .then((expenses) => updateSummary(expenses))
       .catch((error) => console.error("Error updating summary:", error));
     return;
   }
 
-  const selectedDate =
-    (document.getElementById("search-date") || {}).value ||
+  const fromDate =
+    (document.getElementById("search-from-date") || {}).value ||
+    new Date().toISOString().split("T")[0];
+  const toDate =
+    (document.getElementById("search-to-date") || {}).value ||
     new Date().toISOString().split("T")[0];
 
-  const todayAmount = expenses
-    .filter((expense) => expense.date === selectedDate)
-    .reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+  // Filter expenses within the date range
+  const filteredExpenses = expenses.filter((expense) => {
+    const expenseDate = expense.date;
+    return expenseDate >= fromDate && expenseDate <= toDate;
+  });
+
+  const todayAmount = filteredExpenses.reduce(
+    (sum, expense) => sum + parseFloat(expense.amount),
+    0
+  );
 
   __todayExpensesTotal = todayAmount;
   const todayElement = document.getElementById("today-amount");
@@ -251,22 +276,14 @@ async function handleEditExpense(event) {
   };
 
   try {
-    const response = await fetch(`/api/expenses/${expenseId}`, {
-      method: "PUT",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(expenseData),
-    });
+    const data = await APIHelper.put(`/api/expenses/${expenseId}`, expenseData);
 
-    if (response.ok) {
+    if (data) {
       showToast("Expense updated successfully", "success");
       closeEditModal();
       loadExpenses();
     } else {
-      const error = await response.json();
-      showToast(error.message || "Error updating expense", "error");
+      showToast("Error updating expense", "error");
     }
   } catch (error) {
     console.error("Error updating expense:", error);
@@ -276,12 +293,8 @@ async function handleEditExpense(event) {
 
 async function editExpense(expenseId) {
   try {
-    const response = await fetch(`/api/expenses/${expenseId}`, {
-      credentials: "include",
-    });
-    if (response.ok) {
-      const expense = await response.json();
-
+    const expense = await APIHelper.get(`/api/expenses/${expenseId}`);
+    if (expense) {
       // Check if user can edit this expense
       if (shouldDisableEditButton(expense)) {
         alert(
@@ -326,17 +339,13 @@ async function deleteExpense(expenseId) {
   }
 
   try {
-    const response = await fetch(`/api/expenses/${expenseId}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
+    const data = await APIHelper.delete(`/api/expenses/${expenseId}`);
 
-    if (response.ok) {
+    if (data) {
       showToast("Expense deleted successfully", "success");
       loadExpenses();
     } else {
-      const error = await response.json();
-      showToast(error.message || "Error deleting expense", "error");
+      showToast("Error deleting expense", "error");
     }
   } catch (error) {
     console.error("Error deleting expense:", error);
@@ -362,7 +371,8 @@ function performSearch() {
 function clearSearch() {
   document.getElementById("search-keyword").value = "";
   document.getElementById("search-category").value = "";
-  document.getElementById("search-date").value = "";
+  document.getElementById("search-from-date").value = "";
+  document.getElementById("search-to-date").value = "";
   loadExpenses();
 }
 
@@ -487,17 +497,20 @@ function shouldDisableCashEditButton(cashRecord) {
 // Load cash received records
 async function loadCashReceived() {
   try {
-    const selectedDate =
-      (document.getElementById("search-date") || {}).value ||
+    const fromDate =
+      (document.getElementById("search-from-date") || {}).value ||
+      new Date().toISOString().split("T")[0];
+    const toDate =
+      (document.getElementById("search-to-date") || {}).value ||
       new Date().toISOString().split("T")[0];
     const params = new URLSearchParams();
-    if (selectedDate) params.append("date", selectedDate);
+    if (fromDate) params.append("start_date", fromDate);
+    if (toDate) params.append("end_date", toDate);
 
-    const response = await fetch(`/api/cash-received?${params.toString()}`, {
-      credentials: "include",
-    });
-    if (response.ok) {
-      const cashRecords = await response.json();
+    const cashRecords = await APIHelper.get(
+      `/api/cash-received?${params.toString()}`
+    );
+    if (cashRecords) {
       displayCashReceived(cashRecords);
       updateCashSummary(cashRecords);
     } else {
@@ -562,27 +575,38 @@ function displayCashReceived(cashRecords) {
 // Update cash received summary
 function updateCashSummary(cashRecords = null) {
   if (!cashRecords) {
-    const selectedDate =
-      (document.getElementById("search-date") || {}).value ||
+    const fromDate =
+      (document.getElementById("search-from-date") || {}).value ||
+      new Date().toISOString().split("T")[0];
+    const toDate =
+      (document.getElementById("search-to-date") || {}).value ||
       new Date().toISOString().split("T")[0];
     const params = new URLSearchParams();
-    if (selectedDate) params.append("date", selectedDate);
-    fetch(`/api/cash-received?${params.toString()}`, {
-      credentials: "include",
-    })
-      .then((response) => response.json())
+    if (fromDate) params.append("start_date", fromDate);
+    if (toDate) params.append("end_date", toDate);
+    APIHelper.get(`/api/cash-received?${params.toString()}`)
       .then((cashRecords) => updateCashSummary(cashRecords))
       .catch((error) => console.error("Error updating cash summary:", error));
     return;
   }
 
-  const selectedDate =
-    (document.getElementById("search-date") || {}).value ||
+  const fromDate =
+    (document.getElementById("search-from-date") || {}).value ||
+    new Date().toISOString().split("T")[0];
+  const toDate =
+    (document.getElementById("search-to-date") || {}).value ||
     new Date().toISOString().split("T")[0];
 
-  const todayAmount = cashRecords
-    .filter((record) => record.date === selectedDate)
-    .reduce((sum, record) => sum + parseFloat(record.amount), 0);
+  // Filter cash records within the date range
+  const filteredCashRecords = cashRecords.filter((record) => {
+    const recordDate = record.date;
+    return recordDate >= fromDate && recordDate <= toDate;
+  });
+
+  const todayAmount = filteredCashRecords.reduce(
+    (sum, record) => sum + parseFloat(record.amount),
+    0
+  );
 
   __todayCashTotal = todayAmount;
   const todayElement = document.getElementById("today-cash-amount");
@@ -606,22 +630,14 @@ async function handleAddCashReceived(event) {
   };
 
   try {
-    const response = await fetch("/api/cash-received", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(cashData),
-    });
+    const data = await APIHelper.post("/api/cash-received", cashData);
 
-    if (response.ok) {
+    if (data) {
       showToast("Cash received added successfully", "success");
       clearCashForm();
       loadCashReceived();
     } else {
-      const error = await response.json();
-      showToast(error.message || "Error adding cash received", "error");
+      showToast("Error adding cash received", "error");
     }
   } catch (error) {
     console.error("Error adding cash received:", error);
@@ -644,22 +660,14 @@ async function handleEditCashReceived(event) {
   };
 
   try {
-    const response = await fetch(`/api/cash-received/${cashId}`, {
-      method: "PUT",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(cashData),
-    });
+    const data = await APIHelper.put(`/api/cash-received/${cashId}`, cashData);
 
-    if (response.ok) {
+    if (data) {
       showToast("Cash received updated successfully", "success");
       closeEditCashModal();
       loadCashReceived();
     } else {
-      const error = await response.json();
-      showToast(error.message || "Error updating cash received", "error");
+      showToast("Error updating cash received", "error");
     }
   } catch (error) {
     console.error("Error updating cash received:", error);
@@ -670,12 +678,8 @@ async function handleEditCashReceived(event) {
 // Edit cash received record
 async function editCashReceived(cashId) {
   try {
-    const response = await fetch(`/api/cash-received/${cashId}`, {
-      credentials: "include",
-    });
-    if (response.ok) {
-      const cashRecord = await response.json();
-
+    const cashRecord = await APIHelper.get(`/api/cash-received/${cashId}`);
+    if (cashRecord) {
       // Check if user can edit this record
       if (shouldDisableCashEditButton(cashRecord)) {
         alert(
@@ -725,20 +729,13 @@ async function deleteCashReceived(cashId) {
   }
 
   try {
-    const response = await fetch(`/api/cash-received/${cashId}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
+    const data = await APIHelper.delete(`/api/cash-received/${cashId}`);
 
-    if (response.ok) {
+    if (data) {
       showToast("Cash received record deleted successfully", "success");
       loadCashReceived();
     } else {
-      const error = await response.json();
-      showToast(
-        error.message || "Error deleting cash received record",
-        "error"
-      );
+      showToast("Error deleting cash received record", "error");
     }
   } catch (error) {
     console.error("Error deleting cash received:", error);

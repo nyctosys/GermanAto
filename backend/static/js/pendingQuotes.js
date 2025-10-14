@@ -54,8 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
         url += `&id=${encodeURIComponent(idQuery)}`;
       }
 
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await APIHelper.get(url);
       const quotes = data.quotes || [];
 
       if (quotes.length === 0) {
@@ -130,12 +129,14 @@ document.addEventListener("DOMContentLoaded", () => {
           approveBtn.addEventListener("click", async () => {
             if (!confirm("Approve this quote and create repair order?")) return;
             try {
-              const res = await fetch(`/api/invoice/${quote.id}/status`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: "approved" }),
-              });
-              if (res.ok) {
+              const result = await APIHelper.request(
+                `/api/invoice/${quote.id}/status`,
+                {
+                  method: "PUT",
+                  body: JSON.stringify({ status: "approved" }),
+                }
+              );
+              if (result) {
                 // Redirect to repair order form with quote data
                 window.location.href = `repair-order.html?quoteId=${quote.id}&from=pending-quotes`;
               } else {
@@ -153,9 +154,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (viewBtn) {
           viewBtn.addEventListener("click", async () => {
             try {
-              const res = await fetch(`/api/invoice/${quote.id}`);
-              if (res.ok) {
-                const fullInvoiceData = await res.json();
+              const fullInvoiceData = await APIHelper.get(
+                `/api/invoice/${quote.id}`
+              );
+              if (fullInvoiceData) {
                 sessionStorage.setItem(
                   "invoiceData",
                   JSON.stringify(fullInvoiceData)
@@ -187,10 +189,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!confirm("Are you sure you want to delete this document?"))
               return;
             try {
-              const res = await fetch(`/api/invoice/${quote.id}/delete`, {
-                method: "DELETE",
-              });
-              if (res.ok) {
+              const result = await APIHelper.request(
+                `/api/invoice/${quote.id}/delete`,
+                {
+                  method: "DELETE",
+                }
+              );
+              if (result) {
                 document.getElementById(`invoice-card-${quote.id}`).remove();
               } else {
                 alert("Failed to delete document.");

@@ -596,7 +596,7 @@ document.addEventListener("DOMContentLoaded", function () {
     try {
       const data = await APIHelper.get("/api/inventory");
       if (data) {
-        inventoryItems = data;
+        inventoryItems = data.items || data; // Handle both array and object with items property
         populateInventoryDropdowns();
       } else {
         console.error("Failed to load inventory items");
@@ -623,7 +623,8 @@ document.addEventListener("DOMContentLoaded", function () {
       '<option value="">-- Select Inventory Item --</option>';
 
     // Add inventory items
-    inventoryItems.forEach((item) => {
+    const items = Array.isArray(inventoryItems) ? inventoryItems : [];
+    items.forEach((item) => {
       const option = document.createElement("option");
       option.value = item.id;
       option.textContent = `${item.part_number} - ${item.name} (Stock: ${item.quantity})`;
@@ -676,7 +677,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
       if (searchInput && hiddenInput && quoteItem.part_number) {
         // Try to find matching inventory item by part number
-        const matchingItem = inventoryItems.find(
+        const items = Array.isArray(inventoryItems) ? inventoryItems : [];
+        const matchingItem = items.find(
           (item) => item.part_number === quoteItem.part_number
         );
 
@@ -733,7 +735,8 @@ document.addEventListener("DOMContentLoaded", function () {
     inventoryId,
     existingPartData
   ) {
-    const item = inventoryItems.find((item) => item.id == inventoryId);
+    const items = Array.isArray(inventoryItems) ? inventoryItems : [];
+    const item = items.find((item) => item.id == inventoryId);
     if (item) {
       // Populate form fields with inventory item data
       document.getElementById(`part-description-${partCounter}`).value =
@@ -856,7 +859,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     optionsContainer.innerHTML = "";
 
-    inventoryItems.forEach((item) => {
+    // Ensure inventoryItems is an array
+    const items = Array.isArray(inventoryItems) ? inventoryItems : [];
+    items.forEach((item) => {
       const option = document.createElement("div");
       option.className = "dropdown-option";
       option.dataset.value = item.id;

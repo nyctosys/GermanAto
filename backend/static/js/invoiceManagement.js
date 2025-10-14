@@ -88,8 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
         url += `&status=${encodeURIComponent(status)}`;
       }
 
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await APIHelper.get(url);
       const invoices = data.invoices || [];
 
       if (invoices.length === 0) {
@@ -161,7 +160,9 @@ document.addEventListener("DOMContentLoaded", () => {
               invoice.paid_amount || 0
             ).toFixed(2)} PKR</p>
             <p><strong>Balance:</strong> ${(
-              totalWithTax - (invoice.paid_amount || 0)
+              totalWithTax -
+              (invoice.paid_amount || 0) -
+              (invoice.advance || 0)
             ).toFixed(2)} PKR</p>
             <p><strong>Created:</strong> ${invoice.created_at}</p>
             ${statusDisplay}
@@ -188,12 +189,14 @@ document.addEventListener("DOMContentLoaded", () => {
           statusDropdown.addEventListener("change", async (e) => {
             const newStatus = e.target.value;
             try {
-              const res = await fetch(`/api/invoice/${invoice.id}/status`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: newStatus }),
-              });
-              if (res.ok) {
+              const result = await APIHelper.request(
+                `/api/invoice/${invoice.id}/status`,
+                {
+                  method: "PUT",
+                  body: JSON.stringify({ status: newStatus }),
+                }
+              );
+              if (result) {
                 const statusSpan = document.querySelector(
                   `#invoice-card-${invoice.id} .invoice-status`
                 );
@@ -213,9 +216,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (viewBtn) {
           viewBtn.addEventListener("click", async () => {
             try {
-              const res = await fetch(`/api/invoice/${invoice.id}`);
-              if (res.ok) {
-                const fullInvoiceData = await res.json();
+              const fullInvoiceData = await APIHelper.get(
+                `/api/invoice/${invoice.id}`
+              );
+              if (fullInvoiceData) {
                 sessionStorage.setItem(
                   "invoiceData",
                   JSON.stringify(fullInvoiceData)
@@ -283,26 +287,19 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             try {
-              const res = await fetch(
+              const result = await APIHelper.request(
                 `/api/invoice/${invoice.id}/update-balance`,
                 {
                   method: "PUT",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
                   body: JSON.stringify({ paid_amount: paid }),
                 }
               );
 
-              if (res.ok) {
-                const result = await res.json();
+              if (result) {
                 alert(result.message || "Balance updated successfully!");
                 loadInvoices(); // Reload invoices to show updated data
               } else {
-                const error = await res.json();
-                alert(
-                  `Failed to update balance: ${error.error || "Unknown error"}`
-                );
+                alert("Failed to update balance.");
               }
             } catch (err) {
               alert("Error occurred while updating balance.");
@@ -317,10 +314,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!confirm("Are you sure you want to delete this document?"))
               return;
             try {
-              const res = await fetch(`/api/invoice/${invoice.id}/delete`, {
-                method: "DELETE",
-              });
-              if (res.ok) {
+              const result = await APIHelper.request(
+                `/api/invoice/${invoice.id}/delete`,
+                {
+                  method: "DELETE",
+                }
+              );
+              if (result) {
                 document.getElementById(`invoice-card-${invoice.id}`).remove();
               } else {
                 alert("Failed to delete document.");
@@ -332,6 +332,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     } catch (err) {
+      console.error("Error fetching invoices:", err);
       resultsDiv.innerHTML = `<p>Error fetching invoices.</p>`;
     }
   }

@@ -64,13 +64,58 @@ class PerformanceUtils {
 
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
       try {
+        // Prepare headers with JWT authentication
+        const headers = {
+          "Content-Type": "application/json",
+          ...options.headers,
+        };
+
+        // Add JWT token if available
+        if (window.auth && window.auth.getAccessToken()) {
+          headers["Authorization"] = `Bearer ${window.auth.getAccessToken()}`;
+        }
+
         const response = await fetch(url, {
           ...options,
-          headers: {
-            "Content-Type": "application/json",
-            ...options.headers,
-          },
+          headers,
         });
+
+        // Handle 401 responses (token expired)
+        if (response.status === 401) {
+          // Try to refresh the token if auth is available
+          if (window.auth && window.auth.refreshAccessToken) {
+            const refreshSuccess = await window.auth.refreshAccessToken();
+
+            if (refreshSuccess) {
+              // Retry the request with new token
+              headers[
+                "Authorization"
+              ] = `Bearer ${window.auth.getAccessToken()}`;
+              const retryResponse = await fetch(url, {
+                ...options,
+                headers,
+              });
+
+              if (!retryResponse.ok) {
+                throw new Error(
+                  `HTTP ${retryResponse.status}: ${retryResponse.statusText}`
+                );
+              }
+
+              const retryData = await retryResponse.json();
+              return retryData;
+            } else {
+              // Refresh failed, redirect to login
+              if (window.auth && window.auth.clearAuth) {
+                window.auth.clearAuth();
+                window.location.href = "login.html";
+              }
+              throw new Error("Authentication failed");
+            }
+          } else {
+            throw new Error("Authentication failed");
+          }
+        }
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);

@@ -75,7 +75,7 @@ def validate_customer_data(data):
 # Customer routes
 @car_bp.route('/customers', methods=['GET'])
 @login_required
-def get_customers():
+def get_customers(current_user=None):
     """Get all customers"""
     try:
         customers = Customer.query.all()
@@ -99,7 +99,7 @@ def get_customers():
 
 @car_bp.route('/customers', methods=['POST'])
 @role_required(['admin', 'accountant'])
-def create_customer():
+def create_customer(current_user=None):
     """Create a new customer"""
     try:
         data = request.get_json()
@@ -166,7 +166,7 @@ def create_customer():
 
 @car_bp.route('/customers/<int:customer_id>', methods=['PUT'])
 @role_required(['admin', 'accountant'])
-def update_customer(customer_id):
+def update_customer(customer_id, current_user=None):
     """Update an existing customer"""
     try:
         if not customer_id or customer_id <= 0:
@@ -225,7 +225,7 @@ def update_customer(customer_id):
 
 @car_bp.route('/customers/<int:customer_id>', methods=['DELETE'])
 @admin_required
-def delete_customer(customer_id):
+def delete_customer(customer_id, current_user=None):
     """Delete a customer"""
     try:
         if not customer_id or customer_id <= 0:
@@ -260,7 +260,7 @@ def delete_customer(customer_id):
 # Car routes
 @car_bp.route('/cars', methods=['GET'])
 @login_required
-def get_cars():
+def get_cars(current_user=None):
     """Get all cars with customer information"""
     try:
         cars = Car.query.join(Customer).all()
@@ -291,7 +291,7 @@ def get_cars():
 
 @car_bp.route('/cars/<int:car_id>', methods=['GET'])
 @login_required
-def get_car(car_id):
+def get_car(car_id, current_user=None):
     """Get specific car by ID"""
     try:
         if not car_id or car_id <= 0:
@@ -325,7 +325,7 @@ def get_car(car_id):
 
 @car_bp.route('/cars', methods=['POST'])
 @role_required(['admin', 'accountant'])
-def create_car():
+def create_car(current_user=None):
     """Create a new car"""
     try:
         data = request.get_json()
@@ -422,7 +422,7 @@ def create_car():
 
 @car_bp.route('/cars/<int:car_id>', methods=['PUT'])
 @role_required(['admin', 'accountant'])
-def update_car(car_id):
+def update_car(car_id, current_user=None):
     """Update an existing car"""
     try:
         if not car_id or car_id <= 0:
@@ -515,7 +515,7 @@ def update_car(car_id):
 
 @car_bp.route('/cars/<int:car_id>', methods=['DELETE'])
 @admin_required
-def delete_car(car_id):
+def delete_car(car_id, current_user=None):
     """Delete a car"""
     try:
         if not car_id or car_id <= 0:
@@ -549,7 +549,7 @@ def delete_car(car_id):
 
 @car_bp.route('/cars/search', methods=['GET'])
 @login_required
-def search_cars():
+def search_cars(current_user=None):
     """Search cars"""
     try:
         query = request.args.get('q', '').strip()
@@ -592,9 +592,49 @@ def search_cars():
         logger.error(f"Error searching cars: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@car_bp.route('/customers/search', methods=['GET'])
+@login_required
+def search_customers(current_user=None):
+    """Search customers"""
+    try:
+        query = request.args.get('q', '').strip()
+        
+        if not query:
+            return jsonify({'error': 'Search query is required'}), 400
+        
+        # Search in name, phone, and address
+        search_results = Customer.query.filter(
+            db.or_(
+                Customer.name.ilike(f'%{query}%'),
+                Customer.phone.ilike(f'%{query}%'),
+                Customer.address.ilike(f'%{query}%')
+            )
+        ).all()
+        
+        customers_data = []
+        for customer in search_results:
+            customers_data.append({
+                'id': customer.id,
+                'name': customer.name,
+                'phone': customer.phone,
+                'address': customer.address,
+                'created_at': customer.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                'updated_at': customer.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+            })
+        
+        return jsonify({
+            'query': query,
+            'results': customers_data,
+            'count': len(customers_data)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error searching customers: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 @car_bp.route('/cars/customer/<int:customer_id>', methods=['GET'])
 @login_required
-def get_cars_by_customer(customer_id):
+def get_cars_by_customer(customer_id, current_user=None):
     """Get all cars for a specific customer"""
     try:
         if not customer_id or customer_id <= 0:

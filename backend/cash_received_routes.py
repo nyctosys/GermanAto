@@ -47,12 +47,13 @@ def can_edit_cash_received(f):
 
 @cash_received_routes.route('/cash-received', methods=['GET'])
 @login_required
-def get_cash_received():
+def get_cash_received(current_user=None):
     """Get all cash received records with optional filtering"""
     try:
         # Get query parameters for filtering
         payment_method = request.args.get('payment_method')
-        date = request.args.get('date')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
         keyword = request.args.get('keyword')
         
         # Start with base query
@@ -62,8 +63,19 @@ def get_cash_received():
         if payment_method:
             query = query.filter(CashReceived.payment_method == payment_method)
         
-        if date:
-            query = query.filter(CashReceived.date == date)
+        if start_date:
+            try:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+                query = query.filter(CashReceived.date >= start_date_obj)
+            except ValueError:
+                return jsonify({'error': 'Invalid start_date format. Use YYYY-MM-DD'}), 400
+        
+        if end_date:
+            try:
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+                query = query.filter(CashReceived.date <= end_date_obj)
+            except ValueError:
+                return jsonify({'error': 'Invalid end_date format. Use YYYY-MM-DD'}), 400
         
         if keyword:
             query = query.filter(
@@ -97,7 +109,7 @@ def get_cash_received():
 
 @cash_received_routes.route('/cash-received/<int:cash_id>', methods=['GET'])
 @login_required
-def get_cash_received_by_id(cash_id):
+def get_cash_received_by_id(cash_id, current_user=None):
     """Get a specific cash received record by ID"""
     try:
         cash_received = CashReceived.query.get_or_404(cash_id)
@@ -120,7 +132,7 @@ def get_cash_received_by_id(cash_id):
 
 @cash_received_routes.route('/cash-received', methods=['POST'])
 @role_required(['admin', 'accountant'])
-def create_cash_received():
+def create_cash_received(current_user=None):
     """Create a new cash received record"""
     try:
         data = request.get_json()
@@ -249,7 +261,7 @@ def delete_cash_received(cash_id):
 
 @cash_received_routes.route('/cash-received/summary', methods=['GET'])
 @login_required
-def get_cash_received_summary():
+def get_cash_received_summary(current_user=None):
     """Get cash received summary statistics"""
     try:
         # Get query parameters

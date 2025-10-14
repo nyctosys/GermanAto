@@ -47,12 +47,13 @@ def can_edit_expense(f):
 
 @expense_routes.route('/expenses', methods=['GET'])
 @login_required
-def get_expenses():
+def get_expenses(current_user=None):
     """Get all expenses with optional filtering"""
     try:
         # Get query parameters for filtering
         category = request.args.get('category')
-        date = request.args.get('date')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
         keyword = request.args.get('keyword')
         
         # Start with base query
@@ -62,8 +63,19 @@ def get_expenses():
         if category:
             query = query.filter(Expense.category == category)
         
-        if date:
-            query = query.filter(Expense.date == date)
+        if start_date:
+            try:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+                query = query.filter(Expense.date >= start_date_obj)
+            except ValueError:
+                return jsonify({'error': 'Invalid start_date format. Use YYYY-MM-DD'}), 400
+        
+        if end_date:
+            try:
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+                query = query.filter(Expense.date <= end_date_obj)
+            except ValueError:
+                return jsonify({'error': 'Invalid end_date format. Use YYYY-MM-DD'}), 400
         
         if keyword:
             query = query.filter(
@@ -97,7 +109,7 @@ def get_expenses():
 
 @expense_routes.route('/expenses/<int:expense_id>', methods=['GET'])
 @login_required
-def get_expense(expense_id):
+def get_expense(expense_id, current_user=None):
     """Get a specific expense by ID"""
     try:
         expense = Expense.query.get_or_404(expense_id)
@@ -120,7 +132,7 @@ def get_expense(expense_id):
 
 @expense_routes.route('/expenses', methods=['POST'])
 @role_required(['admin', 'accountant'])
-def create_expense():
+def create_expense(current_user=None):
     """Create a new expense"""
     try:
         data = request.get_json()
@@ -249,7 +261,7 @@ def delete_expense(expense_id):
 
 @expense_routes.route('/expenses/summary', methods=['GET'])
 @login_required
-def get_expense_summary():
+def get_expense_summary(current_user=None):
     """Get expense summary statistics"""
     try:
         # Get query parameters

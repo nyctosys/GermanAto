@@ -7,14 +7,14 @@ let cars = [];
 let inventoryItems = [];
 let selectedCustomerId = null;
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   editId = params.get("id");
 
   // Load customers, cars, and inventory on page load
   loadCustomers();
   loadCars();
-  loadInventory();
+  await loadInventory(); // Wait for inventory to load before proceeding
 
   if (editId) {
     loadInvoiceForEdit(editId);
@@ -130,9 +130,9 @@ async function loadCustomers() {
     const data = await APIHelper.get("/api/customers");
     if (!data) return;
 
-      customers = data;
-      window.customers = data; // Make available globally for edit functionality
-      populateCustomerSelect();
+    customers = data;
+    window.customers = data; // Make available globally for edit functionality
+    populateCustomerSelect();
   } catch (error) {
     console.error("Error loading customers:", error);
   }
@@ -144,9 +144,9 @@ async function loadCars() {
     const data = await APIHelper.get("/api/cars");
     if (!data) return;
 
-      cars = data;
-      window.cars = data; // Make available globally for edit functionality
-      populateCarSelect();
+    cars = data;
+    window.cars = data; // Make available globally for edit functionality
+    populateCarSelect();
   } catch (error) {
     console.error("Error loading cars:", error);
   }
@@ -156,10 +156,21 @@ async function loadCars() {
 async function loadInventory() {
   try {
     const data = await APIHelper.get("/api/inventory");
-    if (!data) return;
 
-      inventoryItems = data;
-      window.inventoryItems = data; // Make available globally for edit functionality
+    if (!data) {
+      return;
+    }
+
+    inventoryItems = data.items || data; // Handle both array and object with items property
+    window.inventoryItems = data.items || data; // Make available globally for edit functionality
+
+    // Refresh any existing item dropdowns
+    const itemContainers = document.querySelectorAll(".item");
+    itemContainers.forEach((container) => {
+      if (container.refreshDropdownOptions) {
+        container.refreshDropdownOptions();
+      }
+    });
   } catch (error) {
     console.error("Error loading inventory:", error);
   }
@@ -419,11 +430,14 @@ function addItem(type) {
   let htmlContent = `<p><i>${counter}:</i></p>`;
 
   if (type === "item") {
+    // Ensure inventoryItems is defined and is an array
+    const items = Array.isArray(inventoryItems) ? inventoryItems : [];
+
     htmlContent += `
       <div class="searchable-dropdown">
         <input type="text" class="product-name input-fields" placeholder="Search Part/Lubricant..." required readonly>
         <div class="dropdown-options" style="display: none;">
-          ${inventoryItems
+          ${items
             .map(
               (item) =>
                 `<div class="dropdown-option" data-value="${
@@ -459,11 +473,16 @@ function addItem(type) {
     const dropdownOptions = itemContainer.querySelector(".dropdown-options");
     const priceInput = itemContainer.querySelector(".price");
 
-    // Show dropdown when input is clicked
+    // Show dropdown when input is clicked or focused
     productInput.addEventListener("click", function () {
       dropdownOptions.style.display = "block";
       this.readOnly = false;
       this.focus();
+    });
+
+    productInput.addEventListener("focus", function () {
+      dropdownOptions.style.display = "block";
+      this.readOnly = false;
     });
 
     // Handle search functionality
@@ -471,9 +490,19 @@ function addItem(type) {
       const searchTerm = this.value.toLowerCase();
       const options = dropdownOptions.querySelectorAll(".dropdown-option");
 
+      // Show dropdown when user starts typing
+      if (searchTerm.length > 0) {
+        dropdownOptions.style.display = "block";
+        this.readOnly = false;
+      } else {
+        // Show all options when search term is cleared
+        dropdownOptions.style.display = "block";
+        this.readOnly = false;
+      }
+
       options.forEach((option) => {
         const text = option.textContent.toLowerCase();
-        if (text.includes(searchTerm)) {
+        if (searchTerm.length === 0 || text.includes(searchTerm)) {
           option.style.display = "block";
         } else {
           option.style.display = "none";
@@ -517,6 +546,36 @@ function addItem(type) {
     itemContainer
       .querySelector(".price")
       .addEventListener("input", updateTotal);
+
+    // Function to refresh dropdown options if inventory data loads later
+    const refreshDropdownOptions = () => {
+      const items = Array.isArray(inventoryItems) ? inventoryItems : [];
+      const dropdownOptions = itemContainer.querySelector(".dropdown-options");
+
+      if (dropdownOptions) {
+        if (items.length > 0) {
+          dropdownOptions.innerHTML = items
+            .map(
+              (item) =>
+                `<div class="dropdown-option" data-value="${
+                  item.name
+                }" data-price="${item.price}" data-part-number="${
+                  item.part_number || ""
+                }">${item.part_number ? item.part_number + " - " : ""}${
+                  item.name
+                } - PKR ${item.price.toFixed(2)}</div>`
+            )
+            .join("");
+        } else {
+          // Show message if no inventory items available
+          dropdownOptions.innerHTML =
+            '<div class="dropdown-option" style="color: #666;">No inventory items available</div>';
+        }
+      }
+    };
+
+    // Store refresh function on the container for potential later use
+    itemContainer.refreshDropdownOptions = refreshDropdownOptions;
   } else {
     itemContainer
       .querySelector(".price")
@@ -989,24 +1048,24 @@ document
 
       if (!result) return;
 
-        // Store invoice data in sessionStorage for the template page
-        sessionStorage.setItem("invoiceData", JSON.stringify(invoiceData));
-        sessionStorage.setItem("invoiceId", result.invoice_id);
-        sessionStorage.setItem("documentType", documentType);
+      // Store invoice data in sessionStorage for the template page
+      sessionStorage.setItem("invoiceData", JSON.stringify(invoiceData));
+      sessionStorage.setItem("invoiceId", result.invoice_id);
+      sessionStorage.setItem("documentType", documentType);
 
-        // Navigate to the invoice template page with source parameter
-        window.location.href = "invoice-template.html?from=invoice";
+      // Navigate to the invoice template page with source parameter
+      window.location.href = "invoice-template.html?from=invoice";
 
-        document.getElementById("invoice-form").reset();
+      document.getElementById("invoice-form").reset();
       document.getElementById("total-amount").innerText = "Net Total: 0.00 PKR";
       document.getElementById("total-balance").innerText = "Balance: 0.00 PKR";
-        document.getElementById("items-container").innerHTML = ``;
-        counter = 0;
+      document.getElementById("items-container").innerHTML = ``;
+      counter = 0;
 
-        // Reset dropdowns and details
-        document.getElementById("customer-details").style.display = "none";
-        document.getElementById("car-details").style.display = "none";
-        selectedCustomerId = null;
+      // Reset dropdowns and details
+      document.getElementById("customer-details").style.display = "none";
+      document.getElementById("car-details").style.display = "none";
+      selectedCustomerId = null;
     } catch (error) {
       console.error("Error:", error);
       alert("Failed to create document.");
@@ -1068,7 +1127,7 @@ function loadRepairOrderData() {
         const carDisplayText = `${car.make} - ${car.plate_no}`;
         document.getElementById("car-select").value = carDisplayText;
         handleCarChange(car.id);
-        } else {
+      } else {
         // If car not found, just set the display text
         const carDisplayText = `${repairOrderData.customer_made} - ${repairOrderData.customer_reg_no}`;
         document.getElementById("car-select").value = carDisplayText;
@@ -1234,17 +1293,17 @@ async function handleCustomerSubmit(e) {
     const data = await APIHelper.post("/api/customers", customerData);
     if (!data) return;
 
-      alert("Customer created successfully!");
-      closeCustomerModal();
-      await loadCustomers(); // Reload customers
+    alert("Customer created successfully!");
+    closeCustomerModal();
+    await loadCustomers(); // Reload customers
 
-      // Auto-select the newly created customer
-      const newCustomer = data.customer;
-      const customerDisplayText = `${newCustomer.name} - ${newCustomer.phone}`;
-      document.getElementById("customer-select").value = customerDisplayText;
+    // Auto-select the newly created customer
+    const newCustomer = data.customer;
+    const customerDisplayText = `${newCustomer.name} - ${newCustomer.phone}`;
+    document.getElementById("customer-select").value = customerDisplayText;
 
-      // Trigger customer change with the correct ID
-      handleCustomerChange(newCustomer.id);
+    // Trigger customer change with the correct ID
+    handleCustomerChange(newCustomer.id);
   } catch (error) {
     alert("Error creating customer: " + error.message);
   }
@@ -1294,23 +1353,23 @@ async function handleCarSubmit(e) {
     const data = await APIHelper.post("/api/cars", carData);
     if (!data) return;
 
-      alert("Car created successfully!");
-      closeCarModal();
-      await loadCars(); // Reload cars
+    alert("Car created successfully!");
+    closeCarModal();
+    await loadCars(); // Reload cars
 
-      // If a customer is selected, refresh the car dropdown
-      if (selectedCustomerId) {
-        populateCarSelect();
+    // If a customer is selected, refresh the car dropdown
+    if (selectedCustomerId) {
+      populateCarSelect();
 
-        // Auto-select the newly created car if it belongs to the selected customer
-        const newCar = data.car;
-        if (newCar.customer_id === selectedCustomerId) {
-          const carDisplayText = `${newCar.make} ${newCar.model} - ${newCar.plate_no}`;
-          document.getElementById("car-select").value = carDisplayText;
+      // Auto-select the newly created car if it belongs to the selected customer
+      const newCar = data.car;
+      if (newCar.customer_id === selectedCustomerId) {
+        const carDisplayText = `${newCar.make} ${newCar.model} - ${newCar.plate_no}`;
+        document.getElementById("car-select").value = carDisplayText;
 
-          // Trigger car change with the correct ID
-          handleCarChange(newCar.id);
-        }
+        // Trigger car change with the correct ID
+        handleCarChange(newCar.id);
+      }
     }
   } catch (error) {
     alert("Error creating car: " + error.message);

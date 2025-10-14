@@ -127,14 +127,13 @@ function initializeEventListeners() {
 async function loadCars() {
   try {
     showLoading("cars-tbody");
-    const response = await fetch("/api/cars");
-    const data = await response.json();
-
-    if (response.ok) {
+    const data = await APIHelper.get("/api/cars");
+    
+    if (data) {
       cars = data;
       renderCarsTable(cars);
     } else {
-      showError("Failed to load cars: " + data.error);
+      showError("Failed to load cars");
     }
   } catch (error) {
     showError("Error loading cars: " + error.message);
@@ -143,25 +142,14 @@ async function loadCars() {
 
 async function createCar(carData) {
   try {
-    const response = await fetch("/api/cars", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(carData),
-    });
+    const data = await APIHelper.post("/api/cars", carData);
 
-    const data = await response.json();
-
-    if (response.ok) {
+    if (data) {
       showSuccess("Car created successfully");
       closeCarModal();
       loadCars();
     } else {
-      showError(
-        "Failed to create car: " +
-          (data.details ? data.details.join(", ") : data.error)
-      );
+      showError("Failed to create car");
     }
   } catch (error) {
     showError("Error creating car: " + error.message);
@@ -170,25 +158,14 @@ async function createCar(carData) {
 
 async function updateCar(carId, carData) {
   try {
-    const response = await fetch(`/api/cars/${carId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(carData),
-    });
+    const data = await APIHelper.put(`/api/cars/${carId}`, carData);
 
-    const data = await response.json();
-
-    if (response.ok) {
+    if (data) {
       showSuccess("Car updated successfully");
       closeCarModal();
       loadCars();
     } else {
-      showError(
-        "Failed to update car: " +
-          (data.details ? data.details.join(", ") : data.error)
-      );
+      showError("Failed to update car");
     }
   } catch (error) {
     showError("Error updating car: " + error.message);
@@ -199,17 +176,13 @@ async function deleteCar(carId) {
   if (!confirm("Are you sure you want to delete this car?")) return;
 
   try {
-    const response = await fetch(`/api/cars/${carId}`, {
-      method: "DELETE",
-    });
+    const data = await APIHelper.delete(`/api/cars/${carId}`);
 
-    const data = await response.json();
-
-    if (response.ok) {
+    if (data) {
       showSuccess("Car deleted successfully");
       loadCars();
     } else {
-      showError("Failed to delete car: " + data.error);
+      showError("Failed to delete car");
     }
   } catch (error) {
     showError("Error deleting car: " + error.message);
@@ -225,16 +198,13 @@ async function searchCars() {
 
   try {
     showLoading("cars-tbody");
-    const response = await fetch(
-      `/api/cars/search?q=${encodeURIComponent(query)}`
-    );
-    const data = await response.json();
+    const data = await APIHelper.get(`/api/cars/search?q=${encodeURIComponent(query)}`);
 
-    if (response.ok) {
+    if (data) {
       cars = data.results;
       renderCarsTable(cars);
     } else {
-      showError("Failed to search cars: " + data.error);
+      showError("Failed to search cars");
     }
   } catch (error) {
     showError("Error searching cars: " + error.message);
@@ -245,15 +215,14 @@ async function searchCars() {
 async function loadCustomers() {
   try {
     showLoading("customers-tbody");
-    const response = await fetch("/api/customers");
-    const data = await response.json();
+    const data = await APIHelper.get("/api/customers");
 
-    if (response.ok) {
+    if (data) {
       customers = data;
       renderCustomersTable(customers);
       updateCustomerSelect();
     } else {
-      showError("Failed to load customers: " + data.error);
+      showError("Failed to load customers");
     }
   } catch (error) {
     showError("Error loading customers: " + error.message);
@@ -262,25 +231,14 @@ async function loadCustomers() {
 
 async function createCustomer(customerData) {
   try {
-    const response = await fetch("/api/customers", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(customerData),
-    });
+    const data = await APIHelper.post("/api/customers", customerData);
 
-    const data = await response.json();
-
-    if (response.ok) {
+    if (data) {
       showSuccess("Customer created successfully");
       closeCustomerModal();
       loadCustomers();
     } else {
-      showError(
-        "Failed to create customer: " +
-          (data.details ? data.details.join(", ") : data.error)
-      );
+      showError("Failed to create customer");
     }
   } catch (error) {
     showError("Error creating customer: " + error.message);
@@ -289,25 +247,14 @@ async function createCustomer(customerData) {
 
 async function updateCustomer(customerId, customerData) {
   try {
-    const response = await fetch(`/api/customers/${customerId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(customerData),
-    });
+    const data = await APIHelper.put(`/api/customers/${customerId}`, customerData);
 
-    const data = await response.json();
-
-    if (response.ok) {
+    if (data) {
       showSuccess("Customer updated successfully");
       closeCustomerModal();
       loadCustomers();
     } else {
-      showError(
-        "Failed to update customer: " +
-          (data.details ? data.details.join(", ") : data.error)
-      );
+      showError("Failed to update customer");
     }
   } catch (error) {
     showError("Error updating customer: " + error.message);
@@ -323,18 +270,14 @@ async function deleteCustomer(customerId) {
     return;
 
   try {
-    const response = await fetch(`/api/customers/${customerId}`, {
-      method: "DELETE",
-    });
+    const data = await APIHelper.delete(`/api/customers/${customerId}`);
 
-    const data = await response.json();
-
-    if (response.ok) {
+    if (data) {
       showSuccess("Customer deleted successfully");
       loadCustomers();
       loadCars(); // Reload cars as some might have been deleted
     } else {
-      showError("Failed to delete customer: " + data.error);
+      showError("Failed to delete customer");
     }
   } catch (error) {
     showError("Error deleting customer: " + error.message);
@@ -350,16 +293,13 @@ async function searchCustomers() {
 
   try {
     showLoading("customers-tbody");
-    const response = await fetch(
-      `/api/customers/search?q=${encodeURIComponent(query)}`
-    );
-    const data = await response.json();
+    const data = await APIHelper.get(`/api/customers/search?q=${encodeURIComponent(query)}`);
 
-    if (response.ok) {
+    if (data) {
       customers = data.results;
       renderCustomersTable(customers);
     } else {
-      showError("Failed to search customers: " + data.error);
+      showError("Failed to search customers");
     }
   } catch (error) {
     showError("Error searching customers: " + error.message);
@@ -368,13 +308,12 @@ async function searchCustomers() {
 
 async function loadCustomerCars(customerId) {
   try {
-    const response = await fetch(`/api/cars/customer/${customerId}`);
-    const data = await response.json();
+    const data = await APIHelper.get(`/api/cars/customer/${customerId}`);
 
-    if (response.ok) {
+    if (data) {
       renderCustomerCarsModal(data);
     } else {
-      showError("Failed to load customer cars: " + data.error);
+      showError("Failed to load customer cars");
     }
   } catch (error) {
     showError("Error loading customer cars: " + error.message);

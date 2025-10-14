@@ -45,17 +45,16 @@ document.addEventListener("DOMContentLoaded", function () {
     try {
       showLoading(true);
 
-      const response = await fetch("/api/whatsapp/notifications");
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await APIHelper.get("/api/whatsapp/notifications");
+      if (data) {
+        notifications = data.notifications || [];
+        filteredNotifications = [...notifications];
+
+        updateStats(data.stats);
+        renderNotifications();
+      } else {
+        throw new Error("Failed to load notifications");
       }
-
-      const data = await response.json();
-      notifications = data.notifications || [];
-      filteredNotifications = [...notifications];
-
-      updateStats(data.stats);
-      renderNotifications();
     } catch (error) {
       console.error("Error loading notifications:", error);
       showError("Failed to load notifications. Please try again.");

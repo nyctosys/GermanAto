@@ -207,9 +207,9 @@ def verify():
         return jsonify({'error': 'Token verification failed'}), 500
 
 @auth_bp.route('/logout', methods=['POST'])
-@jwt_required()
 def logout():
     """Logout user (client should clear tokens)"""
+    # Note: JWT validation removed to allow logout even with expired tokens
     # In a more advanced setup, you could blacklist the token here
     return jsonify({'message': 'Logout successful'})
 

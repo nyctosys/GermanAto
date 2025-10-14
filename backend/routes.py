@@ -143,7 +143,7 @@ def can_edit_invoice(f):
 
 @bp.route('/add', methods=['POST'])
 @role_required(['admin', 'accountant'])
-def create_invoice():
+def create_invoice(current_user=None):
     """Create a new invoice"""
     try:
         data = request.get_json()
@@ -324,7 +324,7 @@ def create_invoice():
 
 @bp.route('/invoice/<int:invoice_id>', methods=['GET'])
 @login_required
-def get_invoice(invoice_id):
+def get_invoice(invoice_id, current_user=None):
     """Get invoice by ID"""
     try:
         if not invoice_id or invoice_id <= 0:
@@ -394,7 +394,7 @@ def get_invoice(invoice_id):
 
 @bp.route('/invoice/<int:invoice_id>/delete', methods=['DELETE'])
 @admin_required
-def delete_invoice(invoice_id):
+def delete_invoice(invoice_id, current_user=None):
     """Delete invoice by ID"""
     try:
         if not invoice_id or invoice_id <= 0:
@@ -538,7 +538,7 @@ def update_invoice(invoice_id):
 
 @bp.route('/search', methods=['GET'])
 @login_required
-def search_invoices():
+def search_invoices(current_user=None):
     """Search invoices by various criteria"""
     try:
         query = request.args.get('q', '').strip()
@@ -546,9 +546,12 @@ def search_invoices():
         status = request.args.get('status', '').strip()
         type_of = request.args.get('type', '').strip()
         
-        # If no search criteria provided, return empty results
+        # If no search criteria provided, return empty results in proper format
         if not query and not search_id and not status and not type_of:
-            return jsonify([]), 200
+            return jsonify({
+                'quotes': [],
+                'invoices': []
+            }), 200
         
         # Sanitize query to prevent SQL injection
         if len(query) > 100:  # Limit query length
@@ -585,9 +588,12 @@ def search_invoices():
         if type_of:
             search_conditions.append(Invoice.type_of.ilike(type_of))
         
-        # If no valid search conditions, return empty results
+        # If no valid search conditions, return empty results in proper format
         if not search_conditions:
-            return jsonify([]), 200
+            return jsonify({
+                'quotes': [],
+                'invoices': []
+            }), 200
         
         # Combine conditions with AND
         final_condition = db.and_(*search_conditions)
@@ -641,7 +647,7 @@ def health_check():
 
 @bp.route('/invoice/<int:invoice_id>/convert', methods=['POST'])
 @role_required(['admin', 'accountant'])
-def convert_quote_to_invoice(invoice_id):
+def convert_quote_to_invoice(invoice_id, current_user=None):
     """Convert a quote to an invoice (in-place, same ID)"""
     try:
         invoice = Invoice.query.get(invoice_id)
@@ -676,7 +682,7 @@ def convert_quote_to_invoice(invoice_id):
 
 @bp.route('/invoice/<int:invoice_id>/status', methods=['PUT'])
 @role_required(['admin', 'accountant'])
-def update_invoice_status(invoice_id):
+def update_invoice_status(invoice_id, current_user=None):
     """Update the status of a quote/invoice"""
     try:
         data = request.get_json()
@@ -694,7 +700,7 @@ def update_invoice_status(invoice_id):
 
 @bp.route('/invoice/<int:invoice_id>/update-balance', methods=['PUT'])
 @role_required(['admin', 'accountant'])
-def update_invoice_balance(invoice_id):
+def update_invoice_balance(invoice_id, current_user=None):
     """Add to the paid amount and update status of an invoice"""
     try:
         data = request.get_json()

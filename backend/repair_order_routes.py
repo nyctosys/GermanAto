@@ -13,7 +13,7 @@ repair_order_bp = Blueprint('repair_order', __name__)
 @repair_order_bp.route('/repair-orders', methods=['GET'])
 @login_required
 @role_required(['admin', 'accountant', 'inventory_manager'])
-def get_repair_orders():
+def get_repair_orders(current_user=None):
     try:
         status = request.args.get('status')
         keyword = request.args.get('keyword')
@@ -116,7 +116,7 @@ def get_repair_orders():
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>', methods=['GET'])
 @login_required
 @role_required(['admin', 'accountant', 'inventory_manager'])
-def get_repair_order(repair_order_id):
+def get_repair_order(repair_order_id, current_user=None):
     try:
         # Use joinedload to fetch related data in one query
         repair_order = RepairOrder.query.options(
@@ -183,7 +183,7 @@ def get_repair_order(repair_order_id):
 @repair_order_bp.route('/repair-orders', methods=['POST'])
 @login_required
 @role_required(['admin', 'accountant', 'inventory_manager'])
-def create_repair_order():
+def create_repair_order(current_user=None):
     try:
         data = request.get_json()
         
@@ -255,7 +255,7 @@ def create_repair_order():
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>/status', methods=['PUT'])
 @login_required
 @role_required(['admin', 'accountant', 'inventory_manager'])
-def update_repair_order_status(repair_order_id):
+def update_repair_order_status(repair_order_id, current_user=None):
     try:
         repair_order = RepairOrder.query.get(repair_order_id)
         
@@ -309,7 +309,7 @@ def update_repair_order_status(repair_order_id):
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>', methods=['PUT'])
 @login_required
 @role_required(['admin', 'accountant', 'inventory_manager'])
-def update_repair_order(repair_order_id):
+def update_repair_order(repair_order_id, current_user=None):
     try:
         repair_order = RepairOrder.query.get(repair_order_id)
         
@@ -431,7 +431,7 @@ def update_repair_order(repair_order_id):
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>/delete', methods=['DELETE'])
 @login_required
 @role_required(['admin', 'accountant', 'inventory_manager'])
-def delete_repair_order(repair_order_id):
+def delete_repair_order(repair_order_id, current_user=None):
     try:
         repair_order = RepairOrder.query.get(repair_order_id)
         
@@ -467,7 +467,7 @@ def delete_repair_order(repair_order_id):
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>/parts/<int:part_id>/status', methods=['PUT'])
 @login_required
 @role_required(['admin', 'accountant', 'inventory_manager'])
-def update_part_status(repair_order_id, part_id):
+def update_part_status(repair_order_id, part_id, current_user=None):
     try:
         part = RepairOrderPart.query.filter_by(
             repair_order_id=repair_order_id, 
@@ -496,7 +496,7 @@ def update_part_status(repair_order_id, part_id):
 @repair_order_bp.route('/repair-orders/<int:repair_order_id>/labour/<int:labour_id>/status', methods=['PUT'])
 @login_required
 @role_required(['admin', 'accountant', 'inventory_manager'])
-def update_labour_status(repair_order_id, labour_id):
+def update_labour_status(repair_order_id, labour_id, current_user=None):
     try:
         labour = RepairOrderLabour.query.filter_by(
             repair_order_id=repair_order_id, 

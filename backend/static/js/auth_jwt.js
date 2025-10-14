@@ -121,17 +121,23 @@ class AuthManager {
   async logout() {
     try {
       if (this.accessToken) {
-        await fetch("/api/auth/logout", {
+        const response = await fetch("/api/auth/logout", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${this.accessToken}`,
             "Content-Type": "application/json",
           },
         });
+
+        if (!response.ok) {
+          console.warn(`Logout request failed with status: ${response.status}`);
+        }
       }
     } catch (error) {
       console.error("Logout request failed:", error);
+      // Don't prevent logout on network errors - still clear local auth
     } finally {
+      // Always clear local authentication data regardless of server response
       this.clearAuth();
     }
   }

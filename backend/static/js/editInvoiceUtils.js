@@ -167,11 +167,16 @@ export async function loadInvoiceForEdit(invoiceId) {
   }
 }
 
-// Function to wait for customers and cars data to be loaded
+// Function to wait for customers, cars, and inventory data to be loaded
 function waitForData() {
   return new Promise((resolve) => {
     const checkData = () => {
-      if (window.customers && window.cars) {
+      if (
+        window.customers &&
+        window.cars &&
+        window.inventoryItems &&
+        Array.isArray(window.inventoryItems)
+      ) {
         resolve();
       } else {
         setTimeout(checkData, 50);

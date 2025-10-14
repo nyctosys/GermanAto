@@ -92,7 +92,7 @@ def validate_inventory_data(data):
 
 @inventory_bp.route('/inventory', methods=['GET'])
 @login_required
-def get_inventory():
+def get_inventory(current_user=None):
     """Get inventory items with pagination"""
     try:
         # Get pagination parameters
@@ -167,7 +167,7 @@ def get_inventory():
 
 @inventory_bp.route('/inventory/by-category', methods=['GET'])
 @login_required
-def get_inventory_by_category():
+def get_inventory_by_category(current_user=None):
     """Get inventory items grouped by category with pagination for each category"""
     try:
         # Get pagination parameters
@@ -243,7 +243,7 @@ def get_inventory_by_category():
 
 @inventory_bp.route('/inventory/<int:item_id>', methods=['GET'])
 @login_required
-def get_inventory_item(item_id):
+def get_inventory_item(item_id, current_user=None):
     """Get specific inventory item by ID"""
     try:
         if not item_id or item_id <= 0:
@@ -277,7 +277,7 @@ def get_inventory_item(item_id):
 
 @inventory_bp.route('/inventory', methods=['POST'])
 @role_required(['admin', 'inventory_manager'])
-def create_inventory_item():
+def create_inventory_item(current_user=None):
     """Create a new inventory item"""
     try:
         # Check if request is form data (with file upload) or JSON
@@ -362,7 +362,7 @@ def create_inventory_item():
 
 @inventory_bp.route('/inventory/<int:item_id>', methods=['PUT'])
 @role_required(['admin', 'inventory_manager'])
-def update_inventory_item(item_id):
+def update_inventory_item(item_id, current_user=None):
     """Update an existing inventory item"""
     try:
         if not item_id or item_id <= 0:
@@ -474,7 +474,7 @@ def update_inventory_item(item_id):
 
 @inventory_bp.route('/inventory/<int:item_id>', methods=['DELETE'])
 @admin_required
-def delete_inventory_item(item_id):
+def delete_inventory_item(item_id, current_user=None):
     """Delete an inventory item"""
     try:
         if not item_id or item_id <= 0:
@@ -508,7 +508,7 @@ def delete_inventory_item(item_id):
 
 @inventory_bp.route('/inventory/search', methods=['GET'])
 @login_required
-def search_inventory():
+def search_inventory(current_user=None):
     """Search inventory items"""
     try:
         query = request.args.get('q', '').strip()
@@ -554,7 +554,7 @@ def search_inventory():
 
 @inventory_bp.route('/inventory/stats', methods=['GET'])
 @login_required
-def get_inventory_stats():
+def get_inventory_stats(current_user=None):
     """Get inventory statistics"""
     try:
         total_items = Inventory.query.count()
@@ -589,7 +589,7 @@ def get_inventory_stats():
 
 @inventory_bp.route('/inventory/low-stock', methods=['GET'])
 @login_required
-def get_low_stock_items():
+def get_low_stock_items(current_user=None):
     """Get inventory items that are below reorder level, separated by urgency"""
     try:
         # Get items where quantity is less than or equal to reorder_level
@@ -640,7 +640,7 @@ def get_low_stock_items():
 
 @inventory_bp.route('/inventory/check-stock', methods=['POST'])
 @login_required
-def check_inventory_stock():
+def check_inventory_stock(current_user=None):
     """Check if items have sufficient stock"""
     try:
         data = request.get_json()
@@ -708,7 +708,7 @@ def check_inventory_stock():
 
 @inventory_bp.route('/inventory/deduct-items', methods=['POST'])
 @role_required(['admin', 'inventory_manager'])
-def deduct_inventory_items():
+def deduct_inventory_items(current_user=None):
     """Deduct items from inventory"""
     try:
         data = request.get_json()
@@ -799,7 +799,7 @@ def deduct_inventory_items():
 
 @inventory_bp.route('/inventory/restock', methods=['POST'])
 @role_required(['admin', 'inventory_manager'])
-def restock_inventory():
+def restock_inventory(current_user=None):
     """Restock inventory items by increasing quantity"""
     try:
         data = request.get_json()

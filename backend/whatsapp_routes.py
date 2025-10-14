@@ -17,7 +17,7 @@ whatsapp_bp = Blueprint('whatsapp', __name__)
 
 @whatsapp_bp.route('/whatsapp/notifications', methods=['GET'])
 @login_required
-def get_notifications():
+def get_notifications(current_user=None):
     """Get all WhatsApp notifications with optional filters"""
     try:
         # Get query parameters
@@ -81,7 +81,7 @@ def get_notifications():
 
 @whatsapp_bp.route('/whatsapp/notifications/<int:notification_id>', methods=['GET'])
 @login_required
-def get_notification(notification_id):
+def get_notification(notification_id, current_user=None):
     """Get a specific notification by ID"""
     try:
         notification = WhatsAppNotification.query.get(notification_id)
@@ -97,7 +97,7 @@ def get_notification(notification_id):
 
 @whatsapp_bp.route('/whatsapp/notifications/<int:notification_id>/resend', methods=['POST'])
 @role_required(['admin', 'accountant'])
-def resend_notification(notification_id):
+def resend_notification(notification_id, current_user=None):
     """Resend a failed notification"""
     try:
         notification = WhatsAppNotification.query.get(notification_id)
@@ -152,7 +152,7 @@ def resend_notification(notification_id):
 
 @whatsapp_bp.route('/whatsapp/stats', methods=['GET'])
 @login_required
-def get_notification_stats():
+def get_notification_stats(current_user=None):
     """Get notification statistics"""
     try:
         stats = calculate_notification_stats()
@@ -234,7 +234,7 @@ def calculate_notification_stats():
 
 @whatsapp_bp.route('/whatsapp/test', methods=['POST'])
 @admin_required
-def test_whatsapp_connection():
+def test_whatsapp_connection(current_user=None):
     """Test WhatsApp API connection"""
     try:
         from whatsapp_notifications import whatsapp_notifier

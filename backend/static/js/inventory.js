@@ -51,11 +51,8 @@ const FallbackUtils = {
     }
   },
   fetchWithRetry: async (url, options = {}) => {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return response.json();
+    // Use APIHelper for proper JWT authentication
+    return await APIHelper.get(url);
   },
 };
 
