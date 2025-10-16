@@ -573,8 +573,6 @@
     <script src="static/js/libs/xlsx.full.min.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
-        console.log("Low stock print page loaded");
-
         // Set current date
         const now = new Date();
         const dateString = now.toLocaleDateString("en-US", {
@@ -593,8 +591,6 @@
           sessionStorage.getItem("lowStockItems") || "{}"
         );
 
-        console.log("Data from sessionStorage:", data);
-
         // Handle both new format (with urgent_items and low_stock_items) and old format (single array)
         let urgentItems = [];
         let outOfStockItems = [];
@@ -603,7 +599,6 @@
 
         if (data.urgent_items && data.low_stock_items) {
           // New format
-          console.log("Using new format");
           urgentItems = data.urgent_items || [];
           const allLowStockItems = data.low_stock_items || [];
           outOfStockItems = allLowStockItems.filter(
@@ -615,7 +610,6 @@
           allItems = [...urgentItems, ...allLowStockItems];
         } else if (Array.isArray(data)) {
           // Old format (fallback)
-          console.log("Using old format");
           urgentItems = data.filter((item) => item.quantity < 0);
           outOfStockItems = data.filter((item) => item.quantity === 0);
           lowStockItemsOnly = data.filter(
@@ -623,13 +617,6 @@
           );
           allItems = data;
         }
-
-        console.log("Processed data:", {
-          urgentItems: urgentItems.length,
-          outOfStockItems: outOfStockItems.length,
-          lowStockItemsOnly: lowStockItemsOnly.length,
-          allItems: allItems.length,
-        });
 
         if (allItems.length === 0) {
           document.getElementById("content").innerHTML = `

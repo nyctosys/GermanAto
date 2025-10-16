@@ -98,7 +98,7 @@ def get_customers(current_user=None):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/customers', methods=['POST'])
-@role_required(['admin', 'accountant'])
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def create_customer(current_user=None):
     """Create a new customer"""
     try:
@@ -165,7 +165,7 @@ def create_customer(current_user=None):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/customers/<int:customer_id>', methods=['PUT'])
-@role_required(['admin', 'accountant'])
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def update_customer(customer_id, current_user=None):
     """Update an existing customer"""
     try:
@@ -324,7 +324,7 @@ def get_car(car_id, current_user=None):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/cars', methods=['POST'])
-@role_required(['admin', 'accountant'])
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def create_car(current_user=None):
     """Create a new car"""
     try:
@@ -421,7 +421,7 @@ def create_car(current_user=None):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/cars/<int:car_id>', methods=['PUT'])
-@role_required(['admin', 'accountant'])
+@role_required(['admin', 'accountant', 'inventory_manager'])
 def update_car(car_id, current_user=None):
     """Update an existing car"""
     try:

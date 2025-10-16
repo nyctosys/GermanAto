@@ -591,13 +591,13 @@ document.addEventListener("DOMContentLoaded", function () {
   // Global inventory data
   let inventoryItems = [];
 
-  // Load inventory items for dropdowns
+  // Load inventory items for dropdowns (legacy function - now using database search)
   async function loadInventoryItems() {
     try {
       const data = await APIHelper.get("/api/inventory");
       if (data) {
         inventoryItems = data.items || data; // Handle both array and object with items property
-        populateInventoryDropdowns();
+        // Note: No longer automatically populating dropdowns - using database search instead
       } else {
         console.error("Failed to load inventory items");
       }
@@ -770,26 +770,37 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // Populate options if inventory items are available
-    if (inventoryItems.length > 0) {
-      populateSearchOptions(partCounter);
-    } else {
-      // Load inventory items first
-      loadInventoryItems().then(() => {
-        populateSearchOptions(partCounter);
-      });
-    }
-
-    // Search input event listeners
+    // Search input event listeners with database search
+    let searchTimeout;
     searchInput.addEventListener("input", function () {
-      const searchTerm = this.value.toLowerCase();
-      filterSearchOptions(partCounter, searchTerm);
+      const searchTerm = this.value.trim();
+
+      // Clear previous timeout
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+
+      // Clear dropdown if search term is empty
+      if (!searchTerm) {
+        optionsContainer.style.display = "none";
+        return;
+      }
+
+      // Only search if we have at least 2 characters to avoid too many results
+      if (searchTerm.length < 2) {
+        return;
+      }
+
+      // Debounce the search - wait 300ms after user stops typing
+      searchTimeout = setTimeout(async () => {
+        await searchInventoryItems(partCounter, searchTerm);
+      }, 300);
     });
 
     searchInput.addEventListener("focus", function () {
-      optionsContainer.style.display = "block";
-      if (this.value === "") {
-        showAllOptions(partCounter);
+      if (this.value.trim().length >= 2) {
+        optionsContainer.style.display = "block";
+        searchInventoryItems(partCounter, this.value.trim());
       }
     });
 
@@ -850,7 +861,68 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Populate search options for a specific part
+  // Search inventory items using database query
+  async function searchInventoryItems(partCounter, searchTerm) {
+    const optionsContainer = document.getElementById(
+      `part-inventory-options-${partCounter}`
+    );
+    if (!optionsContainer) return;
+
+    try {
+      // Show loading state
+      optionsContainer.innerHTML =
+        '<div class="dropdown-option">Searching...</div>';
+      optionsContainer.style.display = "block";
+
+      // Call the database search endpoint
+      const result = await APIHelper.get(
+        `/api/inventory/search?q=${encodeURIComponent(searchTerm)}`
+      );
+
+      if (result && result.results) {
+        populateSearchOptionsFromResults(partCounter, result.results);
+      } else {
+        optionsContainer.innerHTML =
+          '<div class="dropdown-option">No items found</div>';
+      }
+    } catch (error) {
+      console.error("Error searching inventory:", error);
+      optionsContainer.innerHTML =
+        '<div class="dropdown-option">Error searching items</div>';
+    }
+  }
+
+  // Populate search options from database search results
+  function populateSearchOptionsFromResults(partCounter, items) {
+    const optionsContainer = document.getElementById(
+      `part-inventory-options-${partCounter}`
+    );
+    if (!optionsContainer) return;
+
+    optionsContainer.innerHTML = "";
+
+    if (items.length === 0) {
+      optionsContainer.innerHTML =
+        '<div class="dropdown-option">No items found</div>';
+      return;
+    }
+
+    items.forEach((item) => {
+      const option = document.createElement("div");
+      option.className = "dropdown-option";
+      option.dataset.value = item.id;
+      option.dataset.item = JSON.stringify(item);
+      option.textContent = `${item.part_number} - ${item.name} (Stock: ${item.quantity})`;
+
+      option.addEventListener("click", function () {
+        selectInventoryItem(partCounter, item);
+      });
+
+      optionsContainer.appendChild(option);
+    });
+  }
+
+  // Populate search options for a specific part (legacy function for backward compatibility)
   function populateSearchOptions(partCounter) {
     const optionsContainer = document.getElementById(
       `part-inventory-options-${partCounter}`
@@ -876,36 +948,23 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Filter search options based on search term
-  function filterSearchOptions(partCounter, searchTerm) {
-    const optionsContainer = document.getElementById(
-      `part-inventory-options-${partCounter}`
-    );
-    if (!optionsContainer) return;
-
-    const options = optionsContainer.querySelectorAll(".dropdown-option");
-
-    options.forEach((option) => {
-      const text = option.textContent.toLowerCase();
-      if (text.includes(searchTerm)) {
-        option.style.display = "block";
-      } else {
-        option.style.display = "none";
-      }
-    });
-  }
-
-  // Show all options
+  // Show all options (legacy function - now triggers search)
   function showAllOptions(partCounter) {
-    const optionsContainer = document.getElementById(
-      `part-inventory-options-${partCounter}`
+    const searchInput = document.getElementById(
+      `part-inventory-search-${partCounter}`
     );
-    if (!optionsContainer) return;
-
-    const options = optionsContainer.querySelectorAll(".dropdown-option");
-    options.forEach((option) => {
-      option.style.display = "block";
-    });
+    if (searchInput && searchInput.value.trim().length >= 2) {
+      // If there's a search term, trigger search
+      searchInventoryItems(partCounter, searchInput.value.trim());
+    } else {
+      // If no search term, hide the dropdown
+      const optionsContainer = document.getElementById(
+        `part-inventory-options-${partCounter}`
+      );
+      if (optionsContainer) {
+        optionsContainer.style.display = "none";
+      }
+    }
   }
 
   // Select an inventory item

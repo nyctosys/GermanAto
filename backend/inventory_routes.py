@@ -193,7 +193,9 @@ def get_inventory_by_category(current_user=None):
                 db.or_(
                     Inventory.name.ilike(search_filter),
                     Inventory.part_number.ilike(search_filter),
-                    Inventory.description.ilike(search_filter)
+                    Inventory.description.ilike(search_filter),
+                    Inventory.location.ilike(search_filter),
+                    Inventory.category.ilike(search_filter)
                 )
             )
         
@@ -280,13 +282,15 @@ def get_inventory_item(item_id, current_user=None):
 def create_inventory_item(current_user=None):
     """Create a new inventory item"""
     try:
+        # Initialize image_path to None
+        image_path = None
+        
         # Check if request is form data (with file upload) or JSON
         if request.form:
             # Handle form data with potential file upload
             data = request.form.to_dict()
             
             # Handle image upload
-            image_path = None
             if 'image' in request.files:
                 file = request.files['image']
                 if file and file.filename:
@@ -550,6 +554,61 @@ def search_inventory(current_user=None):
         
     except Exception as e:
         logger.error(f"Error searching inventory: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@inventory_bp.route('/inventory/search-grouped', methods=['GET'])
+@login_required
+def search_inventory_grouped(current_user=None):
+    """Search inventory items and return results grouped by category"""
+    try:
+        query = request.args.get('q', '').strip()
+        
+        if not query:
+            return jsonify({'error': 'Search query is required'}), 400
+        
+        # Search in part_number, name, description, location, and category
+        search_results = Inventory.query.filter(
+            db.or_(
+                Inventory.part_number.ilike(f'%{query}%'),
+                Inventory.name.ilike(f'%{query}%'),
+                Inventory.description.ilike(f'%{query}%'),
+                Inventory.location.ilike(f'%{query}%'),
+                Inventory.category.ilike(f'%{query}%')
+            )
+        ).all()
+        
+        # Group results by category
+        grouped_results = {}
+        for item in search_results:
+            category = item.category
+            if category not in grouped_results:
+                grouped_results[category] = []
+            
+            grouped_results[category].append({
+                'id': item.id,
+                'part_number': item.part_number,
+                'name': item.name,
+                'category': item.category,
+                'quantity': item.quantity,
+                'price': float(item.price),
+                'description': item.description,
+                'location': item.location,
+                'reorder_level': item.reorder_level,
+                'reorder_quantity': item.reorder_quantity,
+                'image_path': item.image_path,
+                'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+            })
+        
+        return jsonify({
+            'query': query,
+            'results': grouped_results,
+            'total_count': len(search_results),
+            'category_count': len(grouped_results)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error searching inventory grouped: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/stats', methods=['GET'])

@@ -4,6 +4,7 @@ let inventoryItems = [];
 let currentPage = 1;
 let totalPages = 1;
 let isLoading = false;
+let searchTimeout = null;
 
 // Category pagination state
 let categoryPagination = {
@@ -143,11 +144,16 @@ async function loadInventory(page = 1, search = "") {
     // Show loading state
     utils.showLoading("inventory-grid", "Loading inventory...");
 
-    // Load each category separately with pagination
-    const categories = ["parts", "tools", "fluids", "accessories", "other"];
+    if (search && search.trim()) {
+      // Use grouped search for better performance when searching
+      await loadInventoryWithSearch(search);
+    } else {
+      // Load each category separately with pagination for normal browsing
+      const categories = ["parts", "tools", "fluids", "accessories", "other"];
 
-    for (const category of categories) {
-      await loadInventoryByCategory(category, 1, search);
+      for (const category of categories) {
+        await loadInventoryByCategory(category, 1, search);
+      }
     }
 
     // Render all categories after loading
@@ -162,6 +168,44 @@ async function loadInventory(page = 1, search = "") {
   } finally {
     isLoading = false;
     utils.hideLoading("inventory-grid");
+  }
+}
+
+// Load inventory with search using grouped search endpoint
+async function loadInventoryWithSearch(search) {
+  // Get utils once at the beginning of the function
+  const utils = window.PerformanceUtils || FallbackUtils;
+
+  try {
+    // Call the grouped search endpoint
+    const data = await utils.fetchWithRetry(
+      `/api/inventory/search-grouped?q=${encodeURIComponent(search)}`
+    );
+
+    if (data && data.results) {
+      // Clear all category pagination states
+      Object.keys(categoryPagination).forEach((category) => {
+        categoryPagination[category] = {
+          page: 1,
+          totalPages: 1,
+          hasMore: false,
+          items: [],
+          totalItems: 0,
+        };
+      });
+
+      // Populate category pagination with search results
+      Object.keys(data.results).forEach((category) => {
+        if (categoryPagination[category]) {
+          categoryPagination[category].items = data.results[category];
+          categoryPagination[category].totalItems =
+            data.results[category].length;
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error searching inventory:", error);
+    throw error;
   }
 }
 
@@ -757,8 +801,17 @@ function openAddModal() {
 
 // Open edit modal
 function editItem(id) {
-  const item = inventoryItems.find((item) => item.id === id);
-  if (!item) return;
+  // Search for the item across all categories
+  let item = null;
+  for (const category of Object.keys(categoryPagination)) {
+    item = categoryPagination[category].items.find((item) => item.id === id);
+    if (item) break;
+  }
+
+  if (!item) {
+    console.error(`Item with ID ${id} not found`);
+    return;
+  }
 
   currentEditId = id;
   document.getElementById("modal-title").textContent = "Edit Item";
@@ -879,23 +932,59 @@ function setupSearchableSelect() {
   searchInput.addEventListener("focus", handleSearchFocus);
   searchInput.addEventListener("blur", handleSearchBlur);
 
-  // Populate dropdown with all items initially
-  populateSearchableDropdown(inventoryItems);
+  // Clear dropdown initially - items will be loaded via search
+  dropdown.innerHTML =
+    '<div class="dropdown-item">Type to search for items...</div>';
 }
 
-// Handle search input
-function handleSearchInput(e) {
-  const searchTerm = e.target.value.toLowerCase();
-  const filteredItems = inventoryItems.filter(
-    (item) =>
-      item.name.toLowerCase().includes(searchTerm) ||
-      (item.description &&
-        item.description.toLowerCase().includes(searchTerm)) ||
-      (item.part_number && item.part_number.toLowerCase().includes(searchTerm))
-  );
+// Handle search input with debouncing
+async function handleSearchInput(e) {
+  const searchTerm = e.target.value.trim();
 
-  populateSearchableDropdown(filteredItems);
-  showDropdown();
+  // Clear previous timeout
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+  }
+
+  // Clear dropdown if search term is empty
+  if (!searchTerm) {
+    hideDropdown();
+    return;
+  }
+
+  // Only search if we have at least 2 characters to avoid too many results
+  if (searchTerm.length < 2) {
+    return;
+  }
+
+  // Debounce the search - wait 300ms after user stops typing
+  searchTimeout = setTimeout(async () => {
+    try {
+      // Show loading state
+      const dropdown = document.getElementById("restock-product-dropdown");
+      dropdown.innerHTML = '<div class="dropdown-item">Searching...</div>';
+      showDropdown();
+
+      // Call the database search endpoint
+      const result = await APIHelper.get(
+        `/api/inventory/search?q=${encodeURIComponent(searchTerm)}`
+      );
+
+      if (result && result.results) {
+        populateSearchableDropdown(result.results);
+      } else {
+        dropdown.innerHTML = '<div class="dropdown-item">No items found</div>';
+      }
+
+      showDropdown();
+    } catch (error) {
+      console.error("Error searching inventory:", error);
+      const dropdown = document.getElementById("restock-product-dropdown");
+      dropdown.innerHTML =
+        '<div class="dropdown-item">Error searching items</div>';
+      showDropdown();
+    }
+  }, 300);
 }
 
 // Handle search focus
@@ -1102,10 +1191,21 @@ async function updateInventoryItem(id, formData) {
 
     if (result) {
       const updatedItem = result.item;
-      const index = inventoryItems.findIndex((item) => item.id === id);
-      if (index !== -1) {
-        inventoryItems[index] = updatedItem;
+
+      // Update the item in the correct category
+      for (const category of Object.keys(categoryPagination)) {
+        const index = categoryPagination[category].items.findIndex(
+          (item) => item.id === id
+        );
+        if (index !== -1) {
+          categoryPagination[category].items[index] = updatedItem;
+          break;
+        }
       }
+
+      // Re-render the inventory to reflect changes
+      renderInventory();
+
       return updatedItem;
     } else {
       throw new Error("Failed to update item");
@@ -1128,14 +1228,23 @@ async function deleteItem(id) {
     });
 
     if (result) {
-      inventoryItems = inventoryItems.filter((item) => item.id !== id);
+      // Remove the item from the correct category
+      for (const category of Object.keys(categoryPagination)) {
+        categoryPagination[category].items = categoryPagination[
+          category
+        ].items.filter((item) => item.id !== id);
+      }
       renderInventory();
     } else {
       throw new Error("Failed to delete item");
     }
   } catch (error) {
-    // For demo purposes, remove from local array
-    inventoryItems = inventoryItems.filter((item) => item.id !== id);
+    // For demo purposes, remove from local arrays
+    for (const category of Object.keys(categoryPagination)) {
+      categoryPagination[category].items = categoryPagination[
+        category
+      ].items.filter((item) => item.id !== id);
+    }
     renderInventory();
   }
 }

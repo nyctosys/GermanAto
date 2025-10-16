@@ -430,25 +430,11 @@ function addItem(type) {
   let htmlContent = `<p><i>${counter}:</i></p>`;
 
   if (type === "item") {
-    // Ensure inventoryItems is defined and is an array
-    const items = Array.isArray(inventoryItems) ? inventoryItems : [];
-
     htmlContent += `
       <div class="searchable-dropdown">
         <input type="text" class="product-name input-fields" placeholder="Search Part/Lubricant..." required readonly>
         <div class="dropdown-options" style="display: none;">
-          ${items
-            .map(
-              (item) =>
-                `<div class="dropdown-option" data-value="${
-                  item.name
-                }" data-price="${item.price}" data-part-number="${
-                  item.part_number || ""
-                }">${item.part_number ? item.part_number + " - " : ""}${
-                  item.name
-                } - PKR ${item.price.toFixed(2)}</div>`
-            )
-            .join("")}
+          <div class="dropdown-option">Type to search for items...</div>
         </div>
       </div>
       <input type="text" placeholder="Part Number" class="part-number input-fields" readonly>
@@ -481,33 +467,38 @@ function addItem(type) {
     });
 
     productInput.addEventListener("focus", function () {
-      dropdownOptions.style.display = "block";
-      this.readOnly = false;
+      if (this.value.trim().length >= 2) {
+        dropdownOptions.style.display = "block";
+        this.readOnly = false;
+        searchInventoryItemsForInvoice(itemContainer, this.value.trim());
+      }
     });
 
-    // Handle search functionality
+    // Handle search functionality with database query
+    let searchTimeout;
     productInput.addEventListener("input", function () {
-      const searchTerm = this.value.toLowerCase();
-      const options = dropdownOptions.querySelectorAll(".dropdown-option");
-
-      // Show dropdown when user starts typing
-      if (searchTerm.length > 0) {
-        dropdownOptions.style.display = "block";
-        this.readOnly = false;
-      } else {
-        // Show all options when search term is cleared
-        dropdownOptions.style.display = "block";
-        this.readOnly = false;
+      const searchTerm = this.value.trim();
+      
+      // Clear previous timeout
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+      
+      // Clear dropdown if search term is empty
+      if (!searchTerm) {
+        dropdownOptions.style.display = "none";
+        return;
       }
 
-      options.forEach((option) => {
-        const text = option.textContent.toLowerCase();
-        if (searchTerm.length === 0 || text.includes(searchTerm)) {
-          option.style.display = "block";
-        } else {
-          option.style.display = "none";
-        }
-      });
+      // Only search if we have at least 2 characters to avoid too many results
+      if (searchTerm.length < 2) {
+        return;
+      }
+
+      // Debounce the search - wait 300ms after user stops typing
+      searchTimeout = setTimeout(async () => {
+        await searchInventoryItemsForInvoice(itemContainer, searchTerm);
+      }, 300);
     });
 
     // Handle option selection
@@ -871,6 +862,52 @@ function updateBalance() {
   document.getElementById(
     "total-balance"
   ).innerText = `Balance: ${balance.toFixed(2)} PKR`;
+}
+
+// Search inventory items for invoice using database query
+async function searchInventoryItemsForInvoice(itemContainer, searchTerm) {
+  const dropdownOptions = itemContainer.querySelector(".dropdown-options");
+  if (!dropdownOptions) return;
+
+  try {
+    // Show loading state
+    dropdownOptions.innerHTML = '<div class="dropdown-option">Searching...</div>';
+    dropdownOptions.style.display = "block";
+
+    // Call the database search endpoint
+    const result = await APIHelper.get(
+      `/api/inventory/search?q=${encodeURIComponent(searchTerm)}`
+    );
+
+    if (result && result.results) {
+      populateInvoiceDropdownOptions(dropdownOptions, result.results);
+    } else {
+      dropdownOptions.innerHTML = '<div class="dropdown-option">No items found</div>';
+    }
+  } catch (error) {
+    console.error("Error searching inventory:", error);
+    dropdownOptions.innerHTML = '<div class="dropdown-option">Error searching items</div>';
+  }
+}
+
+// Populate invoice dropdown options from database search results
+function populateInvoiceDropdownOptions(dropdownOptions, items) {
+  dropdownOptions.innerHTML = "";
+
+  if (items.length === 0) {
+    dropdownOptions.innerHTML = '<div class="dropdown-option">No items found</div>';
+    return;
+  }
+
+  items.forEach((item) => {
+    const option = document.createElement("div");
+    option.className = "dropdown-option";
+    option.setAttribute("data-value", item.name);
+    option.setAttribute("data-price", item.price);
+    option.setAttribute("data-part-number", item.part_number || "");
+    option.innerHTML = `${item.part_number ? item.part_number + " - " : ""}${item.name} - PKR ${item.price.toFixed(2)}`;
+    dropdownOptions.appendChild(option);
+  });
 }
 
 // Make functions globally available for editInvoiceUtils.js

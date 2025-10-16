@@ -3,10 +3,14 @@ class APIHelper {
   static async request(url, options = {}) {
     const defaultOptions = {
       headers: {
-        "Content-Type": "application/json",
         ...options.headers,
       },
     };
+
+    // Only set Content-Type for JSON requests, not for FormData
+    if (!(options.body instanceof FormData)) {
+      defaultOptions.headers["Content-Type"] = "application/json";
+    }
 
     // Add authorization header if we have a token
     if (auth.getAccessToken()) {
