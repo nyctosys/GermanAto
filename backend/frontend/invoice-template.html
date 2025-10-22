@@ -243,6 +243,8 @@
     </div>
 
     <!-- ===== SCRIPTS ===== -->
+    <script src="static/js/auth_jwt.js"></script>
+    <script src="static/js/api-helper.js"></script>
     <script src="static/js/invoiceTemplateUtils.js?v=2.6"></script>
     <script src="static/js/libs/html2canvas.min.js"></script>
     <script src="static/js/libs/jspdf.umd.min.js"></script>
@@ -487,19 +489,14 @@
         }
 
         try {
-          const response = await fetch(
-            `http://127.0.0.1:5000/api/invoice/${invoiceId}/convert`,
+          const result = await APIHelper.request(
+            `/api/invoice/${invoiceId}/convert`,
             {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
             }
           );
 
-          const result = await response.json();
-
-          if (response.ok) {
+          if (result) {
             alert("Quote successfully converted to invoice!");
             // Update the page to reflect the change
             document.querySelector(".invoice-title").textContent = "Invoice";
@@ -525,9 +522,7 @@
               termsContainer.style.display = "none";
             }
           } else {
-            alert(
-              "Error: " + (result.error || "Failed to convert quote to invoice")
-            );
+            alert("Failed to convert quote to invoice");
           }
         } catch (error) {
           console.error("Error converting quote to invoice:", error);
