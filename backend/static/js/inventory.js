@@ -1118,9 +1118,24 @@ async function handleRestockSubmit(e) {
         `Successfully restocked ${result.quantity_added} units of ${result.product_name}.\n\nOld quantity: ${result.old_quantity}\nNew quantity: ${result.new_quantity}`
       );
 
-      // Close modal and refresh inventory
+      // Close modal and update the specific item in UI
       closeRestockModal();
-      await loadInventory(); // Refresh the inventory display
+
+      // Update the specific item in the UI
+      const productId = result.product_id;
+      for (const category of Object.keys(categoryPagination)) {
+        const itemIndex = categoryPagination[category].items.findIndex(
+          (item) => item.id === productId
+        );
+        if (itemIndex !== -1) {
+          // Update the item with new quantity
+          categoryPagination[category].items[itemIndex].quantity =
+            result.new_quantity;
+          // Re-render the specific category section
+          renderCategorySection(category);
+          break;
+        }
+      }
     } else {
       const errorData = await response.json();
       alert(
@@ -1152,9 +1167,9 @@ async function handleFormSubmit(e) {
       await addInventoryItem(formData);
     }
 
-    // Only close modal and reload after successful API call
+    // Only close modal after successful API call
+    // UI update is handled in addInventoryItem/updateInventoryItem functions
     closeModal();
-    loadInventory();
   } catch (error) {
     console.error("Error saving item:", error);
     alert("Error saving item. Please try again.");
@@ -1170,8 +1185,22 @@ async function addInventoryItem(itemData) {
     });
 
     if (result) {
-      inventoryItems.push(result.item);
-      return result.item;
+      const newItem = result.item;
+
+      // Add to inventoryItems array
+      inventoryItems.push(newItem);
+
+      // Add to the appropriate category in categoryPagination
+      const category = newItem.category;
+      if (categoryPagination[category]) {
+        categoryPagination[category].items.unshift(newItem); // Add to beginning
+        categoryPagination[category].totalItems += 1;
+
+        // Re-render the specific category section
+        renderCategorySection(category);
+      }
+
+      return newItem;
     } else {
       throw new Error("Failed to add item");
     }
@@ -1239,13 +1268,8 @@ async function deleteItem(id) {
       throw new Error("Failed to delete item");
     }
   } catch (error) {
-    // For demo purposes, remove from local arrays
-    for (const category of Object.keys(categoryPagination)) {
-      categoryPagination[category].items = categoryPagination[
-        category
-      ].items.filter((item) => item.id !== id);
-    }
-    renderInventory();
+    console.error("Error deleting item:", error);
+    alert("Failed to delete item. Please try again.");
   }
 }
 

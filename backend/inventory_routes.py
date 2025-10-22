@@ -477,7 +477,7 @@ def update_inventory_item(item_id, current_user=None):
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/<int:item_id>', methods=['DELETE'])
-@admin_required
+@role_required(['admin', 'inventory_manager'])
 def delete_inventory_item(item_id, current_user=None):
     """Delete an inventory item"""
     try:
