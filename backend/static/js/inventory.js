@@ -1220,20 +1220,40 @@ async function updateInventoryItem(id, formData) {
 
     if (result) {
       const updatedItem = result.item;
+      const newCategory = updatedItem.category;
 
-      // Update the item in the correct category
+      // Find and remove the item from its current category
+      let oldCategory = null;
       for (const category of Object.keys(categoryPagination)) {
         const index = categoryPagination[category].items.findIndex(
           (item) => item.id === id
         );
         if (index !== -1) {
-          categoryPagination[category].items[index] = updatedItem;
+          oldCategory = category;
+          categoryPagination[category].items.splice(index, 1);
           break;
         }
       }
 
-      // Re-render the inventory to reflect changes
-      renderInventory();
+      // If category changed, update counts
+      if (oldCategory && oldCategory !== newCategory) {
+        // Decrease count in old category
+        categoryPagination[oldCategory].totalItems -= 1;
+
+        // Add to new category
+        if (categoryPagination[newCategory]) {
+          categoryPagination[newCategory].items.unshift(updatedItem);
+          categoryPagination[newCategory].totalItems += 1;
+        }
+
+        // Re-render both categories
+        renderCategorySection(oldCategory);
+        renderCategorySection(newCategory);
+      } else if (oldCategory) {
+        // Same category, just update the item
+        categoryPagination[oldCategory].items.unshift(updatedItem);
+        renderCategorySection(oldCategory);
+      }
 
       return updatedItem;
     } else {
@@ -1257,13 +1277,20 @@ async function deleteItem(id) {
     });
 
     if (result) {
-      // Remove the item from the correct category
+      // Remove the item from the correct category and update count
       for (const category of Object.keys(categoryPagination)) {
-        categoryPagination[category].items = categoryPagination[
-          category
-        ].items.filter((item) => item.id !== id);
+        const itemIndex = categoryPagination[category].items.findIndex(
+          (item) => item.id === id
+        );
+        if (itemIndex !== -1) {
+          categoryPagination[category].items.splice(itemIndex, 1);
+          categoryPagination[category].totalItems -= 1;
+
+          // Re-render the specific category section
+          renderCategorySection(category);
+          break;
+        }
       }
-      renderInventory();
     } else {
       throw new Error("Failed to delete item");
     }
