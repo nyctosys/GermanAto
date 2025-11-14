@@ -493,13 +493,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
-    // Calculate totals (now 0 since we removed pricing)
-    const partsTotal = 0;
-    const labourTotal = 0;
-
-    repairOrderData.parts_total = partsTotal;
-    repairOrderData.labour_total = labourTotal;
-    repairOrderData.total_estimate = partsTotal + labourTotal;
+    // Price-related fields removed - no totals needed
 
     try {
       let response;

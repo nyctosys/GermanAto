@@ -81,9 +81,6 @@ def get_repair_orders(current_user=None):
                 'current_status': ro.current_status,
                 'status_timeline': json.loads(ro.status_timeline) if ro.status_timeline else {},
                 'vehicle_condition': json.loads(ro.vehicle_condition) if ro.vehicle_condition else {},
-                'parts_total': ro.parts_total,
-                'labour_total': ro.labour_total,
-                'tax_amount': ro.tax_amount,
                 'notes': ro.notes,
                 'created_at': ro.created_at.isoformat() if ro.created_at else None,
                 'updated_at': ro.updated_at.isoformat() if ro.updated_at else None,
@@ -149,9 +146,6 @@ def get_repair_order(repair_order_id, current_user=None):
             'current_status': repair_order.current_status,
             'status_timeline': json.loads(repair_order.status_timeline) if repair_order.status_timeline else {},
             'vehicle_condition': json.loads(repair_order.vehicle_condition) if repair_order.vehicle_condition else {},
-            'parts_total': repair_order.parts_total,
-            'labour_total': repair_order.labour_total,
-            'tax_amount': repair_order.tax_amount,
             'notes': repair_order.notes,
             'created_at': repair_order.created_at.isoformat() if repair_order.created_at else None,
             'updated_at': repair_order.updated_at.isoformat() if repair_order.updated_at else None,
@@ -347,12 +341,6 @@ def update_repair_order(repair_order_id, current_user=None):
             repair_order.diagnosis_plan = data['diagnosis_plan']
         if 'vehicle_condition' in data:
             repair_order.vehicle_condition = json.dumps(data['vehicle_condition'])
-        if 'parts_total' in data and data['parts_total'] is not None:
-            repair_order.parts_total = data['parts_total']
-        if 'labour_total' in data and data['labour_total'] is not None:
-            repair_order.labour_total = data['labour_total']
-        if 'tax_amount' in data and data['tax_amount'] is not None:
-            repair_order.tax_amount = data['tax_amount']
         if 'notes' in data:
             repair_order.notes = data['notes']
         

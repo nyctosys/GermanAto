@@ -186,9 +186,6 @@ class RepairOrder(db.Model):
     current_status = db.Column(db.String(20), default='received', nullable=False)
     status_timeline = db.Column(db.Text, nullable=True)  # JSON string for timeline
     vehicle_condition = db.Column(db.Text, nullable=True)  # JSON string for vehicle condition
-    parts_total = db.Column(db.Float, default=0.0, nullable=False)
-    labour_total = db.Column(db.Float, default=0.0, nullable=False)
-    tax_amount = db.Column(db.Float, default=0.0, nullable=False)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

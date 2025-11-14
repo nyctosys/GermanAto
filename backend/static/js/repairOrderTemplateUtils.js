@@ -86,7 +86,6 @@ function populatePartsTable(parts) {
       <td>${part.description || "N/A"}</td>
       <td>${part.part_number || "N/A"}</td>
       <td>${part.quantity || 1}</td>
-      <td>${formatCurrency(part.price || 0)}</td>
       <td>
         <span class="status-badge ${part.status?.toLowerCase() || "pending"}">
           ${part.status || "Pending"}
@@ -107,7 +106,7 @@ function populateLabourTable(labour) {
   if (!labour || labour.length === 0) {
     const emptyRow = document.createElement("tr");
     emptyRow.innerHTML =
-      '<td colspan="4" style="text-align: center; color: #666;">No labour tasks</td>';
+      '<td colspan="2" style="text-align: center; color: #666;">No labour tasks</td>';
     tableBody.appendChild(emptyRow);
     return;
   }
@@ -116,7 +115,6 @@ function populateLabourTable(labour) {
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${task.description || "N/A"}</td>
-      <td>${formatCurrency(task.rate || 0)}</td>
       <td>
         <span class="status-badge ${task.status?.toLowerCase() || "pending"}">
           ${task.status || "Pending"}
@@ -127,23 +125,9 @@ function populateLabourTable(labour) {
   });
 }
 
-// Update estimate section
+// Update estimate section (no-op - price fields removed)
 function updateEstimate(partsTotal, labourTotal, taxAmount = 0) {
-  const total = partsTotal + labourTotal + taxAmount;
-
-  const elements = {
-    "parts-total": formatCurrency(partsTotal),
-    "labour-total": formatCurrency(labourTotal),
-    "tax-amount": formatCurrency(taxAmount),
-    "total-estimate": formatCurrency(total),
-  };
-
-  Object.keys(elements).forEach((id) => {
-    const element = document.getElementById(id);
-    if (element) {
-      element.textContent = elements[id];
-    }
-  });
+  // Price-related fields removed - function kept for compatibility but does nothing
 }
 
 // Validate repair order data
@@ -305,9 +289,7 @@ function initializeRepairOrderTemplate() {
   populatePartsTable(data.parts || []);
   populateLabourTable(data.labour || []);
 
-  // Calculate and update totals
-  const totals = calculateTotals(data.parts || [], data.labour || []);
-  updateEstimate(totals.partsTotal, totals.labourTotal, data.tax_amount || 0);
+  // Price-related fields removed - no totals to update
 
   // Update status timeline
   if (data.status_timeline) {
