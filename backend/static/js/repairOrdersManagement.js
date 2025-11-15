@@ -239,6 +239,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 );
 
                 if (res) {
+                  // Update the repairOrder object with server response data
+                  if (res.status_timeline) {
+                    repairOrder.status_timeline = res.status_timeline;
+                  }
+                  repairOrder.current_status = newStatus;
+
                   // Update the status display
                   const statusElement = document.querySelector(
                     `#repair-order-card-${repairOrder.id} .repair-order-status`
@@ -248,35 +254,30 @@ document.addEventListener("DOMContentLoaded", () => {
                     statusElement.className = `repair-order-status status-${newStatus}`;
                   }
 
-                  // Update timeline
+                  // Update timeline using server response data
                   const timelineElement = document.querySelector(
                     `#repair-order-card-${repairOrder.id} .timeline-preview`
                   );
-                  if (timelineElement) {
-                    const updatedTimeline = { ...repairOrder.status_timeline };
-                    updatedTimeline[newStatus] = {
-                      date: new Date().toISOString(),
-                      time: new Date().toLocaleTimeString("en-PK", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      }),
-                    };
+                  if (timelineElement && res.status_timeline) {
                     timelineElement.innerHTML = generateTimelinePreview(
-                      updatedTimeline,
+                      res.status_timeline,
                       newStatus
                     );
                   }
 
-                  // Update last changed status display
+                  // Update last changed status display using server data
                   const lastChangedElement = document.querySelector(
                     `#repair-order-card-${repairOrder.id} .info-group:last-child .info-value`
                   );
-                  if (lastChangedElement) {
-                    const now = new Date();
-                    const formattedDateTime = formatDate(now.toISOString());
+                  if (lastChangedElement && res.status_timeline) {
+                    const lastChanged = getLastChangedStatus(res.status_timeline);
+                    const lastChangedDisplay = lastChanged.date
+                      ? formatDate(lastChanged.date)
+                      : "N/A";
                     lastChangedElement.textContent = `${
-                      newStatus.charAt(0).toUpperCase() + newStatus.slice(1)
-                    } - ${formattedDateTime}`;
+                      lastChanged.status.charAt(0).toUpperCase() +
+                      lastChanged.status.slice(1)
+                    } - ${lastChangedDisplay}`;
                   }
 
                   // Show success message
@@ -461,18 +462,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     let lastStatus = "received";
+    let lastDateTimestamp = null;
     let lastDate = null;
     let lastTime = null;
 
-    // Find the most recent status change
+    // Find the most recent status change by comparing timestamps
     Object.keys(statusTimeline).forEach((status) => {
       const statusData = statusTimeline[status];
       if (statusData && statusData.date) {
-        const statusDate = new Date(statusData.date);
-        if (!lastDate || statusDate > new Date(lastDate)) {
-          lastStatus = status;
-          lastDate = statusData.date;
-          lastTime = statusData.time;
+        try {
+          const statusDate = new Date(statusData.date);
+          // Check if date is valid
+          if (!isNaN(statusDate.getTime())) {
+            const statusTimestamp = statusDate.getTime();
+            // Compare timestamps to find the most recent
+            if (lastDateTimestamp === null || statusTimestamp > lastDateTimestamp) {
+              lastStatus = status;
+              lastDateTimestamp = statusTimestamp;
+              lastDate = statusData.date;
+              lastTime = statusData.time;
+            }
+          }
+        } catch (e) {
+          // Skip invalid dates
+          console.warn(`Invalid date for status ${status}:`, statusData.date);
         }
       }
     });
