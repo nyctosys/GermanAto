@@ -21,6 +21,8 @@ def delete_all_inventory():
             print("✅ No inventory items to delete")
             return 0
         
+        # Note: Repair orders (and their parts) should be deleted first
+        # to avoid foreign key constraint issues
         Inventory.query.delete()
         db.session.commit()
         print(f"✅ Deleted {count} inventory item(s)")
@@ -28,6 +30,7 @@ def delete_all_inventory():
     except Exception as e:
         db.session.rollback()
         print(f"❌ Error deleting inventory items: {e}")
+        print("   Note: Make sure repair orders are deleted first to avoid foreign key constraints")
         return 0
 
 def delete_duplicate_customers():
@@ -149,7 +152,7 @@ def delete_duplicate_cars():
 
 def delete_all_repair_orders():
     """Delete all repair orders"""
-    from models import db, RepairOrder
+    from models import db, RepairOrder, RepairOrderPart, RepairOrderLabour
     
     try:
         count = RepairOrder.query.count()
@@ -157,7 +160,22 @@ def delete_all_repair_orders():
             print("✅ No repair orders to delete")
             return 0
         
-        # RepairOrderPart and RepairOrderLabour will be deleted automatically due to cascade
+        # Delete repair order parts and labour first to avoid foreign key constraint issues
+        # This ensures clean deletion even if cascade isn't working as expected
+        parts_count = RepairOrderPart.query.count()
+        labour_count = RepairOrderLabour.query.count()
+        
+        if parts_count > 0:
+            print(f"  Deleting {parts_count} repair order part(s)...")
+            RepairOrderPart.query.delete()
+        
+        if labour_count > 0:
+            print(f"  Deleting {labour_count} repair order labour record(s)...")
+            RepairOrderLabour.query.delete()
+        
+        db.session.commit()
+        
+        # Now delete repair orders
         RepairOrder.query.delete()
         db.session.commit()
         print(f"✅ Deleted {count} repair order(s)")
@@ -195,21 +213,22 @@ def main():
             print("Starting cleanup...")
             print("-" * 50)
             
-            # 1. Delete all inventory items
-            print("\n1. Deleting all inventory items...")
+            # 1. Delete all repair orders first (this will free up foreign key constraints)
+            # Must be done before deleting inventory items
+            print("\n1. Deleting all repair orders...")
+            repair_orders_deleted = delete_all_repair_orders()
+            
+            # 2. Delete all inventory items (now safe since repair order parts are gone)
+            print("\n2. Deleting all inventory items...")
             inventory_deleted = delete_all_inventory()
             
-            # 2. Delete duplicate customers
-            print("\n2. Finding and deleting duplicate customers...")
+            # 3. Delete duplicate customers
+            print("\n3. Finding and deleting duplicate customers...")
             customers_deleted = delete_duplicate_customers()
             
-            # 3. Delete duplicate cars
-            print("\n3. Finding and deleting duplicate cars...")
+            # 4. Delete duplicate cars
+            print("\n4. Finding and deleting duplicate cars...")
             cars_deleted = delete_duplicate_cars()
-            
-            # 4. Delete all repair orders
-            print("\n4. Deleting all repair orders...")
-            repair_orders_deleted = delete_all_repair_orders()
             
             print()
             print("=" * 50)
