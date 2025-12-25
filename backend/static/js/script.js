@@ -6,6 +6,7 @@ let customers = [];
 let cars = [];
 let inventoryItems = [];
 let selectedCustomerId = null;
+let selectedCarId = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
@@ -228,6 +229,11 @@ function setupSearchableDropdowns() {
     this.focus();
     // Force focus for mobile keyboard
     setTimeout(() => this.focus(), 100);
+    // Add class to parent section-card to prevent overlap
+    const sectionCard = this.closest(".section-card");
+    if (sectionCard) {
+      sectionCard.classList.add("dropdown-active");
+    }
   });
 
   // Ensure keyboard opens on mobile touch
@@ -265,6 +271,12 @@ function setupSearchableDropdowns() {
       customerInput.readOnly = false;
       customerInput.removeAttribute("readonly");
 
+      // Remove class from parent section-card
+      const sectionCard = customerInput.closest(".section-card");
+      if (sectionCard) {
+        sectionCard.classList.remove("dropdown-active");
+      }
+
       // Trigger customer change
       handleCustomerChange(parseInt(selectedValue));
     }
@@ -282,6 +294,11 @@ function setupSearchableDropdowns() {
     this.focus();
     // Force focus for mobile keyboard
     setTimeout(() => this.focus(), 100);
+    // Add class to parent section-card to prevent overlap
+    const sectionCard = this.closest(".section-card");
+    if (sectionCard) {
+      sectionCard.classList.add("dropdown-active");
+    }
   });
 
   // Ensure keyboard opens on mobile touch
@@ -319,6 +336,12 @@ function setupSearchableDropdowns() {
       carInput.readOnly = false;
       carInput.removeAttribute("readonly");
 
+      // Remove class from parent section-card
+      const sectionCard = carInput.closest(".section-card");
+      if (sectionCard) {
+        sectionCard.classList.remove("dropdown-active");
+      }
+
       // Trigger car change
       handleCarChange(parseInt(selectedValue));
     }
@@ -334,12 +357,22 @@ function setupSearchableDropdowns() {
       // Don't set readonly - allow editing
       customerInput.readOnly = false;
       customerInput.removeAttribute("readonly");
+      // Remove class from parent section-card
+      const sectionCard = customerInput.closest(".section-card");
+      if (sectionCard) {
+        sectionCard.classList.remove("dropdown-active");
+      }
     }
     if (!carInput.contains(e.target) && !carDropdown.contains(e.target)) {
       carDropdown.style.display = "none";
       // Don't set readonly - allow editing
       carInput.readOnly = false;
       carInput.removeAttribute("readonly");
+      // Remove class from parent section-card
+      const sectionCard = carInput.closest(".section-card");
+      if (sectionCard) {
+        sectionCard.classList.remove("dropdown-active");
+      }
     }
   });
 }
@@ -381,6 +414,8 @@ window.handleCustomerChange = handleCustomerChange;
 
 // Handle car selection change
 function handleCarChange(carId) {
+  selectedCarId = carId;
+
   if (carId) {
     const car = cars.find((c) => c.id === carId);
     if (car) {
@@ -396,6 +431,7 @@ function handleCarChange(carId) {
       document.getElementById("car-details").style.display = "block";
     }
   } else {
+    selectedCarId = null;
     // Clear car details
     document.getElementById("customer_reg").value = "";
     document.getElementById("customer_made").value = "";
@@ -478,12 +514,12 @@ function addItem(type) {
     let searchTimeout;
     productInput.addEventListener("input", function () {
       const searchTerm = this.value.trim();
-      
+
       // Clear previous timeout
       if (searchTimeout) {
         clearTimeout(searchTimeout);
       }
-      
+
       // Clear dropdown if search term is empty
       if (!searchTerm) {
         dropdownOptions.style.display = "none";
@@ -871,7 +907,8 @@ async function searchInventoryItemsForInvoice(itemContainer, searchTerm) {
 
   try {
     // Show loading state
-    dropdownOptions.innerHTML = '<div class="dropdown-option">Searching...</div>';
+    dropdownOptions.innerHTML =
+      '<div class="dropdown-option">Searching...</div>';
     dropdownOptions.style.display = "block";
 
     // Call the database search endpoint
@@ -882,11 +919,13 @@ async function searchInventoryItemsForInvoice(itemContainer, searchTerm) {
     if (result && result.results) {
       populateInvoiceDropdownOptions(dropdownOptions, result.results);
     } else {
-      dropdownOptions.innerHTML = '<div class="dropdown-option">No items found</div>';
+      dropdownOptions.innerHTML =
+        '<div class="dropdown-option">No items found</div>';
     }
   } catch (error) {
     console.error("Error searching inventory:", error);
-    dropdownOptions.innerHTML = '<div class="dropdown-option">Error searching items</div>';
+    dropdownOptions.innerHTML =
+      '<div class="dropdown-option">Error searching items</div>';
   }
 }
 
@@ -895,7 +934,8 @@ function populateInvoiceDropdownOptions(dropdownOptions, items) {
   dropdownOptions.innerHTML = "";
 
   if (items.length === 0) {
-    dropdownOptions.innerHTML = '<div class="dropdown-option">No items found</div>';
+    dropdownOptions.innerHTML =
+      '<div class="dropdown-option">No items found</div>';
     return;
   }
 
@@ -905,7 +945,9 @@ function populateInvoiceDropdownOptions(dropdownOptions, items) {
     option.setAttribute("data-value", item.name);
     option.setAttribute("data-price", item.price);
     option.setAttribute("data-part-number", item.part_number || "");
-    option.innerHTML = `${item.part_number ? item.part_number + " - " : ""}${item.name} - PKR ${item.price.toFixed(2)}`;
+    option.innerHTML = `${item.part_number ? item.part_number + " - " : ""}${
+      item.name
+    } - PKR ${item.price.toFixed(2)}`;
     dropdownOptions.appendChild(option);
   });
 }
@@ -1072,7 +1114,65 @@ document
       customer_chasis: customerChasis,
     };
 
+    // #region agent log - Debug: Log invoice data before API call
+    console.log(
+      "[DEBUG] Invoice data being sent:",
+      JSON.stringify(invoiceData, null, 2)
+    );
+    console.log("[DEBUG] Items count:", invoiceData.items.length);
+    console.log("[DEBUG] Labours count:", invoiceData.labours.length);
+    console.log("[DEBUG] Items details:", invoiceData.items);
+    console.log("[DEBUG] Labours details:", invoiceData.labours);
+    console.log("[DEBUG] Customer phone:", invoiceData.customer_phone);
+    console.log("[DEBUG] Net total:", invoiceData.net_total);
+    // #endregion
+
     try {
+      // Update customer record if a customer was selected
+      if (selectedCustomerId) {
+        try {
+          const customerData = {
+            name: customerName,
+            phone: customerPhone,
+            address: customerAddress,
+          };
+          await APIHelper.put(
+            `/api/customers/${selectedCustomerId}`,
+            customerData
+          );
+          console.log("Customer updated successfully");
+        } catch (error) {
+          console.error("Failed to update customer:", error);
+          // Continue with invoice creation even if customer update fails
+        }
+      }
+
+      // Update car record if a car was selected
+      if (selectedCarId) {
+        try {
+          // Parse make and model from customer_made field
+          const makeModelParts = customerMade.split(" ");
+          const make = makeModelParts[0] || "";
+          const model = makeModelParts.slice(1).join(" ") || "";
+
+          const carData = {
+            make: make,
+            model: model,
+            plate_no: customerReg,
+            mileage: customerMileage || null,
+            vin: customerVin || null,
+            color: customerColor || null,
+            chasis_no: customerChasis || null,
+            customer_id: selectedCustomerId || null,
+          };
+          await APIHelper.put(`/api/cars/${selectedCarId}`, carData);
+          console.log("Car updated successfully");
+        } catch (error) {
+          console.error("Failed to update car:", error);
+          // Continue with invoice creation even if car update fails
+        }
+      }
+
       let result;
       if (editId) {
         result = await APIHelper.put(
@@ -1103,6 +1203,7 @@ document
       document.getElementById("customer-details").style.display = "none";
       document.getElementById("car-details").style.display = "none";
       selectedCustomerId = null;
+      selectedCarId = null;
     } catch (error) {
       console.error("Error:", error);
       alert("Failed to create document.");

@@ -4,284 +4,415 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GermanATO - Invoice/Quote Generator</title>
-
     <link rel="stylesheet" href="static/css/invoice.css" />
   </head>
   <body>
-    <a href="#" id="back-btn" class="back-btn">
-      <span>Back</span>
-    </a>
-
-    <div class="invoice-form">
-      <h1>Invoice/Quote Generator</h1>
-
-      <!-- Document Type Toggle -->
-      <div class="document-type-toggle">
-        <label class="toggle-label">
-          <input
-            type="checkbox"
-            id="direct-invoice-toggle"
-            class="toggle-checkbox"
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
           />
-          <span class="toggle-slider"></span>
-          <span class="toggle-text">Direct Invoice Mode</span>
-        </label>
-        <div class="toggle-description">
-          <span id="toggle-description-text"
-            >Quote Mode: Generate quotes for customer approval</span
-          >
+          <div class="brand-text">
+            <h1>Invoice/Quote Generator</h1>
+            <p>Create invoices and quotes for customers</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
         </div>
       </div>
+    </header>
 
+    <!-- Main Content -->
+    <main class="main-content">
       <form id="invoice-form" method="post">
-        <label for="customer-select">Customer Information</label>
-        <div class="select-with-button">
-          <div class="searchable-dropdown">
-            <input
-              type="text"
-              id="customer-select"
-              class="input-fields"
-              placeholder="Search customers..."
-              required
-              autocomplete="off"
-              inputmode="text"
-            />
-            <div
-              class="dropdown-options"
-              id="customer-dropdown-options"
-              style="display: none"
-            >
-              <!-- Customer options will be populated here -->
-            </div>
-          </div>
-          <button type="button" class="add-btn" id="add-customer-btn">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M12 5V19M5 12H19"
+        <!-- Document Type Toggle Section -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
                 stroke="currentColor"
                 stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 0 0 1.946-.806 3.42 3.42 0 0 1 4.438 0 3.42 3.42 0 0 0 1.946.806 3.42 3.42 0 0 1 3.138 3.138 3.42 3.42 0 0 0 .806 1.946 3.42 3.42 0 0 1 0 4.438 3.42 3.42 0 0 0-.806 1.946 3.42 3.42 0 0 1-3.138 3.138 3.42 3.42 0 0 0-1.946.806 3.42 3.42 0 0 1-4.438 0 3.42 3.42 0 0 0-1.946-.806 3.42 3.42 0 0 1-3.138-3.138 3.42 3.42 0 0 0-.806-1.946 3.42 3.42 0 0 1 0-4.438 3.42 3.42 0 0 0 .806-1.946 3.42 3.42 0 0 1 3.138-3.138z"
+                ></path>
+              </svg>
+            </div>
+            <h2>Document Type</h2>
+          </div>
+          <div class="document-type-toggle">
+            <label class="toggle-label">
+              <input
+                type="checkbox"
+                id="direct-invoice-toggle"
+                class="toggle-checkbox"
               />
-            </svg>
-            Add Customer
-          </button>
-        </div>
-
-        <div id="customer-details" style="display: none">
-          <label for="customer_name">Name</label>
-          <input
-            type="text"
-            id="customer_name"
-            placeholder="Name"
-            class="input-fields"
-            readonly
-          />
-          <label for="customer_address">Address</label>
-          <input
-            type="text"
-            id="customer_address"
-            placeholder="Address"
-            class="input-fields"
-            readonly
-          />
-          <label for="customer_phone">Phone Number</label>
-          <input
-            type="tel"
-            id="customer_phone"
-            placeholder="Phone Number"
-            class="input-fields"
-            readonly
-          />
-        </div>
-
-        <label for="car-select">Car Information</label>
-        <div class="select-with-button">
-          <div class="searchable-dropdown">
-            <input
-              type="text"
-              id="car-select"
-              class="input-fields"
-              placeholder="Search cars..."
-              required
-              autocomplete="off"
-              inputmode="text"
-            />
-            <div
-              class="dropdown-options"
-              id="car-dropdown-options"
-              style="display: none"
-            >
-              <!-- Car options will be populated here -->
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">Direct Invoice Mode</span>
+            </label>
+            <div class="toggle-description">
+              <span id="toggle-description-text"
+                >Quote Mode: Generate quotes for customer approval</span
+              >
             </div>
           </div>
-          <button type="button" class="add-btn" id="add-car-btn">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M12 5V19M5 12H19"
+        </div>
+
+        <!-- Customer Information Section -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
                 stroke="currentColor"
                 stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              >
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </div>
+            <h2>Customer Information</h2>
+          </div>
+          <label for="customer-select">Search Customer</label>
+          <div class="select-with-button">
+            <div class="searchable-dropdown">
+              <input
+                type="text"
+                id="customer-select"
+                class="input-fields"
+                placeholder="Search customers..."
+                required
+                autocomplete="off"
+                inputmode="text"
               />
-            </svg>
-            Add Car
-          </button>
-        </div>
+              <div
+                class="dropdown-options"
+                id="customer-dropdown-options"
+                style="display: none"
+              >
+                <!-- Customer options will be populated here -->
+              </div>
+            </div>
+            <button type="button" class="add-btn" id="add-customer-btn">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 5V19M5 12H19"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              Add Customer
+            </button>
+          </div>
 
-        <div id="car-details" style="display: none">
-          <label for="customer_reg">Registration Number</label>
-          <input
-            type="text"
-            id="customer_reg"
-            placeholder="Registration Number"
-            class="input-fields"
-            readonly
-          />
-          <label for="customer_made">Make & Model</label>
-          <input
-            type="text"
-            id="customer_made"
-            placeholder="Make & Model"
-            class="input-fields"
-            readonly
-          />
-          <label for="customer_mileage">Mileage</label>
-          <input
-            type="text"
-            id="customer_mileage"
-            placeholder="Mileage"
-            class="input-fields"
-            readonly
-          />
-          <label for="customer_vin">VIN (Vehicle Identification Number)</label>
-          <input
-            type="text"
-            id="customer_vin"
-            placeholder="VIN (Vehicle Identification Number)"
-            class="input-fields"
-            readonly
-          />
-          <label for="customer_color">Color</label>
-          <input
-            type="text"
-            id="customer_color"
-            placeholder="Color"
-            class="input-fields"
-            readonly
-          />
-          <label for="customer_chasis">Chassis Number</label>
-          <input
-            type="text"
-            id="customer_chasis"
-            placeholder="Chassis Number"
-            class="input-fields"
-            readonly
-          />
-        </div>
-
-        <h3>Invoice Items</h3>
-        <div id="items-container">
-          <!-- Items will be dynamically added here -->
-        </div>
-
-        <div id="total-amount">Net Total: 0.00 PKR</div>
-        <div class="btns">
-          <button type="button" class="wide-btn" id="add-item">Add Item</button>
-          <button type="button" class="wide-btn" id="add-labour">
-            Add Labour
-          </button>
-        </div>
-
-        <!-- Tax Toggle Section -->
-        <div class="tax-toggle-section">
-          <label class="tax-toggle-label">
+          <div id="customer-details" style="display: none">
+            <label for="customer_name">Name</label>
             <input
-              type="checkbox"
-              id="tax-toggle"
-              class="tax-toggle-checkbox"
+              type="text"
+              id="customer_name"
+              placeholder="Name"
+              class="input-fields"
             />
-            <span class="tax-toggle-text">Include Tax (GST/PST 17%)</span>
-          </label>
-          <div id="tax-amount-display" style="display: none">
-            Tax Amount: <span id="tax-amount">0.00 PKR</span>
+            <label for="customer_address">Address</label>
+            <input
+              type="text"
+              id="customer_address"
+              placeholder="Address"
+              class="input-fields"
+            />
+            <label for="customer_phone">Phone Number</label>
+            <input
+              type="tel"
+              id="customer_phone"
+              placeholder="Phone Number"
+              class="input-fields"
+            />
           </div>
         </div>
 
-        <label for="advance">Advance Payment</label>
-        <input
-          type="number"
-          placeholder="Advance"
-          class="advance input-fields"
-        />
-
-        <label for="discount">Discount</label>
-        <input
-          type="number"
-          id="discount"
-          placeholder="Discount Amount"
-          class="input-fields"
-          value="0"
-          min="0"
-          step="0.01"
-        />
-
-        <div id="total-balance">Balance: 0.00 PKR</div>
-
-        <!-- Inventory Deduction Section -->
-        <div class="inventory-deduction-section">
-          <button
-            type="button"
-            class="inventory-deduction-btn"
-            id="deduct-inventory-btn"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M20 12V8H6V4H4V8H2V10H4V12H6V16H20V12Z"
-                fill="currentColor"
+        <!-- Car Information Section -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"
+                ></path>
+                <polygon points="12 15 17 21 7 21 12 15"></polygon>
+              </svg>
+            </div>
+            <h2>Vehicle Information</h2>
+          </div>
+          <label for="car-select">Search Vehicle</label>
+          <div class="select-with-button">
+            <div class="searchable-dropdown">
+              <input
+                type="text"
+                id="car-select"
+                class="input-fields"
+                placeholder="Search cars..."
+                required
+                autocomplete="off"
+                inputmode="text"
               />
-              <path d="M8 14V18H18V14H8Z" fill="currentColor" />
-            </svg>
-            Check & Deduct Inventory
-          </button>
-          <div class="inventory-deduction-info">
-            <span
-              >This will check stock availability and deduct items from
-              inventory. You'll be warned about insufficient stock.</span
+              <div
+                class="dropdown-options"
+                id="car-dropdown-options"
+                style="display: none"
+              >
+                <!-- Car options will be populated here -->
+              </div>
+            </div>
+            <button type="button" class="add-btn" id="add-car-btn">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 5V19M5 12H19"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              Add Car
+            </button>
+          </div>
+
+          <div id="car-details" style="display: none">
+            <label for="customer_reg">Registration Number</label>
+            <input
+              type="text"
+              id="customer_reg"
+              placeholder="Registration Number"
+              class="input-fields"
+            />
+            <label for="customer_made">Make & Model</label>
+            <input
+              type="text"
+              id="customer_made"
+              placeholder="Make & Model"
+              class="input-fields"
+            />
+            <label for="customer_mileage">Mileage</label>
+            <input
+              type="text"
+              id="customer_mileage"
+              placeholder="Mileage"
+              class="input-fields"
+            />
+            <label for="customer_vin"
+              >VIN (Vehicle Identification Number)</label
             >
+            <input
+              type="text"
+              id="customer_vin"
+              placeholder="VIN (Vehicle Identification Number)"
+              class="input-fields"
+            />
+            <label for="customer_color">Color</label>
+            <input
+              type="text"
+              id="customer_color"
+              placeholder="Color"
+              class="input-fields"
+            />
+            <label for="customer_chasis">Chassis Number</label>
+            <input
+              type="text"
+              id="customer_chasis"
+              placeholder="Chassis Number"
+              class="input-fields"
+            />
           </div>
         </div>
 
-        <div class="btns-submit">
-          <button type="submit" class="wide-btn-submit" data-type="invoice">
-            Generate <br />
-            Invoice
-          </button>
-          <button type="submit" class="wide-btn-submit" data-type="quote">
-            Generate <br />
-            Quote
-          </button>
+        <!-- Invoice Items Section -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                ></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            </div>
+            <h2>Invoice Items</h2>
+          </div>
+          <div id="items-container">
+            <!-- Items will be dynamically added here -->
+          </div>
+          <div class="btns">
+            <button type="button" class="wide-btn" id="add-item">
+              Add Item
+            </button>
+            <button type="button" class="wide-btn" id="add-labour">
+              Add Labour
+            </button>
+          </div>
+        </div>
+
+        <!-- Financial Summary Section -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="12" y1="1" x2="12" y2="23"></line>
+                <path
+                  d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                ></path>
+              </svg>
+            </div>
+            <h2>Financial Summary</h2>
+          </div>
+          <div class="tax-toggle-section">
+            <label class="tax-toggle-label">
+              <input
+                type="checkbox"
+                id="tax-toggle"
+                class="tax-toggle-checkbox"
+              />
+              <span class="tax-toggle-text">Include Tax (GST/PST 17%)</span>
+            </label>
+            <div id="tax-amount-display" style="display: none">
+              Tax Amount: <span id="tax-amount">0.00 PKR</span>
+            </div>
+          </div>
+          <label for="advance">Advance Payment</label>
+          <input
+            type="number"
+            id="advance"
+            placeholder="Advance"
+            class="advance input-fields"
+          />
+          <label for="discount">Discount</label>
+          <input
+            type="number"
+            id="discount"
+            placeholder="Discount Amount"
+            class="input-fields"
+            value="0"
+            min="0"
+            step="0.01"
+          />
+          <div class="summary-display">
+            <div id="total-amount" class="summary-item">
+              Net Total: 0.00 PKR
+            </div>
+            <div id="total-balance" class="summary-item">Balance: 0.00 PKR</div>
+          </div>
+        </div>
+
+        <!-- Actions Section -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </div>
+            <h2>Actions</h2>
+          </div>
+          <div class="inventory-deduction-section">
+            <button
+              type="button"
+              class="inventory-deduction-btn"
+              id="deduct-inventory-btn"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M20 12V8H6V4H4V8H2V10H4V12H6V16H20V12Z"
+                  fill="currentColor"
+                />
+                <path d="M8 14V18H18V14H8Z" fill="currentColor" />
+              </svg>
+              Check & Deduct Inventory
+            </button>
+            <div class="inventory-deduction-info">
+              <span
+                >This will check stock availability and deduct items from
+                inventory. You'll be warned about insufficient stock.</span
+              >
+            </div>
+          </div>
+          <div class="btns-submit">
+            <button type="submit" class="wide-btn-submit" data-type="invoice">
+              Generate <br />
+              Invoice
+            </button>
+            <button type="submit" class="wide-btn-submit" data-type="quote">
+              Generate <br />
+              Quote
+            </button>
+          </div>
         </div>
       </form>
-    </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
 
     <!-- Customer Modal -->
     <div id="customer-modal" class="modal">
@@ -405,11 +536,6 @@
         </form>
       </div>
     </div>
-
-    <!-- Footer Section -->
-    <footer>
-      <p>&copy; 2025 GermanATO. All rights reserved.</p>
-    </footer>
 
     <script>
       document.addEventListener("DOMContentLoaded", function () {

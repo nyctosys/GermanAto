@@ -4,150 +4,99 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Finance Management - GermanATO</title>
-    <link rel="stylesheet" href="static/css/search.css" />
-    <style>
-      .finance-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-height: 60vh;
-        gap: 2rem;
-        padding: 2rem;
-      }
-
-      .finance-header {
-        text-align: center;
-        margin-bottom: 2rem;
-      }
-
-      .finance-header h1 {
-        font-size: 2.5rem;
-        font-weight: 300;
-        margin-bottom: 1rem;
-        color: #212529;
-        letter-spacing: -0.5px;
-        line-height: 1.2;
-      }
-
-      .finance-header p {
-        font-size: 1.125rem;
-        margin-bottom: 0;
-        color: #6c757d;
-        line-height: 1.6;
-        font-weight: 400;
-      }
-
-      .menu-buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1.5rem;
-        justify-content: center;
-        align-items: center;
-      }
-
-      .menu-btn {
-        display: inline-block;
-        text-decoration: none;
-        background: #ffffff;
-        color: #495057;
-        padding: 1.5rem 2.5rem;
-        border-radius: 12px;
-        font-weight: 500;
-        border: 2px solid #e9ecef;
-        transition: all 0.3s ease;
-        width: 280px;
-        text-align: center;
-        box-sizing: border-box;
-        font-size: 1rem;
-        line-height: 1.4;
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-      }
-
-      .menu-btn::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        opacity: 0;
-        transition: opacity 0.3s ease;
-      }
-
-      .menu-btn span {
-        position: relative;
-        z-index: 1;
-      }
-
-      .menu-btn:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-        border-color: #dee2e6;
-        color: #212529;
-      }
-
-      .menu-btn:hover::before {
-        opacity: 1;
-      }
-
-      .menu-btn:active {
-        transform: translateY(-2px);
-      }
-
-      @media (max-width: 768px) {
-        .menu-buttons {
-          flex-direction: column;
-          gap: 1rem;
-        }
-
-        .finance-header h1 {
-          font-size: 2rem;
-        }
-
-        .finance-header p {
-          font-size: 1rem;
-        }
-      }
-
-      @media (max-width: 480px) {
-        .finance-container {
-          padding: 1rem;
-        }
-
-        .menu-btn {
-          width: 100%;
-          max-width: 280px;
-        }
-      }
-    </style>
+    <link rel="stylesheet" href="../static/css/finance-management.css" />
   </head>
   <body>
-    <a href="#" id="back-btn" class="back-btn"><span>Back</span></a>
-    <div class="container">
-      <div class="finance-container">
-        <div class="finance-header">
-          <h1>Finance Management</h1>
-          <p>Manage bills and track daily expenses</p>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="../static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1>Finance Management</h1>
+            <p>Manage bills and track expenses</p>
+          </div>
         </div>
-
-        <div class="menu-buttons">
-          <a href="invoiceSystem.html?from=finance-management" class="menu-btn">
-            <span>Bill Management</span>
-          </a>
-          <a
-            href="daily-expenses.html?from=finance-management"
-            class="menu-btn"
-          >
-            <span>Daily Expenses</span>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
           </a>
         </div>
       </div>
-    </div>
+    </header>
 
-    <script src="static/js/financeManagement.js"></script>
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Page Header -->
+      <div class="page-header">
+        <h2>Finance Management</h2>
+        <p>Select a module to manage your finances</p>
+      </div>
+
+      <!-- Navigation Cards -->
+      <div class="nav-cards">
+        <!-- Bill Management Card -->
+        <a href="invoiceSystem.html?from=finance-management" class="nav-card">
+          <div class="card-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              ></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div class="card-content">
+            <h3>Bill Management</h3>
+            <p>Create and manage invoices, quotes, and track payment status</p>
+          </div>
+        </a>
+
+        <!-- Daily Expenses Card -->
+        <a href="daily-expenses.html?from=finance-management" class="nav-card">
+          <div class="card-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+              <line x1="1" y1="10" x2="23" y2="10"></line>
+            </svg>
+          </div>
+          <div class="card-content">
+            <h3>Daily Expenses</h3>
+            <p>Track and manage daily business expenses and transactions</p>
+          </div>
+        </a>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="../static/js/financeManagement.js"></script>
   </body>
 </html>

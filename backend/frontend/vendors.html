@@ -8,67 +8,119 @@
     <script src="../static/js/notification-utils.js"></script>
   </head>
   <body>
-    <a href="#" id="back-btn" class="back-btn">
-      <span>Back</span>
-    </a>
-
-    <div class="container">
-      <div class="header">
-        <h1>Vendor Management</h1>
-        <p>Manage vendors, ledger entries, and consignment reports</p>
-      </div>
-
-      <div class="main-content">
-        <div class="controls-section">
-          <div class="controls-left">
-            <button class="add-btn" onclick="openAddVendorModal()">
-              <span>+</span>
-              Add New Vendor
-            </button>
-            <button class="nav-btn" id="refreshBtn">
-              <span>🔄</span>
-              Refresh
-            </button>
-          </div>
-          <div class="search-section">
-            <input
-              type="text"
-              id="searchInput"
-              placeholder="Search vendors..."
-              class="search-input"
-            />
-            <button class="search-btn" onclick="searchVendors()">
-              <span>🔍</span>
-            </button>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="../static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1>Vendor Management</h1>
+            <p>Manage vendors, ledger entries, and consignment reports</p>
           </div>
         </div>
-
-        <div class="table-container">
-          <table class="data-table" id="vendorsTable">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Company</th>
-                <th>Contact Person</th>
-                <th>Phone</th>
-                <th>Email</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="vendorsTableBody">
-              <tr>
-                <td colspan="8" class="loading-cell">
-                  <div class="loading-spinner"></div>
-                  <span>Loading vendors...</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
         </div>
       </div>
-    </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="controls-section">
+        <div class="controls-left">
+          <button class="add-btn" onclick="openAddVendorModal()">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Add New Vendor</span>
+          </button>
+          <button class="nav-btn" id="refreshBtn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M23 4v6h-6"></path>
+              <path d="M1 20v-6h6"></path>
+              <path
+                d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+              ></path>
+            </svg>
+            <span>Refresh</span>
+          </button>
+        </div>
+        <div class="search-section">
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="Search vendors..."
+            class="search-input"
+          />
+          <button class="search-btn" onclick="searchVendors()">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table" id="vendorsTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Company</th>
+              <th>Contact Person</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="vendorsTableBody">
+            <tr>
+              <td colspan="8" class="loading-cell">
+                <div class="loading-spinner"></div>
+                <span>Loading vendors...</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
 
     <!-- Add/Edit Vendor Modal -->
     <div class="modal" id="vendorModal">

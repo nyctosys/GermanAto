@@ -7,18 +7,57 @@
     <link rel="stylesheet" href="static/css/repair-order.css" />
   </head>
   <body>
-    <a href="#" id="back-btn" class="back-btn"><span>Back</span></a>
-
-    <div class="container">
-      <div class="header">
-        <h1 id="page-title">Create Repair Order</h1>
-        <p id="page-description">Generate repair order from approved quote</p>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1 id="page-title">Create Repair Order</h1>
+            <p id="page-description">
+              Generate repair order from approved quote
+            </p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
+        </div>
       </div>
+    </header>
 
+    <!-- Main Content -->
+    <main class="main-content">
       <form id="repair-order-form" class="repair-order-form">
         <!-- Customer Information -->
-        <div class="form-section">
-          <h3>Customer Information</h3>
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </div>
+            <h2>Customer Information</h2>
+          </div>
           <div class="form-grid">
             <div class="form-group">
               <label for="customer-select">Select Customer</label>
@@ -46,7 +85,15 @@
                   onclick="openCustomerModal()"
                   title="Add New Customer"
                 >
-                  +
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -81,8 +128,23 @@
         </div>
 
         <!-- Vehicle Information -->
-        <div class="form-section">
-          <h3>Vehicle Information</h3>
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"
+                ></path>
+                <polygon points="12 15 17 21 7 21 12 15"></polygon>
+              </svg>
+            </div>
+            <h2>Vehicle Information</h2>
+          </div>
           <div class="form-grid">
             <div class="form-group">
               <label for="car-select">Select Vehicle</label>
@@ -110,7 +172,15 @@
                   onclick="openCarModal()"
                   title="Add New Vehicle"
                 >
-                  +
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -147,8 +217,26 @@
         </div>
 
         <!-- Problem Description -->
-        <div class="form-section">
-          <h3>Problem Description</h3>
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
+                ></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            </div>
+            <h2>Problem Description</h2>
+          </div>
           <div class="form-group">
             <label for="problem-description">Describe the problem *</label>
             <textarea
@@ -161,8 +249,23 @@
         </div>
 
         <!-- Assigned Worker -->
-        <div class="form-section">
-          <h3>Assigned Worker</h3>
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </div>
+            <h2>Assigned Worker</h2>
+          </div>
           <div class="form-group">
             <label for="worker-select">Select Worker</label>
             <div class="searchable-dropdown">
@@ -188,24 +291,69 @@
         </div>
 
         <!-- Parts Section -->
-        <div class="form-section">
-          <h3>Parts Required</h3>
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+              </svg>
+            </div>
+            <h2>Parts Required</h2>
+          </div>
           <div id="parts-container">
             <!-- Parts will be added here dynamically -->
           </div>
           <button type="button" id="add-part-btn" class="add-btn">
-            + Add Part
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Add Part</span>
           </button>
         </div>
 
         <!-- Labour Section -->
-        <div class="form-section">
-          <h3>Labour Tasks</h3>
+        <div class="section-card">
+          <div class="section-header">
+            <div class="icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <h2>Labour Tasks</h2>
+          </div>
           <div id="labour-container">
             <!-- Labour tasks will be added here dynamically -->
           </div>
           <button type="button" id="add-labour-btn" class="add-btn">
-            + Add Labour Task
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Add Labour Task</span>
           </button>
         </div>
 
@@ -216,7 +364,12 @@
           </button>
         </div>
       </form>
-    </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
 
     <!-- Customer Modal -->
     <div id="customer-modal" class="modal">

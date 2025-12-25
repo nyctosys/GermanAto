@@ -3,6 +3,7 @@ let reportsData = null;
 let salesChart = null;
 let profitChart = null;
 let growthChart = null;
+let currentFilter = "30days"; // Track current active filter
 
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", function () {
@@ -27,6 +28,95 @@ document.addEventListener("DOMContentLoaded", function () {
   // Setup back button
   setupBackButton();
 });
+
+// ===== QUICK FILTER FUNCTIONS =====
+function setQuickFilter(filter) {
+  const today = new Date();
+  let startDate = new Date();
+  const endDate = today;
+
+  // Update active state of filter pills
+  updateActiveFilterPill(filter);
+
+  // Handle custom filter differently
+  if (filter === "custom") {
+    showCustomDateInputs();
+    currentFilter = filter;
+    return;
+  }
+
+  // Hide custom date range for preset filters
+  hideCustomDateInputs();
+
+  // Calculate start date based on filter
+  switch (filter) {
+    case "today":
+      startDate = new Date(today);
+      document.getElementById("period-select").value = "day";
+      break;
+    case "7days":
+      startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - 7);
+      document.getElementById("period-select").value = "week";
+      break;
+    case "30days":
+      startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - 30);
+      document.getElementById("period-select").value = "month";
+      break;
+    case "year":
+      startDate = new Date(today.getFullYear(), 0, 1);
+      document.getElementById("period-select").value = "year";
+      break;
+    default:
+      startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - 30);
+  }
+
+  // Update date inputs
+  document.getElementById("start-date").value = formatDateForInput(startDate);
+  document.getElementById("end-date").value = formatDateForInput(endDate);
+
+  // Save current filter
+  currentFilter = filter;
+
+  // Load reports with new date range
+  loadReports();
+}
+
+function updateActiveFilterPill(activeFilter) {
+  // Remove active class from all pills
+  const pills = document.querySelectorAll(".filter-pill");
+  pills.forEach((pill) => {
+    pill.classList.remove("active");
+  });
+
+  // Add active class to selected pill
+  const activePill = document.querySelector(
+    `.filter-pill[data-filter="${activeFilter}"]`
+  );
+  if (activePill) {
+    activePill.classList.add("active");
+  }
+}
+
+function showCustomDateInputs() {
+  const customRange = document.getElementById("custom-date-range");
+  if (customRange) {
+    customRange.style.display = "flex";
+  }
+}
+
+function hideCustomDateInputs() {
+  const customRange = document.getElementById("custom-date-range");
+  if (customRange) {
+    customRange.style.display = "none";
+  }
+}
+
+function formatDateForInput(date) {
+  return date.toISOString().split("T")[0];
+}
 
 // ===== DATA LOADING =====
 async function loadReports() {
@@ -95,20 +185,19 @@ function updateKPICards() {
   document.getElementById("sales-total").textContent = formatCurrency(
     sales.total || 0
   );
-  document.getElementById("sales-period").textContent = getPeriodText(period);
+  document.getElementById("sales-period").textContent = getFilterText();
 
   // Update expenses
   document.getElementById("expenses-total").textContent = formatCurrency(
     expenses.total || 0
   );
-  document.getElementById("expenses-period").textContent =
-    getPeriodText(period);
+  document.getElementById("expenses-period").textContent = getFilterText();
 
   // Update profit
   document.getElementById("profit-total").textContent = formatCurrency(
     profit.total || 0
   );
-  document.getElementById("profit-period").textContent = getPeriodText(period);
+  document.getElementById("profit-period").textContent = getFilterText();
 
   // Update receivables
   document.getElementById("receivables-total").textContent = formatCurrency(
@@ -155,8 +244,12 @@ function updateTables() {
 
 // ===== CHART FUNCTIONS =====
 function initializeCharts() {
-  // Sales Chart
+  // Sales Chart - Maroon Theme
   const salesCtx = document.getElementById("sales-chart").getContext("2d");
+  const salesGradient = salesCtx.createLinearGradient(0, 0, 0, 280);
+  salesGradient.addColorStop(0, "rgba(139, 21, 56, 0.3)");
+  salesGradient.addColorStop(1, "rgba(139, 21, 56, 0.02)");
+
   salesChart = new Chart(salesCtx, {
     type: "line",
     data: {
@@ -165,19 +258,28 @@ function initializeCharts() {
         {
           label: "Sales",
           data: [],
-          borderColor: "#10b981",
-          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          borderColor: "#8b1538",
+          backgroundColor: salesGradient,
           borderWidth: 3,
           fill: true,
           tension: 0.4,
+          pointBackgroundColor: "#8b1538",
+          pointBorderColor: "#ffffff",
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
         },
       ],
     },
     options: getChartOptions("Sales Trend"),
   });
 
-  // Profit Chart
+  // Profit Chart - Maroon Theme (lighter shade)
   const profitCtx = document.getElementById("profit-chart").getContext("2d");
+  const profitGradient = profitCtx.createLinearGradient(0, 0, 0, 280);
+  profitGradient.addColorStop(0, "rgba(169, 29, 69, 0.3)");
+  profitGradient.addColorStop(1, "rgba(169, 29, 69, 0.02)");
+
   profitChart = new Chart(profitCtx, {
     type: "line",
     data: {
@@ -186,19 +288,25 @@ function initializeCharts() {
         {
           label: "Profit",
           data: [],
-          borderColor: "#3b82f6",
-          backgroundColor: "rgba(59, 130, 246, 0.1)",
+          borderColor: "#a91d45",
+          backgroundColor: profitGradient,
           borderWidth: 3,
           fill: true,
           tension: 0.4,
+          pointBackgroundColor: "#a91d45",
+          pointBorderColor: "#ffffff",
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
         },
       ],
     },
     options: getChartOptions("Profit Trend"),
   });
 
-  // Growth Chart
+  // Growth Chart - Maroon Theme with gradient bars
   const growthCtx = document.getElementById("growth-chart").getContext("2d");
+
   growthChart = new Chart(growthCtx, {
     type: "bar",
     data: {
@@ -208,12 +316,14 @@ function initializeCharts() {
           label: "Growth",
           data: [0, 0, 0],
           backgroundColor: [
-            "rgba(139, 92, 246, 0.8)",
-            "rgba(16, 185, 129, 0.8)",
-            "rgba(59, 130, 246, 0.8)",
+            "rgba(139, 21, 56, 0.85)",
+            "rgba(169, 29, 69, 0.85)",
+            "rgba(109, 16, 41, 0.85)",
           ],
-          borderColor: ["#8b5cf6", "#10b981", "#3b82f6"],
+          borderColor: ["#8b1538", "#a91d45", "#6d1029"],
           borderWidth: 2,
+          borderRadius: 8,
+          borderSkipped: false,
         },
       ],
     },
@@ -252,6 +362,10 @@ function getChartOptions(title) {
   return {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      intersect: false,
+      mode: "index",
+    },
     plugins: {
       legend: {
         display: false,
@@ -259,29 +373,50 @@ function getChartOptions(title) {
       title: {
         display: false,
       },
+      tooltip: {
+        backgroundColor: "rgba(139, 21, 56, 0.9)",
+        titleColor: "#ffffff",
+        bodyColor: "#ffffff",
+        borderColor: "#8b1538",
+        borderWidth: 1,
+        cornerRadius: 8,
+        padding: 12,
+        displayColors: false,
+      },
     },
     scales: {
       y: {
         beginAtZero: true,
+        border: {
+          display: false,
+        },
         grid: {
-          color: "rgba(0, 0, 0, 0.1)",
+          color: "rgba(139, 21, 56, 0.08)",
+          drawBorder: false,
         },
         ticks: {
+          color: "#718096",
+          font: {
+            size: 11,
+          },
           callback: function (value) {
             return formatCurrency(value);
           },
         },
       },
       x: {
-        grid: {
-          color: "rgba(0, 0, 0, 0.1)",
+        border: {
+          display: false,
         },
-      },
-    },
-    elements: {
-      point: {
-        radius: 4,
-        hoverRadius: 6,
+        grid: {
+          display: false,
+        },
+        ticks: {
+          color: "#718096",
+          font: {
+            size: 11,
+          },
+        },
       },
     },
   };
@@ -298,29 +433,50 @@ function getGrowthChartOptions(title) {
       title: {
         display: false,
       },
+      tooltip: {
+        backgroundColor: "rgba(139, 21, 56, 0.9)",
+        titleColor: "#ffffff",
+        bodyColor: "#ffffff",
+        borderColor: "#8b1538",
+        borderWidth: 1,
+        cornerRadius: 8,
+        padding: 12,
+        displayColors: false,
+      },
     },
     scales: {
       y: {
         beginAtZero: true,
+        border: {
+          display: false,
+        },
         grid: {
-          color: "rgba(0, 0, 0, 0.1)",
+          color: "rgba(139, 21, 56, 0.08)",
+          drawBorder: false,
         },
         ticks: {
+          color: "#718096",
+          font: {
+            size: 11,
+          },
           callback: function (value) {
-            return value; // Show numbers without currency formatting
+            return value;
           },
         },
       },
       x: {
-        grid: {
-          color: "rgba(0, 0, 0, 0.1)",
+        border: {
+          display: false,
         },
-      },
-    },
-    elements: {
-      point: {
-        radius: 4,
-        hoverRadius: 6,
+        grid: {
+          display: false,
+        },
+        ticks: {
+          color: "#718096",
+          font: {
+            size: 11,
+          },
+        },
       },
     },
   };
@@ -477,21 +633,42 @@ function getPeriodText(period) {
   return periodMap[period] || "This Month";
 }
 
+function getFilterText() {
+  const filterMap = {
+    today: "Today",
+    "7days": "Last 7 Days",
+    "30days": "Last 30 Days",
+    year: "This Year",
+    custom: "Custom Range",
+  };
+  return filterMap[currentFilter] || "Last 30 Days";
+}
+
 // ===== EVENT LISTENERS =====
 document
   .getElementById("period-select")
   .addEventListener("change", loadReports);
-document.getElementById("start-date").addEventListener("change", loadReports);
-document.getElementById("end-date").addEventListener("change", loadReports);
+document.getElementById("start-date").addEventListener("change", function () {
+  // If user manually changes date, switch to custom filter
+  if (currentFilter !== "custom") {
+    setQuickFilter("custom");
+  }
+  loadReports();
+});
+document.getElementById("end-date").addEventListener("change", function () {
+  // If user manually changes date, switch to custom filter
+  if (currentFilter !== "custom") {
+    setQuickFilter("custom");
+  }
+  loadReports();
+});
 
 // ===== EXPORT FUNCTIONS =====
 function exportToPDF() {
-  // This would implement PDF export functionality
   showInfo("PDF export feature coming soon!");
 }
 
 function exportToExcel() {
-  // This would implement Excel export functionality
   showInfo("Excel export feature coming soon!");
 }
 
@@ -506,14 +683,12 @@ function setupBackButton() {
   if (backBtn) {
     backBtn.addEventListener("click", function (e) {
       e.preventDefault();
-      // Check if we came from home page
       const urlParams = new URLSearchParams(window.location.search);
       const from = urlParams.get("from");
 
       if (from === "home") {
         window.location.href = "home.html";
       } else {
-        // Default to home page
         window.location.href = "home.html";
       }
     });

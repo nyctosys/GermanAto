@@ -172,7 +172,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 </div>
                 <div class="form-group">
                     <label for="part-description-${partCounter}">Description *</label>
-                    <input type="text" id="part-description-${partCounter}" name="parts[${partCounter}][description]" required>
+                    <input type="text" id="part-description-${partCounter}" name="parts[${partCounter}][description]" required readonly>
                 </div>
                 <div class="form-group">
                     <label for="part-number-${partCounter}">Part Number</label>
@@ -496,6 +496,51 @@ document.addEventListener("DOMContentLoaded", function () {
     // Price-related fields removed - no totals needed
 
     try {
+      // Update customer record if a customer was selected
+      if (selectedCustomerId) {
+        try {
+          const customerData = {
+            name: repairOrderData.customer_name,
+            phone: repairOrderData.customer_phone,
+            address: repairOrderData.customer_address,
+          };
+          await APIHelper.put(
+            `/api/customers/${selectedCustomerId}`,
+            customerData
+          );
+          console.log("Customer updated successfully");
+        } catch (error) {
+          console.error("Failed to update customer:", error);
+          // Continue with repair order creation even if customer update fails
+        }
+      }
+
+      // Update car record if a car was selected
+      if (selectedCarId) {
+        try {
+          // Parse make and model from made field (user may have entered both)
+          const makeModelParts = repairOrderData.customer_made.split(" ");
+          const make = makeModelParts[0] || "";
+          const model = makeModelParts.slice(1).join(" ") || "";
+
+          const carData = {
+            make: make,
+            model: model,
+            plate_no: repairOrderData.customer_reg_no,
+            mileage: repairOrderData.customer_mileage || null,
+            vin: repairOrderData.customer_vin || null,
+            color: repairOrderData.customer_color || null,
+            chasis_no: repairOrderData.customer_chasis || null,
+            customer_id: selectedCustomerId || null,
+          };
+          await APIHelper.put(`/api/cars/${selectedCarId}`, carData);
+          console.log("Car updated successfully");
+        } catch (error) {
+          console.error("Failed to update car:", error);
+          // Continue with repair order creation even if car update fails
+        }
+      }
+
       let response;
       let result;
 
@@ -1057,6 +1102,11 @@ document.addEventListener("DOMContentLoaded", function () {
     customerInput.addEventListener("click", function () {
       customerDropdown.style.display = "block";
       this.readOnly = false;
+      // Add dropdown-active class to parent section-card
+      const sectionCard = this.closest(".section-card");
+      if (sectionCard) {
+        sectionCard.classList.add("dropdown-active");
+      }
     });
 
     // Hide dropdown when clicking outside
@@ -1066,6 +1116,11 @@ document.addEventListener("DOMContentLoaded", function () {
         !customerDropdown.contains(e.target)
       ) {
         customerDropdown.style.display = "none";
+        // Remove dropdown-active class from parent section-card
+        const sectionCard = customerInput.closest(".section-card");
+        if (sectionCard) {
+          sectionCard.classList.remove("dropdown-active");
+        }
       }
     });
 
@@ -1095,6 +1150,12 @@ document.addEventListener("DOMContentLoaded", function () {
         customerInput.readOnly = false;
         customerInput.removeAttribute("readonly");
 
+        // Remove dropdown-active class from parent section-card
+        const sectionCard = customerInput.closest(".section-card");
+        if (sectionCard) {
+          sectionCard.classList.remove("dropdown-active");
+        }
+
         // Trigger customer change
         handleCustomerChange(parseInt(selectedValue));
       }
@@ -1109,6 +1170,11 @@ document.addEventListener("DOMContentLoaded", function () {
       carInput.addEventListener("click", function () {
         carDropdown.style.display = "block";
         this.readOnly = false;
+        // Add dropdown-active class to parent section-card
+        const sectionCard = this.closest(".section-card");
+        if (sectionCard) {
+          sectionCard.classList.add("dropdown-active");
+        }
       });
 
       // Handle search functionality for cars
@@ -1137,6 +1203,12 @@ document.addEventListener("DOMContentLoaded", function () {
           carInput.readOnly = false;
           carInput.removeAttribute("readonly");
 
+          // Remove dropdown-active class from parent section-card
+          const sectionCard = carInput.closest(".section-card");
+          if (sectionCard) {
+            sectionCard.classList.remove("dropdown-active");
+          }
+
           // Trigger car change
           handleCarChange(parseInt(selectedValue));
         }
@@ -1152,6 +1224,11 @@ document.addEventListener("DOMContentLoaded", function () {
       workerInput.addEventListener("click", function () {
         workerDropdown.style.display = "block";
         this.readOnly = false;
+        // Add dropdown-active class to parent section-card
+        const sectionCard = this.closest(".section-card");
+        if (sectionCard) {
+          sectionCard.classList.add("dropdown-active");
+        }
       });
 
       // Handle search functionality for workers
@@ -1180,6 +1257,12 @@ document.addEventListener("DOMContentLoaded", function () {
           workerInput.readOnly = false;
           workerInput.removeAttribute("readonly");
 
+          // Remove dropdown-active class from parent section-card
+          const sectionCard = workerInput.closest(".section-card");
+          if (sectionCard) {
+            sectionCard.classList.remove("dropdown-active");
+          }
+
           // Trigger worker change
           handleWorkerChange(parseInt(selectedValue));
         }
@@ -1193,6 +1276,11 @@ document.addEventListener("DOMContentLoaded", function () {
         !customerDropdown.contains(e.target)
       ) {
         customerDropdown.style.display = "none";
+        // Remove dropdown-active class from parent section-card
+        const sectionCard = customerInput.closest(".section-card");
+        if (sectionCard) {
+          sectionCard.classList.remove("dropdown-active");
+        }
       }
       if (
         carInput &&
@@ -1201,6 +1289,11 @@ document.addEventListener("DOMContentLoaded", function () {
         !carDropdown.contains(e.target)
       ) {
         carDropdown.style.display = "none";
+        // Remove dropdown-active class from parent section-card
+        const sectionCard = carInput.closest(".section-card");
+        if (sectionCard) {
+          sectionCard.classList.remove("dropdown-active");
+        }
       }
       if (
         workerInput &&
@@ -1209,6 +1302,11 @@ document.addEventListener("DOMContentLoaded", function () {
         !workerDropdown.contains(e.target)
       ) {
         workerDropdown.style.display = "none";
+        // Remove dropdown-active class from parent section-card
+        const sectionCard = workerInput.closest(".section-card");
+        if (sectionCard) {
+          sectionCard.classList.remove("dropdown-active");
+        }
       }
     });
   }

@@ -151,9 +151,19 @@ def create_invoice(current_user=None):
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
+        # #region agent log - Debug: Log incoming invoice data
+        logger.info(f"[DEBUG] Received invoice data: items={len(data.get('items', []))}, labours={len(data.get('labours', []))}")
+        logger.info(f"[DEBUG] Items detail: {data.get('items', [])}")
+        logger.info(f"[DEBUG] Labours detail: {data.get('labours', [])}")
+        logger.info(f"[DEBUG] Customer phone: {data.get('customer_phone')}")
+        # #endregion
+        
         # Validate input data
         validation_errors = validate_invoice_data(data)
         if validation_errors:
+            # #region agent log - Debug: Log validation errors
+            logger.error(f"[DEBUG] Validation failed with errors: {validation_errors}")
+            # #endregion
             return jsonify({'error': 'Validation failed', 'details': validation_errors}), 400
         
         # Extract and clean data
@@ -583,7 +593,15 @@ def search_invoices(current_user=None):
         
         # Add status filter if provided
         if status:
-            search_conditions.append(Invoice.status == status)
+            # Normalize status: handle both "partially paid" and "partially_paid"
+            # Check both formats since database might have either
+            if status.lower() == 'partially paid':
+                # Use OR condition to match both "partially paid" and "partially_paid"
+                normalized_status = status.replace(' ', '_')
+                search_conditions.append(db.or_(Invoice.status == normalized_status, Invoice.status == status))
+            else:
+                normalized_status = status
+                search_conditions.append(Invoice.status == normalized_status)
         # Add type_of filter if provided
         if type_of:
             search_conditions.append(Invoice.type_of.ilike(type_of))

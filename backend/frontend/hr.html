@@ -8,17 +8,39 @@
     <script src="../static/js/notification-utils.js"></script>
   </head>
   <body>
-    <a href="#" id="back-btn" class="back-btn">
-      <span>Back</span>
-    </a>
-
-    <div class="container">
-      <div class="header">
-        <h1>HR Management</h1>
-        <p>Manage worker information and roles</p>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="../static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1>HR Management</h1>
+            <p>Manage worker information and roles</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
+        </div>
       </div>
+    </header>
 
-      <div class="main-content">
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="container">
         <div class="controls-section">
           <button class="add-btn" onclick="openAddWorkerModal()">
             <span>+</span>
@@ -79,7 +101,8 @@
           </table>
         </div>
       </div>
-    </div>
+      </div>
+    </main>
 
     <!-- Add/Edit Worker Modal -->
     <div id="workerModal" class="modal">
@@ -267,6 +290,11 @@
         </div>
       </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
 
     <script src="../static/js/notification-utils.js"></script>
     <script src="../static/js/auth_jwt.js"></script>
