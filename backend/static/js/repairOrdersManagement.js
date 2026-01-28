@@ -97,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let html = '<div class="results-container">';
       html += '<div class="results-column repair-orders-column">';
-      html += `<h3>🔧 Repair Orders (${repairOrders.length})</h3>`;
+      html += `<h3>Repair Orders (${repairOrders.length})</h3>`;
 
       html += repairOrders
         .map((repairOrder) => {

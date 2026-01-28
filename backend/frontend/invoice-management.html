@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Invoice Management - GermanATO</title>
+    <link rel="stylesheet" href="static/css/theme.css" />
     <link rel="stylesheet" href="static/css/search.css" />
+    <script src="static/js/theme.js"></script>
   </head>
   <body>
     <!-- Top Navigation Header -->
@@ -88,6 +90,34 @@
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date Filter Section -->
+      <div class="date-filter-section">
+        <div class="date-filter-label">Filter by Date:</div>
+        <div class="date-filter-buttons">
+          <button class="date-filter-btn" id="filter-today">Today</button>
+          <button class="date-filter-btn" id="filter-this-week">This Week</button>
+          <button class="date-filter-btn" id="filter-this-month">This Month</button>
+          <button class="date-filter-btn" id="filter-this-year">This Year</button>
+          <button class="date-filter-btn" id="filter-custom">Custom Range</button>
+          <button class="date-filter-btn date-filter-clear" id="clear-date-filter" style="display: none;">Clear Date</button>
+        </div>
+        <div class="custom-range-container" id="custom-range-container" style="display: none;">
+          <div class="custom-range-inputs">
+            <div class="date-input-group">
+              <label for="date-from">From Date</label>
+              <input type="date" id="date-from" class="date-input" />
+            </div>
+            <div class="date-input-group">
+              <label for="date-to">To Date</label>
+              <input type="date" id="date-to" class="date-input" />
+            </div>
+            <div class="custom-range-actions">
+              <button class="date-filter-btn apply-btn" id="apply-custom-range">Apply</button>
+            </div>
           </div>
         </div>
       </div>

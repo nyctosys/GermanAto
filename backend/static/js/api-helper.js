@@ -50,9 +50,14 @@ class APIHelper {
         const errorData = await response
           .json()
           .catch(() => ({ error: "Unknown error" }));
-        throw new Error(
-          errorData.error || `HTTP ${response.status}: ${response.statusText}`
-        );
+        
+        // Include validation details if available
+        let errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+        if (errorData.details && Array.isArray(errorData.details) && errorData.details.length > 0) {
+          errorMessage += '\n\nDetails:\n' + errorData.details.join('\n');
+        }
+        
+        throw new Error(errorMessage);
       }
 
       // Parse and return JSON response

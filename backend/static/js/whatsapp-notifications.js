@@ -200,12 +200,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function getStatusIcon(status) {
     const icons = {
-      sent: "📤",
-      delivered: "✅",
-      failed: "❌",
-      pending: "⏳",
+      sent: "",
+      delivered: "",
+      failed: "",
+      pending: "",
     };
-    return icons[status] || "📱";
+    return icons[status] || "";
   }
 
   function escapeHtml(text) {
@@ -230,7 +230,7 @@ document.addEventListener("DOMContentLoaded", function () {
     errorDiv.className = "error-notification";
     errorDiv.innerHTML = `
       <div class="error-content">
-        <span class="error-icon">⚠️</span>
+        <span class="error-icon"></span>
         <span class="error-message">${message}</span>
         <button class="error-close" onclick="this.parentElement.parentElement.remove()">×</button>
       </div>

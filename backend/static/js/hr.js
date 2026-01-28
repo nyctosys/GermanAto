@@ -102,22 +102,40 @@ async function loadWorkers() {
   }
 }
 
-// Load departments for filter
+// Load departments for filter and form dropdown
 async function loadDepartments() {
   try {
-    const data = await APIHelper.get("/api/workers/departments");
-    if (!data) return;
+    // Load from settings API WITHOUT sync to prevent recreating old departments
+    const data = await APIHelper.get("/api/settings/departments");
+    if (!data || !data.departments) return;
 
+    const departments = data.departments;
+
+    // Populate filter dropdown
     const departmentFilter = document.getElementById("departmentFilter");
     if (departmentFilter) {
       // Clear existing options except the first one
       departmentFilter.innerHTML = '<option value="">All Departments</option>';
 
-      data.departments.forEach((dept) => {
+      departments.forEach((dept) => {
         const option = document.createElement("option");
-        option.value = dept;
-        option.textContent = dept;
+        option.value = dept.name;
+        option.textContent = dept.name;
         departmentFilter.appendChild(option);
+      });
+    }
+
+    // Populate form dropdown
+    const departmentSelect = document.getElementById("department");
+    if (departmentSelect) {
+      // Clear existing options except the first one
+      departmentSelect.innerHTML = '<option value="">Select Department</option>';
+
+      departments.forEach((dept) => {
+        const option = document.createElement("option");
+        option.value = dept.name;
+        option.textContent = dept.name;
+        departmentSelect.appendChild(option);
       });
     }
   } catch (error) {
@@ -160,19 +178,16 @@ function renderWorkersTable() {
           <td>
             <div class="action-buttons">
               <a href="/hr/${worker.id}" class="action-btn view-btn">
-                <span>👁️</span>
                 View
               </a>
               <button class="action-btn edit-btn" onclick="editWorker(${
                 worker.id
               })">
-                <span>✏️</span>
                 Edit
               </button>
               <button class="action-btn delete-btn" onclick="deleteWorker(${
                 worker.id
               })">
-                <span>🗑️</span>
                 Delete
               </button>
             </div>
@@ -243,6 +258,9 @@ function openAddWorkerModal() {
   const today = new Date().toISOString().split("T")[0];
   document.getElementById("hireDate").value = today;
 
+  // Ensure departments are loaded
+  loadDepartments();
+
   showModal("workerModal");
 }
 
@@ -254,12 +272,15 @@ function closeWorkerModal() {
 }
 
 // Edit worker
-function editWorker(workerId) {
+async function editWorker(workerId) {
   const worker = workers.find((w) => w.id === workerId);
   if (!worker) return;
 
   currentWorkerId = workerId;
   document.getElementById("modalTitle").textContent = "Edit Worker";
+
+  // Ensure departments are loaded before setting the value
+  await loadDepartments();
 
   // Populate form with worker data
   document.getElementById("employeeId").value = worker.employee_id;
@@ -272,7 +293,27 @@ function editWorker(workerId) {
   document.getElementById("dateOfBirth").value = worker.date_of_birth;
   document.getElementById("hireDate").value = worker.hire_date;
   document.getElementById("position").value = worker.position;
-  document.getElementById("department").value = worker.department;
+  
+  // Set department value - if it doesn't exist in dropdown, add it as an option
+  const departmentSelect = document.getElementById("department");
+  const departmentValue = worker.department;
+  if (departmentSelect) {
+    // Check if the value exists in the dropdown
+    const optionExists = Array.from(departmentSelect.options).some(
+      opt => opt.value === departmentValue
+    );
+    
+    if (!optionExists && departmentValue) {
+      // Add the department as an option if it doesn't exist (for legacy data)
+      const option = document.createElement("option");
+      option.value = departmentValue;
+      option.textContent = departmentValue + " (Legacy)";
+      departmentSelect.appendChild(option);
+    }
+    
+    departmentSelect.value = departmentValue;
+  }
+  
   document.getElementById("salary").value = worker.salary || "";
   document.getElementById("status").value = worker.status;
   document.getElementById("emergencyContactName").value =

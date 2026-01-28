@@ -224,6 +224,33 @@ body {
   height: 18px;
 }
 
+.history-btn {
+  background: linear-gradient(135deg, #17a2b8 0%, #0c5460 100%);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.history-btn:hover {
+  background: linear-gradient(135deg, #138496 0%, #0a4650 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.history-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 .search-section {
   display: flex;
   gap: 10px;

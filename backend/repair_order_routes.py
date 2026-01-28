@@ -4,7 +4,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import joinedload
 from datetime import datetime
 import json
-from repair_order_inventory_utils import process_repair_order_parts, handle_repair_order_edit_inventory
+from repair_order_inventory_utils import process_repair_order_parts, handle_repair_order_edit_inventory, restore_inventory_for_deleted_repair_order
 from jwt_auth import login_required, role_required, admin_required
 
 repair_order_bp = Blueprint('repair_order', __name__)
@@ -207,7 +207,7 @@ def create_repair_order(current_user=None):
         
         # Process parts
         if data.get('parts'):
-            success, processed_parts, inventory_errors = process_repair_order_parts(data['parts'])
+            success, processed_parts, inventory_errors = process_repair_order_parts(data['parts'], repair_order.id)
             
             if not success:
                 db.session.rollback()
@@ -362,7 +362,7 @@ def update_repair_order(repair_order_id, current_user=None):
                 })
             
             # Handle inventory changes
-            success, inventory_errors = handle_repair_order_edit_inventory(current_parts_data, data['parts'])
+            success, inventory_errors = handle_repair_order_edit_inventory(current_parts_data, data['parts'], repair_order_id)
             
             if not success:
                 db.session.rollback()
@@ -429,13 +429,13 @@ def delete_repair_order(repair_order_id, current_user=None):
         # Get parts before deletion to restore inventory
         parts_to_restore = RepairOrderPart.query.filter_by(repair_order_id=repair_order_id).all()
         
-        # Restore inventory for all parts
-        for part in parts_to_restore:
-            if part.inventory_id and part.quantity > 0:
-                from models import Inventory
-                inventory_item = Inventory.query.get(part.inventory_id)
-                if inventory_item:
-                    inventory_item.quantity += part.quantity
+        # Restore inventory for all parts using the utility function (logs transactions)
+        if parts_to_restore:
+            success, errors = restore_inventory_for_deleted_repair_order(parts_to_restore, repair_order_id)
+            if errors:
+                # Log errors but continue with deletion
+                for error in errors:
+                    print(f"Warning during inventory restore: {error}")
         
         # Delete related parts and labour
         RepairOrderPart.query.filter_by(repair_order_id=repair_order_id).delete()

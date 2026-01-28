@@ -191,7 +191,7 @@ body {
   gap: 32px;
   justify-content: center;
   flex-wrap: wrap;
-  max-width: 800px;
+  max-width: 1200px;
 }
 
 .nav-card {
@@ -338,6 +338,14 @@ body {
   animation-delay: 0.2s;
 }
 
+.nav-card:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.nav-card:nth-child(4) {
+  animation-delay: 0.4s;
+}
+
 /* ===== RESPONSIVE DESIGN ===== */
 @media screen and (max-width: 768px) {
   .header-container {
@@ -470,3 +478,4 @@ body {
   outline: 2px solid var(--primary-maroon);
   outline-offset: 2px;
 }
+

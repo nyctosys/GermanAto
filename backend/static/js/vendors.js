@@ -175,17 +175,17 @@ function renderVendorsTable(vendorsList) {
                     <button class="action-btn view-btn" onclick="viewVendor(${
                       vendor.id
                     })" title="View Details">
-                        👁️
+                        View
                     </button>
                     <button class="action-btn edit-btn" onclick="editVendor(${
                       vendor.id
                     })" title="Edit">
-                        ✏️
+                        Edit
                     </button>
                     <button class="action-btn delete-btn" onclick="deleteVendor(${
                       vendor.id
                     })" title="Delete">
-                        🗑️
+                        Delete
                     </button>
                 </div>
             </td>

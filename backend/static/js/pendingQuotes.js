@@ -30,11 +30,79 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnPending = document.getElementById("show-pending");
   const btnApproved = document.getElementById("show-approved");
 
+  // Date filter elements
+  const filterToday = document.getElementById("filter-today");
+  const filterThisWeek = document.getElementById("filter-this-week");
+  const filterThisMonth = document.getElementById("filter-this-month");
+  const filterThisYear = document.getElementById("filter-this-year");
+  const filterCustom = document.getElementById("filter-custom");
+  const clearDateFilter = document.getElementById("clear-date-filter");
+  const customRangeContainer = document.getElementById("custom-range-container");
+  const dateFromInput = document.getElementById("date-from");
+  const dateToInput = document.getElementById("date-to");
+  const applyCustomRange = document.getElementById("apply-custom-range");
+
   let currentStatus = "all";
   let currentKeywordQuery = "";
   let currentIdQuery = "";
+  let currentDateFrom = "";
+  let currentDateTo = "";
 
-  async function loadQuotes(status, keywordQuery = "", idQuery = "") {
+  // Date range calculation functions
+  function formatDate(date) {
+    return date.toISOString().split('T')[0];
+  }
+
+  function getTodayRange() {
+    const today = new Date();
+    const dateStr = formatDate(today);
+    return { from: dateStr, to: dateStr };
+  }
+
+  function getThisWeekRange() {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    // Calculate Monday (start of week) - if Sunday (0), go back 6 days
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    // Calculate Sunday (end of week)
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { from: formatDate(monday), to: formatDate(sunday) };
+  }
+
+  function getThisMonthRange() {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { from: formatDate(firstDay), to: formatDate(lastDay) };
+  }
+
+  function getThisYearRange() {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), 0, 1);
+    const lastDay = new Date(today.getFullYear(), 11, 31);
+    return { from: formatDate(firstDay), to: formatDate(lastDay) };
+  }
+
+  function setActiveDateButton(activeBtn) {
+    [filterToday, filterThisWeek, filterThisMonth, filterThisYear, filterCustom].forEach((btn) => {
+      btn.classList.remove("active");
+    });
+    if (activeBtn) {
+      activeBtn.classList.add("active");
+    }
+  }
+
+  function updateDateFilterVisibility() {
+    if (currentDateFrom || currentDateTo) {
+      clearDateFilter.style.display = "inline-block";
+    } else {
+      clearDateFilter.style.display = "none";
+    }
+  }
+
+  async function loadQuotes(status, keywordQuery = "", idQuery = "", dateFrom = "", dateTo = "") {
     resultsDiv.innerHTML = "<p>Loading...</p>";
     try {
       let url = `/api/search?type=quote`;
@@ -52,6 +120,14 @@ document.addEventListener("DOMContentLoaded", () => {
       // Add ID search if provided
       if (idQuery) {
         url += `&id=${encodeURIComponent(idQuery)}`;
+      }
+
+      // Add date range filter if provided
+      if (dateFrom) {
+        url += `&date_from=${encodeURIComponent(dateFrom)}`;
+      }
+      if (dateTo) {
+        url += `&date_to=${encodeURIComponent(dateTo)}`;
       }
 
       const data = await APIHelper.get(url);
@@ -72,7 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       let html = '<div class="results-container">';
       html += '<div class="results-column quotes-column">';
-      html += `<h3>📋 ${
+      html += `<h3>${
         status.charAt(0).toUpperCase() + status.slice(1)
       } Quotes (${quotes.length})</h3>`;
       html += quotes
@@ -226,7 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
       clearSearchBtn.style.display = "none";
     }
 
-    loadQuotes(currentStatus, keywordQuery, idQuery);
+    loadQuotes(currentStatus, keywordQuery, idQuery, currentDateFrom, currentDateTo);
   }
 
   function clearSearch() {
@@ -235,7 +311,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentKeywordQuery = "";
     currentIdQuery = "";
     clearSearchBtn.style.display = "none";
-    loadQuotes(currentStatus, "", "");
+    loadQuotes(currentStatus, "", "", currentDateFrom, currentDateTo);
   }
 
   function setActiveButton(activeBtn) {
@@ -266,19 +342,98 @@ document.addEventListener("DOMContentLoaded", () => {
   btnAll.addEventListener("click", () => {
     currentStatus = "all";
     setActiveButton(btnAll);
-    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery);
+    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery, currentDateFrom, currentDateTo);
   });
 
   btnPending.addEventListener("click", () => {
     currentStatus = "pending";
     setActiveButton(btnPending);
-    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery);
+    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery, currentDateFrom, currentDateTo);
   });
 
   btnApproved.addEventListener("click", () => {
     currentStatus = "approved";
     setActiveButton(btnApproved);
-    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery);
+    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery, currentDateFrom, currentDateTo);
+  });
+
+  // Date filter event listeners
+  filterToday.addEventListener("click", () => {
+    const range = getTodayRange();
+    currentDateFrom = range.from;
+    currentDateTo = range.to;
+    setActiveDateButton(filterToday);
+    updateDateFilterVisibility();
+    customRangeContainer.style.display = "none";
+    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery, currentDateFrom, currentDateTo);
+  });
+
+  filterThisWeek.addEventListener("click", () => {
+    const range = getThisWeekRange();
+    currentDateFrom = range.from;
+    currentDateTo = range.to;
+    setActiveDateButton(filterThisWeek);
+    updateDateFilterVisibility();
+    customRangeContainer.style.display = "none";
+    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery, currentDateFrom, currentDateTo);
+  });
+
+  filterThisMonth.addEventListener("click", () => {
+    const range = getThisMonthRange();
+    currentDateFrom = range.from;
+    currentDateTo = range.to;
+    setActiveDateButton(filterThisMonth);
+    updateDateFilterVisibility();
+    customRangeContainer.style.display = "none";
+    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery, currentDateFrom, currentDateTo);
+  });
+
+  filterThisYear.addEventListener("click", () => {
+    const range = getThisYearRange();
+    currentDateFrom = range.from;
+    currentDateTo = range.to;
+    setActiveDateButton(filterThisYear);
+    updateDateFilterVisibility();
+    customRangeContainer.style.display = "none";
+    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery, currentDateFrom, currentDateTo);
+  });
+
+  filterCustom.addEventListener("click", () => {
+    setActiveDateButton(filterCustom);
+    customRangeContainer.style.display = customRangeContainer.style.display === "none" ? "block" : "none";
+    // Pre-fill with current date range if set
+    if (currentDateFrom) {
+      dateFromInput.value = currentDateFrom;
+    }
+    if (currentDateTo) {
+      dateToInput.value = currentDateTo;
+    }
+  });
+
+  applyCustomRange.addEventListener("click", () => {
+    const dateFrom = dateFromInput.value;
+    const dateTo = dateToInput.value;
+    
+    if (!dateFrom && !dateTo) {
+      alert("Please select at least one date.");
+      return;
+    }
+    
+    currentDateFrom = dateFrom;
+    currentDateTo = dateTo;
+    updateDateFilterVisibility();
+    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery, currentDateFrom, currentDateTo);
+  });
+
+  clearDateFilter.addEventListener("click", () => {
+    currentDateFrom = "";
+    currentDateTo = "";
+    dateFromInput.value = "";
+    dateToInput.value = "";
+    setActiveDateButton(null);
+    updateDateFilterVisibility();
+    customRangeContainer.style.display = "none";
+    loadQuotes(currentStatus, currentKeywordQuery, currentIdQuery, "", "");
   });
 
   // Initial load

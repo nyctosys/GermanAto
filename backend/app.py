@@ -16,6 +16,7 @@ from expense_routes import expense_routes
 from cash_received_routes import cash_received_routes
 from vendor_routes import vendor_bp
 from hr_routes import hr_bp
+from settings_routes import settings_bp
 from flask_cors import CORS
 from flask_compress import Compress
 import webbrowser
@@ -99,6 +100,10 @@ app.register_blueprint(vendor_bp, url_prefix='')
 
 # Register the blueprint for HR routes
 app.register_blueprint(hr_bp, url_prefix='')
+
+# Register the blueprint for settings routes
+app.register_blueprint(settings_bp, url_prefix='/api')
+
 # Helper function to get the frontend directory
 def get_frontend_dir():
     return os.path.join(os.path.dirname(__file__), './frontend')
@@ -155,6 +160,15 @@ def serve_invoice_management():
 @app.route('/inventory.html')
 def serve_inventory():
     response = send_from_directory(get_frontend_dir(), 'inventory.html')
+    return response
+
+# Route to serve inventory-history.html page
+@app.route('/inventory-history.html')
+def serve_inventory_history():
+    response = send_from_directory(get_frontend_dir(), 'inventory-history.html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
     return response
 
 # Route to serve car.html page
@@ -238,6 +252,33 @@ def serve_finance_management():
 @app.route('/daily-expenses.html')
 def serve_daily_expenses():
     response = send_from_directory(get_frontend_dir(), 'daily-expenses.html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+# Route to serve major-expenses.html page
+@app.route('/major-expenses.html')
+def serve_major_expenses():
+    response = send_from_directory(get_frontend_dir(), 'major-expenses.html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+# Route to serve parts-expenses.html page
+@app.route('/parts-expenses.html')
+def serve_parts_expenses():
+    response = send_from_directory(get_frontend_dir(), 'parts-expenses.html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+# Route to serve settings.html page
+@app.route('/settings.html')
+def serve_settings():
+    response = send_from_directory(get_frontend_dir(), 'settings.html')
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'

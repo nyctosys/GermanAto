@@ -181,12 +181,15 @@ class AuthManager {
       reports: ["admin"],
       admin: ["admin"],
       "daily-expenses": ["admin", "accountant"],
+      "major-expenses": ["admin", "accountant"],
+      "parts-expenses": ["admin", "accountant"],
       vendors: ["admin", "accountant"],
       "vendor-detail": ["admin", "accountant"],
       hr: ["admin", "accountant"],
       "worker-detail": ["admin", "accountant"],
       "repair-order": ["admin", "accountant", "inventory_manager"],
       "repair-orders-management": ["admin", "accountant", "inventory_manager"],
+      settings: ["admin"],
     };
 
     return (

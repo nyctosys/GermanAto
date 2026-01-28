@@ -234,7 +234,7 @@ class PerformanceUtils {
                     flex-direction: column;
                     color: #dc3545;
                 ">
-                    <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+                    <div style="font-size: 2rem; margin-bottom: 1rem;"></div>
                     <div class="error-message" style="margin-bottom: 1rem;">${message}</div>
                     ${
                       retryCallback

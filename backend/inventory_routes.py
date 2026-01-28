@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, Inventory
+from models import db, Inventory, InventoryTransaction
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 import logging
@@ -7,6 +7,7 @@ import os
 import uuid
 from werkzeug.utils import secure_filename
 from jwt_auth import login_required, role_required, admin_required
+from inventory_transaction_utils import log_issue_out, log_received, log_adjustment, get_inventory_transactions
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -426,24 +427,41 @@ def update_inventory_item(item_id, current_user=None):
         # Extract and clean data
         name = str(data.get('name')).strip()
         category = str(data.get('category')).strip()
-        quantity = int(data.get('quantity', 0))
+        new_quantity = int(data.get('quantity', 0))
         price = float(data.get('price', 0))
         description = str(data.get('description', '')).strip() if data.get('description') else None
         location = str(data.get('location', '')).strip() if data.get('location') else None
         reorder_level = int(data.get('reorder_level', 5))
         reorder_quantity = int(data.get('reorder_quantity', 10))
         
+        # Store old quantity for transaction logging
+        old_quantity = item.quantity
+        
         # Update inventory item
         try:
             item.name = name
             item.category = category
-            item.quantity = quantity
+            item.quantity = new_quantity
             item.price = price
             item.description = description
             item.location = location
             item.reorder_level = reorder_level
             item.reorder_quantity = reorder_quantity
             item.image_path = image_path
+            
+            # Log adjustment if quantity changed
+            if old_quantity != new_quantity:
+                quantity_change = new_quantity - old_quantity
+                user_id = current_user.id if current_user else None
+                log_adjustment(
+                    inventory_id=item.id,
+                    quantity_change=quantity_change,
+                    previous_quantity=old_quantity,
+                    new_quantity=new_quantity,
+                    reference_description=f"Manual quantity adjustment - {item.name}",
+                    created_by=user_id,
+                    notes=f"Quantity changed from {old_quantity} to {new_quantity}"
+                )
             
             db.session.commit()
             
@@ -813,9 +831,24 @@ def deduct_inventory_items(current_user=None):
                         inventory_item = Inventory.query.filter_by(name=product_name).first()
                 
                 if inventory_item:
+                    # Store previous quantity for transaction logging
+                    previous_quantity = inventory_item.quantity
+                    
                     # Deduct the quantity (allow negative stock)
                     inventory_item.quantity -= quantity
                     inventory_item.updated_at = datetime.utcnow()
+                    
+                    # Log the transaction
+                    user_id = current_user.id if current_user else None
+                    log_issue_out(
+                        inventory_id=inventory_item.id,
+                        quantity=quantity,
+                        previous_quantity=previous_quantity,
+                        new_quantity=inventory_item.quantity,
+                        reference_description=f"Manual deduction - {product_name}",
+                        created_by=user_id,
+                        notes=data.get('notes')
+                    )
                     
                     deducted_items.append({
                         'product_name': product_name,
@@ -891,6 +924,18 @@ def restock_inventory(current_user=None):
         # Update the updated_at timestamp
         inventory_item.updated_at = datetime.utcnow()
         
+        # Log the restock transaction
+        user_id = current_user.id if current_user else None
+        log_received(
+            inventory_id=inventory_item.id,
+            quantity=quantity_to_add,
+            previous_quantity=old_quantity,
+            new_quantity=inventory_item.quantity,
+            reference_description=f"Inventory restock - {inventory_item.name}",
+            created_by=user_id,
+            notes=notes
+        )
+        
         # Log the restock operation
         logger.info(f"Restocked {quantity_to_add} units of {inventory_item.name} (ID: {product_id}). "
                    f"Old quantity: {old_quantity}, New quantity: {inventory_item.quantity}. "
@@ -918,4 +963,122 @@ def restock_inventory(current_user=None):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Unexpected error during restock: {e}")
-        return jsonify({'error': 'Internal server error'}), 500 
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+# ===== INVENTORY TRANSACTION HISTORY =====
+
+@inventory_bp.route('/inventory/transactions', methods=['GET'])
+@login_required
+def get_inventory_transactions_route(current_user=None):
+    """Get inventory transaction history with optional filters"""
+    try:
+        # Get query parameters
+        inventory_id = request.args.get('inventory_id', type=int)
+        transaction_type = request.args.get('transaction_type')
+        repair_order_id = request.args.get('repair_order_id', type=int)
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        # Limit per_page to prevent excessive memory usage
+        per_page = min(per_page, 200)
+        
+        # Parse date filters
+        date_from_obj = None
+        date_to_obj = None
+        
+        if date_from:
+            try:
+                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({'error': 'Invalid date_from format. Use YYYY-MM-DD'}), 400
+        
+        if date_to:
+            try:
+                # Add 1 day to include the entire day
+                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
+                date_to_obj = date_to_obj.replace(hour=23, minute=59, second=59)
+            except ValueError:
+                return jsonify({'error': 'Invalid date_to format. Use YYYY-MM-DD'}), 400
+        
+        # Validate transaction type
+        valid_types = ['issue_out', 'received', 'adjustment']
+        if transaction_type and transaction_type not in valid_types:
+            return jsonify({'error': f'Invalid transaction_type. Valid types: {valid_types}'}), 400
+        
+        # Get transactions using utility function
+        transactions, pagination_info = get_inventory_transactions(
+            inventory_id=inventory_id,
+            transaction_type=transaction_type,
+            repair_order_id=repair_order_id,
+            date_from=date_from_obj,
+            date_to=date_to_obj,
+            page=page,
+            per_page=per_page
+        )
+        
+        return jsonify({
+            'transactions': transactions,
+            'pagination': pagination_info
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching inventory transactions: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@inventory_bp.route('/inventory/transactions/<int:transaction_id>', methods=['GET'])
+@login_required
+def get_inventory_transaction_detail(transaction_id, current_user=None):
+    """Get details of a specific inventory transaction"""
+    try:
+        transaction = InventoryTransaction.query.get(transaction_id)
+        
+        if not transaction:
+            return jsonify({'error': 'Transaction not found'}), 404
+        
+        return jsonify(transaction.to_dict()), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching inventory transaction {transaction_id}: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@inventory_bp.route('/inventory/<int:item_id>/transactions', methods=['GET'])
+@login_required
+def get_item_transactions(item_id, current_user=None):
+    """Get transaction history for a specific inventory item"""
+    try:
+        # Verify item exists
+        item = Inventory.query.get(item_id)
+        if not item:
+            return jsonify({'error': 'Inventory item not found'}), 404
+        
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        per_page = min(per_page, 200)
+        
+        # Get transactions for this item
+        transactions, pagination_info = get_inventory_transactions(
+            inventory_id=item_id,
+            page=page,
+            per_page=per_page
+        )
+        
+        return jsonify({
+            'item': {
+                'id': item.id,
+                'name': item.name,
+                'part_number': item.part_number,
+                'current_quantity': item.quantity
+            },
+            'transactions': transactions,
+            'pagination': pagination_info
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching transactions for item {item_id}: {e}")
+        return jsonify({'error': 'Internal server error'}), 500

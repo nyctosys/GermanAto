@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GermanATO - HR Management</title>
+    <link rel="stylesheet" href="../static/css/theme.css" />
     <link rel="stylesheet" href="../static/css/hr.css" />
+    <script src="../static/js/theme.js"></script>
     <script src="../static/js/notification-utils.js"></script>
   </head>
   <body>
@@ -57,7 +59,7 @@
               placeholder="Search workers..."
             />
             <button class="search-btn" onclick="searchWorkers()">
-              <span>🔍</span>
+              Search
             </button>
           </div>
           <div class="filter-group">
@@ -204,12 +206,13 @@
               </div>
               <div class="form-group">
                 <label for="department">Department *</label>
-                <input
-                  type="text"
+                <select
                   id="department"
                   class="input-fields"
                   required
-                />
+                >
+                  <option value="">Select Department</option>
+                </select>
               </div>
             </div>
 
@@ -299,6 +302,7 @@
     <script src="../static/js/notification-utils.js"></script>
     <script src="../static/js/auth_jwt.js"></script>
     <script src="../static/js/api-helper.js"></script>
+    <script src="../static/js/phone-formatter.js"></script>
     <script src="../static/js/hr.js"></script>
   </body>
 </html>

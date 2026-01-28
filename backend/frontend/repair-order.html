@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Create Repair Order - GermanATO</title>
+    <link rel="stylesheet" href="static/css/theme.css" />
     <link rel="stylesheet" href="static/css/repair-order.css" />
+    <script src="static/js/theme.js"></script>
   </head>
   <body>
     <!-- Top Navigation Header -->
@@ -97,6 +99,18 @@
                 </button>
               </div>
             </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0; font-size: 1rem;">Customer Details</h3>
+                <button type="button" class="edit-btn" id="edit-customer-btn" title="Edit Customer" style="display: none;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  Edit
+                </button>
+              </div>
+            </div>
             <div class="form-group">
               <label for="customer-name">Customer Name *</label>
               <input
@@ -104,6 +118,7 @@
                 id="customer-name"
                 name="customer_name"
                 required
+                readonly
               />
             </div>
             <div class="form-group">
@@ -113,6 +128,7 @@
                 id="customer-phone"
                 name="customer_phone"
                 required
+                readonly
               />
             </div>
             <div class="form-group">
@@ -122,6 +138,7 @@
                 id="customer-address"
                 name="customer_address"
                 required
+                readonly
               />
             </div>
           </div>
@@ -184,6 +201,18 @@
                 </button>
               </div>
             </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0; font-size: 1rem;">Vehicle Details</h3>
+                <button type="button" class="edit-btn" id="edit-car-btn" title="Edit Vehicle" style="display: none;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  Edit
+                </button>
+              </div>
+            </div>
             <div class="form-group">
               <label for="reg-number">Registration Number *</label>
               <input
@@ -191,27 +220,28 @@
                 id="reg-number"
                 name="customer_reg_no"
                 required
+                readonly
               />
             </div>
             <div class="form-group">
               <label for="made">Make/Model *</label>
-              <input type="text" id="made" name="customer_made" required />
+              <input type="text" id="made" name="customer_made" required readonly />
             </div>
             <div class="form-group">
               <label for="mileage">Mileage</label>
-              <input type="text" id="mileage" name="customer_mileage" />
+              <input type="text" id="mileage" name="customer_mileage" readonly />
             </div>
             <div class="form-group">
               <label for="vin">VIN</label>
-              <input type="text" id="vin" name="customer_vin" />
+              <input type="text" id="vin" name="customer_vin" readonly />
             </div>
             <div class="form-group">
               <label for="color">Color</label>
-              <input type="text" id="color" name="customer_color" />
+              <input type="text" id="color" name="customer_color" readonly />
             </div>
             <div class="form-group">
               <label for="chasis">Chassis</label>
-              <input type="text" id="chasis" name="customer_chasis" />
+              <input type="text" id="chasis" name="customer_chasis" readonly />
             </div>
           </div>
         </div>
@@ -468,13 +498,22 @@
             />
           </div>
           <div class="form-group">
-            <label for="modal-car-make">Make/Model *</label>
+            <label for="modal-car-make">Make *</label>
             <input
               type="text"
               id="modal-car-make"
               name="modal-car-make"
-              placeholder="e.g., Toyota Corolla"
+              placeholder="e.g., Toyota"
               required
+            />
+          </div>
+          <div class="form-group">
+            <label for="modal-car-model">Model</label>
+            <input
+              type="text"
+              id="modal-car-model"
+              name="modal-car-model"
+              placeholder="e.g., Corolla"
             />
           </div>
           <div class="form-group">
@@ -486,8 +525,8 @@
             />
           </div>
           <div class="form-group">
-            <label for="modal-car-vin">VIN</label>
-            <input type="text" id="modal-car-vin" name="modal-car-vin" />
+            <label for="modal-car-vin">VIN *</label>
+            <input type="text" id="modal-car-vin" name="modal-car-vin" required maxlength="17" placeholder="17-character VIN" />
           </div>
           <div class="form-group">
             <label for="modal-car-color">Color</label>
@@ -514,6 +553,8 @@
     <script src="static/js/notification-utils.js"></script>
     <script src="static/js/auth_jwt.js"></script>
     <script src="static/js/api-helper.js"></script>
+    <script src="static/js/phone-formatter.js"></script>
+    <script src="static/js/customer-car-utils.js"></script>
     <script src="static/js/repairOrder.js"></script>
   </body>
 </html>

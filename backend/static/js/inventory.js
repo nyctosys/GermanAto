@@ -40,7 +40,7 @@ const FallbackUtils = {
     if (element) {
       element.innerHTML = `
         <div style="text-align: center; padding: 2rem; color: #dc3545;">
-          <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+          <div style="font-size: 2rem; margin-bottom: 1rem;"></div>
           <div>${message}</div>
           ${
             retryCallback
@@ -80,6 +80,7 @@ document.addEventListener("DOMContentLoaded", function () {
   localStorage.setItem("lastPage", "inventory");
 
   loadInventory();
+  loadCategories();
   setupEventListeners();
   setupPagination();
 });
@@ -750,11 +751,11 @@ async function showMoreItems(category) {
 // Get category icon
 function getCategoryIcon(category) {
   const icons = {
-    parts: "🔧",
-    tools: "🛠️",
-    fluids: "🛢️",
-    accessories: "🎨",
-    other: "📦",
+    parts: "",
+    tools: "",
+    fluids: "",
+    accessories: "",
+    other: "",
   };
   return icons[category] || "📦";
 }
@@ -779,11 +780,40 @@ function toggleCategory(category) {
   }
 }
 
+// Load categories from database
+async function loadCategories() {
+  try {
+    // Load from settings API WITHOUT sync to prevent recreating old categories
+    const data = await APIHelper.get("/api/settings/categories");
+    if (!data || !data.categories) return;
+
+    const categories = data.categories;
+    const categorySelect = document.getElementById("item-category");
+    
+    if (categorySelect) {
+      // Clear existing options except the first one
+      categorySelect.innerHTML = '<option value="">Select Category</option>';
+
+      categories.forEach((cat) => {
+        const option = document.createElement("option");
+        option.value = cat.name;
+        option.textContent = cat.name;
+        categorySelect.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error("Error loading categories:", error);
+  }
+}
+
 // Open add modal
-function openAddModal() {
+async function openAddModal() {
   currentEditId = null;
   document.getElementById("modal-title").textContent = "Add New Item";
   document.getElementById("item-form").reset();
+
+  // Ensure categories are loaded
+  await loadCategories();
 
   // Reset image display
   const currentImageContainer = document.getElementById(
@@ -800,7 +830,7 @@ function openAddModal() {
 }
 
 // Open edit modal
-function editItem(id) {
+async function editItem(id) {
   // Search for the item across all categories
   let item = null;
   for (const category of Object.keys(categoryPagination)) {
@@ -816,9 +846,32 @@ function editItem(id) {
   currentEditId = id;
   document.getElementById("modal-title").textContent = "Edit Item";
 
+  // Ensure categories are loaded before setting the value
+  await loadCategories();
+
   // Fill form with item data
   document.getElementById("item-name").value = item.name;
-  document.getElementById("item-category").value = item.category;
+  
+  // Set category value - if it doesn't exist in dropdown, add it as an option
+  const categorySelect = document.getElementById("item-category");
+  const categoryValue = item.category;
+  if (categorySelect) {
+    // Check if the value exists in the dropdown
+    const optionExists = Array.from(categorySelect.options).some(
+      opt => opt.value === categoryValue
+    );
+    
+    if (!optionExists && categoryValue) {
+      // Add the category as an option if it doesn't exist (for legacy data)
+      const option = document.createElement("option");
+      option.value = categoryValue;
+      option.textContent = categoryValue + " (Legacy)";
+      categorySelect.appendChild(option);
+    }
+    
+    categorySelect.value = categoryValue;
+  }
+  
   document.getElementById("item-quantity").value = item.quantity;
   document.getElementById("item-price").value = item.price;
   document.getElementById("item-description").value = item.description || "";
@@ -1342,7 +1395,7 @@ function toggleLowStockView() {
     inventoryGrid.style.display = "grid";
     lowStockBtn.style.background =
       "linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%)";
-    lowStockBtn.innerHTML = "<span>⚠️</span> Low Stock Items";
+    lowStockBtn.innerHTML = "<span></span> Low Stock Items";
   }
 }
 
@@ -1390,7 +1443,7 @@ function renderLowStockItems(data) {
   if (urgentItems.length === 0) {
     urgentGrid.innerHTML = `
       <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: #155724;">
-        <h3>✅ No Urgent Items!</h3>
+        <h3>No Urgent Items!</h3>
         <p>No items with negative stock levels.</p>
       </div>
     `;
@@ -1471,7 +1524,7 @@ function createLowStockItemElement(item, urgencyLevel = "low-stock") {
       </div>
       
       <div class="reorder-info">
-        <h4>📋 Reorder Information</h4>
+        <h4>Reorder Information</h4>
         <p><strong>Recommended Order:</strong> <span class="needed-quantity">${
           item.reorder_quantity
         }</span> units</p>

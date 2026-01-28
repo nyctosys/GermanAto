@@ -413,3 +413,100 @@ class Worker(db.Model):
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
         }
+
+
+# ===== SETTINGS MODELS =====
+
+class Department(db.Model):
+    """Department model for managing organizational departments"""
+    __tablename__ = 'departments'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<Department {self.name}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'is_active': self.is_active,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+
+class Category(db.Model):
+    """Category model for managing inventory categories"""
+    __tablename__ = 'categories'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<Category {self.name}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'is_active': self.is_active,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+
+# ===== INVENTORY TRANSACTION HISTORY =====
+
+class InventoryTransaction(db.Model):
+    """Model for tracking all inventory movements"""
+    __tablename__ = 'inventory_transactions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    inventory_id = db.Column(db.Integer, db.ForeignKey('inventory.id'), nullable=False)
+    transaction_type = db.Column(db.String(20), nullable=False)  # 'issue_out', 'received', 'adjustment'
+    quantity = db.Column(db.Integer, nullable=False)  # positive for received, negative for issue out
+    previous_quantity = db.Column(db.Integer, nullable=False)  # stock level before transaction
+    new_quantity = db.Column(db.Integer, nullable=False)  # stock level after transaction
+    repair_order_id = db.Column(db.Integer, db.ForeignKey('repair_order.id'), nullable=True)
+    reference_description = db.Column(db.String(500), nullable=True)  # description of the transaction
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    notes = db.Column(db.Text, nullable=True)
+    
+    # Relationships
+    inventory = db.relationship('Inventory', backref=db.backref('transactions', lazy=True))
+    repair_order = db.relationship('RepairOrder', backref=db.backref('inventory_transactions', lazy=True))
+    user = db.relationship('User', backref=db.backref('inventory_transactions', lazy=True))
+    
+    def __repr__(self):
+        return f'<InventoryTransaction {self.id} - {self.transaction_type} - {self.quantity}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'inventory_id': self.inventory_id,
+            'inventory_name': self.inventory.name if self.inventory else None,
+            'inventory_part_number': self.inventory.part_number if self.inventory else None,
+            'transaction_type': self.transaction_type,
+            'quantity': self.quantity,
+            'previous_quantity': self.previous_quantity,
+            'new_quantity': self.new_quantity,
+            'repair_order_id': self.repair_order_id,
+            'reference_description': self.reference_description,
+            'created_by': self.created_by,
+            'created_by_username': self.user.username if self.user else None,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'notes': self.notes
+        }

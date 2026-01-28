@@ -326,7 +326,7 @@ function renderLedgerTable(entries) {
                 onclick="deleteLedgerEntry(${entry.id})"
                 title="Delete Entry"
               >
-                🗑️
+                Delete
               </button>
             </td>
         </tr>
@@ -419,7 +419,7 @@ function renderConsignmentsTable(consignmentsList) {
                 <button class="action-btn delete-btn" onclick="deleteConsignment(${
                   consignment.id
                 })" title="Delete">
-                    🗑️
+                    Delete
                 </button>
             </td>
         </tr>

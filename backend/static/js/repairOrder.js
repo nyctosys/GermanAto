@@ -89,6 +89,32 @@ document.addEventListener("DOMContentLoaded", function () {
   setupSearchableDropdowns();
   setupCustomerModal();
   setupCarModal();
+  
+  // Setup edit button event listeners
+  const editCustomerBtn = document.getElementById("edit-customer-btn");
+  if (editCustomerBtn) {
+    editCustomerBtn.addEventListener("click", function() {
+      if (typeof window.openEditCustomerModal === "function") {
+        window.openEditCustomerModal();
+      } else {
+        console.error("openEditCustomerModal function not found");
+      }
+    });
+  }
+  
+  const editCarBtn = document.getElementById("edit-car-btn");
+  if (editCarBtn) {
+    editCarBtn.addEventListener("click", function() {
+      console.log("Edit car button clicked, selectedCarId:", selectedCarId);
+      if (typeof window.openEditCarModal === "function") {
+        window.openEditCarModal();
+      } else {
+        console.error("openEditCarModal function not found");
+      }
+    });
+  } else {
+    console.warn("edit-car-btn element not found");
+  }
 
   // ===== FUNCTIONS =====
 
@@ -301,6 +327,46 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function populateFormWithRepairOrderData(repairOrderData) {
+    // Find and select customer from dropdown if available
+    const customerSelect = document.getElementById("customer-select");
+    if (customerSelect && customers.length > 0) {
+      // Try to find customer by name and phone
+      let customer = customers.find(
+        (c) => c.name === repairOrderData.customer_name && c.phone === repairOrderData.customer_phone
+      );
+      // Fallback: match by phone only
+      if (!customer && repairOrderData.customer_phone) {
+        customer = customers.find((c) => c.phone === repairOrderData.customer_phone);
+      }
+      // Fallback: match by name only
+      if (!customer && repairOrderData.customer_name) {
+        customer = customers.find((c) => c.name === repairOrderData.customer_name);
+      }
+      
+      if (customer) {
+        const customerDisplayText = `${customer.name} - ${customer.phone}`;
+        customerSelect.value = customerDisplayText;
+        handleCustomerChange(customer.id);
+        
+        // Wait for car dropdown to be populated, then select car
+        setTimeout(() => {
+          const carSelect = document.getElementById("car-select");
+          if (carSelect && cars.length > 0 && repairOrderData.customer_reg_no) {
+            // Find car by plate number, but only from the selected customer's cars
+            const car = cars.find(
+              (c) => c.plate_no === repairOrderData.customer_reg_no && c.customer_id === customer.id
+            );
+            
+            if (car) {
+              const carDisplayText = `${car.make} ${car.model || ""} - ${car.plate_no}`;
+              carSelect.value = carDisplayText;
+              handleCarChange(car.id);
+            }
+          }
+        }, 100);
+      }
+    }
+    
     // Populate customer information (now editable in edit mode)
     const customerNameField = document.getElementById("customer-name");
     const customerPhoneField = document.getElementById("customer-phone");
@@ -496,7 +562,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // Price-related fields removed - no totals needed
 
     try {
-      // Update customer record if a customer was selected
+      // Update customer record if a customer was selected - Using centralized utility
       if (selectedCustomerId) {
         try {
           const customerData = {
@@ -504,10 +570,7 @@ document.addEventListener("DOMContentLoaded", function () {
             phone: repairOrderData.customer_phone,
             address: repairOrderData.customer_address,
           };
-          await APIHelper.put(
-            `/api/customers/${selectedCustomerId}`,
-            customerData
-          );
+          await CustomerCarUtils.updateCustomer(selectedCustomerId, customerData);
           console.log("Customer updated successfully");
         } catch (error) {
           console.error("Failed to update customer:", error);
@@ -515,7 +578,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
 
-      // Update car record if a car was selected
+      // Update car record if a car was selected - Using centralized utility
       if (selectedCarId) {
         try {
           // Parse make and model from made field (user may have entered both)
@@ -533,7 +596,7 @@ document.addEventListener("DOMContentLoaded", function () {
             chasis_no: repairOrderData.customer_chasis || null,
             customer_id: selectedCustomerId || null,
           };
-          await APIHelper.put(`/api/cars/${selectedCarId}`, carData);
+          await CustomerCarUtils.updateCar(selectedCarId, carData);
           console.log("Car updated successfully");
         } catch (error) {
           console.error("Failed to update car:", error);
@@ -1057,10 +1120,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // ===== CUSTOMER FUNCTIONS =====
 
-  // Load customers from API
+  // Load customers from API - Using centralized utility
   async function loadCustomers() {
     try {
-      const data = await APIHelper.get("/api/customers");
+      const data = await CustomerCarUtils.loadCustomers();
       if (data) {
         customers = data;
         populateCustomerSelect();
@@ -1168,6 +1231,15 @@ document.addEventListener("DOMContentLoaded", function () {
     if (carInput && carDropdown) {
       // Show dropdown when input is clicked
       carInput.addEventListener("click", function () {
+        // Check if a customer is selected
+        if (!selectedCustomerId) {
+          alert("Please select a customer first before selecting a car.");
+          return;
+        }
+        
+        // Refresh car list to show only selected customer's cars
+        populateCarSelect();
+        
         carDropdown.style.display = "block";
         this.readOnly = false;
         // Add dropdown-active class to parent section-card
@@ -1179,9 +1251,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // Handle search functionality for cars
       carInput.addEventListener("input", function () {
+        // If no customer is selected, show message
+        if (!selectedCustomerId) {
+          populateCarSelect();
+          carDropdown.style.display = "block";
+          return;
+        }
+        
         const searchTerm = this.value.toLowerCase();
+        
+        // Refresh car list first to ensure we're showing only customer's cars
+        populateCarSelect();
+        
+        // Then filter by search term
         const options = carDropdown.querySelectorAll(".dropdown-option");
-
         options.forEach((option) => {
           const text = option.textContent.toLowerCase();
           if (text.includes(searchTerm)) {
@@ -1190,6 +1273,12 @@ document.addEventListener("DOMContentLoaded", function () {
             option.style.display = "none";
           }
         });
+        
+        // Show dropdown if there are visible options
+        const visibleOptions = Array.from(options).filter(opt => opt.style.display !== "none");
+        if (visibleOptions.length > 0) {
+          carDropdown.style.display = "block";
+        }
       });
 
       // Handle option selection
@@ -1314,6 +1403,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Handle customer selection change
   function handleCustomerChange(customerId) {
     selectedCustomerId = customerId;
+    
+    // Clear car selection when customer changes
+    selectedCarId = null;
 
     if (customerId) {
       const customer = customers.find((c) => c.id === customerId);
@@ -1323,7 +1415,59 @@ document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("customer-phone").value = customer.phone;
         document.getElementById("customer-address").value =
           customer.address || "";
+        
+        // Show edit button
+        const editBtn = document.getElementById("edit-customer-btn");
+        if (editBtn) {
+          editBtn.style.display = "flex";
+        }
       }
+      
+      // Clear car input and refresh car dropdown
+      const carSelect = document.getElementById("car-select");
+      if (carSelect) {
+        carSelect.value = "";
+      }
+      
+      // Clear car details fields if they exist
+      const carReg = document.getElementById("car-reg");
+      const carMake = document.getElementById("car-make");
+      const carModel = document.getElementById("car-model");
+      const carMileage = document.getElementById("car-mileage");
+      const carVin = document.getElementById("car-vin");
+      const carColor = document.getElementById("car-color");
+      const carChasis = document.getElementById("car-chasis");
+      
+      if (carReg) carReg.value = "";
+      if (carMake) carMake.value = "";
+      if (carModel) carModel.value = "";
+      if (carMileage) carMileage.value = "";
+      if (carVin) carVin.value = "";
+      if (carColor) carColor.value = "";
+      if (carChasis) carChasis.value = "";
+      
+      // Refresh car dropdown to show only this customer's cars
+      populateCarSelect();
+    } else {
+      // Clear customer fields
+      document.getElementById("customer-name").value = "";
+      document.getElementById("customer-phone").value = "";
+      document.getElementById("customer-address").value = "";
+      
+      // Hide edit button
+      const editBtn = document.getElementById("edit-customer-btn");
+      if (editBtn) {
+        editBtn.style.display = "none";
+      }
+      
+      // Clear car input and refresh car dropdown
+      const carSelect = document.getElementById("car-select");
+      if (carSelect) {
+        carSelect.value = "";
+      }
+      
+      // Refresh car dropdown (will show "Please select a customer first" message)
+      populateCarSelect();
     }
   }
 
@@ -1334,8 +1478,41 @@ document.addEventListener("DOMContentLoaded", function () {
     const cancelBtn = document.getElementById("cancel-customer");
     const customerForm = document.getElementById("customer-form");
 
-    // Open modal
+    // Open modal for creating new customer
     window.openCustomerModal = function () {
+      window.editingCustomerId = null;
+      const modalTitle = document.getElementById("customer-modal-title");
+      if (modalTitle) {
+        modalTitle.textContent = "Add Customer";
+      }
+      customerForm.reset();
+      customerModal.style.display = "block";
+    };
+
+    // Open modal for editing existing customer
+    window.openEditCustomerModal = function () {
+      if (!selectedCustomerId) {
+        alert("Please select a customer first.");
+        return;
+      }
+
+      const customer = customers.find((c) => c.id === selectedCustomerId);
+      if (!customer) {
+        alert("Customer not found.");
+        return;
+      }
+
+      window.editingCustomerId = selectedCustomerId;
+      const modalTitle = document.getElementById("customer-modal-title");
+      if (modalTitle) {
+        modalTitle.textContent = "Edit Customer";
+      }
+
+      // Populate form with customer data
+      document.getElementById("modal-customer-name").value = customer.name || "";
+      document.getElementById("modal-customer-phone").value = customer.phone || "";
+      document.getElementById("modal-customer-address").value = customer.address || "";
+
       customerModal.style.display = "block";
     };
 
@@ -1343,6 +1520,7 @@ document.addEventListener("DOMContentLoaded", function () {
     function closeModal() {
       customerModal.style.display = "none";
       customerForm.reset();
+      window.editingCustomerId = null;
     }
 
     closeBtn.addEventListener("click", closeModal);
@@ -1355,7 +1533,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
-    // Handle form submission
+    // Handle form submission - Using centralized utilities
     customerForm.addEventListener("submit", async function (e) {
       e.preventDefault();
 
@@ -1366,52 +1544,78 @@ document.addEventListener("DOMContentLoaded", function () {
         address: formData.get("modal-customer-address"),
       };
 
-      // Validate required fields
-      if (!customerData.name || !customerData.phone) {
-        alert("Please fill in all required fields (Name and Phone).");
-        return;
-      }
-
       try {
-        const data = await APIHelper.post("/api/customers", customerData);
+        let updatedCustomer;
+        const isEditing = window.editingCustomerId;
 
-        if (data) {
-          const newCustomer = data.customer;
-          const customerDisplayText = `${newCustomer.name} - ${newCustomer.phone}`;
-          document.getElementById("customer-select").value =
-            customerDisplayText;
-
-          // Add to customers array
-          customers.push(newCustomer);
-          populateCustomerSelect();
-
-          // Trigger customer change with the correct ID
-          handleCustomerChange(newCustomer.id);
-
-          // Update car modal customer dropdown if it exists
-          updateCarModalCustomerDropdown();
-
-          closeModal();
+        if (isEditing) {
+          // Update existing customer
+          updatedCustomer = await CustomerCarUtils.updateCustomer(window.editingCustomerId, customerData);
+          
+          // Update in customers array
+          const index = customers.findIndex((c) => c.id === window.editingCustomerId);
+          if (index !== -1) {
+            customers[index] = updatedCustomer;
+          }
+          
+          if (typeof showNotification === "function") {
+            showNotification("Customer updated successfully!", "success");
+          } else {
+            alert("Customer updated successfully!");
+          }
         } else {
-          const errorData = await response.json();
-          alert(
-            "Failed to create customer: " +
-              (errorData.details || errorData.error)
-          );
+          // Create new customer
+          updatedCustomer = await CustomerCarUtils.createCustomer(customerData);
+          
+          // Add to customers array
+          customers.push(updatedCustomer);
+          
+          if (typeof showNotification === "function") {
+            showNotification("Customer created successfully!", "success");
+          } else {
+            alert("Customer created successfully!");
+          }
         }
+
+        // Update form fields
+        document.getElementById("customer-name").value = updatedCustomer.name;
+        document.getElementById("customer-phone").value = updatedCustomer.phone;
+        document.getElementById("customer-address").value = updatedCustomer.address || "";
+
+        const customerDisplayText = `${updatedCustomer.name} - ${updatedCustomer.phone}`;
+        document.getElementById("customer-select").value = customerDisplayText;
+
+        populateCustomerSelect();
+
+        // Update selected customer ID
+        if (isEditing && selectedCustomerId === window.editingCustomerId) {
+          selectedCustomerId = updatedCustomer.id;
+        } else if (!isEditing) {
+          handleCustomerChange(updatedCustomer.id);
+        }
+
+        // Update car modal customer dropdown if it exists
+        updateCarModalCustomerDropdown();
+
+        closeModal();
       } catch (error) {
-        console.error("Error creating customer:", error);
-        alert("Error creating customer. Please try again.");
+        console.error("Error saving customer:", error);
+        const errorMsg = error.message || (window.editingCustomerId ? "Failed to update customer" : "Failed to create customer");
+        if (typeof showNotification === "function") {
+          showNotification(errorMsg, "error");
+        } else {
+          alert("Error: " + errorMsg);
+        }
       }
     });
   }
 
   // ===== CAR FUNCTIONS =====
 
-  // Load cars from API
+  // Load cars from API - Using centralized utility
   async function loadCars() {
     try {
-      const data = await APIHelper.get("/api/cars");
+      const data = await CustomerCarUtils.loadCars();
       if (data) {
         cars = data;
         populateCarSelect();
@@ -1434,7 +1638,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Populate car dropdown
+  // Populate car dropdown - filtered by selected customer
   function populateCarSelect() {
     const carInput = document.getElementById("car-select");
     const carDropdown = document.getElementById("car-dropdown-options");
@@ -1443,13 +1647,43 @@ document.addEventListener("DOMContentLoaded", function () {
 
     carDropdown.innerHTML = "";
 
-    cars.forEach((car) => {
-      const option = document.createElement("div");
-      option.className = "dropdown-option";
-      option.setAttribute("data-value", car.id);
-      option.textContent = `${car.make} - ${car.plate_no}`;
-      carDropdown.appendChild(option);
-    });
+    if (selectedCustomerId) {
+      // Filter cars by selected customer
+      const customerCars = cars.filter(
+        (car) => car.customer_id === selectedCustomerId
+      );
+      
+      if (customerCars.length === 0) {
+        // Show message if no cars found for this customer
+        const noCarsOption = document.createElement("div");
+        noCarsOption.className = "dropdown-option";
+        noCarsOption.style.color = "#666";
+        noCarsOption.style.fontStyle = "italic";
+        noCarsOption.textContent = "No cars found for this customer";
+        carDropdown.appendChild(noCarsOption);
+      } else {
+        customerCars.forEach((car) => {
+          const option = document.createElement("div");
+          option.className = "dropdown-option";
+          option.setAttribute("data-value", car.id);
+          option.textContent = `${car.make} ${car.model || ""} - ${car.plate_no}`;
+          carDropdown.appendChild(option);
+        });
+      }
+    } else {
+      // Show message if no customer is selected
+      const noCustomerOption = document.createElement("div");
+      noCustomerOption.className = "dropdown-option";
+      noCustomerOption.style.color = "#666";
+      noCustomerOption.style.fontStyle = "italic";
+      noCustomerOption.textContent = "Please select a customer first";
+      carDropdown.appendChild(noCustomerOption);
+      
+      // Clear car input if no customer is selected
+      if (carInput) {
+        carInput.value = "";
+      }
+    }
   }
 
   // Populate worker dropdown
@@ -1479,15 +1713,46 @@ document.addEventListener("DOMContentLoaded", function () {
     if (carId) {
       const car = cars.find((c) => c.id === carId);
       if (car) {
+        // Verify car belongs to selected customer
+        if (selectedCustomerId && car.customer_id !== selectedCustomerId) {
+          console.warn("Selected car does not belong to selected customer");
+          // Clear car selection if it doesn't match
+          selectedCarId = null;
+          const carSelect = document.getElementById("car-select");
+          if (carSelect) {
+            carSelect.value = "";
+          }
+          alert("This car does not belong to the selected customer. Please select a car from the customer's vehicles.");
+          return;
+        }
+        
         // Populate car fields
         document.getElementById("reg-number").value = car.plate_no || "";
-        document.getElementById("made").value = car.make || "";
+        document.getElementById("made").value = `${car.make || ""} ${car.model || ""}`.trim();
         document.getElementById("mileage").value = car.mileage || "";
         document.getElementById("vin").value = car.vin || "";
         document.getElementById("color").value = car.color || "";
         document.getElementById("chasis").value = car.chasis_no || "";
-
-        // Debug logging
+        
+        // Show edit button
+        const editBtn = document.getElementById("edit-car-btn");
+        if (editBtn) {
+          editBtn.style.display = "flex";
+        }
+      }
+    } else {
+      // Clear car fields when car is deselected
+      document.getElementById("reg-number").value = "";
+      document.getElementById("made").value = "";
+      document.getElementById("mileage").value = "";
+      document.getElementById("vin").value = "";
+      document.getElementById("color").value = "";
+      document.getElementById("chasis").value = "";
+      
+      // Hide edit button
+      const editBtn = document.getElementById("edit-car-btn");
+      if (editBtn) {
+        editBtn.style.display = "none";
       }
     }
   }
@@ -1530,20 +1795,102 @@ document.addEventListener("DOMContentLoaded", function () {
           option.textContent = `${customer.name} - ${customer.phone}`;
           customerSelect.appendChild(option);
         });
+        
+        // Auto-select customer if one is already selected in the form
+        if (selectedCustomerId) {
+          customerSelect.value = selectedCustomerId;
+        }
       }
     }
 
-    // Open modal
+    // Open modal for creating new car
     window.openCarModal = function () {
+      window.editingCarId = null;
+      const modalTitle = document.getElementById("car-modal-title");
+      if (modalTitle) {
+        modalTitle.textContent = "Add Car";
+      }
+      
       // Populate customer dropdown when opening modal
       populateCustomerDropdown();
+      
+      // Reset form but preserve customer selection
+      const preservedCustomerId = selectedCustomerId;
+      carForm.reset();
+      
+      // Re-set the customer selection after reset (reset clears it)
+      if (preservedCustomerId && customerSelect) {
+        customerSelect.value = preservedCustomerId;
+      }
+      
       carModal.style.display = "block";
+      carModal.classList.add("active");
+    };
+
+    // Open modal for editing existing car
+    window.openEditCarModal = function () {
+      console.log("openEditCarModal called, selectedCarId:", selectedCarId);
+      
+      if (!selectedCarId) {
+        alert("Please select a car first.");
+        return;
+      }
+
+      const car = cars.find((c) => c.id === selectedCarId);
+      if (!car) {
+        alert("Car not found.");
+        return;
+      }
+
+      console.log("Car found:", car);
+
+      window.editingCarId = selectedCarId;
+      const modalTitle = document.getElementById("car-modal-title");
+      if (modalTitle) {
+        modalTitle.textContent = "Edit Car";
+      }
+
+      // Populate customer dropdown
+      populateCustomerDropdown();
+
+      // Populate form with car data
+      if (customerSelect) {
+        customerSelect.value = car.customer_id || "";
+      }
+      const makeField = document.getElementById("modal-car-make");
+      const modelField = document.getElementById("modal-car-model");
+      const plateField = document.getElementById("modal-car-plate");
+      const mileageField = document.getElementById("modal-car-mileage");
+      const vinField = document.getElementById("modal-car-vin");
+      const colorField = document.getElementById("modal-car-color");
+      const chassisField = document.getElementById("modal-car-chassis");
+      
+      if (makeField) makeField.value = car.make || "";
+      if (modelField) modelField.value = car.model || "";
+      if (plateField) plateField.value = car.plate_no || "";
+      if (mileageField) mileageField.value = car.mileage || "";
+      if (vinField) vinField.value = car.vin || "";
+      if (colorField) colorField.value = car.color || "";
+      if (chassisField) chassisField.value = car.chasis_no || "";
+
+      // Get modal element to ensure it exists
+      const carModalElement = document.getElementById("car-modal");
+      if (carModalElement) {
+        carModalElement.style.display = "block";
+        carModalElement.classList.add("active");
+        console.log("Car modal opened");
+      } else {
+        console.error("Car modal element not found");
+        alert("Error: Car modal not found");
+      }
     };
 
     // Close modal
     function closeModal() {
       carModal.style.display = "none";
+      carModal.classList.remove("active");
       carForm.reset();
+      window.editingCarId = null;
     }
 
     closeBtn.addEventListener("click", closeModal);
@@ -1556,55 +1903,88 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
-    // Handle form submission
+    // Handle form submission - Using centralized utilities
     carForm.addEventListener("submit", async function (e) {
       e.preventDefault();
 
       const formData = new FormData(carForm);
+      // Get make and model from separate fields
+      const make = formData.get("modal-car-make")?.trim() || "";
+      const model = formData.get("modal-car-model")?.trim() || "";
+
       const carData = {
         customer_id: formData.get("modal-car-customer"),
         plate_no: formData.get("modal-car-plate"),
-        make: formData.get("modal-car-make"),
+        make: make,
+        model: model,
         mileage: formData.get("modal-car-mileage"),
         vin: formData.get("modal-car-vin"),
         color: formData.get("modal-car-color"),
         chasis_no: formData.get("modal-car-chassis"),
       };
 
-      // Validate required fields
-      if (!carData.customer_id || !carData.make || !carData.plate_no) {
-        alert(
-          "Please fill in all required fields (Customer, Registration Number, and Make/Model)."
-        );
-        return;
-      }
-
       try {
-        const data = await APIHelper.post("/api/cars", carData);
+        let updatedCar;
+        const isEditing = window.editingCarId;
 
-        if (data) {
-          const newCar = data.car;
-          const carDisplayText = `${newCar.make} - ${newCar.plate_no}`;
-          document.getElementById("car-select").value = carDisplayText;
-
-          // Add to cars array
-          cars.push(newCar);
-          populateCarSelect();
-
-          // Trigger car change with the correct ID
-          handleCarChange(newCar.id);
-
-          closeModal();
+        if (isEditing) {
+          // Update existing car
+          updatedCar = await CustomerCarUtils.updateCar(window.editingCarId, carData);
+          
+          // Update in cars array
+          const index = cars.findIndex((c) => c.id === window.editingCarId);
+          if (index !== -1) {
+            cars[index] = updatedCar;
+          }
+          
+          if (typeof showNotification === "function") {
+            showNotification("Vehicle updated successfully!", "success");
+          } else {
+            alert("Vehicle updated successfully!");
+          }
         } else {
-          const errorData = await response.json();
-          alert(
-            "Failed to create vehicle: " +
-              (errorData.details || errorData.error)
-          );
+          // Create new car
+          updatedCar = await CustomerCarUtils.createCar(carData);
+          
+          // Add to cars array
+          cars.push(updatedCar);
+          
+          if (typeof showNotification === "function") {
+            showNotification("Vehicle created successfully!", "success");
+          } else {
+            alert("Vehicle created successfully!");
+          }
         }
+
+        // Update form fields
+        document.getElementById("reg-number").value = updatedCar.plate_no || "";
+        document.getElementById("made").value = `${updatedCar.make || ""} ${updatedCar.model || ""}`.trim();
+        document.getElementById("mileage").value = updatedCar.mileage || "";
+        document.getElementById("vin").value = updatedCar.vin || "";
+        document.getElementById("color").value = updatedCar.color || "";
+        document.getElementById("chasis").value = updatedCar.chasis_no || "";
+
+        const carDisplayText = `${updatedCar.make}${updatedCar.model ? " " + updatedCar.model : ""} - ${updatedCar.plate_no}`;
+        document.getElementById("car-select").value = carDisplayText;
+
+        populateCarSelect();
+
+        // Update selected car ID
+        if (isEditing && selectedCarId === window.editingCarId) {
+          selectedCarId = updatedCar.id;
+        } else if (!isEditing && updatedCar.customer_id === selectedCustomerId) {
+          handleCarChange(updatedCar.id);
+        }
+
+        closeModal();
       } catch (error) {
-        console.error("Error creating vehicle:", error);
-        alert("Error creating vehicle. Please try again.");
+        console.error("Error saving vehicle:", error);
+        const errorMsg = error.message || (window.editingCarId ? "Failed to update vehicle" : "Failed to create vehicle");
+        if (typeof showNotification === "function") {
+          showNotification(errorMsg, "error");
+        } else {
+          alert("Error: " + errorMsg);
+        }
       }
     });
   }

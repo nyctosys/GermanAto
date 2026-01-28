@@ -56,28 +56,54 @@ def get_reports():
     try:
         # Get date filter parameters
         period = request.args.get('period', 'month')  # day, week, month, year
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
+        start_date_param = request.args.get('start_date')
+        end_date_param = request.args.get('end_date')
         
-        # Set date range based on period
+        # Set date range: use custom dates if provided, otherwise use period-based calculation
         today = date.today()
-        if period == 'day':
-            start_date = today
-            end_date = today
-        elif period == 'week':
-            # Get last 7 days
-            start_date = today - timedelta(days=6)
-            end_date = today
-        elif period == 'month':
-            start_date = today.replace(day=1)
-            end_date = today
-        elif period == 'year':
-            start_date = today.replace(month=1, day=1)
-            end_date = today
+        
+        # If custom dates are provided, use them (convert from string if needed)
+        # Check for both None and empty strings
+        if start_date_param and end_date_param and start_date_param.strip() and end_date_param.strip():
+            try:
+                start_date = datetime.strptime(start_date_param.strip(), '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_param.strip(), '%Y-%m-%d').date()
+            except (ValueError, TypeError) as e:
+                # If parsing fails, fall back to period-based calculation
+                logger.warning(f"Failed to parse custom dates: {e}")
+                start_date = None
+                end_date = None
+        else:
+            start_date = None
+            end_date = None
+        
+        # Only use period-based calculation if custom dates were not provided
+        if start_date is None or end_date is None:
+            if period == 'day':
+                start_date = today
+                end_date = today
+            elif period == 'week':
+                # Get last 7 days
+                start_date = today - timedelta(days=6)
+                end_date = today
+            elif period == 'month':
+                start_date = today.replace(day=1)
+                end_date = today
+            elif period == 'year':
+                start_date = today.replace(month=1, day=1)
+                end_date = today
+            else:
+                # Default to month if period is invalid
+                start_date = today.replace(day=1)
+                end_date = today
         
         # Convert to datetime for database queries
-        start_datetime = datetime.combine(start_date, datetime.min.time())
-        end_datetime = datetime.combine(end_date, datetime.max.time())
+        try:
+            start_datetime = datetime.combine(start_date, datetime.min.time())
+            end_datetime = datetime.combine(end_date, datetime.max.time())
+        except (TypeError, AttributeError) as e:
+            logger.error(f"Error combining dates: start_date={start_date} (type: {type(start_date)}), end_date={end_date} (type: {type(end_date)})")
+            raise ValueError(f"Invalid date values: {e}")
         
         # Get all data
         sales_data = get_sales_data(start_datetime, end_datetime)
@@ -116,13 +142,16 @@ def get_reports():
         })
         
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
         logger.error(f"Error generating reports: {e}")
-        return jsonify({'error': 'Failed to generate reports'}), 500
+        logger.error(f"Traceback: {error_trace}")
+        return jsonify({'error': 'Failed to generate reports', 'details': str(e)}), 500
 
 def get_sales_data(start_date, end_date):
     """Get comprehensive sales data for the specified period"""
     try:
-        # Get daily sales with trend data
+        # Get daily sales with trend data (only invoices, exclude quotes)
         daily_sales = db.session.execute(db.text("""
             SELECT 
                 DATE(created_at) as date,
@@ -130,28 +159,31 @@ def get_sales_data(start_date, end_date):
                 COUNT(*) as count
             FROM invoice 
             WHERE created_at >= :start_date AND created_at <= :end_date
+            AND type_of = 'invoice'
             GROUP BY DATE(created_at)
             ORDER BY date
         """), {'start_date': start_date, 'end_date': end_date}).fetchall()
         
-        # Get monthly sales
+        # Get monthly sales (only invoices, exclude quotes)
         monthly_sales = db.session.execute(db.text("""
             SELECT 
                 DATE_FORMAT(created_at, '%Y-%m') as month,
                 SUM(net_total) as total
             FROM invoice 
             WHERE created_at >= :start_date AND created_at <= :end_date
+            AND type_of = 'invoice'
             GROUP BY DATE_FORMAT(created_at, '%Y-%m')
             ORDER BY month
         """), {'start_date': start_date, 'end_date': end_date}).fetchall()
         
-        # Get yearly sales
+        # Get yearly sales (only invoices, exclude quotes)
         yearly_sales = db.session.execute(db.text("""
             SELECT 
                 YEAR(created_at) as year,
                 SUM(net_total) as total
             FROM invoice 
             WHERE created_at >= :start_date AND created_at <= :end_date
+            AND type_of = 'invoice'
             GROUP BY YEAR(created_at)
             ORDER BY year
         """), {'start_date': start_date, 'end_date': end_date}).fetchall()
@@ -213,12 +245,13 @@ def get_expenses_data(start_date, end_date):
         return {'daily': [], 'monthly': [], 'yearly': [], 'total': 0}
 
 def get_receivables():
-    """Get total receivables from invoices (net_total - paid_amount)"""
+    """Get total receivables from invoices (net_total - paid_amount) - only invoices, exclude quotes"""
     try:
         result = db.session.execute(db.text("""
             SELECT SUM(net_total - COALESCE(paid_amount, 0)) as receivables 
             FROM invoice 
             WHERE net_total > COALESCE(paid_amount, 0)
+            AND type_of = 'invoice'
         """)).fetchone()
         
         return float(result[0] or 0)

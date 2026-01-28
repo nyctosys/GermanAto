@@ -38,7 +38,8 @@ def validate_phone_number(phone):
     if not phone:
         return False
     # More flexible phone number validation - allow various formats
-    pattern = r'^(\+92\s?\d{3}\s?\d{7}|\d{11}|\d{4}\s?\d{7})$'
+    # Accepts: +92 xxx xxxxxxx, 0xxxxxxxxx (10 digits), 0xxx xxxxxx, 0xxx xxxxxxx (11 digits), or xxxx xxxxxxx
+    pattern = r'^(\+92\s?\d{3}\s?\d{7}|0\d{9}|0\d{3}\s?\d{6}|0\d{3}\s?\d{7}|\d{11}|\d{4}\s?\d{7})$'
     return bool(re.match(pattern, phone))
 
 def validate_invoice_data(data):
@@ -58,7 +59,7 @@ def validate_invoice_data(data):
     # Validate phone number only if provided and not "N/A"
     phone = data.get('customer_phone')
     if phone and phone != "N/A" and not validate_phone_number(phone):
-        errors.append("Phone number must be in format: +92 xxx xxxxxxx")
+        errors.append("Phone number must be in format: +92 xxx xxxxxxx, 0xxx xxxxxx (10 digits), or 0xxx xxxxxxx (11 digits)")
     
     # Validate numeric fields
     try:
@@ -151,19 +152,9 @@ def create_invoice(current_user=None):
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
-        # #region agent log - Debug: Log incoming invoice data
-        logger.info(f"[DEBUG] Received invoice data: items={len(data.get('items', []))}, labours={len(data.get('labours', []))}")
-        logger.info(f"[DEBUG] Items detail: {data.get('items', [])}")
-        logger.info(f"[DEBUG] Labours detail: {data.get('labours', [])}")
-        logger.info(f"[DEBUG] Customer phone: {data.get('customer_phone')}")
-        # #endregion
-        
         # Validate input data
         validation_errors = validate_invoice_data(data)
         if validation_errors:
-            # #region agent log - Debug: Log validation errors
-            logger.error(f"[DEBUG] Validation failed with errors: {validation_errors}")
-            # #endregion
             return jsonify({'error': 'Validation failed', 'details': validation_errors}), 400
         
         # Extract and clean data
@@ -555,9 +546,11 @@ def search_invoices(current_user=None):
         search_id = request.args.get('id', '').strip()
         status = request.args.get('status', '').strip()
         type_of = request.args.get('type', '').strip()
+        date_from = request.args.get('date_from', '').strip()
+        date_to = request.args.get('date_to', '').strip()
         
         # If no search criteria provided, return empty results in proper format
-        if not query and not search_id and not status and not type_of:
+        if not query and not search_id and not status and not type_of and not date_from and not date_to:
             return jsonify({
                 'quotes': [],
                 'invoices': []
@@ -602,9 +595,31 @@ def search_invoices(current_user=None):
             else:
                 normalized_status = status
                 search_conditions.append(Invoice.status == normalized_status)
+        
         # Add type_of filter if provided
         if type_of:
             search_conditions.append(Invoice.type_of.ilike(type_of))
+        
+        # Add date range filter if provided
+        if date_from:
+            try:
+                from datetime import datetime
+                date_from_parsed = datetime.strptime(date_from, '%Y-%m-%d')
+                search_conditions.append(Invoice.created_at >= date_from_parsed)
+            except ValueError:
+                # Invalid date format, ignore it
+                pass
+        
+        if date_to:
+            try:
+                from datetime import datetime, timedelta
+                date_to_parsed = datetime.strptime(date_to, '%Y-%m-%d')
+                # Add 1 day to include the entire end date (up to 23:59:59)
+                date_to_end = date_to_parsed + timedelta(days=1)
+                search_conditions.append(Invoice.created_at < date_to_end)
+            except ValueError:
+                # Invalid date format, ignore it
+                pass
         
         # If no valid search conditions, return empty results in proper format
         if not search_conditions:
@@ -616,8 +631,8 @@ def search_invoices(current_user=None):
         # Combine conditions with AND
         final_condition = db.and_(*search_conditions)
         
-        # Execute search
-        results = Invoice.query.filter(final_condition).order_by(Invoice.created_at.desc()).limit(50).all()
+        # Execute search (no limit - return all matching results)
+        results = Invoice.query.filter(final_condition).order_by(Invoice.created_at.desc()).all()
         
         invoice_list = []
         for invoice in results:

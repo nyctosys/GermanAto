@@ -377,6 +377,37 @@ body {
   outline: none;
 }
 
+/* ===== EDIT BUTTON ===== */
+.edit-btn {
+  background: linear-gradient(135deg, var(--primary-maroon), var(--primary-maroon-light));
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.edit-btn:hover {
+  background: linear-gradient(135deg, var(--primary-maroon-light), var(--primary-maroon));
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(139, 21, 56, 0.3);
+}
+
+.edit-btn:active {
+  transform: translateY(0);
+}
+
+.edit-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 .input-fields:focus,
 .form-group input:focus,
 .form-group textarea:focus,
@@ -615,16 +646,61 @@ body {
   backdrop-filter: blur(4px);
 }
 
+.modal.active,
+.modal[style*="display: block"] {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
 .modal-content {
   background-color: var(--bg-white);
-  margin: 5% auto;
+  margin: 0;
   padding: 0;
   border-radius: 16px;
   width: 90%;
   max-width: 500px;
+  max-height: 90vh;
   box-shadow: var(--shadow-lg);
   animation: modalSlideIn 0.3s ease-out;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Car modal (add vehicle) should be scrollable */
+#car-modal .modal-content {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Customer modal should also be scrollable if content overflows */
+#customer-modal .modal-content {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar styling for modals */
+.modal-content::-webkit-scrollbar,
+.modal form::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track,
+.modal form::-webkit-scrollbar-track {
+  background: var(--bg-light);
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb,
+.modal form::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover,
+.modal form::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-maroon);
 }
 
 @keyframes modalSlideIn {
@@ -650,6 +726,7 @@ body {
     rgba(139, 21, 56, 0.02)
   );
   position: relative;
+  flex-shrink: 0;
 }
 
 .modal-header::before {
@@ -699,6 +776,10 @@ body {
 
 .modal form {
   padding: 24px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0; /* Allow form to shrink and enable scrolling */
 }
 
 .modal .form-group {

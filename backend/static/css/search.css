@@ -327,6 +327,162 @@ body {
   height: 20px;
 }
 
+/* ===== DATE FILTER SECTION ===== */
+.date-filter-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.5rem;
+  background: var(--bg-white);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+}
+
+.date-filter-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 0.75rem;
+}
+
+.date-filter-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.date-filter-btn {
+  background: var(--bg-light);
+  color: var(--text-dark);
+  border: 2px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.date-filter-btn:hover {
+  border-color: var(--primary-maroon);
+  color: var(--primary-maroon);
+  background: rgba(139, 21, 56, 0.05);
+}
+
+.date-filter-btn.active {
+  background: linear-gradient(
+    135deg,
+    var(--primary-maroon),
+    var(--primary-maroon-dark)
+  );
+  color: white;
+  border-color: var(--primary-maroon);
+  box-shadow: 0 2px 8px rgba(139, 21, 56, 0.25);
+}
+
+.date-filter-btn.date-filter-clear {
+  background: var(--danger-light);
+  color: var(--danger-color);
+  border-color: var(--danger-color);
+}
+
+.date-filter-btn.date-filter-clear:hover {
+  background: var(--danger-color);
+  color: white;
+}
+
+.date-filter-btn.apply-btn {
+  background: var(--success-color);
+  color: white;
+  border-color: var(--success-color);
+}
+
+.date-filter-btn.apply-btn:hover {
+  background: #218838;
+  border-color: #218838;
+}
+
+.custom-range-container {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.custom-range-inputs {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.date-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.date-input-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.date-input {
+  padding: 0.5rem 0.75rem;
+  border: 2px solid var(--border-light);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.3s ease;
+  background: var(--bg-white);
+  color: var(--text-dark);
+}
+
+.date-input:focus {
+  border-color: var(--primary-maroon);
+  box-shadow: 0 0 0 3px rgba(139, 21, 56, 0.1);
+}
+
+.custom-range-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+/* Date Filter Responsive */
+@media (max-width: 768px) {
+  .date-filter-section {
+    padding: 1rem;
+  }
+
+  .date-filter-buttons {
+    gap: 0.4rem;
+  }
+
+  .date-filter-btn {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .custom-range-inputs {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .date-input-group {
+    width: 100%;
+  }
+
+  .date-input {
+    width: 100%;
+  }
+
+  .custom-range-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 /* ===== STATUS TOGGLE BUTTONS ===== */
 .quote-status-toggle,
 .invoice-status-toggle,
