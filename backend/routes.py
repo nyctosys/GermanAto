@@ -394,7 +394,7 @@ def get_invoice(invoice_id, current_user=None):
         return jsonify({'error': 'Internal server error'}), 500
 
 @bp.route('/invoice/<int:invoice_id>/delete', methods=['DELETE'])
-@admin_required
+@role_required(['admin', 'accountant'])
 def delete_invoice(invoice_id, current_user=None):
     """Delete invoice by ID"""
     try:

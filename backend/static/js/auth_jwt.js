@@ -189,7 +189,7 @@ class AuthManager {
       "worker-detail": ["admin", "accountant"],
       "repair-order": ["admin", "accountant", "inventory_manager"],
       "repair-orders-management": ["admin", "accountant", "inventory_manager"],
-      settings: ["admin"],
+      settings: ["admin", "accountant", "inventory_manager"],
     };
 
     return (

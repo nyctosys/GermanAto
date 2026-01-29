@@ -33,7 +33,7 @@ def get_departments(current_user=None):
 
 
 @settings_bp.route('/settings/departments', methods=['POST'])
-@admin_required
+@role_required(['admin', 'accountant'])
 def create_department(current_user=None):
     """Create a new department"""
     try:
@@ -70,7 +70,7 @@ def create_department(current_user=None):
 
 
 @settings_bp.route('/settings/departments/<int:department_id>', methods=['PUT'])
-@admin_required
+@role_required(['admin', 'accountant'])
 def update_department(current_user=None, department_id=None):
     """Update a department"""
     try:
@@ -112,7 +112,7 @@ def update_department(current_user=None, department_id=None):
 
 
 @settings_bp.route('/settings/departments/<int:department_id>', methods=['DELETE'])
-@admin_required
+@role_required(['admin', 'accountant'])
 def delete_department(current_user=None, department_id=None):
     """Delete a department permanently"""
     try:
@@ -150,7 +150,7 @@ def get_categories(current_user=None):
 
 
 @settings_bp.route('/settings/categories', methods=['POST'])
-@admin_required
+@role_required(['admin', 'inventory_manager'])
 def create_category(current_user=None):
     """Create a new category"""
     try:
@@ -187,7 +187,7 @@ def create_category(current_user=None):
 
 
 @settings_bp.route('/settings/categories/<int:category_id>', methods=['PUT'])
-@admin_required
+@role_required(['admin', 'inventory_manager'])
 def update_category(current_user=None, category_id=None):
     """Update a category"""
     try:
@@ -229,7 +229,7 @@ def update_category(current_user=None, category_id=None):
 
 
 @settings_bp.route('/settings/categories/<int:category_id>', methods=['DELETE'])
-@admin_required
+@role_required(['admin', 'inventory_manager'])
 def delete_category(current_user=None, category_id=None):
     """Delete a category permanently"""
     try:

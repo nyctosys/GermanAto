@@ -5,10 +5,20 @@ let editingCategoryId = null;
 
 // Initialize page
 document.addEventListener("DOMContentLoaded", function () {
-  // Check authentication
-  if (!auth.requirePageAccess("settings")) {
+  // Check authentication - allow all authenticated users
+  if (!auth.requireAuth()) {
     return;
   }
+
+  // Check user roles for showing/hiding controls
+  const isAdmin = auth.hasRole("admin");
+  const isAccountant = auth.hasRole("accountant");
+  const isInventoryManager = auth.hasRole("inventory_manager");
+  
+  // Can manage departments: admin or accountant
+  const canManageDepartments = isAdmin || isAccountant;
+  // Can manage categories: admin or inventory_manager
+  const canManageCategories = isAdmin || isInventoryManager;
 
   // Load theme preference
   loadThemePreference();
@@ -17,9 +27,58 @@ document.addEventListener("DOMContentLoaded", function () {
   loadDepartments();
   loadCategories();
 
+  // Hide controls based on role permissions
+  if (!canManageDepartments) {
+    hideDepartmentControls();
+  }
+  
+  if (!canManageCategories) {
+    hideCategoryControls();
+  }
+
   // Setup event listeners
   setupEventListeners();
 });
+
+function hideDepartmentControls() {
+  // Hide "Add Department" button
+  const addDeptBtn = document.querySelector('button[onclick="openDepartmentModal()"]');
+  if (addDeptBtn) {
+    addDeptBtn.style.display = "none";
+  }
+
+  // Hide Actions column header in departments table
+  const deptTable = document.getElementById("departments-table");
+  if (deptTable) {
+    const deptHeader = deptTable.querySelector("thead tr");
+    if (deptHeader) {
+      const actionsHeader = deptHeader.querySelector("th:last-child");
+      if (actionsHeader && actionsHeader.textContent.trim() === "Actions") {
+        actionsHeader.style.display = "none";
+      }
+    }
+  }
+}
+
+function hideCategoryControls() {
+  // Hide "Add Category" button
+  const addCatBtn = document.querySelector('button[onclick="openCategoryModal()"]');
+  if (addCatBtn) {
+    addCatBtn.style.display = "none";
+  }
+
+  // Hide Actions column header in categories table
+  const catTable = document.getElementById("categories-table");
+  if (catTable) {
+    const catHeader = catTable.querySelector("thead tr");
+    if (catHeader) {
+      const actionsHeader = catHeader.querySelector("th:last-child");
+      if (actionsHeader && actionsHeader.textContent.trim() === "Actions") {
+        actionsHeader.style.display = "none";
+      }
+    }
+  }
+}
 
 // Setup event listeners
 function setupEventListeners() {
@@ -117,11 +176,15 @@ function displayDepartments(departments, workerCounts = {}) {
   const tbody = document.getElementById("departments-tbody");
   if (!tbody) return;
 
+  const isAdmin = auth.hasRole("admin");
+  const isAccountant = auth.hasRole("accountant");
+  const canManageDepartments = isAdmin || isAccountant;
+
   if (departments.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">
-          No departments found. Click "Add Department" to create one.
+        <td colspan="${canManageDepartments ? '5' : '4'}" style="text-align: center; padding: 24px; color: var(--text-muted);">
+          No departments found.${canManageDepartments ? ' Click "Add Department" to create one.' : ''}
         </td>
       </tr>
     `;
@@ -132,14 +195,7 @@ function displayDepartments(departments, workerCounts = {}) {
     .map(
       (dept) => {
         const workerCount = workerCounts[dept.name] || 0;
-        return `
-    <tr>
-      <td>${dept.id}</td>
-      <td><strong>${escapeHtml(dept.name)}</strong></td>
-      <td>${escapeHtml(dept.description || "-")}</td>
-      <td>
-        <span class="usage-count">${workerCount} ${workerCount === 1 ? 'worker' : 'workers'}</span>
-      </td>
+        const actionsColumn = canManageDepartments ? `
       <td>
         <div class="action-buttons">
           <button class="action-btn edit-btn" onclick="editDepartment(${dept.id})">
@@ -158,6 +214,16 @@ function displayDepartments(departments, workerCounts = {}) {
           </button>
         </div>
       </td>
+    ` : '';
+        return `
+    <tr>
+      <td>${dept.id}</td>
+      <td><strong>${escapeHtml(dept.name)}</strong></td>
+      <td>${escapeHtml(dept.description || "-")}</td>
+      <td>
+        <span class="usage-count">${workerCount} ${workerCount === 1 ? 'worker' : 'workers'}</span>
+      </td>
+      ${actionsColumn}
     </tr>
   `;
       }
@@ -333,11 +399,15 @@ function displayCategories(categories, itemCounts = {}) {
   const tbody = document.getElementById("categories-tbody");
   if (!tbody) return;
 
+  const isAdmin = auth.hasRole("admin");
+  const isInventoryManager = auth.hasRole("inventory_manager");
+  const canManageCategories = isAdmin || isInventoryManager;
+
   if (categories.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">
-          No categories found. Click "Add Category" to create one.
+        <td colspan="${canManageCategories ? '5' : '4'}" style="text-align: center; padding: 24px; color: var(--text-muted);">
+          No categories found.${canManageCategories ? ' Click "Add Category" to create one.' : ''}
         </td>
       </tr>
     `;
@@ -348,14 +418,7 @@ function displayCategories(categories, itemCounts = {}) {
     .map(
       (cat) => {
         const itemCount = itemCounts[cat.name] || 0;
-        return `
-    <tr>
-      <td>${cat.id}</td>
-      <td><strong>${escapeHtml(cat.name)}</strong></td>
-      <td>${escapeHtml(cat.description || "-")}</td>
-      <td>
-        <span class="usage-count">${itemCount} ${itemCount === 1 ? 'item' : 'items'}</span>
-      </td>
+        const actionsColumn = canManageCategories ? `
       <td>
         <div class="action-buttons">
           <button class="action-btn edit-btn" onclick="editCategory(${cat.id})">
@@ -374,6 +437,16 @@ function displayCategories(categories, itemCounts = {}) {
           </button>
         </div>
       </td>
+    ` : '';
+        return `
+    <tr>
+      <td>${cat.id}</td>
+      <td><strong>${escapeHtml(cat.name)}</strong></td>
+      <td>${escapeHtml(cat.description || "-")}</td>
+      <td>
+        <span class="usage-count">${itemCount} ${itemCount === 1 ? 'item' : 'items'}</span>
+      </td>
+      ${actionsColumn}
     </tr>
   `;
       }
