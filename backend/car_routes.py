@@ -224,7 +224,7 @@ def update_customer(customer_id, current_user=None):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/customers/<int:customer_id>', methods=['DELETE'])
-@admin_required
+@role_required(['admin', 'accountant'])
 def delete_customer(customer_id, current_user=None):
     """Delete a customer"""
     try:
@@ -514,7 +514,7 @@ def update_car(car_id, current_user=None):
         return jsonify({'error': 'Internal server error'}), 500
 
 @car_bp.route('/cars/<int:car_id>', methods=['DELETE'])
-@admin_required
+@role_required(['admin', 'accountant'])
 def delete_car(car_id, current_user=None):
     """Delete a car"""
     try:
