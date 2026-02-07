@@ -459,7 +459,7 @@ function renderCategorySection(category) {
   }
 
   const categoryData = categoryPagination[category];
-  if (!categoryData.items || categoryData.items.length === 0) {
+  if (!categoryData || !categoryData.items || categoryData.items.length === 0) {
     return;
   }
 
@@ -1293,10 +1293,18 @@ async function updateInventoryItem(id, formData) {
         // Decrease count in old category
         categoryPagination[oldCategory].totalItems -= 1;
 
-        // Add to new category
+        // Add to new category (create slot if server returned a category not in initial set, e.g. "supplies")
         if (categoryPagination[newCategory]) {
           categoryPagination[newCategory].items.unshift(updatedItem);
           categoryPagination[newCategory].totalItems += 1;
+        } else {
+          categoryPagination[newCategory] = {
+            page: 1,
+            totalPages: 1,
+            hasMore: false,
+            items: [updatedItem],
+            totalItems: 1,
+          };
         }
 
         // Re-render both categories
