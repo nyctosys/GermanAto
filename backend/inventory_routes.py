@@ -629,6 +629,18 @@ def search_inventory_grouped(current_user=None):
         logger.error(f"Error searching inventory grouped: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@inventory_bp.route('/inventory/categories', methods=['GET'])
+@login_required
+def get_inventory_categories(current_user=None):
+    """Get distinct category names that exist in inventory (for grid loading)"""
+    try:
+        distinct = db.session.query(Inventory.category).distinct().order_by(Inventory.category).all()
+        categories = [row[0] for row in distinct if row[0]]
+        return jsonify({'categories': categories}), 200
+    except Exception as e:
+        logger.error(f"Error fetching inventory categories: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 @inventory_bp.route('/inventory/stats', methods=['GET'])
 @login_required
 def get_inventory_stats(current_user=None):

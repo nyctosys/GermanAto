@@ -6,6 +6,9 @@ let totalPages = 1;
 let isLoading = false;
 let searchTimeout = null;
 
+// Default category order for stable display (known categories first)
+const DEFAULT_CATEGORY_ORDER = ["parts", "tools", "fluids", "accessories", "other"];
+
 // Category pagination state
 let categoryPagination = {
   parts: { page: 1, totalPages: 1, hasMore: false, items: [], totalItems: 0 },
@@ -20,6 +23,9 @@ let categoryPagination = {
   },
   other: { page: 1, totalPages: 1, hasMore: false, items: [], totalItems: 0 },
 };
+
+// Dynamic list of categories to load/render (from API; includes any category that has items)
+let inventoryCategoryOrder = [...DEFAULT_CATEGORY_ORDER];
 
 // Fallback PerformanceUtils if not available
 const FallbackUtils = {
@@ -132,6 +138,34 @@ function setupEventListeners() {
     });
 }
 
+// Fetch distinct categories from API and ensure categoryPagination has an entry for each
+async function ensureCategoryList() {
+  try {
+    const data = await APIHelper.get("/api/inventory/categories");
+    const apiCategories = (data && data.categories) ? data.categories : [];
+    // Merge: default order first, then any API categories not in the list
+    const merged = [...DEFAULT_CATEGORY_ORDER];
+    apiCategories.forEach((c) => {
+      if (c && !merged.includes(c)) merged.push(c);
+    });
+    inventoryCategoryOrder = merged;
+    // Ensure categoryPagination has a slot for every category we might load
+    inventoryCategoryOrder.forEach((cat) => {
+      if (!categoryPagination[cat]) {
+        categoryPagination[cat] = {
+          page: 1,
+          totalPages: 1,
+          hasMore: false,
+          items: [],
+          totalItems: 0,
+        };
+      }
+    });
+  } catch (e) {
+    inventoryCategoryOrder = [...DEFAULT_CATEGORY_ORDER];
+  }
+}
+
 // Load inventory items with pagination and performance optimization
 async function loadInventory(page = 1, search = "") {
   if (isLoading) return;
@@ -149,10 +183,9 @@ async function loadInventory(page = 1, search = "") {
       // Use grouped search for better performance when searching
       await loadInventoryWithSearch(search);
     } else {
-      // Load each category separately with pagination for normal browsing
-      const categories = ["parts", "tools", "fluids", "accessories", "other"];
-
-      for (const category of categories) {
+      // Use dynamic category list from API so new categories are loaded
+      await ensureCategoryList();
+      for (const category of inventoryCategoryOrder) {
         await loadInventoryByCategory(category, 1, search);
       }
     }
@@ -195,13 +228,22 @@ async function loadInventoryWithSearch(search) {
         };
       });
 
-      // Populate category pagination with search results
+      // Populate category pagination with search results (create slot for new categories)
       Object.keys(data.results).forEach((category) => {
-        if (categoryPagination[category]) {
-          categoryPagination[category].items = data.results[category];
-          categoryPagination[category].totalItems =
-            data.results[category].length;
+        if (!categoryPagination[category]) {
+          categoryPagination[category] = {
+            page: 1,
+            totalPages: 1,
+            hasMore: false,
+            items: [],
+            totalItems: 0,
+          };
+          if (!inventoryCategoryOrder.includes(category)) {
+            inventoryCategoryOrder.push(category);
+          }
         }
+        categoryPagination[category].items = data.results[category];
+        categoryPagination[category].totalItems = data.results[category].length;
       });
     }
   } catch (error) {
@@ -434,13 +476,13 @@ function renderInventory() {
     return;
   }
 
-  // Define category order for consistent display
-  const categoryOrder = ["parts", "tools", "fluids", "accessories", "other"];
+  // Use dynamic category order so new categories are rendered
+  const categoryOrder = inventoryCategoryOrder;
 
   // Render each category section
   categoryOrder.forEach((category) => {
     const categoryData = categoryPagination[category];
-    if (categoryData.items && categoryData.items.length > 0) {
+    if (categoryData && categoryData.items && categoryData.items.length > 0) {
       renderCategorySection(category);
     }
   });
@@ -1245,13 +1287,22 @@ async function addInventoryItem(itemData) {
 
       // Add to the appropriate category in categoryPagination
       const category = newItem.category;
-      if (categoryPagination[category]) {
-        categoryPagination[category].items.unshift(newItem); // Add to beginning
+      if (!categoryPagination[category]) {
+        categoryPagination[category] = {
+          page: 1,
+          totalPages: 1,
+          hasMore: false,
+          items: [newItem],
+          totalItems: 1,
+        };
+        if (!inventoryCategoryOrder.includes(category)) {
+          inventoryCategoryOrder.push(category);
+        }
+      } else {
+        categoryPagination[category].items.unshift(newItem);
         categoryPagination[category].totalItems += 1;
-
-        // Re-render the specific category section
-        renderCategorySection(category);
       }
+      renderCategorySection(category);
 
       return newItem;
     } else {
@@ -1293,7 +1344,7 @@ async function updateInventoryItem(id, formData) {
         // Decrease count in old category
         categoryPagination[oldCategory].totalItems -= 1;
 
-        // Add to new category (create slot if server returned a category not in initial set, e.g. "supplies")
+        // Add to new category (create slot if server returned a category not in initial set)
         if (categoryPagination[newCategory]) {
           categoryPagination[newCategory].items.unshift(updatedItem);
           categoryPagination[newCategory].totalItems += 1;
@@ -1305,6 +1356,9 @@ async function updateInventoryItem(id, formData) {
             items: [updatedItem],
             totalItems: 1,
           };
+          if (!inventoryCategoryOrder.includes(newCategory)) {
+            inventoryCategoryOrder.push(newCategory);
+          }
         }
 
         // Re-render both categories
