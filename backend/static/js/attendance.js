@@ -284,18 +284,33 @@ function renderZktecoDevices() {
   }
   el.innerHTML = zktecoDevices
     .map(
-      (d) => `
+      (d) => {
+        const statusBadge = getDeviceStatusBadge(d.last_seen_at);
+        return `
     <div class="zkteco-device-card" data-id="${d.id}">
       <div class="zkteco-device-info">
         <strong>${escapeHtml(d.name || "Device")}</strong>
+        ${statusBadge}
         <span class="zkteco-device-addr">SN: ${escapeHtml(d.serial_number || "—")}</span>
+        ${d.last_seen_at ? `<span class="zkteco-last-seen">Last seen: ${escapeHtml(d.last_seen_at)}</span>` : ""}
         ${d.last_sync ? `<span class="zkteco-last-sync">Last push: ${escapeHtml(d.last_sync)}</span>` : ""}
         ${d.last_sync_status ? `<span class="zkteco-status">${escapeHtml(d.last_sync_status)}</span>` : ""}
       </div>
     </div>
-  `
+  `;
+      }
     )
     .join("");
+}
+
+function getDeviceStatusBadge(lastSeenAt) {
+  if (!lastSeenAt) return '<span class="zkteco-badge zkteco-badge-unknown">Not seen</span>';
+  const seen = new Date(lastSeenAt.replace(" ", "T"));
+  const now = new Date();
+  const minutesAgo = (now - seen) / (60 * 1000);
+  if (minutesAgo <= 5) return '<span class="zkteco-badge zkteco-badge-online">Online</span>';
+  if (minutesAgo <= 60) return '<span class="zkteco-badge zkteco-badge-recent">Seen recently</span>';
+  return '<span class="zkteco-badge zkteco-badge-offline">Not seen recently</span>';
 }
 
 function openDeviceModal() {
@@ -332,6 +347,11 @@ async function saveZktecoDevice() {
 function setupZktecoModals() {
   const addDeviceBtn = document.getElementById("addDeviceBtn");
   if (addDeviceBtn) addDeviceBtn.addEventListener("click", openDeviceModal);
+  const refreshDevicesBtn = document.getElementById("refreshDevicesBtn");
+  if (refreshDevicesBtn) refreshDevicesBtn.addEventListener("click", function () {
+    refreshDevicesBtn.disabled = true;
+    loadZktecoDevices().finally(function () { refreshDevicesBtn.disabled = false; });
+  });
 
   const closeDeviceModalBtn = document.getElementById("closeDeviceModal");
   const cancelDeviceBtn = document.getElementById("cancelDeviceBtn");

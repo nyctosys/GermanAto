@@ -465,6 +465,7 @@ class ZKTecoDevice(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     last_sync = db.Column(db.DateTime, nullable=True)
     last_sync_status = db.Column(db.String(50), nullable=True)
+    last_seen_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -483,6 +484,7 @@ class ZKTecoDevice(db.Model):
             'is_active': self.is_active,
             'last_sync': self.last_sync.strftime('%Y-%m-%d %H:%M:%S') if self.last_sync else None,
             'last_sync_status': self.last_sync_status,
+            'last_seen_at': self.last_seen_at.strftime('%Y-%m-%d %H:%M:%S') if self.last_seen_at else None,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
         }

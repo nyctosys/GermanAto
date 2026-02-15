@@ -10,6 +10,24 @@ iclock_bp = Blueprint('iclock', __name__)
 logger = logging.getLogger(__name__)
 
 
+def _record_device_seen(sn, endpoint, table=None):
+    """Update last_seen_at for device with this SN and log the request."""
+    if not sn:
+        return
+    device = ZKTecoDevice.query.filter_by(serial_number=sn).first()
+    now = datetime.utcnow()
+    if device:
+        device.last_seen_at = now
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    msg = f"iclock {endpoint} SN={sn}"
+    if table:
+        msg += f" table={table}"
+    logger.info(msg)
+
+
 def _parse_attlog_body(body_text):
     """
     Parse ATTLOG POST body. Common format: one line per punch, tab-separated
@@ -54,6 +72,7 @@ def cdata():
     """
     sn = request.args.get('SN', '').strip()
     table = request.args.get('table', '').strip()
+    _record_device_seen(sn, "cdata", table or None)
 
     if request.method == 'GET':
         return Response('OK', mimetype='text/plain')
@@ -125,4 +144,6 @@ def cdata():
 @iclock_bp.route('/iclock/getrequest', methods=['GET'])
 def getrequest():
     """ADMS getrequest: device polls for commands. Return 200 with body so device does not 404."""
+    sn = request.args.get('SN', '').strip()
+    _record_device_seen(sn, "getrequest")
     return Response('OK\n', mimetype='text/plain')
