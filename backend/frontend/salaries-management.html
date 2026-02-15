@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Salaries Management</title>
+    <link rel="stylesheet" href="../static/css/theme.css" />
+    <link rel="stylesheet" href="../static/css/salaries-management.css" />
+    <script src="../static/js/theme.js"></script>
+    <script src="../static/js/notification-utils.js"></script>
+  </head>
+  <body>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="../static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1>Salaries Management</h1>
+            <p>View salaries and print salary slips</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="/hr" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="container">
+        <div class="filters-section">
+          <div class="filter-group">
+            <label for="departmentFilter">Department</label>
+            <select id="departmentFilter" class="filter-select">
+              <option value="">All Departments</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="statusFilter">Status</label>
+            <select id="statusFilter" class="filter-select">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="terminated">Terminated</option>
+            </select>
+          </div>
+          <button type="button" class="clear-filter-btn" id="clearFiltersBtn">Clear Filters</button>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="salariesTable">
+            <thead>
+              <tr>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Position</th>
+                <th>Department</th>
+                <th>Salary</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="salariesTableBody">
+              <tr>
+                <td colspan="6" class="loading-cell">
+                  <div class="loading-spinner"></div>
+                  <span>Loading...</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <!-- Print slip modal -->
+    <div id="slipModal" class="modal">
+      <div class="modal-content slip-modal-content">
+        <div class="modal-header">
+          <h2>Salary Slip</h2>
+          <button type="button" class="close" id="closeSlipModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="slip-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="slipMonth">Month</label>
+                <select id="slipMonth" class="input-fields">
+                  <option value="1">January</option>
+                  <option value="2">February</option>
+                  <option value="3">March</option>
+                  <option value="4">April</option>
+                  <option value="5">May</option>
+                  <option value="6">June</option>
+                  <option value="7">July</option>
+                  <option value="8">August</option>
+                  <option value="9">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="slipYear">Year</label>
+                <input type="number" id="slipYear" class="input-fields" min="2020" max="2030" />
+              </div>
+            </div>
+          </div>
+          <div id="slipPreview" class="slip-preview no-print"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="cancelSlipBtn">Cancel</button>
+          <button type="button" class="btn-primary" id="printSlipBtn">Print Slip</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Printable slip (hidden, shown only when printing) -->
+    <div id="slipPrintArea" class="slip-print-area"></div>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="../static/js/notification-utils.js"></script>
+    <script src="../static/js/auth_jwt.js"></script>
+    <script src="../static/js/api-helper.js"></script>
+    <script src="../static/js/salaries-management.js"></script>
+  </body>
+</html>

@@ -34,14 +34,19 @@ function initializeHR() {
   setupBackButton();
 }
 
-// Setup back button
+// Setup back button (employees page goes back to HR hub, else home)
 function setupBackButton() {
   const backBtn = document.getElementById("back-btn");
   if (backBtn) {
     backBtn.addEventListener("click", function (e) {
       e.preventDefault();
-      window.location.href = "/home.html";
+      const fromHr = window.location.pathname.indexOf("employees") !== -1 ||
+        (window.location.search && new URLSearchParams(window.location.search).get("from") === "hr");
+      window.location.href = fromHr ? "/hr" : "/home.html";
     });
+    const fromHr = window.location.pathname.indexOf("employees") !== -1 ||
+      (window.location.search && new URLSearchParams(window.location.search).get("from") === "hr");
+    backBtn.href = fromHr ? "/hr" : "/home.html";
   }
 }
 

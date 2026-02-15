@@ -415,6 +415,79 @@ class Worker(db.Model):
         }
 
 
+# ===== ATTENDANCE MODEL =====
+
+class AttendanceRecord(db.Model):
+    """Attendance record for a worker (check-in/check-out). Used for salary calculation."""
+    __tablename__ = 'attendance_records'
+
+    id = db.Column(db.Integer, primary_key=True)
+    worker_id = db.Column(db.Integer, db.ForeignKey('workers.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    check_in_time = db.Column(db.DateTime, nullable=True)
+    check_out_time = db.Column(db.DateTime, nullable=True)
+    work_hours = db.Column(db.Float, nullable=True)
+    notes = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    worker = db.relationship('Worker', backref=db.backref('attendance_records', lazy='dynamic'))
+
+    def __repr__(self):
+        return f'<AttendanceRecord worker_id={self.worker_id} date={self.date}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'worker_id': self.worker_id,
+            'date': self.date.strftime('%Y-%m-%d') if self.date else None,
+            'check_in_time': self.check_in_time.strftime('%H:%M') if self.check_in_time else None,
+            'check_out_time': self.check_out_time.strftime('%H:%M') if self.check_out_time else None,
+            'work_hours': round(self.work_hours, 2) if self.work_hours is not None else None,
+            'notes': self.notes,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+
+# ===== ZKTECO DEVICE MODEL =====
+
+class ZKTecoDevice(db.Model):
+    """ZKTeco attendance device (ADMS push). Identified by serial_number (SN)."""
+    __tablename__ = 'zkteco_devices'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    serial_number = db.Column(db.String(64), unique=True, nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    port = db.Column(db.Integer, default=4370, nullable=True)
+    timeout = db.Column(db.Integer, default=30, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    last_sync = db.Column(db.DateTime, nullable=True)
+    last_sync_status = db.Column(db.String(50), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        addr = f"{self.ip_address}:{self.port}" if self.ip_address else (self.serial_number or "?")
+        return f'<ZKTecoDevice {self.name} {addr}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'serial_number': self.serial_number,
+            'ip_address': self.ip_address,
+            'port': self.port,
+            'timeout': self.timeout,
+            'is_active': self.is_active,
+            'last_sync': self.last_sync.strftime('%Y-%m-%d %H:%M:%S') if self.last_sync else None,
+            'last_sync_status': self.last_sync_status,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+
 # ===== SETTINGS MODELS =====
 
 class Department(db.Model):

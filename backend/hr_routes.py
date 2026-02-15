@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Worker, User
-from datetime import datetime, date
+from models import db, Worker, User, AttendanceRecord, ZKTecoDevice
+from datetime import datetime, date, time, timedelta
 from functools import wraps
+from sqlalchemy import func, and_
 import logging
 
 # Create blueprint for HR routes
@@ -382,3 +383,348 @@ def test_auth():
     except Exception as e:
         logger.error(f"Error in test auth endpoint: {e}", exc_info=True)
         return jsonify({'error': f'Auth test failed: {str(e)}'}), 500
+
+
+# ===== ATTENDANCE ROUTES =====
+
+@hr_bp.route('/api/attendance', methods=['GET'])
+@role_required(['admin', 'accountant', 'inventory_manager'])
+def get_attendance():
+    """List attendance records with optional worker_id, start_date, end_date"""
+    try:
+        worker_id = request.args.get('worker_id', type=int)
+        start_date_str = request.args.get('start_date', '').strip()
+        end_date_str = request.args.get('end_date', '').strip()
+
+        query = AttendanceRecord.query.order_by(AttendanceRecord.date.desc(), AttendanceRecord.check_in_time.desc())
+
+        if worker_id:
+            query = query.filter(AttendanceRecord.worker_id == worker_id)
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                query = query.filter(AttendanceRecord.date >= start_date)
+            except ValueError:
+                pass
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                query = query.filter(AttendanceRecord.date <= end_date)
+            except ValueError:
+                pass
+
+        records = query.all()
+        # Include worker name for display
+        out = []
+        for r in records:
+            d = r.to_dict()
+            if r.worker:
+                d['worker_name'] = f"{r.worker.first_name or ''} {r.worker.last_name or ''}".strip() or r.worker.employee_id
+                d['employee_id'] = r.worker.employee_id
+            out.append(d)
+        return jsonify({'attendance': out, 'total': len(out)})
+    except Exception as e:
+        logger.error(f"Error fetching attendance: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to fetch attendance'}), 500
+
+
+@hr_bp.route('/api/attendance', methods=['POST'])
+@role_required(['admin', 'accountant'])
+def create_attendance():
+    """Create an attendance record (manual entry)."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        worker_id = data.get('worker_id')
+        date_str = data.get('date')
+        check_in = data.get('check_in_time')
+        check_out = data.get('check_out_time')
+        notes = data.get('notes', '').strip()
+
+        if not worker_id or not date_str:
+            return jsonify({'error': 'worker_id and date are required'}), 400
+
+        worker = Worker.query.get(worker_id)
+        if not worker:
+            return jsonify({'error': 'Worker not found'}), 404
+
+        try:
+            att_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid date format (use YYYY-MM-DD)'}), 400
+
+        check_in_time = None
+        if check_in:
+            try:
+                if isinstance(check_in, str) and len(check_in) <= 5:
+                    h, m = map(int, check_in.split(':'))
+                    check_in_time = datetime.combine(att_date, time(h, m))
+                else:
+                    check_in_time = datetime.strptime(check_in, '%H:%M').time()
+                    check_in_time = datetime.combine(att_date, check_in_time)
+            except (ValueError, TypeError):
+                pass
+
+        check_out_time = None
+        if check_out:
+            try:
+                if isinstance(check_out, str) and len(check_out) <= 5:
+                    h, m = map(int, check_out.split(':'))
+                    check_out_time = datetime.combine(att_date, time(h, m))
+                else:
+                    check_out_time = datetime.strptime(check_out, '%H:%M').time()
+                    check_out_time = datetime.combine(att_date, check_out_time)
+            except (ValueError, TypeError):
+                pass
+
+        work_hours = None
+        if check_in_time and check_out_time and check_out_time > check_in_time:
+            delta = check_out_time - check_in_time
+            work_hours = delta.total_seconds() / 3600.0
+
+        record = AttendanceRecord(
+            worker_id=worker_id,
+            date=att_date,
+            check_in_time=check_in_time,
+            check_out_time=check_out_time,
+            work_hours=work_hours,
+            notes=notes or None
+        )
+        db.session.add(record)
+        db.session.commit()
+        out = record.to_dict()
+        out['worker_name'] = f"{worker.first_name or ''} {worker.last_name or ''}".strip() or worker.employee_id
+        out['employee_id'] = worker.employee_id
+        return jsonify({'message': 'Attendance record created', 'attendance': out}), 201
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error creating attendance: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to create attendance'}), 500
+
+
+@hr_bp.route('/api/attendance/<int:record_id>', methods=['PUT'])
+@role_required(['admin', 'accountant'])
+def update_attendance(record_id):
+    """Update an attendance record."""
+    try:
+        record = AttendanceRecord.query.get(record_id)
+        if not record:
+            return jsonify({'error': 'Attendance record not found'}), 404
+        data = request.get_json() or {}
+        date_str = data.get('date')
+        check_in = data.get('check_in_time')
+        check_out = data.get('check_out_time')
+        notes = data.get('notes')
+
+        if date_str:
+            try:
+                record.date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if check_in is not None:
+            try:
+                if isinstance(check_in, str) and len(check_in) <= 5:
+                    h, m = map(int, check_in.split(':'))
+                    record.check_in_time = datetime.combine(record.date, time(h, m))
+                else:
+                    t = datetime.strptime(check_in, '%H:%M').time()
+                    record.check_in_time = datetime.combine(record.date, t)
+            except (ValueError, TypeError):
+                record.check_in_time = None
+        if check_out is not None:
+            try:
+                if isinstance(check_out, str) and len(check_out) <= 5:
+                    h, m = map(int, check_out.split(':'))
+                    record.check_out_time = datetime.combine(record.date, time(h, m))
+                else:
+                    t = datetime.strptime(check_out, '%H:%M').time()
+                    record.check_out_time = datetime.combine(record.date, t)
+            except (ValueError, TypeError):
+                record.check_out_time = None
+        if notes is not None:
+            record.notes = notes.strip() or None
+
+        if record.check_in_time and record.check_out_time and record.check_out_time > record.check_in_time:
+            record.work_hours = (record.check_out_time - record.check_in_time).total_seconds() / 3600.0
+        else:
+            record.work_hours = None
+
+        db.session.commit()
+        out = record.to_dict()
+        if record.worker:
+            out['worker_name'] = f"{record.worker.first_name or ''} {record.worker.last_name or ''}".strip() or record.worker.employee_id
+            out['employee_id'] = record.worker.employee_id
+        return jsonify({'message': 'Attendance updated', 'attendance': out})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating attendance: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to update attendance'}), 500
+
+
+@hr_bp.route('/api/attendance/<int:record_id>', methods=['DELETE'])
+@role_required(['admin', 'accountant'])
+def delete_attendance(record_id):
+    """Delete an attendance record."""
+    try:
+        record = AttendanceRecord.query.get(record_id)
+        if not record:
+            return jsonify({'error': 'Attendance record not found'}), 404
+        db.session.delete(record)
+        db.session.commit()
+        return jsonify({'message': 'Attendance record deleted'})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting attendance: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to delete attendance'}), 500
+
+
+@hr_bp.route('/api/attendance/summary', methods=['GET'])
+@role_required(['admin', 'accountant', 'inventory_manager'])
+def get_attendance_summary():
+    """Get attendance summary for a worker in a month (days_worked, total_hours). Used for salary calculation."""
+    try:
+        worker_id = request.args.get('worker_id', type=int)
+        month = request.args.get('month', type=int)
+        year = request.args.get('year', type=int)
+        if not worker_id or not month or not year:
+            return jsonify({'error': 'worker_id, month, and year are required'}), 400
+        if month < 1 or month > 12:
+            return jsonify({'error': 'Invalid month'}), 400
+
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_date = date(year, month + 1, 1) - timedelta(days=1)
+
+        records = AttendanceRecord.query.filter(
+            and_(
+                AttendanceRecord.worker_id == worker_id,
+                AttendanceRecord.date >= start_date,
+                AttendanceRecord.date <= end_date)
+        ).all()
+
+        days_worked = len(set(r.date for r in records))
+        total_hours = sum(r.work_hours or 0 for r in records)
+
+        return jsonify({
+            'worker_id': worker_id,
+            'month': month,
+            'year': year,
+            'days_worked': days_worked,
+            'total_hours': round(total_hours, 2),
+            'records_count': len(records)
+        })
+    except Exception as e:
+        logger.error(f"Error fetching attendance summary: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to fetch summary'}), 500
+
+
+@hr_bp.route('/api/salary/calculate', methods=['GET'])
+@role_required(['admin', 'accountant', 'inventory_manager'])
+def calculate_salary():
+    """Calculate salary for a worker for a given month based on attendance. Returns net_salary, days_worked, total_hours."""
+    try:
+        worker_id = request.args.get('worker_id', type=int)
+        month = request.args.get('month', type=int)
+        year = request.args.get('year', type=int)
+        if not worker_id or not month or not year:
+            return jsonify({'error': 'worker_id, month, and year are required'}), 400
+
+        worker = Worker.query.get(worker_id)
+        if not worker:
+            return jsonify({'error': 'Worker not found'}), 404
+
+        base_salary = float(worker.salary) if worker.salary else 0
+
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_date = date(year, month + 1, 1) - timedelta(days=1)
+
+        records = AttendanceRecord.query.filter(
+            and_(
+                AttendanceRecord.worker_id == worker_id,
+                AttendanceRecord.date >= start_date,
+                AttendanceRecord.date <= end_date)
+        ).all()
+
+        days_worked = len(set(r.date for r in records))
+        total_hours = sum(r.work_hours or 0 for r in records)
+
+        # Salary = (base_salary / 30) * days_worked (proportional to days present)
+        days_in_month = (end_date - start_date).days + 1
+        daily_rate = base_salary / 30.0 if base_salary else 0
+        net_salary = round(daily_rate * days_worked, 2)
+
+        return jsonify({
+            'worker_id': worker_id,
+            'employee_id': worker.employee_id,
+            'first_name': worker.first_name,
+            'last_name': worker.last_name,
+            'position': worker.position,
+            'department': worker.department,
+            'month': month,
+            'year': year,
+            'base_salary': base_salary,
+            'days_worked': days_worked,
+            'total_hours': round(total_hours, 2),
+            'daily_rate': round(daily_rate, 2),
+            'net_salary': net_salary,
+            'deductions': 0,
+            'bonuses': 0
+        })
+    except Exception as e:
+        logger.error(f"Error calculating salary: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to calculate salary'}), 500
+
+
+# ===== ZKTECO DEVICE API (register by name + SN; no pyzk) =====
+
+@hr_bp.route('/api/zkteco/devices', methods=['GET'])
+@role_required(['admin', 'accountant', 'inventory_manager'])
+def list_zkteco_devices():
+    """List registered ZKTeco devices (ADMS push, identified by serial number)."""
+    try:
+        devices = ZKTecoDevice.query.filter_by(is_active=True).all()
+        return jsonify({'devices': [d.to_dict() for d in devices]})
+    except Exception as e:
+        logger.error(f"Error listing ZKTeco devices: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to list devices'}), 500
+
+
+@hr_bp.route('/api/zkteco/devices', methods=['POST'])
+@role_required(['admin', 'accountant'])
+def create_zkteco_device():
+    """Register a ZKTeco device by name and serial number (SN). No connection test."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body required'}), 400
+        name = (data.get('name') or '').strip()
+        serial_number = (data.get('serial_number') or '').strip()
+        if not name:
+            return jsonify({'error': 'name is required'}), 400
+        if not serial_number:
+            return jsonify({'error': 'serial_number is required'}), 400
+        existing = ZKTecoDevice.query.filter_by(serial_number=serial_number).first()
+        if existing:
+            return jsonify({'error': 'A device with this serial number is already registered'}), 400
+        device = ZKTecoDevice(
+            name=name,
+            serial_number=serial_number,
+            ip_address=data.get('ip_address') or None,
+            port=int(data['port']) if data.get('port') is not None else None,
+            timeout=int(data.get('timeout') or 30),
+            is_active=True
+        )
+        db.session.add(device)
+        db.session.commit()
+        return jsonify({'message': 'Device added', 'device': device.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error creating ZKTeco device: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to add device'}), 500
