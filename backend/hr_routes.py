@@ -739,6 +739,23 @@ def create_zkteco_device():
         return jsonify({'error': 'Failed to add device'}), 500
 
 
+@hr_bp.route('/api/zkteco/devices/<int:device_id>', methods=['DELETE'])
+@role_required(['admin', 'accountant'])
+def delete_zkteco_device(device_id):
+    """Remove a ZKTeco device (soft-delete: set is_active=False)."""
+    try:
+        device = ZKTecoDevice.query.get(device_id)
+        if not device:
+            return jsonify({'error': 'Device not found'}), 404
+        device.is_active = False
+        db.session.commit()
+        return jsonify({'message': 'Device removed'})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error removing ZKTeco device: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to remove device'}), 500
+
+
 @hr_bp.route('/api/zkteco/devices/<int:device_id>/test', methods=['POST'])
 @role_required(['admin', 'accountant', 'inventory_manager'])
 def test_zkteco_device(device_id):

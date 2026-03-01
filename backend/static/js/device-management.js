@@ -79,6 +79,9 @@ function renderDevices() {
         '<button type="button" class="btn-device btn-sync" data-id="' +
         d.id +
         '">Sync</button>' +
+        '<button type="button" class="btn-device btn-remove" data-id="' +
+        d.id +
+        '" title="Remove device">Remove</button>' +
         "</div>" +
         "</div>"
       );
@@ -99,6 +102,31 @@ function renderDevices() {
       openSyncModal(id, dev ? dev.name : "Device");
     });
   });
+  el.querySelectorAll(".btn-remove").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      removeDevice(Number(this.getAttribute("data-id")));
+    });
+  });
+}
+
+async function removeDevice(deviceId) {
+  const dev = devices.find(function (d) {
+    return d.id === deviceId;
+  });
+  const name = dev ? (dev.name || "Device") : "this device";
+  if (!confirm("Remove " + name + " from device list? You can add it again later.")) return;
+  const btn = document.querySelector(".btn-remove[data-id='" + deviceId + "']");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await APIHelper.request("/api/zkteco/devices/" + deviceId, { method: "DELETE" });
+    if (res && !res.error) {
+      if (typeof showNotification === "function") showNotification("Device removed.", "success");
+      loadDevices();
+    } else throw new Error((res && res.error) || "Failed to remove device");
+  } catch (err) {
+    if (typeof showNotification === "function") showNotification(err.message || "Failed to remove device.", "error");
+  }
+  if (btn) btn.disabled = false;
 }
 
 async function testDevice(deviceId) {
@@ -119,11 +147,11 @@ function openDeviceModal() {
   document.getElementById("deviceForm").reset();
   document.getElementById("devicePort").value = "4370";
   document.getElementById("deviceTimeout").value = "30";
-  document.getElementById("deviceModal").classList.add("active");
+  document.getElementById("deviceModal").classList.add("show");
 }
 
 function closeDeviceModal() {
-  document.getElementById("deviceModal").classList.remove("active");
+  document.getElementById("deviceModal").classList.remove("show");
 }
 
 async function saveDevice() {
@@ -160,12 +188,12 @@ function openSyncModal(deviceId, deviceName) {
   document.getElementById("syncDeviceName").textContent = "Sync from: " + (deviceName || "Device");
   document.getElementById("syncStartDate").value = "";
   document.getElementById("syncEndDate").value = "";
-  document.getElementById("syncModal").classList.add("active");
+  document.getElementById("syncModal").classList.add("show");
 }
 
 function closeSyncModal() {
   syncDeviceId = null;
-  document.getElementById("syncModal").classList.remove("active");
+  document.getElementById("syncModal").classList.remove("show");
 }
 
 async function confirmSync() {
