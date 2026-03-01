@@ -71,6 +71,13 @@ def worker_detail(worker_id):
     worker = Worker.query.get_or_404(worker_id)
     return send_from_directory('frontend', 'worker_detail.html')
 
+
+@hr_bp.route('/hr/device-management')
+def device_management_page():
+    """ZKTeco device management page (pull method)."""
+    return send_from_directory('frontend', 'device-management.html')
+
+
 @hr_bp.route('/api/workers', methods=['GET'])
 @role_required(['admin', 'accountant', 'inventory_manager'])
 def get_workers():

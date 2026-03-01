@@ -288,16 +288,13 @@ body::before {
   margin-top: 12px;
 }
 
-.attendance-device-link {
-  margin-bottom: 12px;
-  font-size: 0.875rem;
-}
-.attendance-device-link a {
-  color: var(--primary-maroon);
+.btn-device-mgmt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-decoration: none;
-}
-.attendance-device-link a:hover {
-  text-decoration: underline;
+  color: #fff;
+  white-space: nowrap;
 }
 
 .filters-section {
