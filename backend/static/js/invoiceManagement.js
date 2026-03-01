@@ -302,7 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 );
                 sessionStorage.setItem("invoiceId", invoice.id);
                 sessionStorage.setItem("documentType", fullInvoiceData.type_of);
-                window.location.href = "invoice-template.html";
+                window.location.href = `invoice-template.html?from=invoice-management&id=${invoice.id}`;
               } else {
                 alert("Document not found");
               }

@@ -142,8 +142,8 @@ async function handleFormSubmit(event) {
     sessionStorage.setItem("invoiceId", result.invoice_id);
     sessionStorage.setItem("documentType", documentType);
 
-    // Navigate to the invoice template page
-    window.location.href = "invoice-template.html?from=invoice";
+    // Navigate to the invoice template page (id in URL so refresh re-fetches from API)
+    window.location.href = `invoice-template.html?from=invoice&id=${result.invoice_id}`;
 
     // Reset form
     resetForm();

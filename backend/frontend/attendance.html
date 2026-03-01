@@ -35,21 +35,8 @@
     </header>
 
     <main class="main-content">
-      <!-- ZKTeco devices section -->
-      <div class="container zkteco-section">
-        <div class="section-header">
-          <h2>ZKTeco attendance device (ADMS push)</h2>
-          <div class="section-header-actions">
-            <button type="button" class="btn-secondary btn-sm" id="refreshDevicesBtn" title="Refresh device status">Refresh status</button>
-            <button type="button" class="add-btn btn-sm" id="addDeviceBtn">+ Add device</button>
-          </div>
-        </div>
-        <div id="zktecoDevicesList" class="zkteco-devices-list">
-          <div class="loading-cell">Loading devices...</div>
-        </div>
-      </div>
-
       <div class="container">
+        <p class="attendance-device-link"><a href="/device-management.html">Manage ZKTeco devices</a> (add devices and sync attendance)</p>
         <div class="filters-section">
           <div class="filter-group">
             <label for="workerFilter">Worker</label>
@@ -133,33 +120,6 @@
         <div class="modal-footer">
           <button type="button" class="btn-secondary" id="cancelAttendanceBtn">Cancel</button>
           <button type="button" class="btn-primary" id="saveAttendanceBtn">Save</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Add ZKTeco device modal (ADMS: register by name + serial number) -->
-    <div id="deviceModal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Add ZKTeco device</h2>
-          <button type="button" class="close" id="closeDeviceModal">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form id="deviceForm">
-            <div class="form-group">
-              <label for="deviceName">Name *</label>
-              <input type="text" id="deviceName" class="input-fields" placeholder="e.g. Office entrance" required />
-            </div>
-            <div class="form-group">
-              <label for="deviceSn">Serial number (SN) *</label>
-              <input type="text" id="deviceSn" class="input-fields" placeholder="e.g. UFS2252500425" required />
-            </div>
-            <p class="sync-hint">Configure the device with Server URL pointing to this app (e.g. http://your-server/iclock). Attendance is pushed automatically.</p>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="cancelDeviceBtn">Cancel</button>
-          <button type="button" class="btn-primary" id="saveDeviceBtn">Add device</button>
         </div>
       </div>
     </div>

@@ -288,6 +288,18 @@ body::before {
   margin-top: 12px;
 }
 
+.attendance-device-link {
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+}
+.attendance-device-link a {
+  color: var(--primary-maroon);
+  text-decoration: none;
+}
+.attendance-device-link a:hover {
+  text-decoration: underline;
+}
+
 .filters-section {
   padding: 24px 32px;
   background: var(--bg-light);

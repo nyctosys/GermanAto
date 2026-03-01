@@ -362,8 +362,8 @@ async function handleFormSubmit(event) {
     sessionStorage.setItem("invoiceId", result.invoice_id);
     sessionStorage.setItem("documentType", documentType.toLowerCase());
 
-    // Navigate to the invoice template page
-    window.location.href = "invoice-template.html?from=invoice";
+    // Navigate to the invoice template page (id in URL so refresh re-fetches from API)
+    window.location.href = `invoice-template.html?from=invoice&id=${editId}`;
   } catch (error) {
     console.error("Error:", error);
     const errorMessage = error.message || "Failed to update document.";

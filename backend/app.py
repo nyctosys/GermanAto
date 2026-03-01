@@ -16,7 +16,6 @@ from expense_routes import expense_routes
 from cash_received_routes import cash_received_routes
 from vendor_routes import vendor_bp
 from hr_routes import hr_bp
-from iclock_routes import iclock_bp
 from settings_routes import settings_bp
 from flask_cors import CORS
 from flask_compress import Compress
@@ -101,9 +100,6 @@ app.register_blueprint(vendor_bp, url_prefix='')
 
 # Register the blueprint for HR routes
 app.register_blueprint(hr_bp, url_prefix='')
-
-# iClock ADMS (ZKTeco device-as-client); kept separate from HR
-app.register_blueprint(iclock_bp, url_prefix='')
 
 # Register the blueprint for settings routes
 app.register_blueprint(settings_bp, url_prefix='/api')
@@ -310,6 +306,15 @@ def serve_salaries_management():
 @app.route('/attendance.html')
 def serve_attendance():
     response = send_from_directory(get_frontend_dir(), 'attendance.html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+# Route to serve device-management.html (HR - ZKTeco devices, pull method)
+@app.route('/device-management.html')
+def serve_device_management():
+    response = send_from_directory(get_frontend_dir(), 'device-management.html')
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'

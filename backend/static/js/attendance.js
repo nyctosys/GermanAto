@@ -1,7 +1,6 @@
 // Attendance page
 let workers = [];
 let attendance = [];
-let zktecoDevices = [];
 
 document.addEventListener("DOMContentLoaded", function () {
   if (typeof auth === "undefined" || !auth.requirePageAccess) {
@@ -18,10 +17,8 @@ function initAttendance() {
   if (!auth.requirePageAccess("hr")) return;
   loadWorkers();
   loadAttendance();
-  loadZktecoDevices();
   setupFilters();
   setupModal();
-  setupZktecoModals();
   setupBackButton();
 }
 
@@ -259,107 +256,4 @@ function setupModal() {
   if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
   if (saveBtn) saveBtn.addEventListener("click", saveAttendance);
   if (modal) modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
-}
-
-// ----- ZKTeco devices -----
-async function loadZktecoDevices() {
-  const el = document.getElementById("zktecoDevicesList");
-  if (!el) return;
-  try {
-    const data = await APIHelper.get("/api/zkteco/devices");
-    zktecoDevices = (data && data.devices) ? data.devices : [];
-    renderZktecoDevices();
-  } catch (err) {
-    console.error("Error loading ZKTeco devices:", err);
-    el.innerHTML = '<div class="empty-cell">Failed to load devices.</div>';
-  }
-}
-
-function renderZktecoDevices() {
-  const el = document.getElementById("zktecoDevicesList");
-  if (!el) return;
-  if (zktecoDevices.length === 0) {
-    el.innerHTML = '<div class="empty-cell">No ZKTeco devices. Click "Add device" to register by name and serial number (SN).</div>';
-    return;
-  }
-  el.innerHTML = zktecoDevices
-    .map(
-      (d) => {
-        const statusBadge = getDeviceStatusBadge(d.last_seen_at);
-        return `
-    <div class="zkteco-device-card" data-id="${d.id}">
-      <div class="zkteco-device-info">
-        <strong>${escapeHtml(d.name || "Device")}</strong>
-        ${statusBadge}
-        <span class="zkteco-device-addr">SN: ${escapeHtml(d.serial_number || "—")}</span>
-        ${d.last_seen_at ? `<span class="zkteco-last-seen">Last seen: ${escapeHtml(d.last_seen_at)}</span>` : ""}
-        ${d.last_sync ? `<span class="zkteco-last-sync">Last push: ${escapeHtml(d.last_sync)}</span>` : ""}
-        ${d.last_sync_status ? `<span class="zkteco-status">${escapeHtml(d.last_sync_status)}</span>` : ""}
-      </div>
-    </div>
-  `;
-      }
-    )
-    .join("");
-}
-
-function getDeviceStatusBadge(lastSeenAt) {
-  if (!lastSeenAt) return '<span class="zkteco-badge zkteco-badge-unknown">Not seen</span>';
-  const seen = new Date(lastSeenAt.replace(" ", "T"));
-  const now = new Date();
-  const minutesAgo = (now - seen) / (60 * 1000);
-  if (minutesAgo <= 5) return '<span class="zkteco-badge zkteco-badge-online">Online</span>';
-  if (minutesAgo <= 60) return '<span class="zkteco-badge zkteco-badge-recent">Seen recently</span>';
-  return '<span class="zkteco-badge zkteco-badge-offline">Not seen recently</span>';
-}
-
-function openDeviceModal() {
-  document.getElementById("deviceForm").reset();
-  document.getElementById("deviceModal").classList.add("active");
-}
-
-function closeDeviceModal() {
-  document.getElementById("deviceModal").classList.remove("active");
-}
-
-async function saveZktecoDevice() {
-  const name = document.getElementById("deviceName").value.trim();
-  const serialNumber = document.getElementById("deviceSn").value.trim();
-  if (!name || !serialNumber) {
-    if (typeof showNotification === "function") showNotification("Name and serial number are required.", "error");
-    return;
-  }
-  try {
-    const res = await APIHelper.request("/api/zkteco/devices", {
-      method: "POST",
-      body: JSON.stringify({ name, serial_number: serialNumber })
-    });
-    if (res && res.device && !res.error) {
-      if (typeof showNotification === "function") showNotification("Device added successfully.", "success");
-      closeDeviceModal();
-      loadZktecoDevices();
-    } else throw new Error((res && res.error) || "Failed to add device");
-  } catch (err) {
-    if (typeof showNotification === "function") showNotification(err.message || "Failed to add device.", "error");
-  }
-}
-
-function setupZktecoModals() {
-  const addDeviceBtn = document.getElementById("addDeviceBtn");
-  if (addDeviceBtn) addDeviceBtn.addEventListener("click", openDeviceModal);
-  const refreshDevicesBtn = document.getElementById("refreshDevicesBtn");
-  if (refreshDevicesBtn) refreshDevicesBtn.addEventListener("click", function () {
-    refreshDevicesBtn.disabled = true;
-    loadZktecoDevices().finally(function () { refreshDevicesBtn.disabled = false; });
-  });
-
-  const closeDeviceModalBtn = document.getElementById("closeDeviceModal");
-  const cancelDeviceBtn = document.getElementById("cancelDeviceBtn");
-  const saveDeviceBtn = document.getElementById("saveDeviceBtn");
-  if (closeDeviceModalBtn) closeDeviceModalBtn.addEventListener("click", closeDeviceModal);
-  if (cancelDeviceBtn) cancelDeviceBtn.addEventListener("click", closeDeviceModal);
-  if (saveDeviceBtn) saveDeviceBtn.addEventListener("click", saveZktecoDevice);
-
-  const deviceModal = document.getElementById("deviceModal");
-  if (deviceModal) deviceModal.addEventListener("click", function (e) { if (e.target === deviceModal) closeDeviceModal(); });
 }

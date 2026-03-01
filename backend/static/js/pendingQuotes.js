@@ -240,7 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 );
                 sessionStorage.setItem("invoiceId", quote.id);
                 sessionStorage.setItem("documentType", fullInvoiceData.type_of);
-                window.location.href = "invoice-template.html";
+                window.location.href = `invoice-template.html?from=pending-quotes&id=${quote.id}`;
               } else {
                 alert("Document not found");
               }

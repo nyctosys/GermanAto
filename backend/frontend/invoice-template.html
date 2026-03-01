@@ -350,8 +350,8 @@
         setTimeout(updateResponsiveScale, 100);
       });
 
-      // Load invoice data from sessionStorage when page loads
-      document.addEventListener("DOMContentLoaded", function () {
+      // Load invoice data from sessionStorage or fetch by ID from URL (e.g. after refresh)
+      document.addEventListener("DOMContentLoaded", async function () {
         // Update responsive scale when DOM is ready
         updateResponsiveScale();
         // Set up smart back button logic
@@ -371,12 +371,29 @@
           backBtn.href = "invoiceSystem.html";
         }
 
-        const invoiceData = sessionStorage.getItem("invoiceData");
-        const invoiceId = sessionStorage.getItem("invoiceId");
+        const invoiceDataRaw = sessionStorage.getItem("invoiceData");
+        const invoiceIdFromStorage = sessionStorage.getItem("invoiceId");
         const documentType = sessionStorage.getItem("documentType");
 
-        if (invoiceData && invoiceId) {
-          const data = JSON.parse(invoiceData);
+        let data = null;
+        let invoiceId = null;
+
+        if (invoiceDataRaw && invoiceIdFromStorage) {
+          data = JSON.parse(invoiceDataRaw);
+          invoiceId = invoiceIdFromStorage;
+        } else if (urlParams.get("id")) {
+          try {
+            const id = urlParams.get("id");
+            data = await APIHelper.get("/api/invoice/" + id);
+            if (data) {
+              invoiceId = String(data.id);
+            }
+          } catch (e) {
+            console.error("Failed to load invoice:", e);
+          }
+        }
+
+        if (data && invoiceId) {
           // Determine document type
           let actualDocumentType = documentType;
           if (data.type_of) {

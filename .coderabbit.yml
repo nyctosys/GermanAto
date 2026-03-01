@@ -10,7 +10,6 @@ filters:
     - **/*.min.js
 
 review:
-  languages: [python, javascript, html, css]
   focus:
     - security
     - correctness
@@ -29,15 +28,3 @@ prs:
   on: [opened, synchronize, reopened]
   drafts: false                        # skip drafts
   wip: false                           # skip WIP (if you use WIP prefixes)
-
-conventions:
-  python:
-    min_version: "3.9"
-    style: pep8
-  javascript:
-    style: standard
-
-# Optional: linter hints; CodeRabbit won’t run them, but will align feedback
-linters:
-  python: flake8
-  js: eslint
