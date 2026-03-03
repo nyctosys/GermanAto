@@ -453,7 +453,7 @@ class AttendanceRecord(db.Model):
 # ===== ZKTECO DEVICE MODEL =====
 
 class ZKTecoDevice(db.Model):
-    """ZKTeco attendance device (ADMS push). Identified by serial_number (SN)."""
+    """ZKTeco device that pushes attendance to this server (PUSH protocol). Identified by serial_number (SN)."""
     __tablename__ = 'zkteco_devices'
 
     id = db.Column(db.Integer, primary_key=True)

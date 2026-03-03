@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -21,12 +21,17 @@
           />
           <div class="brand-text">
             <h1>ZKTeco Device Management</h1>
-            <p>Add devices and sync attendance (pull method)</p>
+            <p>Add devices (PUSH). Device sends attendance to this server.</p>
           </div>
         </div>
         <div class="header-actions">
           <a href="/hr" id="back-btn" class="back-btn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M19 12H5M12 19l-7-7 7-7"></path>
             </svg>
             <span>Back</span>
@@ -38,13 +43,23 @@
     <main class="main-content">
       <div class="container device-section">
         <div class="section-header">
-          <h2>ZKTeco attendance devices (pull)</h2>
+          <h2>ZKTeco attendance devices (PUSH)</h2>
           <div class="section-header-actions">
-            <button type="button" class="btn-secondary btn-sm" id="refreshDevicesBtn">Refresh</button>
-            <button type="button" class="add-btn btn-sm" id="addDeviceBtn">+ Add device</button>
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              id="refreshDevicesBtn"
+            >
+              Refresh
+            </button>
+            <button type="button" class="add-btn btn-sm" id="addDeviceBtn">
+              + Add device
+            </button>
           </div>
         </div>
-        <p class="section-hint">Devices are reached by IP and port. Ensure the device is on the same network. Employee ID on device must match Worker Employee ID.</p>
+        <p class="section-hint">
+          Add a device by its serial number (SN). On the device, set Cloud Server to this server's URL. Employee ID on device must match Worker Employee ID.
+        </p>
         <div id="deviceList" class="device-list">
           <div class="loading-cell">Loading devices...</div>
         </div>
@@ -56,63 +71,74 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Add ZKTeco device</h2>
-          <button type="button" class="close" id="closeDeviceModal">&times;</button>
+          <button type="button" class="close" id="closeDeviceModal">
+            &times;
+          </button>
         </div>
         <div class="modal-body">
           <form id="deviceForm">
             <div class="form-group">
               <label for="deviceName">Name *</label>
-              <input type="text" id="deviceName" class="input-fields" placeholder="e.g. Office entrance" required />
+              <input
+                type="text"
+                id="deviceName"
+                class="input-fields"
+                placeholder="e.g. Office entrance"
+                required
+              />
             </div>
             <div class="form-group">
-              <label for="deviceIp">IP address *</label>
-              <input type="text" id="deviceIp" class="input-fields" placeholder="192.168.1.201" required />
+              <label for="deviceSn">Serial number (SN) *</label>
+              <input
+                type="text"
+                id="deviceSn"
+                class="input-fields"
+                placeholder="e.g. UFS2252500425"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="deviceIp">IP address (optional)</label>
+              <input
+                type="text"
+                id="deviceIp"
+                class="input-fields"
+                placeholder="e.g. 192.168.1.201"
+              />
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label for="devicePort">Port</label>
-                <input type="number" id="devicePort" class="input-fields" value="4370" min="1" max="65535" />
+                <label for="devicePort">Port (optional)</label>
+                <input
+                  type="number"
+                  id="devicePort"
+                  class="input-fields"
+                  placeholder="4370"
+                  min="1"
+                  max="65535"
+                />
               </div>
               <div class="form-group">
-                <label for="deviceTimeout">Timeout (sec)</label>
-                <input type="number" id="deviceTimeout" class="input-fields" value="30" min="5" max="120" />
+                <label for="deviceTimeout">Timeout (optional)</label>
+                <input
+                  type="number"
+                  id="deviceTimeout"
+                  class="input-fields"
+                  value="30"
+                  min="5"
+                  max="120"
+                />
               </div>
-            </div>
-            <div class="form-group">
-              <label for="deviceSn">Serial number (optional)</label>
-              <input type="text" id="deviceSn" class="input-fields" placeholder="e.g. UFS2252500425" />
             </div>
           </form>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="cancelDeviceBtn">Cancel</button>
-          <button type="button" class="btn-primary" id="saveDeviceBtn">Add device</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Sync modal -->
-    <div id="syncModal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Sync from device</h2>
-          <button type="button" class="close" id="closeSyncModal">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p class="sync-info" id="syncDeviceName"></p>
-          <div class="form-group">
-            <label for="syncStartDate">From date (optional)</label>
-            <input type="date" id="syncStartDate" class="input-fields" />
-          </div>
-          <div class="form-group">
-            <label for="syncEndDate">To date (optional)</label>
-            <input type="date" id="syncEndDate" class="input-fields" />
-          </div>
-          <p class="sync-hint">Leave dates empty to sync all records.</p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="cancelSyncBtn">Cancel</button>
-          <button type="button" class="btn-primary" id="confirmSyncBtn">Sync</button>
+          <button type="button" class="btn-secondary" id="cancelDeviceBtn">
+            Cancel
+          </button>
+          <button type="button" class="btn-primary" id="saveDeviceBtn">
+            Add device
+          </button>
         </div>
       </div>
     </div>

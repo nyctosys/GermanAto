@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify, send_from_directory, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Worker, User, AttendanceRecord, ZKTecoDevice
 from datetime import datetime, date, time, timedelta
@@ -690,12 +690,130 @@ def calculate_salary():
         return jsonify({'error': 'Failed to calculate salary'}), 500
 
 
-# ===== ZKTECO DEVICE API (pull via pyzk) =====
+# ===== ZKTECO PUSH PROTOCOL (device sends data to server; no auth) =====
+
+def _iclock_ok():
+    """Return 200 OK with plain text body for ZKTeco device."""
+    return Response("OK", status=200, mimetype="text/plain; charset=utf-8")
+
+
+def _update_device_last_seen(sn):
+    """Update last_seen_at for device with given serial_number. Swallow errors."""
+    if not sn or not str(sn).strip():
+        return
+    try:
+        device = ZKTecoDevice.query.filter_by(serial_number=sn.strip(), is_active=True).first()
+        if device:
+            device.last_seen_at = datetime.utcnow()
+            db.session.commit()
+    except Exception as e:
+        logger.warning("Could not update ZKTecoDevice last_seen_at for SN=%s: %s", sn, e)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+@hr_bp.route('/iclock/getrequest', methods=['GET'])
+def iclock_getrequest():
+    """ZKTeco device heartbeat. No auth. Update last_seen_at and return OK."""
+    try:
+        sn = request.args.get("SN", "").strip()
+        if sn:
+            _update_device_last_seen(sn)
+        return _iclock_ok()
+    except Exception as e:
+        logger.error("iclock/getrequest error: %s", e, exc_info=True)
+        return _iclock_ok()
+
+
+@hr_bp.route('/iclock/cdata', methods=['GET', 'POST'])
+def iclock_cdata():
+    """ZKTeco device push (options, ATTLOG, OPERLOG, etc.). No auth. Persist ATTLOG to AttendanceRecord."""
+    try:
+        sn = request.args.get("SN", "").strip()
+        table = request.args.get("table", "").strip()
+        if sn:
+            _update_device_last_seen(sn)
+        if request.method == "GET":
+            return _iclock_ok()
+        body = request.get_data(as_text=True) or ""
+        if not body.strip():
+            return _iclock_ok()
+        if table == "ATTLOG":
+            _process_attlog(body, sn)
+        else:
+            logger.debug("iclock/cdata table=%s SN=%s (not ATTLOG, no DB write)", table, sn)
+        return _iclock_ok()
+    except Exception as e:
+        logger.error("iclock/cdata error: %s", e, exc_info=True)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return _iclock_ok()
+
+
+def _process_attlog(body, sn):
+    """Parse ATTLOG body (tab-separated: user_id, timestamp, punch) and merge into AttendanceRecord."""
+    workers_by_emp = {w.employee_id: w for w in Worker.query.all() if w.employee_id}
+    TIMESTAMP_FMT = "%Y-%m-%d %H:%M:%S"
+    for line in body.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split("\t")
+        if len(parts) < 3:
+            logger.warning("ATTLOG invalid line (expected at least 3 fields): %s", line[:100])
+            continue
+        user_id = (parts[0] or "").strip()
+        ts_str = (parts[1] or "").strip()
+        punch = (parts[2] or "").strip()
+        if punch not in ("0", "1"):
+            logger.warning("ATTLOG invalid punch (expected 0 or 1): user_id=%s punch=%s", user_id, punch)
+            continue
+        try:
+            ts = datetime.strptime(ts_str, TIMESTAMP_FMT)
+        except ValueError:
+            logger.warning("ATTLOG invalid timestamp: user_id=%s ts=%s", user_id, ts_str)
+            continue
+        worker = workers_by_emp.get(user_id)
+        if not worker:
+            logger.warning("ATTLOG unknown user_id=%s SN=%s (no Worker with this employee_id)", user_id, sn)
+            continue
+        att_date = ts.date()
+        record = AttendanceRecord.query.filter_by(worker_id=worker.id, date=att_date).first()
+        if not record:
+            record = AttendanceRecord(
+                worker_id=worker.id,
+                date=att_date,
+                check_in_time=None,
+                check_out_time=None,
+                work_hours=None,
+                notes="ZKTeco push",
+            )
+            db.session.add(record)
+        if punch == "0":
+            if record.check_in_time is None or ts < record.check_in_time:
+                record.check_in_time = ts
+        else:
+            if record.check_out_time is None or ts > record.check_out_time:
+                record.check_out_time = ts
+        if record.check_in_time and record.check_out_time and record.check_out_time > record.check_in_time:
+            delta = record.check_out_time - record.check_in_time
+            record.work_hours = round(delta.total_seconds() / 3600.0, 2)
+        else:
+            record.work_hours = None
+        record.notes = record.notes or "ZKTeco push"
+    db.session.commit()
+
+
+# ===== ZKTECO DEVICE API (PUSH: register by serial number) =====
 
 @hr_bp.route('/api/zkteco/devices', methods=['GET'])
 @role_required(['admin', 'accountant', 'inventory_manager'])
 def list_zkteco_devices():
-    """List registered ZKTeco devices (pull method: IP + port)."""
+    """List registered ZKTeco devices (PUSH: identified by serial number)."""
     try:
         devices = ZKTecoDevice.query.filter_by(is_active=True).all()
         return jsonify({'devices': [d.to_dict() for d in devices]})
@@ -707,28 +825,38 @@ def list_zkteco_devices():
 @hr_bp.route('/api/zkteco/devices', methods=['POST'])
 @role_required(['admin', 'accountant'])
 def create_zkteco_device():
-    """Register a ZKTeco device (pull). Requires IP and port; tests connection before adding."""
+    """Register a ZKTeco device (PUSH). Requires serial_number; set Cloud Server on device to this server."""
     try:
-        from zkteco_service import test_connection
         data = request.get_json()
         if not data:
             return jsonify({'error': 'Request body required'}), 400
-        name = (data.get('name') or '').strip() or (data.get('ip_address') or '').strip()
-        ip_address = (data.get('ip_address') or '').strip()
-        port = int(data.get('port') or 4370)
-        timeout = int(data.get('timeout') or 30)
-        if not ip_address:
-            return jsonify({'error': 'ip_address is required'}), 400
-        ok, msg = test_connection(ip_address, port=port, timeout=min(timeout, 15))
-        if not ok:
-            return jsonify({'error': 'Cannot connect to device: ' + msg}), 400
+        serial_number = (data.get('serial_number') or '').strip()
+        if not serial_number:
+            return jsonify({'error': 'serial_number is required'}), 400
+        name = (data.get('name') or '').strip() or serial_number
+        existing = ZKTecoDevice.query.filter_by(serial_number=serial_number, is_active=True).first()
+        if existing:
+            return jsonify({'error': 'A device with this serial number is already registered'}), 400
+        ip_address = (data.get('ip_address') or '').strip() or None
+        port = data.get('port')
+        if port is not None:
+            try:
+                port = int(port)
+            except (TypeError, ValueError):
+                port = None
+        timeout = 30
+        if data.get('timeout') is not None:
+            try:
+                timeout = max(5, min(120, int(data.get('timeout'))))
+            except (TypeError, ValueError):
+                pass
         device = ZKTecoDevice(
-            name=name or ip_address,
-            serial_number=(data.get('serial_number') or '').strip() or None,
+            name=name,
+            serial_number=serial_number,
             ip_address=ip_address,
             port=port,
             timeout=timeout,
-            is_active=True
+            is_active=True,
         )
         db.session.add(device)
         db.session.commit()
@@ -754,133 +882,3 @@ def delete_zkteco_device(device_id):
         db.session.rollback()
         logger.error(f"Error removing ZKTeco device: {e}", exc_info=True)
         return jsonify({'error': 'Failed to remove device'}), 500
-
-
-@hr_bp.route('/api/zkteco/devices/<int:device_id>/test', methods=['POST'])
-@role_required(['admin', 'accountant', 'inventory_manager'])
-def test_zkteco_device(device_id):
-    """Test connection to a registered ZKTeco device (pull)."""
-    try:
-        from zkteco_service import test_connection
-        device = ZKTecoDevice.query.get(device_id)
-        if not device:
-            return jsonify({'error': 'Device not found'}), 404
-        if not device.ip_address or device.port is None:
-            return jsonify({'success': False, 'message': 'Device has no IP/port configured (pull method requires IP and port)'}), 400
-        ok, msg = test_connection(device.ip_address, port=device.port, timeout=min(device.timeout, 15))
-        return jsonify({'success': ok, 'message': msg})
-    except Exception as e:
-        logger.error(f"Error testing device: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': str(e)})
-
-
-@hr_bp.route('/api/zkteco/devices/<int:device_id>/sync', methods=['POST'])
-@role_required(['admin', 'accountant'])
-def sync_zkteco_attendance(device_id):
-    """Sync attendance from ZKTeco device (pull). Matches device user_id to Worker.employee_id."""
-    try:
-        from zkteco_service import get_attendance_logs
-        device = ZKTecoDevice.query.get(device_id)
-        if not device:
-            return jsonify({'error': 'Device not found'}), 404
-        if not device.ip_address or device.port is None:
-            return jsonify({'error': 'Device has no IP/port (pull method requires IP and port)'}), 400
-        data = request.get_json() or {}
-        start_date_str = (data.get('start_date') or '').strip()
-        end_date_str = (data.get('end_date') or '').strip()
-        start_date = None
-        end_date = None
-        if start_date_str:
-            try:
-                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
-        if end_date_str:
-            try:
-                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
-        logs = get_attendance_logs(
-            device.ip_address,
-            port=device.port,
-            timeout=device.timeout,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        if not logs:
-            device.last_sync = datetime.utcnow()
-            device.last_sync_status = 'ok_no_logs'
-            db.session.commit()
-            return jsonify({
-                'message': 'No attendance logs in range (or device returned none)',
-                'synced': 0,
-                'created': 0,
-                'updated': 0,
-                'skipped_unknown_user': 0
-            })
-        workers_by_emp = {w.employee_id: w for w in Worker.query.all() if w.employee_id}
-        by_user_date = defaultdict(list)
-        for log in logs:
-            uid = (log.get('user_id') or '').strip()
-            if not uid:
-                continue
-            d = log.get('date')
-            ts = log.get('timestamp')
-            if not d or not ts:
-                continue
-            by_user_date[(uid, d)].append(ts)
-        created = 0
-        updated = 0
-        skipped_unknown = 0
-        for (user_id, att_date), timestamps in by_user_date.items():
-            worker = workers_by_emp.get(user_id)
-            if not worker:
-                skipped_unknown += 1
-                continue
-            timestamps.sort()
-            check_in_time = timestamps[0]
-            check_out_time = timestamps[-1] if len(timestamps) > 1 else None
-            work_hours = None
-            if check_out_time and check_in_time and check_out_time > check_in_time:
-                delta = check_out_time - check_in_time
-                work_hours = round(delta.total_seconds() / 3600.0, 2)
-            existing = AttendanceRecord.query.filter_by(worker_id=worker.id, date=att_date).first()
-            if existing:
-                existing.check_in_time = check_in_time
-                existing.check_out_time = check_out_time
-                existing.work_hours = work_hours
-                existing.notes = existing.notes or 'ZKTeco sync'
-                updated += 1
-            else:
-                record = AttendanceRecord(
-                    worker_id=worker.id,
-                    date=att_date,
-                    check_in_time=check_in_time,
-                    check_out_time=check_out_time,
-                    work_hours=work_hours,
-                    notes='ZKTeco sync'
-                )
-                db.session.add(record)
-                created += 1
-        device.last_sync = datetime.utcnow()
-        device.last_sync_status = 'ok'
-        db.session.commit()
-        return jsonify({
-            'message': 'Sync completed',
-            'synced': len(by_user_date),
-            'created': created,
-            'updated': updated,
-            'skipped_unknown_user': skipped_unknown
-        })
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error syncing ZKTeco: {e}", exc_info=True)
-        if device_id:
-            try:
-                dev = ZKTecoDevice.query.get(device_id)
-                if dev:
-                    dev.last_sync_status = 'error'
-                    db.session.commit()
-            except Exception:
-                pass
-        return jsonify({'error': 'Sync failed: ' + str(e)}), 500

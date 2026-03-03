@@ -1,4 +1,4 @@
-// ZKTeco Device Management page (pull method)
+// ZKTeco Device Management page (PUSH: device sends attendance to this server)
 let devices = [];
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -40,7 +40,7 @@ async function loadDevices() {
   if (!el) return;
   try {
     const data = await APIHelper.get("/api/zkteco/devices");
-    devices = (data && data.devices) ? data.devices : [];
+    devices = data && data.devices ? data.devices : [];
     renderDevices();
   } catch (err) {
     console.error("Error loading devices:", err);
@@ -52,12 +52,19 @@ function renderDevices() {
   const el = document.getElementById("deviceList");
   if (!el) return;
   if (devices.length === 0) {
-    el.innerHTML = '<div class="empty-cell">No devices. Click "Add device" to add a ZKTeco device (IP + port).</div>';
+    el.innerHTML =
+      '<div class="empty-cell">No devices. Click "Add device" and enter the device serial number (SN). Set Cloud Server on the device to this server.</div>';
     return;
   }
   el.innerHTML = devices
     .map(function (d) {
-      const addr = d.ip_address != null && d.port != null ? escapeHtml(d.ip_address) + ":" + d.port : "—";
+      const addr =
+        d.ip_address != null && d.port != null
+          ? escapeHtml(d.ip_address) + ":" + d.port
+          : "—";
+      const lastSeen = d.last_seen_at
+        ? '<span class="device-last-sync">Last push: ' + escapeHtml(d.last_seen_at) + "</span>"
+        : "";
       return (
         '<div class="device-card" data-id="' +
         d.id +
@@ -66,19 +73,13 @@ function renderDevices() {
         "<strong>" +
         escapeHtml(d.name || "Device") +
         "</strong>" +
-        '<span class="device-addr">' +
-        addr +
+        '<span class="device-addr">SN: ' +
+        escapeHtml(d.serial_number || "—") +
+        (addr !== "—" ? " · " + addr : "") +
         "</span>" +
-        (d.last_sync ? '<span class="device-last-sync">Last sync: ' + escapeHtml(d.last_sync) + "</span>" : "") +
-        (d.last_sync_status ? '<span class="device-status">' + escapeHtml(d.last_sync_status) + "</span>" : "") +
+        lastSeen +
         "</div>" +
         '<div class="device-actions">' +
-        '<button type="button" class="btn-device btn-test" data-id="' +
-        d.id +
-        '">Test</button>' +
-        '<button type="button" class="btn-device btn-sync" data-id="' +
-        d.id +
-        '">Sync</button>' +
         '<button type="button" class="btn-device btn-remove" data-id="' +
         d.id +
         '" title="Remove device">Remove</button>' +
@@ -88,20 +89,6 @@ function renderDevices() {
     })
     .join("");
 
-  el.querySelectorAll(".btn-test").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      testDevice(Number(this.getAttribute("data-id")));
-    });
-  });
-  el.querySelectorAll(".btn-sync").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      const id = Number(this.getAttribute("data-id"));
-      const dev = devices.find(function (d) {
-        return d.id === id;
-      });
-      openSyncModal(id, dev ? dev.name : "Device");
-    });
-  });
   el.querySelectorAll(".btn-remove").forEach(function (btn) {
     btn.addEventListener("click", function () {
       removeDevice(Number(this.getAttribute("data-id")));
@@ -113,40 +100,37 @@ async function removeDevice(deviceId) {
   const dev = devices.find(function (d) {
     return d.id === deviceId;
   });
-  const name = dev ? (dev.name || "Device") : "this device";
-  if (!confirm("Remove " + name + " from device list? You can add it again later.")) return;
+  const name = dev ? dev.name || "Device" : "this device";
+  if (
+    !confirm(
+      "Remove " + name + " from device list? You can add it again later.",
+    )
+  )
+    return;
   const btn = document.querySelector(".btn-remove[data-id='" + deviceId + "']");
   if (btn) btn.disabled = true;
   try {
-    const res = await APIHelper.request("/api/zkteco/devices/" + deviceId, { method: "DELETE" });
+    const res = await APIHelper.request("/api/zkteco/devices/" + deviceId, {
+      method: "DELETE",
+    });
     if (res && !res.error) {
-      if (typeof showNotification === "function") showNotification("Device removed.", "success");
+      if (typeof showNotification === "function")
+        showNotification("Device removed.", "success");
       loadDevices();
     } else throw new Error((res && res.error) || "Failed to remove device");
   } catch (err) {
-    if (typeof showNotification === "function") showNotification(err.message || "Failed to remove device.", "error");
-  }
-  if (btn) btn.disabled = false;
-}
-
-async function testDevice(deviceId) {
-  const btn = document.querySelector(".btn-test[data-id='" + deviceId + "']");
-  if (btn) btn.disabled = true;
-  try {
-    const res = await APIHelper.request("/api/zkteco/devices/" + deviceId + "/test", { method: "POST" });
-    const ok = res && res.success;
-    const msg = (res && res.message) || "Unknown response";
-    if (typeof showNotification === "function") showNotification(msg, ok ? "success" : "error");
-  } catch (err) {
-    if (typeof showNotification === "function") showNotification(err.message || "Test failed", "error");
+    if (typeof showNotification === "function")
+      showNotification(err.message || "Failed to remove device.", "error");
   }
   if (btn) btn.disabled = false;
 }
 
 function openDeviceModal() {
   document.getElementById("deviceForm").reset();
-  document.getElementById("devicePort").value = "4370";
-  document.getElementById("deviceTimeout").value = "30";
+  const portEl = document.getElementById("devicePort");
+  const timeoutEl = document.getElementById("deviceTimeout");
+  if (portEl) portEl.value = "";
+  if (timeoutEl) timeoutEl.value = "30";
   document.getElementById("deviceModal").classList.add("show");
 }
 
@@ -156,102 +140,69 @@ function closeDeviceModal() {
 
 async function saveDevice() {
   const name = document.getElementById("deviceName").value.trim();
-  const ip = document.getElementById("deviceIp").value.trim();
-  const port = parseInt(document.getElementById("devicePort").value, 10) || 4370;
-  const timeout = parseInt(document.getElementById("deviceTimeout").value, 10) || 30;
   const serialNumber = document.getElementById("deviceSn").value.trim();
-  if (!name || !ip) {
-    if (typeof showNotification === "function") showNotification("Name and IP address are required.", "error");
+  const ip = document.getElementById("deviceIp").value.trim();
+  const portVal = document.getElementById("devicePort").value.trim();
+  const timeoutVal = document.getElementById("deviceTimeout").value.trim();
+  if (!serialNumber) {
+    if (typeof showNotification === "function")
+      showNotification("Serial number (SN) is required.", "error");
     return;
   }
+  if (!name) {
+    if (typeof showNotification === "function")
+      showNotification("Name is required.", "error");
+    return;
+  }
+  const body = { name, serial_number: serialNumber };
+  if (ip) body.ip_address = ip;
+  if (portVal) {
+    const p = parseInt(portVal, 10);
+    if (!isNaN(p)) body.port = p;
+  }
+  if (timeoutVal) {
+    const t = parseInt(timeoutVal, 10);
+    if (!isNaN(t)) body.timeout = t;
+  }
   try {
-    const body = { name, ip_address: ip, port, timeout };
-    if (serialNumber) body.serial_number = serialNumber;
     const res = await APIHelper.request("/api/zkteco/devices", {
       method: "POST",
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
     if (res && res.device && !res.error) {
-      if (typeof showNotification === "function") showNotification("Device added successfully.", "success");
+      if (typeof showNotification === "function")
+        showNotification("Device added successfully.", "success");
       closeDeviceModal();
       loadDevices();
     } else throw new Error((res && res.error) || "Failed to add device");
   } catch (err) {
-    if (typeof showNotification === "function") showNotification(err.message || "Failed to add device.", "error");
+    if (typeof showNotification === "function")
+      showNotification(err.message || "Failed to add device.", "error");
   }
-}
-
-let syncDeviceId = null;
-
-function openSyncModal(deviceId, deviceName) {
-  syncDeviceId = deviceId;
-  document.getElementById("syncDeviceName").textContent = "Sync from: " + (deviceName || "Device");
-  document.getElementById("syncStartDate").value = "";
-  document.getElementById("syncEndDate").value = "";
-  document.getElementById("syncModal").classList.add("show");
-}
-
-function closeSyncModal() {
-  syncDeviceId = null;
-  document.getElementById("syncModal").classList.remove("show");
-}
-
-async function confirmSync() {
-  if (!syncDeviceId) return;
-  const start = document.getElementById("syncStartDate").value.trim();
-  const end = document.getElementById("syncEndDate").value.trim();
-  const body = {};
-  if (start) body.start_date = start;
-  if (end) body.end_date = end;
-  const confirmBtn = document.getElementById("confirmSyncBtn");
-  if (confirmBtn) confirmBtn.disabled = true;
-  try {
-    const res = await APIHelper.request("/api/zkteco/devices/" + syncDeviceId + "/sync", {
-      method: "POST",
-      body: JSON.stringify(body)
-    });
-    if (res && !res.error) {
-      const msg =
-        "Synced: " +
-        (res.created || 0) +
-        " created, " +
-        (res.updated || 0) +
-        " updated." +
-        (res.skipped_unknown_user ? " " + res.skipped_unknown_user + " unknown user(s) skipped." : "");
-      if (typeof showNotification === "function") showNotification(msg, "success");
-      closeSyncModal();
-      loadDevices();
-    } else throw new Error((res && res.error) || "Sync failed");
-  } catch (err) {
-    if (typeof showNotification === "function") showNotification(err.message || "Sync failed.", "error");
-  }
-  if (confirmBtn) confirmBtn.disabled = false;
 }
 
 function setupModals() {
   const addBtn = document.getElementById("addDeviceBtn");
   if (addBtn) addBtn.addEventListener("click", openDeviceModal);
   const refreshBtn = document.getElementById("refreshDevicesBtn");
-  if (refreshBtn) refreshBtn.addEventListener("click", function () {
-    refreshBtn.disabled = true;
-    loadDevices().finally(function () {
-      refreshBtn.disabled = false;
+  if (refreshBtn)
+    refreshBtn.addEventListener("click", function () {
+      refreshBtn.disabled = true;
+      loadDevices().finally(function () {
+        refreshBtn.disabled = false;
+      });
     });
-  });
   const closeDeviceBtn = document.getElementById("closeDeviceModal");
   const cancelDeviceBtn = document.getElementById("cancelDeviceBtn");
   const saveDeviceBtn = document.getElementById("saveDeviceBtn");
-  if (closeDeviceBtn) closeDeviceBtn.addEventListener("click", closeDeviceModal);
-  if (cancelDeviceBtn) cancelDeviceBtn.addEventListener("click", closeDeviceModal);
+  if (closeDeviceBtn)
+    closeDeviceBtn.addEventListener("click", closeDeviceModal);
+  if (cancelDeviceBtn)
+    cancelDeviceBtn.addEventListener("click", closeDeviceModal);
   if (saveDeviceBtn) saveDeviceBtn.addEventListener("click", saveDevice);
   const deviceModal = document.getElementById("deviceModal");
-  if (deviceModal) deviceModal.addEventListener("click", function (e) { if (e.target === deviceModal) closeDeviceModal(); });
-  const closeSyncBtn = document.getElementById("closeSyncModal");
-  const cancelSyncBtn = document.getElementById("cancelSyncBtn");
-  const confirmSyncBtn = document.getElementById("confirmSyncBtn");
-  if (closeSyncBtn) closeSyncBtn.addEventListener("click", closeSyncModal);
-  if (cancelSyncBtn) cancelSyncBtn.addEventListener("click", closeSyncModal);
-  if (confirmSyncBtn) confirmSyncBtn.addEventListener("click", confirmSync);
-  const syncModal = document.getElementById("syncModal");
-  if (syncModal) syncModal.addEventListener("click", function (e) { if (e.target === syncModal) closeSyncModal(); });
+  if (deviceModal)
+    deviceModal.addEventListener("click", function (e) {
+      if (e.target === deviceModal) closeDeviceModal();
+    });
 }
