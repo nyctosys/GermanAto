@@ -117,8 +117,8 @@ def can_edit_invoice(f):
             if not user or not user.is_active:
                 return jsonify({'error': 'User not found or inactive'}), 401
             
-            # Admins can always edit
-            if user.role == 'admin':
+            # Admins and accountants can always edit (including invoices older than 1 day)
+            if user.role in ('admin', 'accountant'):
                 return f(*args, **kwargs)
             
             # For other roles, check if invoice is older than 1 day (only for invoices, not quotes)

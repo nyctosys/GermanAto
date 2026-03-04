@@ -117,19 +117,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const user = JSON.parse(userStr);
 
-    // Admins can always edit
-    if (user.role === "admin") {
+    // Admins and accountants can always edit (including invoices older than 1 day)
+    if (user.role === "admin" || user.role === "accountant") {
       return false;
-    }
-
-    // Accountants can always edit quotes, but invoices older than 1 day are restricted
-    if (user.role === "accountant") {
-      // If it's a quote, allow editing
-      if (invoice.type_of.toLowerCase() === "quote") {
-        return false;
-      }
-      // If it's an invoice, check if it's older than 1 day
-      return isInvoiceOlderThanOneDay(invoice.created_at);
     }
 
     // Other roles cannot edit
