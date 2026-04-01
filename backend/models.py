@@ -428,10 +428,13 @@ class AttendanceRecord(db.Model):
     check_out_time = db.Column(db.DateTime, nullable=True)
     work_hours = db.Column(db.Float, nullable=True)
     notes = db.Column(db.String(255), nullable=True)
+    source = db.Column(db.String(50), nullable=True)  # e.g. 'manual', 'ZKTeco push'
+    zkteco_device_id = db.Column(db.Integer, db.ForeignKey('zkteco_devices.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     worker = db.relationship('Worker', backref=db.backref('attendance_records', lazy='dynamic'))
+    zkteco_device = db.relationship('ZKTecoDevice', backref=db.backref('attendance_records', lazy='dynamic'))
 
     def __repr__(self):
         return f'<AttendanceRecord worker_id={self.worker_id} date={self.date}>'
@@ -445,6 +448,8 @@ class AttendanceRecord(db.Model):
             'check_out_time': self.check_out_time.strftime('%H:%M') if self.check_out_time else None,
             'work_hours': round(self.work_hours, 2) if self.work_hours is not None else None,
             'notes': self.notes,
+            'source': self.source,
+            'zkteco_device_id': self.zkteco_device_id,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
         }

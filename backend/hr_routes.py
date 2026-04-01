@@ -4,6 +4,7 @@ from models import db, Worker, User, AttendanceRecord, ZKTecoDevice
 from datetime import datetime, date, time, timedelta
 from functools import wraps
 from sqlalchemy import func, and_
+from sqlalchemy.exc import IntegrityError
 from collections import defaultdict
 import logging
 
@@ -498,7 +499,8 @@ def create_attendance():
             check_in_time=check_in_time,
             check_out_time=check_out_time,
             work_hours=work_hours,
-            notes=notes or None
+            notes=notes or None,
+            source="manual",
         )
         db.session.add(record)
         db.session.commit()
@@ -757,6 +759,11 @@ def iclock_cdata():
 def _process_attlog(body, sn):
     """Parse ATTLOG body (tab-separated: user_id, timestamp, punch) and merge into AttendanceRecord."""
     workers_by_emp = {w.employee_id: w for w in Worker.query.all() if w.employee_id}
+    zkteco_device_id = None
+    if sn:
+        dev = ZKTecoDevice.query.filter_by(serial_number=sn.strip(), is_active=True).first()
+        if dev:
+            zkteco_device_id = dev.id
     TIMESTAMP_FMT = "%Y-%m-%d %H:%M:%S"
     for line in body.strip().split("\n"):
         line = line.strip()
@@ -769,8 +776,8 @@ def _process_attlog(body, sn):
         user_id = (parts[0] or "").strip()
         ts_str = (parts[1] or "").strip()
         punch = (parts[2] or "").strip()
-        if punch not in ("0", "1"):
-            logger.warning("ATTLOG invalid punch (expected 0 or 1): user_id=%s punch=%s", user_id, punch)
+        if punch not in ("0", "1", "255"):
+            logger.warning("ATTLOG invalid punch (expected 0, 1, or 255): user_id=%s punch=%s", user_id, punch)
             continue
         try:
             ts = datetime.strptime(ts_str, TIMESTAMP_FMT)
@@ -791,13 +798,24 @@ def _process_attlog(body, sn):
                 check_out_time=None,
                 work_hours=None,
                 notes="ZKTeco push",
+                source="ZKTeco push",
+                zkteco_device_id=zkteco_device_id,
             )
             db.session.add(record)
         if punch == "0":
             if record.check_in_time is None or ts < record.check_in_time:
                 record.check_in_time = ts
-        else:
+        elif punch == "1":
             if record.check_out_time is None or ts > record.check_out_time:
+                record.check_out_time = ts
+        else:
+            # Some ZKTeco setups send 255 for generic punch (no explicit in/out).
+            # Fallback: earliest punch becomes check-in, later punch becomes check-out.
+            if record.check_in_time is None:
+                record.check_in_time = ts
+            elif ts < record.check_in_time:
+                record.check_in_time = ts
+            elif record.check_out_time is None or ts > record.check_out_time:
                 record.check_out_time = ts
         if record.check_in_time and record.check_out_time and record.check_out_time > record.check_in_time:
             delta = record.check_out_time - record.check_in_time
@@ -805,6 +823,8 @@ def _process_attlog(body, sn):
         else:
             record.work_hours = None
         record.notes = record.notes or "ZKTeco push"
+        record.source = record.source or "ZKTeco push"
+        record.zkteco_device_id = zkteco_device_id
     db.session.commit()
 
 
@@ -834,9 +854,6 @@ def create_zkteco_device():
         if not serial_number:
             return jsonify({'error': 'serial_number is required'}), 400
         name = (data.get('name') or '').strip() or serial_number
-        existing = ZKTecoDevice.query.filter_by(serial_number=serial_number, is_active=True).first()
-        if existing:
-            return jsonify({'error': 'A device with this serial number is already registered'}), 400
         ip_address = (data.get('ip_address') or '').strip() or None
         port = data.get('port')
         if port is not None:
@@ -850,6 +867,17 @@ def create_zkteco_device():
                 timeout = max(5, min(120, int(data.get('timeout'))))
             except (TypeError, ValueError):
                 pass
+        existing = ZKTecoDevice.query.filter_by(serial_number=serial_number).first()
+        if existing:
+            if existing.is_active:
+                return jsonify({'error': 'A device with this serial number is already registered'}), 400
+            existing.name = name
+            existing.ip_address = ip_address
+            existing.port = port
+            existing.timeout = timeout
+            existing.is_active = True
+            db.session.commit()
+            return jsonify({'message': 'Device re-added', 'device': existing.to_dict()}), 201
         device = ZKTecoDevice(
             name=name,
             serial_number=serial_number,
@@ -861,6 +889,10 @@ def create_zkteco_device():
         db.session.add(device)
         db.session.commit()
         return jsonify({'message': 'Device added', 'device': device.to_dict()}), 201
+    except IntegrityError as e:
+        db.session.rollback()
+        logger.warning("ZKTeco device create IntegrityError (duplicate SN?): %s", e)
+        return jsonify({'error': 'A device with this serial number already exists'}), 400
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error creating ZKTeco device: {e}", exc_info=True)
