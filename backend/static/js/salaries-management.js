@@ -163,6 +163,10 @@ async function getSlipPayload(workerId, month, year) {
     net_salary: worker.salary != null ? Number(worker.salary) : 0,
     days_worked: null,
     total_hours: null,
+    incomplete_records_count: 0,
+    incomplete_dates: [],
+    requires_manual_review: false,
+    review_notes: null,
     month: Number(month),
     year: Number(year)
   };
@@ -184,6 +188,10 @@ async function getSlipPayload(workerId, month, year) {
         net_salary: res.net_salary,
         days_worked: res.days_worked,
         total_hours: res.total_hours,
+        incomplete_records_count: res.incomplete_records_count || 0,
+        incomplete_dates: Array.isArray(res.incomplete_dates) ? res.incomplete_dates : [],
+        requires_manual_review: Boolean(res.requires_manual_review),
+        review_notes: res.review_notes || null,
         month: res.month,
         year: res.year
       };
@@ -237,10 +245,19 @@ function renderSlipHtml(payload) {
     payload.total_hours != null
       ? `<tr><td>Total hours</td><td>${payload.total_hours} h</td></tr>`
       : "";
+  const reviewWarning = payload.requires_manual_review
+    ? `<p class="slip-review-warning">
+        ${escapeHtml(payload.review_notes || "Manual review required: incomplete attendance found for selected period.")}
+      </p>`
+    : "";
+  const incompleteRow = payload.requires_manual_review
+    ? `<tr><td>Incomplete attendance</td><td>${payload.incomplete_records_count || 0} record(s)</td></tr>`
+    : "";
   return `
     <div class="slip-content">
       <h3>GermanATO</h3>
       <p class="slip-title">Salary Slip (based on attendance)</p>
+      ${reviewWarning}
       <table class="slip-table">
         <tr><td>Employee ID</td><td>${escapeHtml(String(payload.employee_id || "—"))}</td></tr>
         <tr><td>Name</td><td>${escapeHtml(name)}</td></tr>
@@ -249,6 +266,7 @@ function renderSlipHtml(payload) {
         <tr><td>Period</td><td>${monthName} ${payload.year}</td></tr>
         ${daysRow}
         ${hoursRow}
+        ${incompleteRow}
         <tr><td>Net Salary</td><td><strong>${formatted}</strong></td></tr>
       </table>
     </div>

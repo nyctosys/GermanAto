@@ -618,6 +618,15 @@ def get_attendance_summary():
 
         days_worked = len(set(r.date for r in records))
         total_hours = sum(r.work_hours or 0 for r in records)
+        incomplete_records = [
+            r for r in records
+            if (
+                (r.check_in_time is not None and r.check_out_time is None) or
+                (r.check_in_time is None and r.check_out_time is not None)
+            )
+        ]
+        incomplete_dates = sorted({r.date.strftime('%Y-%m-%d') for r in incomplete_records})
+        requires_manual_review = len(incomplete_records) > 0
 
         return jsonify({
             'worker_id': worker_id,
@@ -625,7 +634,10 @@ def get_attendance_summary():
             'year': year,
             'days_worked': days_worked,
             'total_hours': round(total_hours, 2),
-            'records_count': len(records)
+            'records_count': len(records),
+            'incomplete_records_count': len(incomplete_records),
+            'incomplete_dates': incomplete_dates,
+            'requires_manual_review': requires_manual_review
         })
     except Exception as e:
         logger.error(f"Error fetching attendance summary: {e}", exc_info=True)
@@ -664,9 +676,17 @@ def calculate_salary():
 
         days_worked = len(set(r.date for r in records))
         total_hours = sum(r.work_hours or 0 for r in records)
+        incomplete_records = [
+            r for r in records
+            if (
+                (r.check_in_time is not None and r.check_out_time is None) or
+                (r.check_in_time is None and r.check_out_time is not None)
+            )
+        ]
+        incomplete_dates = sorted({r.date.strftime('%Y-%m-%d') for r in incomplete_records})
+        requires_manual_review = len(incomplete_records) > 0
 
         # Salary = (base_salary / 30) * days_worked (proportional to days present)
-        days_in_month = (end_date - start_date).days + 1
         daily_rate = base_salary / 30.0 if base_salary else 0
         net_salary = round(daily_rate * days_worked, 2)
 
@@ -685,7 +705,11 @@ def calculate_salary():
             'daily_rate': round(daily_rate, 2),
             'net_salary': net_salary,
             'deductions': 0,
-            'bonuses': 0
+            'bonuses': 0,
+            'incomplete_records_count': len(incomplete_records),
+            'incomplete_dates': incomplete_dates,
+            'requires_manual_review': requires_manual_review,
+            'review_notes': 'Incomplete attendance exists. Please review missing check-in/check-out entries before final payroll.' if requires_manual_review else None
         })
     except Exception as e:
         logger.error(f"Error calculating salary: {e}", exc_info=True)

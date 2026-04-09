@@ -332,6 +332,9 @@ body::before {
   font-size: 0.875rem;
 }
 .data-table tbody tr:hover { background: rgba(139, 21, 56, 0.04); }
+.attendance-row-incomplete {
+  background: rgba(245, 158, 11, 0.10);
+}
 .loading-cell, .empty-cell { text-align: center; padding: 48px 20px; color: var(--text-muted); }
 .loading-spinner {
   display: inline-block;
@@ -356,6 +359,20 @@ body::before {
 }
 .btn-edit { background: var(--bg-light); color: var(--primary-maroon); }
 .btn-delete { background: #fee2e2; color: #b91c1c; }
+
+.status-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-warning {
+  background: rgba(245, 158, 11, 0.16);
+  color: #92400e;
+}
 
 .modal {
   display: none;

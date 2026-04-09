@@ -438,6 +438,17 @@ body::before {
   margin-bottom: 16px;
 }
 
+.slip-review-warning {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 .slip-table {
   width: 100%;
   border-collapse: collapse;

@@ -15,11 +15,21 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function initAttendance() {
   if (!auth.requirePageAccess("hr")) return;
+  setDefaultDateFilters();
   loadWorkers();
   loadAttendance();
   setupFilters();
   setupModal();
   setupBackButton();
+}
+
+function setDefaultDateFilters() {
+  const startInput = document.getElementById("startDate");
+  const endInput = document.getElementById("endDate");
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (startInput && !startInput.value) startInput.value = today;
+  if (endInput && !endInput.value) endInput.value = today;
 }
 
 function setupBackButton() {
@@ -89,21 +99,29 @@ function renderTable() {
   }
   tbody.innerHTML = attendance
     .map(
-      (a) => `
-    <tr>
+      (a) => {
+        const hasCheckIn = Boolean(a.check_in_time);
+        const hasCheckOut = Boolean(a.check_out_time);
+        const isIncomplete = (hasCheckIn && !hasCheckOut) || (!hasCheckIn && hasCheckOut);
+        const statusBadge = isIncomplete
+          ? '<span class="status-badge status-warning">Manual review</span>'
+          : "";
+        return `
+    <tr class="${isIncomplete ? "attendance-row-incomplete" : ""}">
       <td>${escapeHtml(a.date || "—")}</td>
       <td>${escapeHtml(a.employee_id || "—")}</td>
       <td>${escapeHtml(a.worker_name || "—")}</td>
-      <td>${escapeHtml(a.check_in_time || "—")}</td>
-      <td>${escapeHtml(a.check_out_time || "—")}</td>
+      <td>${escapeHtml(a.check_in_time || "—")} ${(!hasCheckIn && hasCheckOut) ? '<small>(missing in)</small>' : ""}</td>
+      <td>${escapeHtml(a.check_out_time || "—")} ${(hasCheckIn && !hasCheckOut) ? '<small>(missing out)</small>' : ""}</td>
       <td>${a.work_hours != null ? a.work_hours + " h" : "—"}</td>
-      <td>${escapeHtml(a.notes || "—")}</td>
+      <td>${escapeHtml(a.notes || "—")} ${statusBadge}</td>
       <td>
         <button type="button" class="btn-edit" data-id="${a.id}">Edit</button>
         <button type="button" class="btn-delete" data-id="${a.id}">Delete</button>
       </td>
     </tr>
-  `
+  `;
+      }
     )
     .join("");
 
@@ -132,8 +150,9 @@ function setupFilters() {
   if (clear) {
     clear.addEventListener("click", () => {
       document.getElementById("workerFilter").value = "";
-      document.getElementById("startDate").value = "";
-      document.getElementById("endDate").value = "";
+      const today = new Date().toISOString().slice(0, 10);
+      document.getElementById("startDate").value = today;
+      document.getElementById("endDate").value = today;
       loadAttendance();
     });
   }
