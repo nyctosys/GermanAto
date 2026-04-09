@@ -442,17 +442,20 @@ document.addEventListener("DOMContentLoaded", function () {
     return;
   }
 
-  const backBtn = document.getElementById("back-btn");
+  const backBtn =
+    document.getElementById("back-btn") || document.querySelector(".back-btn");
   const urlParams = new URLSearchParams(window.location.search);
   const fromPage =
     urlParams.get("from") ||
     localStorage.getItem("lastPage") ||
     "finance-management";
 
-  if (fromPage === "finance-management") {
-    backBtn.href = "finance-management.html";
-  } else {
-    backBtn.href = "finance-management.html";
+  if (backBtn) {
+    if (fromPage === "finance-management") {
+      backBtn.href = "finance-management.html";
+    } else {
+      backBtn.href = "finance-management.html";
+    }
   }
 
   localStorage.setItem("lastPage", "major-expenses");
