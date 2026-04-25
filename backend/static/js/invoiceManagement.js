@@ -221,15 +221,12 @@ document.addEventListener("DOMContentLoaded", () => {
             <p><strong>Reg No:</strong> ${invoice.customer_reg_no}</p>
             <p><strong>Net Total:</strong> ${invoice.total.toFixed(2)} PKR</p>
             ${taxDisplay}
+            <p><strong>Discount:</strong> ${invoice.discount.toFixed(2)} PKR</p>
             <p><strong>Advance:</strong> ${invoice.advance.toFixed(2)} PKR</p>
             <p><strong>Paid Amount:</strong> ${(
               invoice.paid_amount || 0
             ).toFixed(2)} PKR</p>
-            <p><strong>Balance:</strong> ${(
-              totalWithTax -
-              (invoice.paid_amount || 0) -
-              (invoice.advance || 0)
-            ).toFixed(2)} PKR</p>
+            <p><strong>Balance:</strong> ${invoice.balance.toFixed(2)} PKR</p>
             <p><strong>Created:</strong> ${invoice.created_at}</p>
             ${statusDisplay}
             <div class="invoice-actions">

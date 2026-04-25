@@ -176,10 +176,9 @@ document.addEventListener("DOMContentLoaded", () => {
             <p><strong>Reg No:</strong> ${quote.customer_reg_no}</p>
             <p><strong>Net Total:</strong> ${quote.total.toFixed(2)} PKR</p>
             ${taxDisplay}
+            <p><strong>Discount:</strong> ${quote.discount.toFixed(2)} PKR</p>
             <p><strong>Advance:</strong> ${quote.advance.toFixed(2)} PKR</p>
-            <p><strong>Total Quotation:</strong> ${totalWithTax.toFixed(
-              2
-            )} PKR</p>
+            <p><strong>Total Quotation:</strong> ${(totalWithTax - quote.discount).toFixed(2)} PKR</p>
             <p><strong>Created:</strong> ${quote.created_at}</p>
             <p><strong>Status:</strong> <span class="quote-status">${
               quote.status || "pending"
