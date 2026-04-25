@@ -482,9 +482,9 @@ def update_invoice(invoice_id):
             items_data = data.get('items', [])
             labours_data = data.get('labours', [])
             
-            # Delete old items and labours
-            InvoiceItem.query.filter_by(invoice_id=invoice_id).delete()
-            InvoiceLabour.query.filter_by(invoice_id=invoice_id).delete()
+            # Clear old items and labours to avoid stale session data
+            invoice.items = []
+            invoice.labours = []
             
             # Add new items
             for item in items_data:
@@ -495,7 +495,7 @@ def update_invoice(invoice_id):
                     quantity=int(item['quantity']),
                     price=float(item['price'])
                 )
-                db.session.add(new_item)
+                invoice.items.append(new_item)
             
             # Add new labours
             for labour in labours_data:
@@ -504,18 +504,19 @@ def update_invoice(invoice_id):
                     description=str(labour['description']).strip(),
                     price=float(labour['price'])
                 )
-                db.session.add(new_labour)
+                invoice.labours.append(new_labour)
             
             # Recalculate total
             total = calculate_totals(items_data, labours_data)
             invoice.net_total = total
             
-            # Calculate balance considering tax and discount
+            # Calculate balance considering tax, discount, and already paid amount
+            current_paid = float(invoice.paid_amount or 0)
             if invoice.include_tax and invoice.tax_amount > 0:
                 total_with_tax = total + invoice.tax_amount
-                invoice.balance = round(total_with_tax - invoice.discount - invoice.advance, 2)
+                invoice.balance = round(total_with_tax - invoice.discount - invoice.advance - current_paid, 2)
             else:
-                invoice.balance = round(total - invoice.discount - invoice.advance, 2)
+                invoice.balance = round(total - invoice.discount - invoice.advance - current_paid, 2)
             
             db.session.commit()
             
