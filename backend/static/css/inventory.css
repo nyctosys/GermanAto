@@ -257,6 +257,13 @@ body {
   align-items: center;
 }
 
+.form-help {
+  display: block;
+  margin-top: 0.375rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
 .search-input {
   padding: 10px 16px;
   border: 1px solid var(--border-light);
@@ -1455,6 +1462,18 @@ body.modal-open {
   border: 2px solid #ffc107;
   border-radius: 12px;
   box-shadow: var(--shadow-md);
+}
+
+.low-stock-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.low-stock-export-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+  transform: none;
 }
 
 .section-header {

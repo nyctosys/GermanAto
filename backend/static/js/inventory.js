@@ -380,77 +380,63 @@ function loadSampleData() {
       name: "Engine Oil Filter",
       category: "parts",
       quantity: 25,
-      price: 450.0,
       description: "High-quality engine oil filter for various car models",
       location: "Shelf A1",
       reorder_level: 5,
-      reorder_quantity: 20,
     },
     {
       id: 2,
       name: "Brake Pads Set",
       category: "parts",
       quantity: 12,
-      price: 1200.0,
       description: "Front brake pads set for sedan vehicles",
       location: "Shelf B2",
       reorder_level: 3,
-      reorder_quantity: 15,
     },
     {
       id: 3,
       name: "Air Filter",
       category: "parts",
       quantity: 2, // Low stock
-      price: 350.0,
       description: "Engine air filter for improved performance",
       location: "Shelf A3",
       reorder_level: 5,
-      reorder_quantity: 25,
     },
     {
       id: 4,
       name: "Transmission Fluid",
       category: "fluids",
       quantity: 0, // Out of stock
-      price: 800.0,
       description: "High-quality transmission fluid",
       location: "Shelf C1",
       reorder_level: 3,
-      reorder_quantity: 10,
     },
     {
       id: 5,
       name: "Spark Plugs",
       category: "parts",
       quantity: 4, // Low stock
-      price: 250.0,
       description: "Iridium spark plugs for better ignition",
       location: "Shelf A2",
       reorder_level: 5,
-      reorder_quantity: 30,
     },
     {
       id: 6,
       name: "Socket Wrench Set",
       category: "tools",
       quantity: 8,
-      price: 2500.0,
       description: "Complete socket wrench set with 32 pieces",
       location: "Tool Cabinet C1",
       reorder_level: 2,
-      reorder_quantity: 5,
     },
     {
       id: 7,
       name: "Motor Oil 5W-30",
       category: "fluids",
       quantity: 30,
-      price: 800.0,
       description: "Synthetic motor oil 5W-30, 1L bottles",
       location: "Fluid Storage D1",
       reorder_level: 5,
-      reorder_quantity: 20,
     },
   ];
   renderInventory();
@@ -615,6 +601,11 @@ function updateCategoryHeaderCount(category) {
 function createInventoryItemElement(item) {
   const div = document.createElement("div");
   div.className = "inventory-item";
+  const openingQuantity = Number(item.opening_quantity ?? item.quantity ?? 0);
+  const purchasesQuantity = Number(item.purchases_quantity ?? 0);
+  const salesQuantity = Number(item.sales_quantity ?? 0);
+  const closingQuantity = Number(item.closing_quantity ?? item.quantity ?? 0);
+
   div.innerHTML = `
         <div class="item-header">
             <div class="item-image-container">
@@ -632,30 +623,29 @@ function createInventoryItemElement(item) {
                 <div class="item-category">${getCategoryDisplayName(
                   item.category
                 )}</div>
+                <div class="item-category">${
+                  item.barcode || item.manufacturer_part_number || ""
+                }</div>
             </div>
         </div>
         <div class="item-details">
             <div class="item-detail">
-                <span>Quantity:</span>
+                <span>Opening Qty:</span>
+                <span>${openingQuantity}</span>
+            </div>
+            <div class="item-detail">
+                <span>Purchases (issue in):</span>
+                <span>${purchasesQuantity}</span>
+            </div>
+            <div class="item-detail">
+                <span>Sales (issue out):</span>
+                <span>${salesQuantity}</span>
+            </div>
+            <div class="item-detail">
+                <span>Closing Qty:</span>
                 <span class="${
-                  item.quantity <= (item.reorder_level || 5) ? "low-stock" : ""
-                }">${item.quantity}</span>
-            </div>
-            <div class="item-detail">
-                <span>Price:</span>
-                <span>PKR ${item.price.toFixed(2)}</span>
-            </div>
-            <div class="item-detail">
-                <span>Total Value:</span>
-                <span>PKR ${(item.quantity * item.price).toFixed(2)}</span>
-            </div>
-            <div class="item-detail">
-                <span>Reorder Level:</span>
-                <span>${item.reorder_level || 5}</span>
-            </div>
-            <div class="item-detail">
-                <span>Reorder Qty:</span>
-                <span>${item.reorder_quantity || 10}</span>
+                  closingQuantity <= (item.reorder_level || 5) ? "low-stock" : ""
+                }">${closingQuantity}</span>
             </div>
             ${
               item.location
@@ -885,6 +875,14 @@ async function editItem(id) {
     return;
   }
 
+  try {
+    item = await APIHelper.get(`/api/inventory/${id}`);
+  } catch (error) {
+    console.error(`Error loading item ${id}:`, error);
+    alert("Could not load item details. Please try again.");
+    return;
+  }
+
   currentEditId = id;
   document.getElementById("modal-title").textContent = "Edit Item";
 
@@ -915,12 +913,12 @@ async function editItem(id) {
   }
   
   document.getElementById("item-quantity").value = item.quantity;
-  document.getElementById("item-price").value = item.price;
+  document.getElementById("item-barcode").value = item.barcode || "";
+  document.getElementById("item-manufacturer-part-number").value =
+    item.manufacturer_part_number || "";
   document.getElementById("item-description").value = item.description || "";
   document.getElementById("item-location").value = item.location || "";
   document.getElementById("item-reorder-level").value = item.reorder_level || 5;
-  document.getElementById("item-reorder-quantity").value =
-    item.reorder_quantity || 10;
 
   // Handle current image display
   const currentImageContainer = document.getElementById(
@@ -1007,6 +1005,8 @@ function closeRestockModal() {
   document.getElementById("restock-modal").style.display = "none";
   document.getElementById("restock-form").reset();
   // Clear the search input and hidden field
+  document.getElementById("restock-code").value = "";
+  document.getElementById("restock-code-status").textContent = "";
   document.getElementById("restock-product-search").value = "";
   document.getElementById("restock-product").value = "";
 }
@@ -1027,9 +1027,49 @@ function setupSearchableSelect() {
   searchInput.addEventListener("focus", handleSearchFocus);
   searchInput.addEventListener("blur", handleSearchBlur);
 
+  const codeInput = document.getElementById("restock-code");
+  codeInput.removeEventListener("keydown", handleRestockCodeKeydown);
+  codeInput.removeEventListener("change", handleRestockCodeLookup);
+  codeInput.addEventListener("keydown", handleRestockCodeKeydown);
+  codeInput.addEventListener("change", handleRestockCodeLookup);
+
   // Clear dropdown initially - items will be loaded via search
   dropdown.innerHTML =
     '<div class="dropdown-item">Type to search for items...</div>';
+}
+
+function handleRestockCodeKeydown(e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    handleRestockCodeLookup();
+  }
+}
+
+async function handleRestockCodeLookup() {
+  const codeInput = document.getElementById("restock-code");
+  const status = document.getElementById("restock-code-status");
+  const code = codeInput.value.trim();
+
+  if (!code) {
+    status.textContent = "";
+    return;
+  }
+
+  try {
+    status.textContent = "Looking up item...";
+    const result = await APIHelper.get(
+      `/api/inventory/lookup?code=${encodeURIComponent(code)}`
+    );
+
+    if (result && result.item) {
+      selectProduct(result.item, result.item.name);
+      status.textContent = `Matched: ${result.item.name}`;
+    }
+  } catch (error) {
+    document.getElementById("restock-product").value = "";
+    document.getElementById("restock-product-search").value = "";
+    status.textContent = "No matching inventory item found";
+  }
 }
 
 // Handle search input with debouncing
@@ -1126,8 +1166,10 @@ function populateSearchableDropdown(items) {
     itemDiv.innerHTML = `
       <div class="product-name">${item.name}</div>
       <div class="product-details">
-        Current Stock: ${item.quantity} | Category: ${item.category || "N/A"}
+        Current Stock: ${item.closing_quantity ?? item.quantity} | Category: ${item.category || "N/A"}
         ${item.part_number ? ` | Part #: ${item.part_number}` : ""}
+        ${item.barcode ? ` | Barcode: ${item.barcode}` : ""}
+        ${item.manufacturer_part_number ? ` | MPN: ${item.manufacturer_part_number}` : ""}
       </div>
     `;
 
@@ -1174,12 +1216,13 @@ async function handleRestockSubmit(e) {
 
   const formData = new FormData(e.target);
   const productId = formData.get("product_id");
+  const code = (formData.get("code") || "").trim();
   const quantity = formData.get("quantity");
   const notes = formData.get("notes") || "";
 
   // Validate form data
-  if (!productId || !quantity) {
-    alert("Please select a product and enter the quantity to restock.");
+  if ((!productId && !code) || !quantity) {
+    alert("Please scan a code or select a product, then enter the quantity received.");
     return;
   }
 
@@ -1189,20 +1232,25 @@ async function handleRestockSubmit(e) {
   }
 
   const restockData = {
-    product_id: parseInt(productId),
     quantity: parseInt(quantity),
     notes: notes,
   };
 
+  if (code) {
+    restockData.code = code;
+  } else {
+    restockData.product_id = parseInt(productId);
+  }
+
   // Get the submit button and show loading state
   const submitBtn = e.target.querySelector(".save-btn");
   const originalText = submitBtn.textContent;
-  submitBtn.textContent = "Restocking...";
+  submitBtn.textContent = "Receiving...";
   submitBtn.disabled = true;
 
   try {
-    // Call the restock API endpoint
-    const result = await APIHelper.request("/api/inventory/restock", {
+    const endpoint = code ? "/api/inventory/receive" : "/api/inventory/restock";
+    const result = await APIHelper.request(endpoint, {
       method: "POST",
       body: JSON.stringify(restockData),
     });
@@ -1210,7 +1258,7 @@ async function handleRestockSubmit(e) {
     if (result) {
       // Show success message
       alert(
-        `Successfully restocked ${result.quantity_added} units of ${result.product_name}.\n\nOld quantity: ${result.old_quantity}\nNew quantity: ${result.new_quantity}`
+        `Successfully received ${result.quantity_added} units of ${result.product_name}.\n\nOld quantity: ${result.old_quantity}\nNew quantity: ${result.new_quantity}`
       );
 
       // Close modal and update the specific item in UI
@@ -1223,9 +1271,15 @@ async function handleRestockSubmit(e) {
           (item) => item.id === productId
         );
         if (itemIndex !== -1) {
-          // Update the item with new quantity
-          categoryPagination[category].items[itemIndex].quantity =
-            result.new_quantity;
+          const existingItem = categoryPagination[category].items[itemIndex];
+          categoryPagination[category].items[itemIndex] = result.item || {
+            ...existingItem,
+            quantity: result.new_quantity,
+            closing_quantity: result.new_quantity,
+            purchases_quantity:
+              Number(existingItem.purchases_quantity || 0) +
+              Number(result.quantity_added || 0),
+          };
           // Re-render the specific category section
           renderCategorySection(category);
           break;
@@ -1234,12 +1288,12 @@ async function handleRestockSubmit(e) {
     } else {
       const errorData = await response.json();
       alert(
-        `Error restocking item: ${errorData.error || "Unknown error occurred"}`
+        `Error receiving stock: ${errorData.error || "Unknown error occurred"}`
       );
     }
   } catch (error) {
-    console.error("Error restocking item:", error);
-    alert("Error restocking item. Please check your connection and try again.");
+    console.error("Error receiving stock:", error);
+    alert("Error receiving stock. Please check your connection and try again.");
   } finally {
     // Restore button state
     submitBtn.textContent = originalText;
@@ -1533,11 +1587,15 @@ function renderLowStockItems(data) {
 // Create low stock item element
 function createLowStockItemElement(item, urgencyLevel = "low-stock") {
   let stockStatus, statusText;
+  const openingQuantity = Number(item.opening_quantity ?? item.quantity ?? 0);
+  const purchasesQuantity = Number(item.purchases_quantity ?? 0);
+  const salesQuantity = Number(item.sales_quantity ?? 0);
+  const closingQuantity = Number(item.closing_quantity ?? item.quantity ?? 0);
 
   if (urgencyLevel === "urgent") {
     stockStatus = "urgent";
     statusText = item.stock_status || "URGENT - Negative Stock";
-  } else if (item.quantity === 0) {
+  } else if (closingQuantity === 0) {
     stockStatus = "out-of-stock";
     statusText = "Out of Stock";
   } else {
@@ -1562,16 +1620,20 @@ function createLowStockItemElement(item, urgencyLevel = "low-stock") {
       
       <div class="low-stock-item-details">
         <div class="low-stock-item-detail">
-          <span>Current Stock:</span>
-          <span>${item.quantity}</span>
+          <span>Opening Qty:</span>
+          <span>${openingQuantity}</span>
         </div>
         <div class="low-stock-item-detail">
-          <span>Reorder Level:</span>
-          <span>${item.reorder_level}</span>
+          <span>Purchases (issue in):</span>
+          <span>${purchasesQuantity}</span>
         </div>
         <div class="low-stock-item-detail">
-          <span>Price:</span>
-          <span>PKR ${item.price.toFixed(2)}</span>
+          <span>Sales (issue out):</span>
+          <span>${salesQuantity}</span>
+        </div>
+        <div class="low-stock-item-detail">
+          <span>Closing Qty:</span>
+          <span>${closingQuantity}</span>
         </div>
         ${
           item.location
@@ -1581,21 +1643,6 @@ function createLowStockItemElement(item, urgencyLevel = "low-stock") {
           <span>${item.location}</span>
         </div>
         `
-            : ""
-        }
-      </div>
-      
-      <div class="reorder-info">
-        <h4>Reorder Information</h4>
-        <p><strong>Recommended Order:</strong> <span class="needed-quantity">${
-          item.reorder_quantity
-        }</span> units</p>
-        <p><strong>Total Cost:</strong> PKR ${(
-          item.reorder_quantity * item.price
-        ).toFixed(2)}</p>
-        ${
-          item.description
-            ? `<p><strong>Description:</strong> ${item.description}</p>`
             : ""
         }
       </div>
@@ -1612,30 +1659,167 @@ function createLowStockItemElement(item, urgencyLevel = "low-stock") {
   `;
 }
 
-// Open print sheet for low stock items
-async function openPrintSheet() {
-  try {
-    // Fetch latest low stock items from server
-    const lowStockItems = await APIHelper.request("/api/inventory/low-stock");
-    if (lowStockItems) {
-      sessionStorage.setItem("lowStockItems", JSON.stringify(lowStockItems));
-    } else {
-      // Fallback to current inventory data
-      const lowStockItems = inventoryItems.filter(
-        (item) => item.quantity <= item.reorder_level
-      );
-      sessionStorage.setItem("lowStockItems", JSON.stringify(lowStockItems));
+async function fetchCompleteInventoryReport() {
+  const perPage = 200;
+  let page = 1;
+  let allItems = [];
+
+  while (true) {
+    const data = await APIHelper.get(`/api/inventory?page=${page}&per_page=${perPage}`);
+    const items = data && data.items ? data.items : [];
+    allItems = allItems.concat(items);
+
+    if (!data || !data.pagination || !data.pagination.has_next) {
+      return allItems;
     }
 
-    // Open print sheet in same window
-    window.location.href = "low-stock-print.html";
+    page += 1;
+  }
+}
+
+function getInventoryStockStatus(item) {
+  const closingQuantity = Number(item.closing_quantity ?? item.quantity ?? 0);
+
+  if (closingQuantity < 0) return "Negative Stock";
+  if (closingQuantity === 0) return "Out of Stock";
+  if (closingQuantity <= (item.reorder_level || 0)) return "Low Stock";
+  return "In Stock";
+}
+
+function buildInventoryReportRows(items) {
+  return items.map((item) => ({
+    "Part Number": item.part_number || "",
+    Barcode: item.barcode || "",
+    "Manufacturer Part Number": item.manufacturer_part_number || "",
+    "Item Name": item.name || "",
+    Category: getCategoryDisplayName(item.category || "other"),
+    "Opening Qty": Number(item.opening_quantity ?? item.quantity ?? 0),
+    "Purchases (issue in)": Number(item.purchases_quantity ?? 0),
+    "Sales (issue out)": Number(item.sales_quantity ?? 0),
+    "Closing Qty": Number(item.closing_quantity ?? item.quantity ?? 0),
+    Location: item.location || "",
+    "Reorder Level": Number(item.reorder_level || 0),
+    "Stock Status": getInventoryStockStatus(item),
+    Description: item.description || "",
+    "Created At": item.created_at || "",
+    "Updated At": item.updated_at || "",
+  }));
+}
+
+function getInventoryReportColumns() {
+  return [
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 26 },
+    { wch: 30 },
+    { wch: 20 },
+    { wch: 12 },
+    { wch: 20 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 40 },
+    { wch: 20 },
+    { wch: 20 },
+  ];
+}
+
+function exportInventoryReportXlsx(items) {
+  const reportRows = buildInventoryReportRows(items);
+  const lowStockCount = items.filter(
+    (item) =>
+      Number(item.closing_quantity ?? item.quantity ?? 0) <=
+      Number(item.reorder_level || 0)
+  ).length;
+  const generatedAt = new Date();
+  const dateStamp = generatedAt.toISOString().slice(0, 10);
+
+  const reportSheet = XLSX.utils.json_to_sheet(reportRows);
+  reportSheet["!cols"] = getInventoryReportColumns();
+
+  const summarySheet = XLSX.utils.aoa_to_sheet([
+    ["GermanATO Complete Inventory Report"],
+    ["Generated At", generatedAt.toLocaleString()],
+    ["Total Items", items.length],
+    ["Low Stock Items", lowStockCount],
+  ]);
+  summarySheet["!cols"] = [{ wch: 28 }, { wch: 24 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+  XLSX.utils.book_append_sheet(wb, reportSheet, "Inventory");
+  XLSX.writeFile(wb, `complete-inventory-report-${dateStamp}.xlsx`);
+}
+
+async function fetchLowStockReportItems() {
+  const data = await APIHelper.get("/api/inventory/low-stock");
+  const urgentItems = data && data.urgent_items ? data.urgent_items : [];
+  const lowStockItems = data && data.low_stock_items ? data.low_stock_items : [];
+
+  return urgentItems.concat(lowStockItems);
+}
+
+async function exportLowStockReportXlsx() {
+  const exportBtn = document.querySelector(".low-stock-export-btn");
+  const originalText = exportBtn ? exportBtn.innerHTML : "";
+
+  try {
+    if (!window.XLSX) {
+      throw new Error("Excel export library is not available");
+    }
+
+    if (exportBtn) {
+      exportBtn.disabled = true;
+      exportBtn.innerHTML = "<span>Exporting...</span>";
+    }
+
+    const items = await fetchLowStockReportItems();
+    const rows = buildInventoryReportRows(items);
+    const generatedAt = new Date();
+    const dateStamp = generatedAt.toISOString().slice(0, 10);
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    sheet["!cols"] = getInventoryReportColumns();
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheet, "Low Stock");
+    XLSX.writeFile(wb, `low-stock-inventory-report-${dateStamp}.xlsx`);
   } catch (error) {
-    console.error("Error fetching low stock items:", error);
-    // Fallback to current inventory data
-    const lowStockItems = inventoryItems.filter(
-      (item) => item.quantity <= item.reorder_level
-    );
-    sessionStorage.setItem("lowStockItems", JSON.stringify(lowStockItems));
-    window.location.href = "low-stock-print.html";
+    console.error("Error exporting low stock report:", error);
+    alert("Could not export the low stock report. Please try again.");
+  } finally {
+    if (exportBtn) {
+      exportBtn.disabled = false;
+      exportBtn.innerHTML = originalText;
+    }
+  }
+}
+
+// Export complete inventory sheet
+async function openPrintSheet() {
+  const printBtn = document.querySelector(".print-btn");
+  const originalText = printBtn ? printBtn.innerHTML : "";
+
+  try {
+    if (!window.XLSX) {
+      throw new Error("Excel export library is not available");
+    }
+
+    if (printBtn) {
+      printBtn.disabled = true;
+      printBtn.innerHTML = "<span>Exporting...</span>";
+    }
+
+    const items = await fetchCompleteInventoryReport();
+    exportInventoryReportXlsx(items);
+  } catch (error) {
+    console.error("Error exporting inventory report:", error);
+    alert("Could not export the inventory report. Please try again.");
+  } finally {
+    if (printBtn) {
+      printBtn.disabled = false;
+      printBtn.innerHTML = originalText;
+    }
   }
 }

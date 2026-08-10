@@ -67,13 +67,6 @@ def validate_inventory_data(data):
     except (ValueError, TypeError):
         errors.append("Quantity must be a valid number")
     
-    try:
-        price = float(data.get('price', 0))
-        if price < 0:
-            errors.append("Price cannot be negative")
-    except (ValueError, TypeError):
-        errors.append("Price must be a valid number")
-    
     # Validate reorder fields
     try:
         reorder_level = int(data.get('reorder_level', 5))
@@ -82,14 +75,105 @@ def validate_inventory_data(data):
     except (ValueError, TypeError):
         errors.append("Reorder level must be a valid number")
     
-    try:
-        reorder_quantity = int(data.get('reorder_quantity', 10))
-        if reorder_quantity <= 0:
-            errors.append("Reorder quantity must be greater than 0")
-    except (ValueError, TypeError):
-        errors.append("Reorder quantity must be a valid number")
-    
     return errors
+
+def clean_optional_text(value):
+    if value is None:
+        return None
+
+    value = str(value).strip()
+    return value or None
+
+def get_inventory_movement_totals(items):
+    """Return opening, received, issued, and closing quantities for inventory items."""
+    item_ids = [item.id for item in items]
+    movement_totals = {
+        item.id: {
+            'opening_quantity': item.quantity,
+            'purchases_quantity': 0,
+            'sales_quantity': 0,
+            'closing_quantity': item.quantity
+        }
+        for item in items
+    }
+
+    if not item_ids:
+        return movement_totals
+
+    transactions = InventoryTransaction.query.filter(
+        InventoryTransaction.inventory_id.in_(item_ids)
+    ).all()
+
+    net_changes = {item_id: 0 for item_id in item_ids}
+    for transaction in transactions:
+        item_totals = movement_totals[transaction.inventory_id]
+        quantity = transaction.quantity or 0
+        net_changes[transaction.inventory_id] += quantity
+
+        if transaction.transaction_type == 'received':
+            item_totals['purchases_quantity'] += abs(quantity)
+        elif transaction.transaction_type == 'issue_out':
+            item_totals['sales_quantity'] += abs(quantity)
+
+    for item in items:
+        movement_totals[item.id]['opening_quantity'] = item.quantity - net_changes[item.id]
+
+    return movement_totals
+
+def inventory_item_to_dict(item, movement_totals=None):
+    item_data = {
+        'id': item.id,
+        'part_number': item.part_number,
+        'barcode': item.barcode,
+        'manufacturer_part_number': item.manufacturer_part_number,
+        'name': item.name,
+        'category': item.category,
+        'quantity': item.quantity,
+        'description': item.description,
+        'location': item.location,
+        'reorder_level': item.reorder_level,
+        'image_path': item.image_path,
+        'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    if movement_totals and item.id in movement_totals:
+        item_data.update(movement_totals[item.id])
+
+    return item_data
+
+def inventory_item_detail_to_dict(item):
+    return inventory_item_to_dict(item, get_inventory_movement_totals([item]))
+
+def find_inventory_item_by_code(code):
+    code = clean_optional_text(code)
+    if not code:
+        return None
+
+    return (
+        Inventory.query.filter(Inventory.barcode == code).first()
+        or Inventory.query.filter(Inventory.manufacturer_part_number == code).first()
+        or Inventory.query.filter(Inventory.part_number == code).first()
+    )
+
+def ensure_unique_inventory_codes(barcode=None, manufacturer_part_number=None, item_id=None):
+    if barcode:
+        existing = Inventory.query.filter(Inventory.barcode == barcode)
+        if item_id:
+            existing = existing.filter(Inventory.id != item_id)
+        if existing.first():
+            return f"Barcode {barcode} is already assigned to another inventory item"
+
+    if manufacturer_part_number:
+        existing = Inventory.query.filter(
+            Inventory.manufacturer_part_number == manufacturer_part_number
+        )
+        if item_id:
+            existing = existing.filter(Inventory.id != item_id)
+        if existing.first():
+            return f"Manufacturer part number {manufacturer_part_number} is already assigned to another inventory item"
+
+    return None
 
 @inventory_bp.route('/inventory', methods=['GET'])
 @login_required
@@ -116,6 +200,8 @@ def get_inventory(current_user=None):
                 db.or_(
                     Inventory.name.ilike(search_filter),
                     Inventory.part_number.ilike(search_filter),
+                    Inventory.barcode.ilike(search_filter),
+                    Inventory.manufacturer_part_number.ilike(search_filter),
                     Inventory.description.ilike(search_filter)
                 )
             )
@@ -131,24 +217,11 @@ def get_inventory(current_user=None):
         )
         
         inventory_items = pagination.items
-        items_data = []
-        
-        for item in inventory_items:
-            items_data.append({
-                'id': item.id,
-                'part_number': item.part_number,
-                'name': item.name,
-                'category': item.category,
-                'quantity': item.quantity,
-                'price': float(item.price),
-                'description': item.description,
-                'location': item.location,
-                'reorder_level': item.reorder_level,
-                'reorder_quantity': item.reorder_quantity,
-                'image_path': item.image_path,
-                'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-            })
+        movement_totals = get_inventory_movement_totals(inventory_items)
+        items_data = [
+            inventory_item_to_dict(item, movement_totals)
+            for item in inventory_items
+        ]
         
         return jsonify({
             'items': items_data,
@@ -194,6 +267,8 @@ def get_inventory_by_category(current_user=None):
                 db.or_(
                     Inventory.name.ilike(search_filter),
                     Inventory.part_number.ilike(search_filter),
+                    Inventory.barcode.ilike(search_filter),
+                    Inventory.manufacturer_part_number.ilike(search_filter),
                     Inventory.description.ilike(search_filter),
                     Inventory.location.ilike(search_filter),
                     Inventory.category.ilike(search_filter)
@@ -208,24 +283,11 @@ def get_inventory_by_category(current_user=None):
         )
         
         inventory_items = pagination.items
-        items_data = []
-        
-        for item in inventory_items:
-            items_data.append({
-                'id': item.id,
-                'part_number': item.part_number,
-                'name': item.name,
-                'category': item.category,
-                'quantity': item.quantity,
-                'price': float(item.price),
-                'description': item.description,
-                'location': item.location,
-                'reorder_level': item.reorder_level,
-                'reorder_quantity': item.reorder_quantity,
-                'image_path': item.image_path,
-                'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-            })
+        movement_totals = get_inventory_movement_totals(inventory_items)
+        items_data = [
+            inventory_item_to_dict(item, movement_totals)
+            for item in inventory_items
+        ]
         
         return jsonify({
             'items': items_data,
@@ -256,21 +318,7 @@ def get_inventory_item(item_id, current_user=None):
         if not item:
             return jsonify({'error': 'Inventory item not found'}), 404
         
-        item_data = {
-            'id': item.id,
-            'part_number': item.part_number,
-            'name': item.name,
-            'category': item.category,
-            'quantity': item.quantity,
-            'price': float(item.price),
-            'description': item.description,
-            'location': item.location,
-            'reorder_level': item.reorder_level,
-            'reorder_quantity': item.reorder_quantity,
-            'image_path': item.image_path,
-            'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-        }
+        item_data = inventory_item_detail_to_dict(item)
         
         return jsonify(item_data), 200
         
@@ -313,24 +361,31 @@ def create_inventory_item(current_user=None):
         # Extract and clean data
         name = str(data.get('name')).strip()
         category = str(data.get('category')).strip()
+        barcode = clean_optional_text(data.get('barcode'))
+        manufacturer_part_number = clean_optional_text(data.get('manufacturer_part_number'))
         quantity = int(data.get('quantity', 0))
-        price = float(data.get('price', 0))
         description = str(data.get('description', '')).strip() if data.get('description') else None
         location = str(data.get('location', '')).strip() if data.get('location') else None
         reorder_level = int(data.get('reorder_level', 5))
-        reorder_quantity = int(data.get('reorder_quantity', 10))
+
+        code_error = ensure_unique_inventory_codes(
+            barcode=barcode,
+            manufacturer_part_number=manufacturer_part_number
+        )
+        if code_error:
+            return jsonify({'error': code_error}), 400
         
         # Create inventory item
         try:
             inventory_item = Inventory(
                 name=name,
                 category=category,
+                barcode=barcode,
+                manufacturer_part_number=manufacturer_part_number,
                 quantity=quantity,
-                price=price,
                 description=description,
                 location=location,
                 reorder_level=reorder_level,
-                reorder_quantity=reorder_quantity,
                 image_path=image_path
             )
             db.session.add(inventory_item)
@@ -340,20 +395,7 @@ def create_inventory_item(current_user=None):
             
             return jsonify({
                 'message': 'Inventory item created successfully',
-                'item': {
-                    'id': inventory_item.id,
-                    'name': inventory_item.name,
-                    'category': inventory_item.category,
-                    'quantity': inventory_item.quantity,
-                    'price': float(inventory_item.price),
-                    'description': inventory_item.description,
-                    'location': inventory_item.location,
-                    'reorder_level': inventory_item.reorder_level,
-                    'reorder_quantity': inventory_item.reorder_quantity,
-                    'image_path': inventory_item.image_path,
-                    'created_at': inventory_item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    'updated_at': inventory_item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                }
+                'item': inventory_item_detail_to_dict(inventory_item)
             }), 201
             
         except SQLAlchemyError as e:
@@ -427,12 +469,20 @@ def update_inventory_item(item_id, current_user=None):
         # Extract and clean data
         name = str(data.get('name')).strip()
         category = str(data.get('category')).strip()
+        barcode = clean_optional_text(data.get('barcode'))
+        manufacturer_part_number = clean_optional_text(data.get('manufacturer_part_number'))
         new_quantity = int(data.get('quantity', 0))
-        price = float(data.get('price', 0))
         description = str(data.get('description', '')).strip() if data.get('description') else None
         location = str(data.get('location', '')).strip() if data.get('location') else None
         reorder_level = int(data.get('reorder_level', 5))
-        reorder_quantity = int(data.get('reorder_quantity', 10))
+
+        code_error = ensure_unique_inventory_codes(
+            barcode=barcode,
+            manufacturer_part_number=manufacturer_part_number,
+            item_id=item.id
+        )
+        if code_error:
+            return jsonify({'error': code_error}), 400
         
         # Store old quantity for transaction logging
         old_quantity = item.quantity
@@ -441,12 +491,12 @@ def update_inventory_item(item_id, current_user=None):
         try:
             item.name = name
             item.category = category
+            item.barcode = barcode
+            item.manufacturer_part_number = manufacturer_part_number
             item.quantity = new_quantity
-            item.price = price
             item.description = description
             item.location = location
             item.reorder_level = reorder_level
-            item.reorder_quantity = reorder_quantity
             item.image_path = image_path
             
             # Log adjustment if quantity changed
@@ -469,20 +519,7 @@ def update_inventory_item(item_id, current_user=None):
             
             return jsonify({
                 'message': 'Inventory item updated successfully',
-                'item': {
-                    'id': item.id,
-                    'name': item.name,
-                    'category': item.category,
-                    'quantity': item.quantity,
-                    'price': float(item.price),
-                    'description': item.description,
-                    'location': item.location,
-                    'reorder_level': item.reorder_level,
-                    'reorder_quantity': item.reorder_quantity,
-                    'image_path': item.image_path,
-                    'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                }
+                'item': inventory_item_detail_to_dict(item)
             }), 200
             
         except SQLAlchemyError as e:
@@ -542,6 +579,8 @@ def search_inventory(current_user=None):
         search_results = Inventory.query.filter(
             db.or_(
                 Inventory.part_number.ilike(f'%{query}%'),
+                Inventory.barcode.ilike(f'%{query}%'),
+                Inventory.manufacturer_part_number.ilike(f'%{query}%'),
                 Inventory.name.ilike(f'%{query}%'),
                 Inventory.description.ilike(f'%{query}%'),
                 Inventory.location.ilike(f'%{query}%'),
@@ -549,20 +588,11 @@ def search_inventory(current_user=None):
             )
         ).all()
         
-        items_data = []
-        for item in search_results:
-            items_data.append({
-                'id': item.id,
-                'part_number': item.part_number,
-                'name': item.name,
-                'category': item.category,
-                'quantity': item.quantity,
-                'price': float(item.price),
-                'description': item.description,
-                'location': item.location,
-                'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-            })
+        movement_totals = get_inventory_movement_totals(search_results)
+        items_data = [
+            inventory_item_to_dict(item, movement_totals)
+            for item in search_results
+        ]
         
         return jsonify({
             'query': query,
@@ -588,6 +618,8 @@ def search_inventory_grouped(current_user=None):
         search_results = Inventory.query.filter(
             db.or_(
                 Inventory.part_number.ilike(f'%{query}%'),
+                Inventory.barcode.ilike(f'%{query}%'),
+                Inventory.manufacturer_part_number.ilike(f'%{query}%'),
                 Inventory.name.ilike(f'%{query}%'),
                 Inventory.description.ilike(f'%{query}%'),
                 Inventory.location.ilike(f'%{query}%'),
@@ -595,6 +627,8 @@ def search_inventory_grouped(current_user=None):
             )
         ).all()
         
+        movement_totals = get_inventory_movement_totals(search_results)
+
         # Group results by category
         grouped_results = {}
         for item in search_results:
@@ -602,21 +636,9 @@ def search_inventory_grouped(current_user=None):
             if category not in grouped_results:
                 grouped_results[category] = []
             
-            grouped_results[category].append({
-                'id': item.id,
-                'part_number': item.part_number,
-                'name': item.name,
-                'category': item.category,
-                'quantity': item.quantity,
-                'price': float(item.price),
-                'description': item.description,
-                'location': item.location,
-                'reorder_level': item.reorder_level,
-                'reorder_quantity': item.reorder_quantity,
-                'image_path': item.image_path,
-                'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-            })
+            grouped_results[category].append(
+                inventory_item_to_dict(item, movement_totals)
+            )
         
         return jsonify({
             'query': query,
@@ -647,27 +669,23 @@ def get_inventory_stats(current_user=None):
     """Get inventory statistics"""
     try:
         total_items = Inventory.query.count()
-        total_value = db.session.query(db.func.sum(Inventory.quantity * Inventory.price)).scalar() or 0
         low_stock_items = Inventory.query.filter(Inventory.quantity < 10).count()
         
         # Category breakdown
         category_stats = db.session.query(
             Inventory.category,
-            db.func.count(Inventory.id).label('count'),
-            db.func.sum(Inventory.quantity * Inventory.price).label('total_value')
+            db.func.count(Inventory.id).label('count')
         ).group_by(Inventory.category).all()
         
         category_data = []
         for stat in category_stats:
             category_data.append({
                 'category': stat.category,
-                'count': stat.count,
-                'total_value': float(stat.total_value or 0)
+                'count': stat.count
             })
         
         return jsonify({
             'total_items': total_items,
-            'total_value': float(total_value),
             'low_stock_items': low_stock_items,
             'categories': category_data
         }), 200
@@ -683,26 +701,13 @@ def get_low_stock_items(current_user=None):
     try:
         # Get items where quantity is less than or equal to reorder_level
         low_stock_items = Inventory.query.filter(Inventory.quantity <= Inventory.reorder_level).all()
+        movement_totals = get_inventory_movement_totals(low_stock_items)
         
         urgent_items = []  # Negative values (urgent)
         low_stock_items_data = []  # Regular low stock items
         
         for item in low_stock_items:
-            item_data = {
-                'id': item.id,
-                'part_number': item.part_number,
-                'name': item.name,
-                'category': item.category,
-                'quantity': item.quantity,
-                'price': float(item.price),
-                'description': item.description,
-                'location': item.location,
-                'reorder_level': item.reorder_level,
-                'reorder_quantity': item.reorder_quantity,
-                'needed_quantity': item.reorder_quantity,
-                'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-            }
+            item_data = inventory_item_to_dict(item, movement_totals)
             
             # Separate negative values (urgent) from regular low stock
             if item.quantity < 0:
@@ -725,6 +730,83 @@ def get_low_stock_items(current_user=None):
         
     except Exception as e:
         logger.error(f"Error fetching low stock items: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@inventory_bp.route('/inventory/lookup', methods=['GET'])
+@login_required
+def lookup_inventory_by_code(current_user=None):
+    """Find one inventory item by barcode, manufacturer part number, or internal part number."""
+    try:
+        code = clean_optional_text(request.args.get('code'))
+        if not code:
+            return jsonify({'error': 'Code is required'}), 400
+
+        item = find_inventory_item_by_code(code)
+        if not item:
+            return jsonify({'error': 'Inventory item not found'}), 404
+
+        return jsonify({'item': inventory_item_detail_to_dict(item)}), 200
+
+    except Exception as e:
+        logger.error(f"Error looking up inventory item by code: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@inventory_bp.route('/inventory/receive', methods=['POST'])
+@role_required(['admin', 'inventory_manager'])
+def receive_inventory_by_code(current_user=None):
+    """Receive stock by scanned barcode or manufacturer/internal part number."""
+    try:
+        data = request.get_json() or {}
+        code = clean_optional_text(data.get('code'))
+        quantity_to_add = int(data.get('quantity', 0))
+        notes = clean_optional_text(data.get('notes'))
+
+        if not code:
+            return jsonify({'error': 'Barcode or part number is required'}), 400
+
+        if quantity_to_add <= 0:
+            return jsonify({'error': 'Quantity must be greater than 0'}), 400
+
+        inventory_item = find_inventory_item_by_code(code)
+        if not inventory_item:
+            return jsonify({'error': 'Inventory item not found for scanned code'}), 404
+
+        old_quantity = inventory_item.quantity
+        inventory_item.quantity += quantity_to_add
+        inventory_item.updated_at = datetime.utcnow()
+
+        log_received(
+            inventory_id=inventory_item.id,
+            quantity=quantity_to_add,
+            previous_quantity=old_quantity,
+            new_quantity=inventory_item.quantity,
+            reference_description=f"Inventory received by code scan - {inventory_item.name}",
+            created_by=current_user.id if current_user else None,
+            notes=notes or f"Scanned code: {code}"
+        )
+
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Inventory received successfully',
+            'product_id': inventory_item.id,
+            'product_name': inventory_item.name,
+            'code': code,
+            'quantity_added': quantity_to_add,
+            'old_quantity': old_quantity,
+            'new_quantity': inventory_item.quantity,
+            'item': inventory_item_detail_to_dict(inventory_item)
+        }), 200
+
+    except ValueError as e:
+        return jsonify({'error': f'Invalid quantity value: {str(e)}'}), 400
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error(f"Database error receiving inventory by code: {e}")
+        return jsonify({'error': 'Database error occurred'}), 500
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error receiving inventory by code: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @inventory_bp.route('/inventory/check-stock', methods=['POST'])
@@ -963,7 +1045,8 @@ def restock_inventory(current_user=None):
             'quantity_added': quantity_to_add,
             'old_quantity': old_quantity,
             'new_quantity': inventory_item.quantity,
-            'notes': notes
+            'notes': notes,
+            'item': inventory_item_detail_to_dict(inventory_item)
         }), 200
         
     except ValueError as e:

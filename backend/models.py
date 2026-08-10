@@ -106,6 +106,8 @@ class InvoiceLabour(db.Model):
 class Inventory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     part_number = db.Column(db.String(20), unique=True, nullable=False)  # Auto-generated part number
+    barcode = db.Column(db.String(100), unique=True, nullable=True)
+    manufacturer_part_number = db.Column(db.String(100), unique=True, nullable=True)
     name = db.Column(db.String(255), nullable=False)
     category = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False, default=0)
