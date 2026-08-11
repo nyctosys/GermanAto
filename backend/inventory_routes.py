@@ -85,7 +85,17 @@ def clean_optional_text(value):
     return value or None
 
 def get_inventory_movement_totals(items):
-    """Return opening, received, issued, and closing quantities for inventory items."""
+    """Return opening, inbound, outbound, and closing quantities for inventory items.
+
+    Closing is the live on-hand quantity. Every logged movement is classified by
+    direction so the card identity always holds:
+
+        Opening + Purchases (issue in) - Sales (issue out) = Closing
+
+    Inbound (`received` and positive adjustments) counts as purchases.
+    Outbound (`issue_out` and negative adjustments) counts as sales.
+    Opening is reconstructed as closing minus the net of those movements.
+    """
     item_ids = [item.id for item in items]
     movement_totals = {
         item.id: {
@@ -104,19 +114,22 @@ def get_inventory_movement_totals(items):
         InventoryTransaction.inventory_id.in_(item_ids)
     ).all()
 
-    net_changes = {item_id: 0 for item_id in item_ids}
     for transaction in transactions:
         item_totals = movement_totals[transaction.inventory_id]
         quantity = transaction.quantity or 0
-        net_changes[transaction.inventory_id] += quantity
 
-        if transaction.transaction_type == 'received':
-            item_totals['purchases_quantity'] += abs(quantity)
-        elif transaction.transaction_type == 'issue_out':
+        if quantity > 0:
+            item_totals['purchases_quantity'] += quantity
+        elif quantity < 0:
             item_totals['sales_quantity'] += abs(quantity)
 
     for item in items:
-        movement_totals[item.id]['opening_quantity'] = item.quantity - net_changes[item.id]
+        item_totals = movement_totals[item.id]
+        item_totals['opening_quantity'] = (
+            item.quantity
+            - item_totals['purchases_quantity']
+            + item_totals['sales_quantity']
+        )
 
     return movement_totals
 
