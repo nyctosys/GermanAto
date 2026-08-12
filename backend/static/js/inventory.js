@@ -605,6 +605,7 @@ function createInventoryItemElement(item) {
   const purchasesQuantity = Number(item.purchases_quantity ?? 0);
   const salesQuantity = Number(item.sales_quantity ?? 0);
   const closingQuantity = Number(item.closing_quantity ?? item.quantity ?? 0);
+  const movementDate = item.movement_date || new Date().toISOString().slice(0, 10);
 
   div.innerHTML = `
         <div class="item-header">
@@ -626,6 +627,7 @@ function createInventoryItemElement(item) {
                 <div class="item-category">${
                   item.barcode || item.manufacturer_part_number || ""
                 }</div>
+                <div class="item-movement-date">Today · ${movementDate}</div>
             </div>
         </div>
         <div class="item-details">
@@ -668,6 +670,9 @@ function createInventoryItemElement(item) {
             : ""
         } <br>
         <div class="item-actions">
+            <button class="action-btn excel-btn" onclick="exportItemLedgerXlsx(${
+              item.id
+            })">Excel</button>
             <button class="action-btn edit-btn" onclick="editItem(${
               item.id
             })">Edit</button>
@@ -1591,6 +1596,7 @@ function createLowStockItemElement(item, urgencyLevel = "low-stock") {
   const purchasesQuantity = Number(item.purchases_quantity ?? 0);
   const salesQuantity = Number(item.sales_quantity ?? 0);
   const closingQuantity = Number(item.closing_quantity ?? item.quantity ?? 0);
+  const movementDate = item.movement_date || new Date().toISOString().slice(0, 10);
 
   if (urgencyLevel === "urgent") {
     stockStatus = "urgent";
@@ -1614,6 +1620,7 @@ function createLowStockItemElement(item, urgencyLevel = "low-stock") {
           <div class="low-stock-item-part-number">${
             item.part_number || "No Part Number"
           }</div>
+          <div class="item-movement-date">Today · ${movementDate}</div>
         </div>
         <div class="stock-status ${stockStatus}">${statusText}</div>
       </div>
@@ -1648,6 +1655,9 @@ function createLowStockItemElement(item, urgencyLevel = "low-stock") {
       </div>
       
       <div class="item-actions" style="margin-top: 1rem;">
+        <button class="action-btn excel-btn" onclick="exportItemLedgerXlsx(${item.id})">
+          Excel
+        </button>
         <button class="action-btn edit-btn" onclick="editItem(${item.id})">
           Edit Item
         </button>
@@ -1686,6 +1696,134 @@ function getInventoryStockStatus(item) {
   return "In Stock";
 }
 
+function sanitizeExcelFilenamePart(value) {
+  return String(value || "item")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .slice(0, 60);
+}
+
+async function exportItemLedgerXlsx(itemId) {
+  try {
+    if (!window.XLSX) {
+      throw new Error("Excel export library is not available");
+    }
+
+    const ledger = await APIHelper.get(`/api/inventory/${itemId}/ledger`);
+    if (!ledger || !ledger.item) {
+      throw new Error("Ledger data was not returned");
+    }
+
+    const item = ledger.item;
+    const dailyRows = (ledger.daily_rows || []).map((row) => ({
+      Date: row.date,
+      Opening: Number(row.opening || 0),
+      "In (Purchases)": Number(row.in_quantity || 0),
+      "Out (Sales)": Number(row.out_quantity || 0),
+      Closing: Number(row.closing || 0),
+    }));
+
+    const transactionRows = (ledger.transactions || []).map((txn) => ({
+      Date: txn.date,
+      "Date Time": txn.datetime,
+      Type: txn.transaction_type,
+      In: Number(txn.in_quantity || 0),
+      Out: Number(txn.out_quantity || 0),
+      "Previous Qty": Number(txn.previous_quantity || 0),
+      "New Qty": Number(txn.new_quantity || 0),
+      Reference: txn.reference_description || "",
+      Notes: txn.notes || "",
+      "Repair Order": txn.repair_order_id || "",
+    }));
+
+    const summarySheet = XLSX.utils.aoa_to_sheet([
+      ["GermanATO Item Stock Ledger"],
+      ["Item Name", item.name || ""],
+      ["Part Number", item.part_number || ""],
+      ["Barcode", item.barcode || ""],
+      ["Manufacturer Part Number", item.manufacturer_part_number || ""],
+      ["Business Date", ledger.movement_date || item.movement_date || ""],
+      ["Today Opening", Number(item.opening_quantity ?? 0)],
+      ["Today Purchases (In)", Number(item.purchases_quantity ?? 0)],
+      ["Today Sales (Out)", Number(item.sales_quantity ?? 0)],
+      ["Today Closing", Number(item.closing_quantity ?? item.quantity ?? 0)],
+      [],
+      [
+        "Note",
+        "Each day's closing becomes the next day's opening. Card values are for today only.",
+      ],
+    ]);
+    summarySheet["!cols"] = [{ wch: 28 }, { wch: 40 }];
+
+    const dailySheet = XLSX.utils.json_to_sheet(
+      dailyRows.length
+        ? dailyRows
+        : [
+            {
+              Date: ledger.movement_date || "",
+              Opening: Number(item.opening_quantity ?? item.quantity ?? 0),
+              "In (Purchases)": 0,
+              "Out (Sales)": 0,
+              Closing: Number(item.closing_quantity ?? item.quantity ?? 0),
+            },
+          ]
+    );
+    dailySheet["!cols"] = [
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 12 },
+    ];
+
+    const transactionsSheet = XLSX.utils.json_to_sheet(
+      transactionRows.length
+        ? transactionRows
+        : [
+            {
+              Date: "",
+              "Date Time": "",
+              Type: "",
+              In: 0,
+              Out: 0,
+              "Previous Qty": "",
+              "New Qty": "",
+              Reference: "No transactions recorded",
+              Notes: "",
+              "Repair Order": "",
+            },
+          ]
+    );
+    transactionsSheet["!cols"] = [
+      { wch: 12 },
+      { wch: 20 },
+      { wch: 12 },
+      { wch: 8 },
+      { wch: 8 },
+      { wch: 14 },
+      { wch: 10 },
+      { wch: 40 },
+      { wch: 30 },
+      { wch: 14 },
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+    XLSX.utils.book_append_sheet(wb, dailySheet, "Daily In-Out");
+    XLSX.utils.book_append_sheet(wb, transactionsSheet, "Transactions");
+
+    const filenamePart = sanitizeExcelFilenamePart(
+      item.part_number || item.name || `item-${item.id}`
+    );
+    const dateStamp = ledger.movement_date || new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `inventory-ledger-${filenamePart}-${dateStamp}.xlsx`);
+  } catch (error) {
+    console.error("Error exporting item ledger:", error);
+    alert("Could not export this item's Excel ledger. Please try again.");
+  }
+}
+
 function buildInventoryReportRows(items) {
   return items.map((item) => ({
     "Part Number": item.part_number || "",
@@ -1693,6 +1831,7 @@ function buildInventoryReportRows(items) {
     "Manufacturer Part Number": item.manufacturer_part_number || "",
     "Item Name": item.name || "",
     Category: getCategoryDisplayName(item.category || "other"),
+    "Business Date": item.movement_date || "",
     "Opening Qty": Number(item.opening_quantity ?? item.quantity ?? 0),
     "Purchases (issue in)": Number(item.purchases_quantity ?? 0),
     "Sales (issue out)": Number(item.sales_quantity ?? 0),
@@ -1713,6 +1852,7 @@ function getInventoryReportColumns() {
     { wch: 26 },
     { wch: 30 },
     { wch: 20 },
+    { wch: 14 },
     { wch: 12 },
     { wch: 20 },
     { wch: 18 },

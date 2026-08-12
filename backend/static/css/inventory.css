@@ -647,6 +647,25 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+.excel-btn {
+  background: #1f7a4d;
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.excel-btn:hover {
+  background: #17633e;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.item-movement-date {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
 .delete-btn {
   background: #dc3545;
   color: white;

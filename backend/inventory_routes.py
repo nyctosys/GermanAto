@@ -1,13 +1,17 @@
 from flask import Blueprint, request, jsonify
 from models import db, Inventory, InventoryTransaction
 from sqlalchemy.exc import SQLAlchemyError
-from datetime import datetime
+from datetime import datetime, time, timezone, timedelta
+from zoneinfo import ZoneInfo
 import logging
 import os
 import uuid
 from werkzeug.utils import secure_filename
 from jwt_auth import login_required, role_required, admin_required
 from inventory_transaction_utils import log_issue_out, log_received, log_adjustment, get_inventory_transactions
+
+# Business day boundary for opening/closing rollover (matches frontend Asia/Karachi usage)
+BUSINESS_TZ = ZoneInfo('Asia/Karachi')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -84,25 +88,66 @@ def clean_optional_text(value):
     value = str(value).strip()
     return value or None
 
-def get_inventory_movement_totals(items):
-    """Return opening, inbound, outbound, and closing quantities for inventory items.
+def get_business_now():
+    """Current datetime in the shop business timezone."""
+    return datetime.now(BUSINESS_TZ)
 
-    Closing is the live on-hand quantity. Every logged movement is classified by
-    direction so the card identity always holds:
 
-        Opening + Purchases (issue in) - Sales (issue out) = Closing
+def get_business_day_bounds(business_day):
+    """Return naive-UTC [start, end) bounds for a Asia/Karachi business day.
 
-    Inbound (`received` and positive adjustments) counts as purchases.
-    Outbound (`issue_out` and negative adjustments) counts as sales.
-    Opening is reconstructed as closing minus the net of those movements.
+    InventoryTransaction.created_at is stored as naive UTC via datetime.utcnow().
     """
+    start_local = datetime.combine(business_day, time.min, tzinfo=BUSINESS_TZ)
+    end_local = start_local + timedelta(days=1)
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc
+
+
+def classify_movement_quantity(quantity):
+    """Split a signed movement into (inbound, outbound) absolute quantities."""
+    quantity = quantity or 0
+    if quantity > 0:
+        return quantity, 0
+    if quantity < 0:
+        return 0, abs(quantity)
+    return 0, 0
+
+
+def to_business_date(created_at):
+    """Convert a stored naive-UTC timestamp to the shop business calendar date."""
+    if created_at is None:
+        return None
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return created_at.astimezone(BUSINESS_TZ).date()
+
+
+def get_inventory_movement_totals(items, business_day=None):
+    """Return day-scoped opening/inbound/outbound/closing for inventory cards.
+
+    Cards are always for one business day (default: today in Asia/Karachi).
+
+        Opening (today) = Closing (yesterday)
+        Opening + Purchases - Sales = Closing (today / current stock)
+
+    Only today's movements count as purchases/sales. Opening is reconstructed as
+    current stock minus today's net change, so a new calendar day automatically
+    rolls yesterday's closing into today's opening with no batch job.
+    """
+    if business_day is None:
+        business_day = get_business_now().date()
+
+    day_start, day_end = get_business_day_bounds(business_day)
     item_ids = [item.id for item in items]
     movement_totals = {
         item.id: {
             'opening_quantity': item.quantity,
             'purchases_quantity': 0,
             'sales_quantity': 0,
-            'closing_quantity': item.quantity
+            'closing_quantity': item.quantity,
+            'movement_date': business_day.isoformat(),
         }
         for item in items
     }
@@ -111,17 +156,16 @@ def get_inventory_movement_totals(items):
         return movement_totals
 
     transactions = InventoryTransaction.query.filter(
-        InventoryTransaction.inventory_id.in_(item_ids)
+        InventoryTransaction.inventory_id.in_(item_ids),
+        InventoryTransaction.created_at >= day_start,
+        InventoryTransaction.created_at < day_end,
     ).all()
 
     for transaction in transactions:
         item_totals = movement_totals[transaction.inventory_id]
-        quantity = transaction.quantity or 0
-
-        if quantity > 0:
-            item_totals['purchases_quantity'] += quantity
-        elif quantity < 0:
-            item_totals['sales_quantity'] += abs(quantity)
+        inbound, outbound = classify_movement_quantity(transaction.quantity)
+        item_totals['purchases_quantity'] += inbound
+        item_totals['sales_quantity'] += outbound
 
     for item in items:
         item_totals = movement_totals[item.id]
@@ -132,6 +176,106 @@ def get_inventory_movement_totals(items):
         )
 
     return movement_totals
+
+
+def build_item_daily_ledger(item):
+    """Build date-wise opening/in/out/closing rows for one inventory item.
+
+    Walks every logged transaction chronologically so each day's closing becomes
+    the next day's opening. Days with no movement are omitted unless needed for
+    continuity from the earliest transaction through today.
+    """
+    business_today = get_business_now().date()
+    transactions = (
+        InventoryTransaction.query
+        .filter(InventoryTransaction.inventory_id == item.id)
+        .order_by(InventoryTransaction.created_at.asc(), InventoryTransaction.id.asc())
+        .all()
+    )
+
+    net_all = sum((transaction.quantity or 0) for transaction in transactions)
+    running_quantity = item.quantity - net_all
+
+    daily_rows = []
+    transaction_rows = []
+    grouped = {}
+
+    for transaction in transactions:
+        txn_date = to_business_date(transaction.created_at)
+        if txn_date is None:
+            continue
+        grouped.setdefault(txn_date, []).append(transaction)
+
+    if not grouped:
+        return {
+            'daily_rows': [{
+                'date': business_today.isoformat(),
+                'opening': item.quantity,
+                'in_quantity': 0,
+                'out_quantity': 0,
+                'closing': item.quantity,
+            }],
+            'transactions': [],
+            'movement_date': business_today.isoformat(),
+        }
+
+    for current_date in sorted(grouped.keys()):
+        day_transactions = grouped[current_date]
+        opening = running_quantity
+        inbound_total = 0
+        outbound_total = 0
+
+        for transaction in day_transactions:
+            quantity = transaction.quantity or 0
+            inbound, outbound = classify_movement_quantity(quantity)
+            inbound_total += inbound
+            outbound_total += outbound
+            running_quantity += quantity
+
+            created_local = transaction.created_at
+            if created_local and created_local.tzinfo is None:
+                created_local = created_local.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TZ)
+            elif created_local:
+                created_local = created_local.astimezone(BUSINESS_TZ)
+
+            transaction_rows.append({
+                'id': transaction.id,
+                'date': current_date.isoformat(),
+                'datetime': created_local.strftime('%Y-%m-%d %H:%M:%S') if created_local else '',
+                'transaction_type': transaction.transaction_type,
+                'in_quantity': inbound,
+                'out_quantity': outbound,
+                'quantity': quantity,
+                'previous_quantity': transaction.previous_quantity,
+                'new_quantity': transaction.new_quantity,
+                'reference_description': transaction.reference_description,
+                'notes': transaction.notes,
+                'repair_order_id': transaction.repair_order_id,
+            })
+
+        daily_rows.append({
+            'date': current_date.isoformat(),
+            'opening': opening,
+            'in_quantity': inbound_total,
+            'out_quantity': outbound_total,
+            'closing': running_quantity,
+        })
+
+    if not daily_rows or daily_rows[-1]['date'] != business_today.isoformat():
+        daily_rows.append({
+            'date': business_today.isoformat(),
+            'opening': running_quantity,
+            'in_quantity': 0,
+            'out_quantity': 0,
+            'closing': running_quantity,
+        })
+
+    return {
+        'daily_rows': daily_rows,
+        'transactions': transaction_rows,
+        'movement_date': business_today.isoformat(),
+    }
+
 
 def inventory_item_to_dict(item, movement_totals=None):
     item_data = {
@@ -152,11 +296,16 @@ def inventory_item_to_dict(item, movement_totals=None):
 
     if movement_totals and item.id in movement_totals:
         item_data.update(movement_totals[item.id])
+    else:
+        item_data['movement_date'] = get_business_now().date().isoformat()
 
     return item_data
 
-def inventory_item_detail_to_dict(item):
-    return inventory_item_to_dict(item, get_inventory_movement_totals([item]))
+def inventory_item_detail_to_dict(item, business_day=None):
+    return inventory_item_to_dict(
+        item,
+        get_inventory_movement_totals([item], business_day=business_day)
+    )
 
 def find_inventory_item_by_code(code):
     code = clean_optional_text(code)
@@ -1189,4 +1338,29 @@ def get_item_transactions(item_id, current_user=None):
         
     except Exception as e:
         logger.error(f"Error fetching transactions for item {item_id}: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@inventory_bp.route('/inventory/<int:item_id>/ledger', methods=['GET'])
+@login_required
+def get_item_ledger(item_id, current_user=None):
+    """Return date-wise in/out ledger used to back each inventory card Excel file."""
+    try:
+        if not item_id or item_id <= 0:
+            return jsonify({'error': 'Invalid item ID'}), 400
+
+        item = Inventory.query.get(item_id)
+        if not item:
+            return jsonify({'error': 'Inventory item not found'}), 404
+
+        ledger = build_item_daily_ledger(item)
+        return jsonify({
+            'item': inventory_item_detail_to_dict(item),
+            'daily_rows': ledger['daily_rows'],
+            'transactions': ledger['transactions'],
+            'movement_date': ledger['movement_date'],
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error building ledger for item {item_id}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
