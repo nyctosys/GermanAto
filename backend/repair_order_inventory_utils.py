@@ -140,13 +140,23 @@ def calculate_inventory_changes(old_parts, new_parts):
     old_parts_dict = {}
     new_parts_dict = {}
     
+    def get_part_key(part):
+        inv_id = part.get('inventory_id')
+        if inv_id is not None:
+            try:
+                # Cast string/float ids to int for reliable comparison (e.g., "9" vs 9)
+                return int(float(inv_id))
+            except (ValueError, TypeError):
+                pass
+        return part.get('part_number') or part.get('description')
+    
     for part in old_parts:
-        key = part.get('inventory_id') or part.get('part_number') or part.get('description')
+        key = get_part_key(part)
         if key:
             old_parts_dict[key] = part
     
     for part in new_parts:
-        key = part.get('inventory_id') or part.get('part_number') or part.get('description')
+        key = get_part_key(part)
         if key:
             new_parts_dict[key] = part
     

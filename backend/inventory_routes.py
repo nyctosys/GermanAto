@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, Inventory, InventoryTransaction
+from models import db, Inventory, InventoryTransaction, RepairOrderPart
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime, time, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -146,6 +146,7 @@ def get_inventory_movement_totals(items, business_day=None):
             'opening_quantity': item.quantity,
             'purchases_quantity': 0,
             'sales_quantity': 0,
+            'adjustments_quantity': 0,
             'closing_quantity': item.quantity,
             'movement_date': business_day.isoformat(),
         }
@@ -163,9 +164,12 @@ def get_inventory_movement_totals(items, business_day=None):
 
     for transaction in transactions:
         item_totals = movement_totals[transaction.inventory_id]
-        inbound, outbound = classify_movement_quantity(transaction.quantity)
-        item_totals['purchases_quantity'] += inbound
-        item_totals['sales_quantity'] += outbound
+        if transaction.transaction_type == 'adjustment':
+            item_totals['adjustments_quantity'] += transaction.quantity
+        else:
+            inbound, outbound = classify_movement_quantity(transaction.quantity)
+            item_totals['purchases_quantity'] += inbound
+            item_totals['sales_quantity'] += outbound
 
     for item in items:
         item_totals = movement_totals[item.id]
@@ -173,6 +177,7 @@ def get_inventory_movement_totals(items, business_day=None):
             item.quantity
             - item_totals['purchases_quantity']
             + item_totals['sales_quantity']
+            - item_totals['adjustments_quantity']
         )
 
     return movement_totals
@@ -182,8 +187,8 @@ def build_item_daily_ledger(item):
     """Build date-wise opening/in/out/closing rows for one inventory item.
 
     Walks every logged transaction chronologically so each day's closing becomes
-    the next day's opening. Days with no movement are omitted unless needed for
-    continuity from the earliest transaction through today.
+    the next day's opening. Days with no movement are included consecutively
+    from the earliest transaction through today.
     """
     business_today = get_business_now().date()
     transactions = (
@@ -213,62 +218,66 @@ def build_item_daily_ledger(item):
                 'opening': item.quantity,
                 'in_quantity': 0,
                 'out_quantity': 0,
+                'adjustments_quantity': 0,
                 'closing': item.quantity,
             }],
             'transactions': [],
             'movement_date': business_today.isoformat(),
         }
 
-    for current_date in sorted(grouped.keys()):
-        day_transactions = grouped[current_date]
+    start_date = min(grouped.keys())
+    end_date = business_today
+    
+    current_date = start_date
+    while current_date <= end_date:
         opening = running_quantity
         inbound_total = 0
         outbound_total = 0
+        adjustments_total = 0
 
-        for transaction in day_transactions:
-            quantity = transaction.quantity or 0
-            inbound, outbound = classify_movement_quantity(quantity)
-            inbound_total += inbound
-            outbound_total += outbound
-            running_quantity += quantity
+        if current_date in grouped:
+            day_transactions = grouped[current_date]
+            for transaction in day_transactions:
+                quantity = transaction.quantity or 0
+                if transaction.transaction_type == 'adjustment':
+                    adjustments_total += quantity
+                else:
+                    inbound, outbound = classify_movement_quantity(quantity)
+                    inbound_total += inbound
+                    outbound_total += outbound
+                running_quantity += quantity
 
-            created_local = transaction.created_at
-            if created_local and created_local.tzinfo is None:
-                created_local = created_local.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TZ)
-            elif created_local:
-                created_local = created_local.astimezone(BUSINESS_TZ)
+                created_local = transaction.created_at
+                if created_local and created_local.tzinfo is None:
+                    created_local = created_local.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TZ)
+                elif created_local:
+                    created_local = created_local.astimezone(BUSINESS_TZ)
 
-            transaction_rows.append({
-                'id': transaction.id,
-                'date': current_date.isoformat(),
-                'datetime': created_local.strftime('%Y-%m-%d %H:%M:%S') if created_local else '',
-                'transaction_type': transaction.transaction_type,
-                'in_quantity': inbound,
-                'out_quantity': outbound,
-                'quantity': quantity,
-                'previous_quantity': transaction.previous_quantity,
-                'new_quantity': transaction.new_quantity,
-                'reference_description': transaction.reference_description,
-                'notes': transaction.notes,
-                'repair_order_id': transaction.repair_order_id,
-            })
+                transaction_rows.append({
+                    'id': transaction.id,
+                    'date': current_date.isoformat(),
+                    'datetime': created_local.strftime('%Y-%m-%d %H:%M:%S') if created_local else '',
+                    'transaction_type': transaction.transaction_type,
+                    'in_quantity': 0 if transaction.transaction_type == 'adjustment' else (quantity if quantity > 0 else 0),
+                    'out_quantity': 0 if transaction.transaction_type == 'adjustment' else (abs(quantity) if quantity < 0 else 0),
+                    'quantity': quantity,
+                    'previous_quantity': transaction.previous_quantity,
+                    'new_quantity': transaction.new_quantity,
+                    'reference_description': transaction.reference_description,
+                    'notes': transaction.notes,
+                    'repair_order_id': transaction.repair_order_id,
+                })
 
         daily_rows.append({
             'date': current_date.isoformat(),
             'opening': opening,
             'in_quantity': inbound_total,
             'out_quantity': outbound_total,
+            'adjustments_quantity': adjustments_total,
             'closing': running_quantity,
         })
-
-    if not daily_rows or daily_rows[-1]['date'] != business_today.isoformat():
-        daily_rows.append({
-            'date': business_today.isoformat(),
-            'opening': running_quantity,
-            'in_quantity': 0,
-            'out_quantity': 0,
-            'closing': running_quantity,
-        })
+        
+        current_date += timedelta(days=1)
 
     return {
         'daily_rows': daily_rows,
@@ -298,6 +307,10 @@ def inventory_item_to_dict(item, movement_totals=None):
         item_data.update(movement_totals[item.id])
     else:
         item_data['movement_date'] = get_business_now().date().isoformat()
+        item_data['opening_quantity'] = item.quantity
+        item_data['purchases_quantity'] = 0
+        item_data['sales_quantity'] = 0
+        item_data['adjustments_quantity'] = 0
 
     return item_data
 
@@ -708,6 +721,12 @@ def delete_inventory_item(item_id, current_user=None):
         
         # Delete inventory item
         try:
+            # Nullify references in RepairOrderPart so history remains readable but unlinked
+            db.session.query(RepairOrderPart).filter(RepairOrderPart.inventory_id == item_id).update({RepairOrderPart.inventory_id: None})
+            
+            # Delete related transactions
+            db.session.query(InventoryTransaction).filter(InventoryTransaction.inventory_id == item_id).delete()
+            
             db.session.delete(item)
             db.session.commit()
             

@@ -608,6 +608,14 @@ body {
   border: 1px solid rgba(220, 53, 69, 0.3);
 }
 
+.adjustment-positive {
+  color: #28a745 !important;
+}
+
+.adjustment-negative {
+  color: #dc3545 !important;
+}
+
 .item-id {
   font-size: 13px;
   color: #888;

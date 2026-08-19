@@ -604,6 +604,7 @@ function createInventoryItemElement(item) {
   const openingQuantity = Number(item.opening_quantity ?? item.quantity ?? 0);
   const purchasesQuantity = Number(item.purchases_quantity ?? 0);
   const salesQuantity = Number(item.sales_quantity ?? 0);
+  const adjustmentsQuantity = Number(item.adjustments_quantity ?? 0);
   const closingQuantity = Number(item.closing_quantity ?? item.quantity ?? 0);
   const movementDate = item.movement_date || new Date().toISOString().slice(0, 10);
 
@@ -642,6 +643,12 @@ function createInventoryItemElement(item) {
             <div class="item-detail">
                 <span>Sales (issue out):</span>
                 <span>${salesQuantity}</span>
+            </div>
+            <div class="item-detail">
+                <span>Adjustments:</span>
+                <span class="${
+                  adjustmentsQuantity > 0 ? "adjustment-positive" : adjustmentsQuantity < 0 ? "adjustment-negative" : ""
+                }">${adjustmentsQuantity > 0 ? "+" : ""}${adjustmentsQuantity}</span>
             </div>
             <div class="item-detail">
                 <span>Closing Qty:</span>
@@ -1718,10 +1725,11 @@ async function exportItemLedgerXlsx(itemId) {
     const item = ledger.item;
     const dailyRows = (ledger.daily_rows || []).map((row) => ({
       Date: row.date,
-      Opening: Number(row.opening || 0),
-      "In (Purchases)": Number(row.in_quantity || 0),
-      "Out (Sales)": Number(row.out_quantity || 0),
-      Closing: Number(row.closing || 0),
+      Opening: Number(row.opening ?? 0),
+      "In (Purchases)": Number(row.in_quantity ?? 0),
+      "Out (Sales)": Number(row.out_quantity ?? 0),
+      Adjustments: Number(row.adjustments_quantity ?? 0),
+      Closing: Number(row.closing ?? 0),
     }));
 
     const transactionRows = (ledger.transactions || []).map((txn) => ({
@@ -1737,7 +1745,23 @@ async function exportItemLedgerXlsx(itemId) {
       "Repair Order": txn.repair_order_id || "",
     }));
 
-    const summarySheet = XLSX.utils.aoa_to_sheet([
+    // Calculate monthly totals
+    const monthlySummary = {};
+    (ledger.daily_rows || []).forEach(row => {
+      const month = row.date.substring(0, 7); // e.g. "2026-08"
+      if (!monthlySummary[month]) {
+        monthlySummary[month] = {
+          in: 0,
+          out: 0,
+          adjustments: 0
+        };
+      }
+      monthlySummary[month].in += Number(row.in_quantity ?? 0);
+      monthlySummary[month].out += Number(row.out_quantity ?? 0);
+      monthlySummary[month].adjustments += Number(row.adjustments_quantity ?? 0);
+    });
+
+    const summaryData = [
       ["GermanATO Item Stock Ledger"],
       ["Item Name", item.name || ""],
       ["Part Number", item.part_number || ""],
@@ -1747,14 +1771,29 @@ async function exportItemLedgerXlsx(itemId) {
       ["Today Opening", Number(item.opening_quantity ?? 0)],
       ["Today Purchases (In)", Number(item.purchases_quantity ?? 0)],
       ["Today Sales (Out)", Number(item.sales_quantity ?? 0)],
+      ["Today Adjustments", Number(item.adjustments_quantity ?? 0)],
       ["Today Closing", Number(item.closing_quantity ?? item.quantity ?? 0)],
       [],
       [
         "Note",
         "Each day's closing becomes the next day's opening. Card values are for today only.",
       ],
-    ]);
-    summarySheet["!cols"] = [{ wch: 28 }, { wch: 40 }];
+      [],
+      ["Monthly Summary Breakdown"],
+      ["Month", "Total Received (In)", "Total Issued (Out)", "Total Adjustments"]
+    ];
+
+    Object.keys(monthlySummary).sort().forEach(month => {
+      summaryData.push([
+        month,
+        monthlySummary[month].in,
+        monthlySummary[month].out,
+        monthlySummary[month].adjustments
+      ]);
+    });
+
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+    summarySheet["!cols"] = [{ wch: 28 }, { wch: 28 }, { wch: 24 }, { wch: 20 }];
 
     const dailySheet = XLSX.utils.json_to_sheet(
       dailyRows.length
@@ -1765,6 +1804,7 @@ async function exportItemLedgerXlsx(itemId) {
               Opening: Number(item.opening_quantity ?? item.quantity ?? 0),
               "In (Purchases)": 0,
               "Out (Sales)": 0,
+              Adjustments: 0,
               Closing: Number(item.closing_quantity ?? item.quantity ?? 0),
             },
           ]
@@ -1773,6 +1813,7 @@ async function exportItemLedgerXlsx(itemId) {
       { wch: 14 },
       { wch: 12 },
       { wch: 16 },
+      { wch: 14 },
       { wch: 14 },
       { wch: 12 },
     ];
@@ -1809,9 +1850,9 @@ async function exportItemLedgerXlsx(itemId) {
     ];
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
     XLSX.utils.book_append_sheet(wb, dailySheet, "Daily In-Out");
     XLSX.utils.book_append_sheet(wb, transactionsSheet, "Transactions");
+    XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
 
     const filenamePart = sanitizeExcelFilenamePart(
       item.part_number || item.name || `item-${item.id}`
@@ -1888,8 +1929,8 @@ function exportInventoryReportXlsx(items) {
   summarySheet["!cols"] = [{ wch: 28 }, { wch: 24 }];
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
   XLSX.utils.book_append_sheet(wb, reportSheet, "Inventory");
+  XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
   XLSX.writeFile(wb, `complete-inventory-report-${dateStamp}.xlsx`);
 }
 
