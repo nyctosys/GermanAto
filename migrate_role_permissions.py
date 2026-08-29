@@ -6,15 +6,33 @@ Usage (from the project's virtual‑env):
     $ python migrate_role_permissions.py   # creates table + seeds data
     $ python migrate_role_permissions.py --downgrade   # drops the table
 
-The script expects a `DATABASE_URL` environment variable
-(e.g. mysql://user:pwd@host:3306/germanato) – the same format Flask‑SQLAlchemy
-uses in the app configuration.
+DATABASE_URL is loaded automatically from the nearest .env file
+(same behaviour as the main Flask app via python-dotenv).
+You can still override it by exporting DATABASE_URL in your shell.
 """
 
 import os
 import sys
 import argparse
 from pathlib import Path
+
+# ── Load .env automatically ──────────────────────────────────────────
+# Look for .env in the script's directory, then one level up (repo root).
+try:
+    from dotenv import load_dotenv
+    _script_dir = Path(__file__).resolve().parent
+    _dotenv_candidates = [
+        _script_dir / ".env",
+        _script_dir.parent / ".env",
+    ]
+    for _candidate in _dotenv_candidates:
+        if _candidate.exists():
+            load_dotenv(dotenv_path=_candidate, override=False)
+            print(f"ℹ️   Loaded env from: {_candidate}")
+            break
+except ImportError:
+    # python-dotenv not installed – fall back to environment variables only
+    print("⚠️   python-dotenv not installed; relying on shell environment variables.")
 
 from sqlalchemy import (
     create_engine,
@@ -32,18 +50,19 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 # ----------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------
-def get_engine() -> "Engine":
+def get_engine():
     """Create a SQLAlchemy engine from the DATABASE_URL env variable."""
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         sys.stderr.write(
-            "❌  DATABASE_URL environment variable is not set.\n"
-            "    Export it before running this script, e.g.\n"
-            "    export DATABASE_URL='mysql://user:pwd@host:3306/germanato'\n"
+            "❌  DATABASE_URL is not set.\n"
+            "    Make sure a .env file exists in the backend directory with:\n"
+            "    DATABASE_URL=mysql://user:pwd@host:3306/germanato\n"
+            "    Or export it manually before running this script.\n"
         )
         sys.exit(1)
 
-    # echo=False silences the SQL logs – remove or set to True for debugging
+    print(f"🔗  Connecting to: {db_url.split('@')[-1]}")  # hide credentials
     return create_engine(db_url, echo=False)
 
 
@@ -103,7 +122,7 @@ def seed_default_permissions(conn):
         )
 
     for row in default_matrix:
-        conn.execute(insert_stmt, **row)
+        conn.execute(insert_stmt, row)
 
 
 def upgrade(engine):
