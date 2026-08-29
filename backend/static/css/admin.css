@@ -686,3 +686,155 @@ body {
   outline: 2px solid var(--primary-maroon);
   outline-offset: 2px;
 }
+
+/* ===== TABS NAVIGATION ===== */
+.tabs-navigation {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 8px;
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: var(--primary-maroon);
+}
+
+.tab-btn.active {
+  color: var(--primary-maroon);
+  border-bottom-color: var(--primary-maroon);
+}
+
+.tab-section {
+  display: none;
+}
+
+.tab-section.active {
+  display: block;
+}
+
+/* ===== LOGS FILTERS ===== */
+.logs-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  background: var(--bg-white);
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 24px;
+  border: 1px solid var(--border-light);
+  align-items: end;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-group label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.filter-group input,
+.filter-group select {
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: var(--text-dark);
+  background: var(--bg-white);
+  width: 100%;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: var(--primary-maroon);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: var(--primary-maroon-dark);
+}
+
+.btn-secondary {
+  background: var(--bg-light);
+  color: var(--text-dark);
+  border: 1px solid var(--border-light);
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+/* ===== LOGS PAGINATION ===== */
+.logs-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--bg-white);
+  border-top: 1px solid var(--border-light);
+}
+
+.page-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-white);
+  color: var(--text-dark);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--bg-light);
+  border-color: var(--text-muted);
+}
+
+.page-btn:disabled {
+  color: var(--text-light);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.page-info {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+

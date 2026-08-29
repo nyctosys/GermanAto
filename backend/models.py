@@ -61,6 +61,34 @@ class User(db.Model):
         return required_role in role_hierarchy.get(self.role, [])
 
 
+class AppLog(db.Model):
+    """Model for tracking all application actions and audit trails"""
+    __tablename__ = 'app_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    username = db.Column(db.String(80), nullable=True)
+    action = db.Column(db.String(100), nullable=False)
+    module = db.Column(db.String(50), nullable=False)
+    reference_id = db.Column(db.Integer, nullable=True)
+    details = db.Column(db.Text, nullable=False)
+    ip_address = db.Column(db.String(45), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'username': self.username,
+            'action': self.action,
+            'module': self.module,
+            'reference_id': self.reference_id,
+            'details': self.details,
+            'ip_address': self.ip_address,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None
+        }
+
+
 class Invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -82,6 +110,12 @@ class Invoice(db.Model):
     tax_amount = db.Column(db.Float, default=0.0, nullable=False)
     paid_amount = db.Column(db.Float, default=0.0, nullable=True)  # Amount paid by customer
     status = db.Column(db.String(20), default='pending', nullable=False)  # pending for quotes, unpaid for invoices
+    
+    # Audit trail and logs
+    created_by_user = db.Column(db.String(80), nullable=True)
+    updated_by_user = db.Column(db.String(80), nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    payments_history = db.Column(db.Text, nullable=True)
 
     items = db.relationship('InvoiceItem', backref='invoice', cascade='all, delete-orphan', lazy=True)
     labours = db.relationship('InvoiceLabour', backref='invoice', cascade='all, delete-orphan', lazy=True)
@@ -192,6 +226,11 @@ class RepairOrder(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # Audit trail and multiple workers support
+    created_by_user = db.Column(db.String(80), nullable=True)
+    updated_by_user = db.Column(db.String(80), nullable=True)
+    workers_json = db.Column(db.Text, nullable=True)
+    
     parts = db.relationship('RepairOrderPart', backref='repair_order', cascade='all, delete-orphan', lazy=True)
     labour = db.relationship('RepairOrderLabour', backref='repair_order', cascade='all, delete-orphan', lazy=True)
 
@@ -280,7 +319,7 @@ class Vendor(db.Model):
     
     # Relationships
     ledger_entries = db.relationship('VendorLedger', backref='vendor', lazy=True, cascade='all, delete-orphan')
-    consignments = db.relationship('VendorConsignment', backref='vendor', lazy=True, cascade='all, delete-orphan')
+    purchase_orders = db.relationship('PurchaseOrder', backref='vendor', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Vendor {self.name} - {self.company_name}>'
@@ -314,6 +353,11 @@ class VendorLedger(db.Model):
     balance = db.Column(db.Numeric(10, 2), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Audit trail, payment notes and attachments
+    created_by_user = db.Column(db.String(80), nullable=True)
+    payment_notes = db.Column(db.Text, nullable=True)
+    attachment_path = db.Column(db.String(255), nullable=True)
+    
     def __repr__(self):
         return f'<VendorLedger {self.vendor_id} - {self.description}>'
     
@@ -327,13 +371,16 @@ class VendorLedger(db.Model):
             'debit': float(self.debit),
             'credit': float(self.credit),
             'balance': float(self.balance),
+            'created_by_user': self.created_by_user,
+            'payment_notes': self.payment_notes,
+            'attachment_path': self.attachment_path,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
         }
 
 
-class VendorConsignment(db.Model):
-    """Vendor consignment records for tracking goods received"""
-    __tablename__ = 'vendor_consignments'
+class PurchaseOrder(db.Model):
+    """Purchase order records for tracking goods received from vendors"""
+    __tablename__ = 'purchase_orders'
     
     id = db.Column(db.Integer, primary_key=True)
     vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=False)
@@ -344,10 +391,13 @@ class VendorConsignment(db.Model):
     rate = db.Column(db.Numeric(10, 2), nullable=False)
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     remarks = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(50), default='ordered', nullable=False) # ordered, in transit, received
+    created_by_user = db.Column(db.String(80), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def __repr__(self):
-        return f'<VendorConsignment {self.vendor_id} - {self.item_name}>'
+        return f'<PurchaseOrder {self.vendor_id} - {self.item_name}>'
     
     def to_dict(self):
         return {
@@ -360,7 +410,10 @@ class VendorConsignment(db.Model):
             'rate': float(self.rate),
             'amount': float(self.amount),
             'remarks': self.remarks,
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            'status': self.status,
+            'created_by_user': self.created_by_user,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None
         }
 
 
@@ -591,4 +644,21 @@ class InventoryTransaction(db.Model):
             'created_by_username': self.user.username if self.user else None,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             'notes': self.notes
+        }
+
+class RolePermission(db.Model):
+    __tablename__ = 'role_permissions'
+    id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(50), nullable=False)
+    permission = db.Column(db.String(100), nullable=False)
+    
+    __table_args__ = (
+        db.UniqueConstraint('role', 'permission', name='unique_role_permission'),
+    )
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'role': self.role,
+            'permission': self.permission
         }

@@ -183,15 +183,15 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="repair-order-actions">
               <div class="action-buttons">
                 <button class="view-btn">View</button>
-                <button class="edit-btn">Edit</button>
+                <button class="edit-btn" ${(currentStatus === "complete" && auth.getCurrentUser().role !== "admin") ? "disabled style='opacity: 0.5; cursor: not-allowed;'" : ""}>Edit</button>
                 ${
                   currentStatus === "complete"
                     ? '<button class="generate-invoice-btn">Generate Invoice</button>'
                     : ""
                 }
-                <button class="delete-btn">Delete</button>
+                <button class="delete-btn" ${(currentStatus === "complete" && auth.getCurrentUser().role !== "admin") ? "disabled style='opacity: 0.5; cursor: not-allowed;'" : ""}>Delete</button>
               </div>
-              <select class="status-dropdown" data-id="${repairOrder.id}">
+              <select class="status-dropdown" data-id="${repairOrder.id}" ${(currentStatus === "complete" && auth.getCurrentUser().role !== "admin") ? "disabled style='opacity: 0.7; cursor: not-allowed;'" : ""}>
                 <option value="received" ${
                   currentStatus === "received" ? "selected" : ""
                 }>Received</option>

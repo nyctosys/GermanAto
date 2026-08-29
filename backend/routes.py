@@ -4,17 +4,38 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 import logging
 import re
+import json
 from datetime import datetime, timedelta
 from functools import wraps
 from whatsapp_notifications import whatsapp_notifier
-from jwt_auth import login_required, role_required, admin_required
+from jwt_auth import login_required, role_required, admin_required, get_current_user
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from log_utils import log_action, save_uploaded_file
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('invoice', __name__)
+
+def calculate_invoice_status(invoice):
+    """Automatically calculate invoice status based on advance, paid_amount and total due"""
+    if invoice.type_of.lower() == 'quote':
+        return 'pending'
+        
+    total_due = invoice.net_total
+    if invoice.include_tax and invoice.tax_amount:
+        total_due += invoice.tax_amount
+    total_due -= invoice.discount
+    
+    total_paid = (invoice.advance or 0.0) + (invoice.paid_amount or 0.0)
+    
+    if total_paid <= 0:
+        return 'unpaid'
+    elif total_paid >= total_due or invoice.balance <= 0:
+        return 'paid'
+    else:
+        return 'partially_paid'
 
 def calculate_totals(items, labours):
     """Calculate total from items and labours"""
@@ -210,8 +231,11 @@ def create_invoice(current_user=None):
                 type_of=type_of,
                 include_tax=include_tax,
                 tax_amount=tax_amount,
-                status=default_status
+                status=default_status,
+                created_by_user=current_user.username if current_user else None
             )
+            invoice.status = calculate_invoice_status(invoice)
+            
             db.session.add(invoice)
             db.session.flush()  # Get the ID without committing
             
@@ -248,6 +272,7 @@ def create_invoice(current_user=None):
             #         logger.error(f"Error updating inventory: {e}")
             #         return jsonify({'error': 'Failed to update inventory'}), 500
             
+            log_action(current_user, 'CREATE', 'invoices' if type_of == 'invoice' else 'quotes', invoice.id, f"Created {type_of} for customer {customer_name} total {invoice.net_total} PKR")
             db.session.commit()
             
             logger.info(f"Invoice created successfully: ID {invoice.id}")
@@ -348,12 +373,17 @@ def get_invoice(invoice_id, current_user=None):
             "balance": float(invoice.balance),
             "advance": float(invoice.advance),
             "net_total": float(invoice.net_total),
+            "total": float(invoice.net_total),  # Return total for frontend compatibility
             "discount": float(invoice.discount),
             "type_of": invoice.type_of,
             "include_tax": invoice.include_tax,
             "tax_amount": float(invoice.tax_amount),
             "paid_amount": float(invoice.paid_amount or 0),
             "status": invoice.status,
+            "created_by_user": invoice.created_by_user,
+            "updated_by_user": invoice.updated_by_user,
+            "updated_at": invoice.updated_at.strftime("%Y-%m-%d %H:%M:%S") if invoice.updated_at else None,
+            "payments_history": json.loads(invoice.payments_history) if invoice.payments_history else [],
             "items": [
                 {
                     "id": item.id, 
@@ -411,6 +441,7 @@ def delete_invoice(invoice_id, current_user=None):
             InvoiceLabour.query.filter_by(invoice_id=invoice_id).delete()
             
             # Delete the invoice
+            log_action(current_user, 'DELETE', 'invoices' if invoice.type_of == 'invoice' else 'quotes', invoice_id, f"Deleted {invoice.type_of} ID {invoice_id} for customer {invoice.customer_name}")
             db.session.delete(invoice)
             db.session.commit()
             
@@ -518,6 +549,13 @@ def update_invoice(invoice_id):
             else:
                 invoice.balance = round(total - invoice.discount - invoice.advance - current_paid, 2)
             
+            # Set updater and calculate status
+            current_user = get_current_user()
+            invoice.updated_by_user = current_user.username if current_user else None
+            invoice.updated_at = datetime.utcnow()
+            invoice.status = calculate_invoice_status(invoice)
+            
+            log_action(current_user, 'UPDATE', 'invoices' if invoice.type_of == 'invoice' else 'quotes', invoice.id, f"Updated {invoice.type_of} details (Net Total: {invoice.net_total} PKR, Balance: {invoice.balance} PKR)")
             db.session.commit()
             
             logger.info(f"Invoice updated successfully: ID {invoice_id}")
@@ -647,11 +685,16 @@ def search_invoices(current_user=None):
                 "balance": float(invoice.balance),
                 "advance": float(invoice.advance),
                 "total": float(invoice.net_total),
+                "net_total": float(invoice.net_total),  # Return both for frontend compatibility
                 "discount": float(invoice.discount),
                 "include_tax": invoice.include_tax,
                 "tax_amount": float(invoice.tax_amount),
                 "paid_amount": float(invoice.paid_amount or 0),
-                "status": invoice.status
+                "status": invoice.status,
+                "created_by_user": invoice.created_by_user,
+                "updated_by_user": invoice.updated_by_user,
+                "updated_at": invoice.updated_at.strftime("%Y-%m-%d %H:%M:%S") if invoice.updated_at else None,
+                "payments_history": json.loads(invoice.payments_history) if invoice.payments_history else []
             }
             invoice_list.append(invoice_data)
         
@@ -717,38 +760,62 @@ def convert_quote_to_invoice(invoice_id, current_user=None):
 @bp.route('/invoice/<int:invoice_id>/status', methods=['PUT'])
 @role_required(['admin', 'accountant'])
 def update_invoice_status(invoice_id, current_user=None):
-    """Update the status of a quote/invoice"""
+    """Manually updating status is disabled. This endpoint automatically calculates status."""
     try:
-        data = request.get_json()
-        if not data or 'status' not in data:
-            return jsonify({'error': 'No status provided'}), 400
         invoice = Invoice.query.get(invoice_id)
         if not invoice:
             return jsonify({'error': 'Invoice not found'}), 404
-        invoice.status = data['status']
+        
+        # Auto calculate status
+        old_status = invoice.status
+        invoice.status = calculate_invoice_status(invoice)
         db.session.commit()
-        return jsonify({'message': 'Status updated', 'status': invoice.status}), 200
+        
+        if old_status != invoice.status:
+            log_action(current_user, 'UPDATE_STATUS', 'invoices', invoice.id, f"Auto-calculated status: updated from {old_status} to {invoice.status}")
+            
+        return jsonify({'message': 'Status auto-calculated', 'status': invoice.status}), 200
     except Exception as e:
-        logger.error(f"Error updating invoice status {invoice_id}: {e}")
+        logger.error(f"Error auto-updating invoice status {invoice_id}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @bp.route('/invoice/<int:invoice_id>/update-balance', methods=['PUT'])
 @role_required(['admin', 'accountant'])
 def update_invoice_balance(invoice_id, current_user=None):
-    """Add to the paid amount and update status of an invoice"""
+    """Add to the paid amount and update status of an invoice (with optional proof upload)"""
     try:
-        data = request.get_json()
-        if not data or 'paid_amount' not in data:
+        # Check if multipart/form-data or JSON
+        paid_amount_str = None
+        proof_file = None
+        
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            paid_amount_str = request.form.get('paid_amount')
+            if 'proof' in request.files:
+                proof_file = request.files['proof']
+        else:
+            data = request.get_json()
+            if data:
+                paid_amount_str = data.get('paid_amount')
+                
+        if paid_amount_str is None:
             return jsonify({'error': 'No paid_amount provided'}), 400
+            
+        try:
+            additional_amount = float(paid_amount_str)
+            if additional_amount < 0:
+                return jsonify({'error': 'Additional amount cannot be negative'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid paid_amount value'}), 400
         
         invoice = Invoice.query.get(invoice_id)
         if not invoice:
             return jsonify({'error': 'Invoice not found'}), 404
         
-        additional_amount = float(data['paid_amount'])
-        if additional_amount < 0:
-            return jsonify({'error': 'Additional amount cannot be negative'}), 400
-        
+        # Save optional proof file
+        proof_path = None
+        if proof_file:
+            proof_path = save_uploaded_file(proof_file)
+            
         # Add to existing paid amount
         current_paid = invoice.paid_amount or 0
         invoice.paid_amount = current_paid + additional_amount
@@ -762,26 +829,100 @@ def update_invoice_balance(invoice_id, current_user=None):
         if invoice.advance:
             balance -= invoice.advance
         balance -= invoice.paid_amount
+        invoice.balance = round(balance, 2)
         
-        # Update status based on total paid amount
-        if invoice.paid_amount == 0:
-            invoice.status = 'unpaid'
-        elif balance <= 0:
-            invoice.status = 'paid'
-        else:
-            invoice.status = 'partially_paid'
+        # Auto-calculate status
+        invoice.status = calculate_invoice_status(invoice)
+        invoice.updated_by_user = current_user.username if current_user else None
+        invoice.updated_at = datetime.utcnow()
         
+        # Record payment transaction in history
+        history_list = []
+        if invoice.payments_history:
+            try:
+                history_list = json.loads(invoice.payments_history)
+            except Exception:
+                history_list = []
+                
+        payment_record = {
+            'amount': additional_amount,
+            'timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+            'person': current_user.username if current_user else 'anonymous/system',
+            'proof_path': proof_path
+        }
+        history_list.append(payment_record)
+        invoice.payments_history = json.dumps(history_list)
+        
+        # Log action
+        log_action(current_user, 'UPDATE_BALANCE', 'invoices', invoice.id, f"Added payment of {additional_amount:.2f} PKR. Total paid: {invoice.paid_amount:.2f} PKR. Balance: {invoice.balance:.2f} PKR")
         db.session.commit()
         
         return jsonify({
             'message': f'Added {additional_amount:.2f} PKR to paid amount. Total paid: {invoice.paid_amount:.2f} PKR',
             'paid_amount': invoice.paid_amount,
-            'balance': balance,
-            'status': invoice.status
+            'balance': invoice.balance,
+            'status': invoice.status,
+            'payments_history': history_list
         }), 200
         
     except ValueError as e:
-        return jsonify({'error': 'Invalid paid_amount value'}), 400
+        return jsonify({'error': 'Invalid values'}), 400
     except Exception as e:
         logger.error(f"Error updating invoice balance {invoice_id}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
+
+@bp.route('/api/admin/app-logs', methods=['GET'])
+@login_required
+@admin_required
+def get_app_logs(current_user=None):
+    """Get all application logs with search and filters (Admin only)"""
+    try:
+        from models import AppLog
+        username = request.args.get('username')
+        module = request.args.get('module')
+        action = request.args.get('action')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        keyword = request.args.get('keyword')
+        
+        query = AppLog.query
+        
+        if username:
+            query = query.filter(AppLog.username == username)
+        if module:
+            query = query.filter(AppLog.module == module)
+        if action:
+            query = query.filter(AppLog.action == action)
+            
+        if start_date:
+            try:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                query = query.filter(AppLog.created_at >= start_date_obj)
+            except ValueError:
+                pass
+                
+        if end_date:
+            try:
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                query = query.filter(AppLog.created_at < end_date_obj)
+            except ValueError:
+                pass
+                
+        if keyword:
+            query = query.filter(AppLog.details.ilike(f'%{keyword}%'))
+            
+        # Paginate results
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 100, type=int)
+        
+        pagination = query.order_by(AppLog.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+        
+        return jsonify({
+            'logs': [log.to_dict() for log in pagination.items],
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': pagination.page
+        }), 200
+    except Exception as e:
+        logger.error(f"Error fetching app logs: {e}")
+        return jsonify({'error': 'Failed to fetch logs'}), 500

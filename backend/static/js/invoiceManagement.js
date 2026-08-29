@@ -175,10 +175,11 @@ document.addEventListener("DOMContentLoaded", () => {
       html += `<h3>🧾 Invoices (${invoices.length})</h3>`;
       html += invoices
         .map((invoice) => {
+          const invoiceTotal = invoice.net_total !== undefined ? invoice.net_total : (invoice.total || 0);
           const totalWithTax =
             invoice.include_tax && invoice.tax_amount > 0
-              ? invoice.total + invoice.tax_amount
-              : invoice.total;
+              ? invoiceTotal + invoice.tax_amount
+              : invoiceTotal;
           const taxDisplay =
             invoice.include_tax && invoice.tax_amount > 0
               ? `<p><strong>GST/PST:</strong> ${invoice.tax_amount.toFixed(
@@ -188,19 +189,28 @@ document.addEventListener("DOMContentLoaded", () => {
           const statusDisplay = `<p><strong>Status:</strong> <span class="invoice-status">${
             invoice.status || "N/A"
           }</span></p>`;
-          const statusDropdown = `
-            <select class="invoice-status-dropdown" data-id="${invoice.id}">
-              <option value="unpaid" ${
-                invoice.status === "unpaid" ? "selected" : ""
-              }>Unpaid</option>
-              <option value="partially paid" ${
-                invoice.status === "partially paid" ? "selected" : ""
-              }>Partially Paid</option>
-              <option value="paid" ${
-                invoice.status === "paid" ? "selected" : ""
-              }>Paid</option>
-            </select>
-          `;
+          
+          let proofLinksHtml = "";
+          if (invoice.payments_history && invoice.payments_history.length > 0) {
+            const paymentsWithProof = invoice.payments_history.filter(p => p.proof_path);
+            if (paymentsWithProof.length > 0) {
+              proofLinksHtml = `
+                <div class="proof-links" style="margin-top: 8px; font-size: 0.85rem; border-top: 1px dashed #e2e8f0; padding-top: 8px; margin-bottom: 8px;">
+                  <strong>Payment Proofs:</strong>
+                  <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
+                    ${paymentsWithProof.map((p, idx) => `
+                      <a href="/${p.proof_path}" target="_blank" class="badge" style="background: #2b6cb0; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;" title="Paid on ${p.timestamp} by ${p.person}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 10px; height: 10px;">
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                        </svg>
+                        Proof #${idx + 1} (${p.amount} PKR)
+                      </a>
+                    `).join("")}
+                  </div>
+                </div>
+              `;
+            }
+          }
 
           // Check if edit button should be disabled
           const isEditDisabled = shouldDisableEditButton(invoice);
@@ -210,31 +220,67 @@ document.addEventListener("DOMContentLoaded", () => {
           const editButtonDisabled = isEditDisabled ? "disabled" : "";
           const editButtonText = isEditDisabled ? "Edit (Locked)" : "Edit";
 
+          // Status badge coloring
+          let statusBadgeColor = "#e2e8f0";
+          let statusTextColor = "#4a5568";
+          const statusLower = (invoice.status || "unpaid").toLowerCase();
+          if (statusLower === "paid") {
+            statusBadgeColor = "#c6f6d5";
+            statusTextColor = "#22543d";
+          } else if (statusLower === "partially paid" || statusLower === "partial") {
+            statusBadgeColor = "#feebc8";
+            statusTextColor = "#744210";
+          } else if (statusLower === "unpaid") {
+            statusBadgeColor = "#fed7d7";
+            statusTextColor = "#742a2a";
+          }
+
+          const statusBadge = `
+            <span class="status-badge" style="background: ${statusBadgeColor}; color: ${statusTextColor}; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: inline-block;">
+              ${invoice.status || "N/A"}
+            </span>
+          `;
+
           return `
-          <div class="invoice-card invoice-card" id="invoice-card-${
-            invoice.id
-          }">
-            <h2>${invoice.type_of}</h2>
-            <h3>ID: ${invoice.id}</h3>
-            <p><strong>Name:</strong> ${invoice.customer_name}</p>
-            <p><strong>Phone:</strong> ${invoice.customer_phone}</p>
-            <p><strong>Reg No:</strong> ${invoice.customer_reg_no}</p>
-            <p><strong>Net Total:</strong> ${invoice.total.toFixed(2)} PKR</p>
-            ${taxDisplay}
-            <p><strong>Discount:</strong> ${invoice.discount.toFixed(2)} PKR</p>
-            <p><strong>Advance:</strong> ${invoice.advance.toFixed(2)} PKR</p>
-            <p><strong>Paid Amount:</strong> ${(
-              invoice.paid_amount || 0
-            ).toFixed(2)} PKR</p>
-            <p><strong>Balance:</strong> ${invoice.balance.toFixed(2)} PKR</p>
-            <p><strong>Created:</strong> ${invoice.created_at}</p>
-            ${statusDisplay}
-            <div class="invoice-actions">
+          <div class="invoice-card" id="invoice-card-${invoice.id}" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); margin-bottom: 20px; transition: transform 0.2s, box-shadow 0.2s;">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #edf2f7; padding-bottom: 12px; margin-bottom: 16px;">
+              <div>
+                <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #8b1538; text-transform: capitalize;">${invoice.type_of}</h2>
+                <span style="font-size: 0.8rem; color: #718096;">ID: #${invoice.id} &bull; Created: ${invoice.created_at}</span>
+              </div>
+              ${statusBadge}
+            </div>
+            
+            <div class="card-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; font-size: 0.875rem;">
+              <div class="info-block">
+                <span style="display: block; font-size: 0.75rem; color: #a0aec0; text-transform: uppercase; font-weight: 600;">Customer</span>
+                <strong>${invoice.customer_name}</strong>
+                <div style="font-size: 0.8rem; color: #4a5568; margin-top: 2px;">${invoice.customer_phone}</div>
+                <div style="font-size: 0.8rem; color: #718096; font-style: italic;">Reg: ${invoice.customer_reg_no}</div>
+              </div>
+              
+              <div class="info-block" style="background: #f7fafc; padding: 8px 12px; border-radius: 8px;">
+                <span style="display: block; font-size: 0.75rem; color: #718096; text-transform: uppercase; font-weight: 600;">Summary</span>
+                <div>Net Total: <strong>${invoiceTotal.toFixed(2)}</strong></div>
+                ${invoice.discount > 0 ? `<div>Discount: <span style="color: #e53e3e;">-${invoice.discount.toFixed(2)}</span></div>` : ""}
+                ${invoice.advance > 0 ? `<div>Advance: <span style="color: #4a5568;">-${invoice.advance.toFixed(2)}</span></div>` : ""}
+                ${invoice.include_tax && invoice.tax_amount > 0 ? `<div>Tax (GST): <span style="color: #718096;">+${invoice.tax_amount.toFixed(2)}</span></div>` : ""}
+              </div>
+              
+              <div class="info-block" style="background: #fffaf0; padding: 8px 12px; border-radius: 8px; border: 1px solid #feebc8;">
+                <span style="display: block; font-size: 0.75rem; color: #b7791f; text-transform: uppercase; font-weight: 600;">Outstanding</span>
+                <div style="font-size: 1.1rem; font-weight: 700; color: #dd6b20;">${invoice.balance.toFixed(2)} PKR</div>
+                <div style="font-size: 0.75rem; color: #718096; margin-top: 2px;">Paid: ${(invoice.paid_amount || 0).toFixed(2)} PKR</div>
+              </div>
+            </div>
+            
+            ${proofLinksHtml}
+            
+            <div class="invoice-actions" style="display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #edf2f7; padding-top: 12px; margin-top: 12px; flex-wrap: wrap;">
               <button class="wide-btn-submit view-btn">View</button>
               <button class="${editButtonClass}" ${editButtonDisabled}>${editButtonText}</button>
               <button class="wide-btn-update update-balance-btn">Update Balance</button>
               <button class="wide-btn-delete delete-btn">Delete</button>
-              ${statusDropdown}
             </div>
           </div>
         `;
@@ -244,34 +290,6 @@ document.addEventListener("DOMContentLoaded", () => {
       resultsDiv.innerHTML = html;
       // Attach event listeners
       invoices.forEach((invoice) => {
-        // Status dropdown
-        const statusDropdown = document.querySelector(
-          `#invoice-card-${invoice.id} .invoice-status-dropdown`
-        );
-        if (statusDropdown) {
-          statusDropdown.addEventListener("change", async (e) => {
-            const newStatus = e.target.value;
-            try {
-              const result = await APIHelper.request(
-                `/api/invoice/${invoice.id}/status`,
-                {
-                  method: "PUT",
-                  body: JSON.stringify({ status: newStatus }),
-                }
-              );
-              if (result) {
-                const statusSpan = document.querySelector(
-                  `#invoice-card-${invoice.id} .invoice-status`
-                );
-                if (statusSpan) statusSpan.textContent = newStatus;
-              } else {
-                alert("Failed to update invoice status.");
-              }
-            } catch (err) {
-              alert("Error updating invoice status.");
-            }
-          });
-        }
         // View/Edit/Delete event listeners
         const viewBtn = document.querySelector(
           `#invoice-card-${invoice.id} .view-btn`
@@ -319,7 +337,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (updateBalanceBtn) {
           updateBalanceBtn.addEventListener("click", async () => {
             // Calculate total with tax for this specific invoice
-            let totalWithTax = invoice.total;
+            const invoiceTotal = invoice.net_total !== undefined ? invoice.net_total : (invoice.total || 0);
+            let totalWithTax = invoiceTotal;
             if (invoice.include_tax && invoice.tax_amount) {
               totalWithTax += invoice.tax_amount;
             }
@@ -332,41 +351,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const currentBalance = totalWithTax - (invoice.paid_amount || 0);
             const currentPaidAmount = invoice.paid_amount || 0;
-            const paidAmount = prompt(
-              `Enter additional amount to pay for invoice ${
-                invoice.id
-              }:\nCurrent paid: ${currentPaidAmount.toFixed(
-                2
-              )} PKR\nCurrent balance: ${currentBalance.toFixed(
-                2
-              )} PKR\n\nEnter amount to add:`
-            );
-            if (paidAmount === null) return; // User cancelled
-
-            const paid = parseFloat(paidAmount);
-            if (isNaN(paid) || paid < 0) {
-              alert("Please enter a valid positive number.");
-              return;
-            }
-
-            try {
-              const result = await APIHelper.request(
-                `/api/invoice/${invoice.id}/update-balance`,
-                {
-                  method: "PUT",
-                  body: JSON.stringify({ paid_amount: paid }),
-                }
-              );
-
-              if (result) {
-                alert(result.message || "Balance updated successfully!");
-                loadInvoices(); // Reload invoices to show updated data
-              } else {
-                alert("Failed to update balance.");
-              }
-            } catch (err) {
-              alert("Error occurred while updating balance.");
-            }
+            
+            openUpdateBalanceModal(invoice.id, totalWithTax, currentPaidAmount, currentBalance);
           });
         }
         const deleteBtn = document.querySelector(
@@ -555,6 +541,76 @@ document.addEventListener("DOMContentLoaded", () => {
     loadInvoices(currentStatus, currentKeywordQuery, currentIdQuery, "", "");
   });
 
+  // Update Balance Modal Event Listeners
+  const closeBtn = document.getElementById("close-balance-modal");
+  if (closeBtn) closeBtn.addEventListener("click", closeUpdateBalanceModal);
+  
+  const cancelBtn = document.getElementById("btn-cancel-balance");
+  if (cancelBtn) cancelBtn.addEventListener("click", closeUpdateBalanceModal);
+  
+  const balanceForm = document.getElementById("balance-form");
+  if (balanceForm) balanceForm.addEventListener("submit", handleBalanceFormSubmit);
+  
+  window.addEventListener("click", (e) => {
+    const modal = document.getElementById("update-balance-modal");
+    if (e.target === modal) {
+      closeUpdateBalanceModal();
+    }
+  });
+
   // Initial load
   loadInvoices("all");
 });
+
+// Update Balance Modal Helper Functions
+function openUpdateBalanceModal(invoiceId, total, paid, remaining) {
+  document.getElementById("balance-invoice-id").value = invoiceId;
+  document.getElementById("balance-info-id").textContent = `#${invoiceId}`;
+  document.getElementById("balance-info-total").textContent = `${total.toFixed(2)} PKR`;
+  document.getElementById("balance-info-paid").textContent = `${paid.toFixed(2)} PKR`;
+  document.getElementById("balance-info-remaining").textContent = `${remaining.toFixed(2)} PKR`;
+  document.getElementById("balance-paid-amount").value = "";
+  document.getElementById("balance-proof-file").value = "";
+  document.getElementById("update-balance-modal").style.display = "block";
+}
+
+function closeUpdateBalanceModal() {
+  document.getElementById("update-balance-modal").style.display = "none";
+}
+
+async function handleBalanceFormSubmit(e) {
+  e.preventDefault();
+  
+  const invoiceId = document.getElementById("balance-invoice-id").value;
+  const paidAmount = document.getElementById("balance-paid-amount").value;
+  const fileInput = document.getElementById("balance-proof-file");
+  
+  if (!paidAmount || parseFloat(paidAmount) < 0) {
+    alert("Please enter a valid positive amount.");
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append("paid_amount", paidAmount);
+  if (fileInput.files.length > 0) {
+    formData.append("proof", fileInput.files[0]);
+  }
+  
+  try {
+    const result = await APIHelper.request(`/api/invoice/${invoiceId}/update-balance`, {
+      method: "PUT",
+      body: formData
+    });
+    
+    if (result) {
+      alert(result.message || "Balance updated successfully!");
+      closeUpdateBalanceModal();
+      loadInvoices(); // Reload lists
+    } else {
+      alert("Failed to update balance.");
+    }
+  } catch (error) {
+    console.error("Error updating balance:", error);
+    alert(error.message || "Error occurred while updating balance.");
+  }
+}

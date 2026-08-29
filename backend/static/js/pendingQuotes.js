@@ -153,37 +153,73 @@ document.addEventListener("DOMContentLoaded", () => {
       } Quotes (${quotes.length})</h3>`;
       html += quotes
         .map((quote) => {
+          const quoteTotal = quote.net_total !== undefined ? quote.net_total : (quote.total || 0);
           const totalWithTax =
             quote.include_tax && quote.tax_amount > 0
-              ? quote.total + quote.tax_amount
-              : quote.total;
+              ? quoteTotal + quote.tax_amount
+              : quoteTotal;
           const taxDisplay =
             quote.include_tax && quote.tax_amount > 0
               ? `<p><strong>GST/PST:</strong> ${quote.tax_amount.toFixed(
                   2
                 )} PKR</p>`
               : "";
+          // Status badge coloring
+          let statusBadgeColor = "#feebc8";
+          let statusTextColor = "#744210";
+          const quoteStatus = quote.status || "pending";
+          if (quoteStatus === "approved") {
+            statusBadgeColor = "#c6f6d5";
+            statusTextColor = "#22543d";
+          } else if (quoteStatus === "rejected") {
+            statusBadgeColor = "#fed7d7";
+            statusTextColor = "#742a2a";
+          }
+
+          const statusBadge = `
+            <span class="status-badge" style="background: ${statusBadgeColor}; color: ${statusTextColor}; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: inline-block;">
+              ${quoteStatus}
+            </span>
+          `;
+
           const approveBtn =
             status === "pending"
               ? `<button class="wide-btn-approve approve-btn">Approve</button>`
               : "";
+
           return `
-          <div class="invoice-card quote-card" id="invoice-card-${quote.id}">
-            <h2>${quote.type_of}</h2>
-            <h3>ID: ${quote.id}</h3>
-            <p><strong>Name:</strong> ${quote.customer_name}</p>
-            <p><strong>Phone:</strong> ${quote.customer_phone}</p>
-            <p><strong>Reg No:</strong> ${quote.customer_reg_no}</p>
-            <p><strong>Net Total:</strong> ${quote.total.toFixed(2)} PKR</p>
-            ${taxDisplay}
-            <p><strong>Discount:</strong> ${quote.discount.toFixed(2)} PKR</p>
-            <p><strong>Advance:</strong> ${quote.advance.toFixed(2)} PKR</p>
-            <p><strong>Total Quotation:</strong> ${(totalWithTax - quote.discount).toFixed(2)} PKR</p>
-            <p><strong>Created:</strong> ${quote.created_at}</p>
-            <p><strong>Status:</strong> <span class="quote-status">${
-              quote.status || "pending"
-            }</span></p>
-            <div class="invoice-actions">
+          <div class="invoice-card" id="invoice-card-${quote.id}" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); margin-bottom: 20px; transition: transform 0.2s, box-shadow 0.2s;">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #edf2f7; padding-bottom: 12px; margin-bottom: 16px;">
+              <div>
+                <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #8b1538; text-transform: capitalize;">${quote.type_of}</h2>
+                <span style="font-size: 0.8rem; color: #718096;">ID: #${quote.id} &bull; Created: ${quote.created_at}</span>
+              </div>
+              ${statusBadge}
+            </div>
+            
+            <div class="card-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; font-size: 0.875rem;">
+              <div class="info-block">
+                <span style="display: block; font-size: 0.75rem; color: #a0aec0; text-transform: uppercase; font-weight: 600;">Customer</span>
+                <strong>${quote.customer_name}</strong>
+                <div style="font-size: 0.8rem; color: #4a5568; margin-top: 2px;">${quote.customer_phone}</div>
+                <div style="font-size: 0.8rem; color: #718096; font-style: italic;">Reg: ${quote.customer_reg_no}</div>
+              </div>
+              
+              <div class="info-block" style="background: #f7fafc; padding: 8px 12px; border-radius: 8px;">
+                <span style="display: block; font-size: 0.75rem; color: #718096; text-transform: uppercase; font-weight: 600;">Summary</span>
+                <div>Net Total: <strong>${quoteTotal.toFixed(2)}</strong></div>
+                ${quote.discount > 0 ? `<div>Discount: <span style="color: #e53e3e;">-${quote.discount.toFixed(2)}</span></div>` : ""}
+                ${quote.advance > 0 ? `<div>Advance: <span style="color: #4a5568;">-${quote.advance.toFixed(2)}</span></div>` : ""}
+                ${quote.include_tax && quote.tax_amount > 0 ? `<div>Tax (GST): <span style="color: #718096;">+${quote.tax_amount.toFixed(2)}</span></div>` : ""}
+              </div>
+              
+              <div class="info-block" style="background: #fffaf0; padding: 8px 12px; border-radius: 8px; border: 1px solid #feebc8;">
+                <span style="display: block; font-size: 0.75rem; color: #b7791f; text-transform: uppercase; font-weight: 600;">Total Quotation</span>
+                <div style="font-size: 1.1rem; font-weight: 700; color: #dd6b20;">${(totalWithTax - quote.discount).toFixed(2)} PKR</div>
+              </div>
+            </div>
+            
+            <div class="invoice-actions" style="display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #edf2f7; padding-top: 12px; margin-top: 12px; flex-wrap: wrap;">
               <button class="wide-btn-submit view-btn">View</button>
               <button class="wide-btn-edit edit-btn">Edit</button>
               <button class="wide-btn-delete delete-btn">Delete</button>

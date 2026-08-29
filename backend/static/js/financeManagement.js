@@ -10,6 +10,18 @@ function navigateToDailyExpenses() {
 
 // Wait for DOM to be fully loaded
 document.addEventListener("DOMContentLoaded", function () {
+  // Hide major expenses card if user is not admin
+  const userStr = localStorage.getItem("user");
+  if (userStr) {
+    const user = JSON.parse(userStr);
+    if (user.role !== "admin") {
+      const majorExpensesCard = document.getElementById("major-expenses-card");
+      if (majorExpensesCard) {
+        majorExpensesCard.style.display = "none";
+      }
+    }
+  }
+
   // Find the back button
   const backBtn = document.getElementById("back-btn");
 

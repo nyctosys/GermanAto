@@ -18,6 +18,7 @@ class AuthManager {
     // If we have tokens, verify them with the server
     if (this.isAuthenticated) {
       await this.verifyToken();
+      await this.loadPermissions();
     }
   }
 
@@ -108,6 +109,8 @@ class AuthManager {
         localStorage.setItem("refreshToken", this.refreshToken);
         localStorage.setItem("user", JSON.stringify(data.user));
 
+        await this.loadPermissions();
+
         return { success: true, user: data.user };
       } else {
         return { success: false, error: data.error };
@@ -115,6 +118,25 @@ class AuthManager {
     } catch (error) {
       console.error("Login failed:", error);
       return { success: false, error: "Network error. Please try again." };
+    }
+  }
+
+  async loadPermissions() {
+    if (!this.isAuthenticated || !this.accessToken) return;
+    try {
+      const response = await fetch("/api/auth/permissions/my", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem("userPermissions", JSON.stringify(data.permissions));
+      }
+    } catch (error) {
+      console.error("Failed to load user permissions:", error);
     }
   }
 
@@ -151,6 +173,7 @@ class AuthManager {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
+    localStorage.removeItem("userPermissions");
   }
 
   // Role checking methods
@@ -172,6 +195,36 @@ class AuthManager {
   }
 
   canAccessPage(pageName) {
+    if (!this.isAuthenticated || !this.user) {
+      return false;
+    }
+
+    if (this.user.role === "admin") {
+      return true;
+    }
+
+    // Dynamic permissions check
+    const cachedPermissions = localStorage.getItem("userPermissions");
+    if (cachedPermissions) {
+      try {
+        const perms = JSON.parse(cachedPermissions);
+        if (Array.isArray(perms)) {
+          // Normalize sub-pages to their parent permissions
+          let checkedPage = pageName;
+          if (pageName === "vendor-detail") checkedPage = "vendors";
+          else if (pageName === "worker-detail") checkedPage = "hr";
+          else if (pageName === "search") checkedPage = "invoice";
+
+          if (perms.includes(checkedPage)) {
+            return true;
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing userPermissions:", e);
+      }
+    }
+
+    // Fallback static permissions
     const pagePermissions = {
       home: ["admin", "accountant", "inventory_manager"],
       invoice: ["admin", "accountant"],
@@ -181,8 +234,7 @@ class AuthManager {
       reports: ["admin"],
       admin: ["admin"],
       "daily-expenses": ["admin", "accountant"],
-      "major-expenses": ["admin", "accountant"],
-      "parts-expenses": ["admin", "accountant"],
+      "major-expenses": ["admin"],
       vendors: ["admin", "accountant"],
       "vendor-detail": ["admin", "accountant"],
       hr: ["admin", "accountant"],

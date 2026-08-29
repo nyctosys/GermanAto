@@ -66,8 +66,44 @@ def role_required(required_roles):
                 # Convert to list if string
                 roles_list = [required_roles] if isinstance(required_roles, str) else required_roles
                 
-                if user.role not in roles_list:
-                    return jsonify({'error': 'Insufficient permissions'}), 403
+                # Dynamic role permissions check
+                from models import RolePermission
+                from flask import request
+                
+                path = request.path
+                permission_needed = None
+                
+                if '/api/invoice' in path or '/api/quotes' in path:
+                    permission_needed = 'invoice'
+                elif '/api/inventory' in path:
+                    permission_needed = 'inventory'
+                elif '/api/cars' in path:
+                    permission_needed = 'car'
+                elif '/api/expenses' in path or '/api/cash-received' in path:
+                    if '/api/expenses/major' in path:
+                        permission_needed = 'major-expenses'
+                    else:
+                        permission_needed = 'daily-expenses'
+                elif '/api/vendors' in path or '/api/ledger' in path or '/api/purchase-orders' in path:
+                    permission_needed = 'vendors'
+                elif '/api/workers' in path or '/api/salaries' in path or '/api/attendance' in path:
+                    permission_needed = 'hr'
+                elif '/api/repair-orders' in path:
+                    permission_needed = 'repair-order'
+                elif '/api/admin' in path:
+                    permission_needed = 'admin'
+
+                # If user is admin, they always have access
+                if user.role == 'admin':
+                    pass
+                else:
+                    if permission_needed:
+                        has_perm = RolePermission.query.filter_by(role=user.role, permission=permission_needed).first() is not None
+                        if not has_perm:
+                            return jsonify({'error': 'Insufficient permissions'}), 403
+                    else:
+                        if user.role not in roles_list:
+                            return jsonify({'error': 'Insufficient permissions'}), 403
                 
                 # Add user to kwargs for use in route functions
                 kwargs['current_user'] = user

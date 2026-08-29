@@ -228,16 +228,196 @@ async function deleteUser(id) {
   }
 }
 
-// Show user management section
-function showUserManagement() {
-  // Update active button state
-  document.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.classList.remove("active");
-  });
-  document
-    .querySelector('.nav-btn[onclick="showUserManagement()"]')
-    .classList.add("active");
+// Tab Switching Logic
+function switchTab(tab) {
+  // Hide all sections, remove active class from all tab buttons
+  document.querySelectorAll(".tab-section").forEach((sec) => (sec.style.display = "none"));
+  document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"));
 
-  // Show user management section
-  document.getElementById("user-management-section").style.display = "block";
+  if (tab === "users") {
+    document.getElementById("users-section").style.display = "block";
+    document.getElementById("users-tab-btn").classList.add("active");
+  } else if (tab === "permissions") {
+    document.getElementById("permissions-section").style.display = "block";
+    document.getElementById("permissions-tab-btn").classList.add("active");
+    loadRolePermissions();
+  } else if (tab === "logs") {
+    document.getElementById("logs-section").style.display = "block";
+    document.getElementById("logs-tab-btn").classList.add("active");
+    loadLogs(1);
+  }
+}
+
+// Logs Filtering State
+let currentLogsPage = 1;
+
+// Load App Action Logs
+async function loadLogs(page = 1) {
+  currentLogsPage = page;
+  const username = document.getElementById("filter-username").value.trim();
+  const module = document.getElementById("filter-module").value;
+  const action = document.getElementById("filter-action").value;
+  const startDate = document.getElementById("filter-start-date").value;
+  const endDate = document.getElementById("filter-end-date").value;
+  const keyword = document.getElementById("filter-keyword").value.trim();
+
+  let url = `/api/admin/app-logs?page=${page}&per_page=50`;
+  if (username) url += `&username=${encodeURIComponent(username)}`;
+  if (module) url += `&module=${encodeURIComponent(module)}`;
+  if (action) url += `&action=${encodeURIComponent(action)}`;
+  if (startDate) url += `&start_date=${encodeURIComponent(startDate)}`;
+  if (endDate) url += `&end_date=${encodeURIComponent(endDate)}`;
+  if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;
+
+  try {
+    const data = await APIHelper.get(url);
+    renderLogs(data.logs);
+    renderLogsPagination(data.current_page, data.pages);
+  } catch (error) {
+    console.error("Error loading app logs:", error);
+    showError("Failed to load logs. Please try again.");
+  }
+}
+
+// Render Logs Table
+function renderLogs(logs) {
+  const table = document.getElementById("logs-table");
+
+  if (!logs || logs.length === 0) {
+    table.innerHTML = `
+            <div style="padding: 40px; text-align: center; color: #6c757d;">
+                <h3>No logs found</h3>
+                <p>Try adjusting your search filters.</p>
+            </div>
+        `;
+    return;
+  }
+
+  table.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 160px;">Timestamp</th>
+                    <th style="width: 100px;">User</th>
+                    <th style="width: 120px;">Module</th>
+                    <th style="width: 140px;">Action</th>
+                    <th style="width: 100px;">Ref ID</th>
+                    <th>Details</th>
+                    <th style="width: 130px;">IP Address</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${logs
+                  .map(
+                    (log) => `
+                    <tr>
+                        <td style="font-family: monospace; font-size: 11px;">${log.created_at || "N/A"}</td>
+                        <td><strong>${log.username || "system"}</strong></td>
+                        <td><span class="role-badge role-accountant">${log.module}</span></td>
+                        <td><span class="role-badge role-admin">${log.action}</span></td>
+                        <td>${log.reference_id || "-"}</td>
+                        <td style="font-size: 13px;">${log.details}</td>
+                        <td style="font-family: monospace; font-size: 12px; color: var(--text-muted);">${log.ip_address || "-"}</td>
+                    </tr>
+                `
+                  )
+                  .join("")}
+            </tbody>
+        </table>
+    `;
+}
+
+// Render Logs Pagination Controls
+function renderLogsPagination(currentPage, totalPages) {
+  const container = document.getElementById("logs-pagination");
+  if (totalPages <= 1) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = `
+        <button class="page-btn" ${currentPage === 1 ? "disabled" : ""} onclick="loadLogs(${currentPage - 1})">Previous</button>
+        <span class="page-info">Page ${currentPage} of ${totalPages}</span>
+        <button class="page-btn" ${currentPage === totalPages ? "disabled" : ""} onclick="loadLogs(${currentPage + 1})">Next</button>
+    `;
+}
+
+// Filter Actions
+function applyLogsFilters() {
+  loadLogs(1);
+}
+
+function resetLogsFilters() {
+  document.getElementById("filter-username").value = "";
+  document.getElementById("filter-module").value = "";
+  document.getElementById("filter-action").value = "";
+  document.getElementById("filter-start-date").value = "";
+  document.getElementById("filter-end-date").value = "";
+  document.getElementById("filter-keyword").value = "";
+  loadLogs(1);
+}
+
+// Load Role Permissions from backend and check appropriate checkboxes
+async function loadRolePermissions() {
+  try {
+    const data = await APIHelper.get("/api/auth/roles-permissions");
+    if (!data) return;
+
+    // Reset all checkboxes first
+    document.querySelectorAll(".perm-chk").forEach(chk => chk.checked = false);
+
+    // Populate accountant permissions
+    if (data.accountant) {
+      data.accountant.forEach(perm => {
+        const chk = document.querySelector(`.accountant-chk[value="${perm}"]`);
+        if (chk) chk.checked = true;
+      });
+    }
+
+    // Populate inventory manager permissions
+    if (data.inventory_manager) {
+      data.inventory_manager.forEach(perm => {
+        const chk = document.querySelector(`.inventory-chk[value="${perm}"]`);
+        if (chk) chk.checked = true;
+      });
+    }
+  } catch (error) {
+    console.error("Error loading role permissions:", error);
+    showError("Failed to load role permissions");
+  }
+}
+
+// Save role permissions to backend
+async function saveRolePermissions() {
+  try {
+    const accountantPerms = [];
+    document.querySelectorAll(".accountant-chk:checked").forEach(chk => {
+      accountantPerms.push(chk.value);
+    });
+
+    const inventoryPerms = [];
+    document.querySelectorAll(".inventory-chk:checked").forEach(chk => {
+      inventoryPerms.push(chk.value);
+    });
+
+    const payload = {
+      accountant: accountantPerms,
+      inventory_manager: inventoryPerms
+    };
+
+    const res = await APIHelper.request("/api/auth/roles-permissions", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+
+    if (res) {
+      showSuccess("Role permissions saved successfully!");
+      if (typeof auth !== "undefined") {
+        await auth.loadPermissions();
+      }
+    }
+  } catch (error) {
+    console.error("Error saving role permissions:", error);
+    showError("Failed to save role permissions");
+  }
 }

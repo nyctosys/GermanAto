@@ -5,6 +5,7 @@ from sqlalchemy import desc
 from functools import wraps
 from jwt_auth import login_required, role_required, admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from log_utils import log_action
 
 expense_routes = Blueprint('expense_routes', __name__)
 
@@ -167,6 +168,7 @@ def create_expense(current_user=None):
         )
         
         db.session.add(new_expense)
+        log_action(current_user, 'CREATE', 'expenses', new_expense.id, f"Created expense: {new_expense.description} ({new_expense.amount} PKR, Category: {new_expense.category})")
         db.session.commit()
         
         # Return the created expense
@@ -223,6 +225,12 @@ def update_expense(expense_id):
         expense.notes = data.get('notes', '')
         expense.updated_at = datetime.utcnow()
         
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'UPDATE', 'expenses', expense.id, f"Updated expense ID {expense.id}: {expense.description} ({expense.amount} PKR)")
         db.session.commit()
         
         # Return the updated expense
@@ -250,6 +258,12 @@ def delete_expense(expense_id):
     try:
         expense = Expense.query.get_or_404(expense_id)
         
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'DELETE', 'expenses', expense_id, f"Deleted expense ID {expense_id}: {expense.description} ({expense.amount} PKR)")
         db.session.delete(expense)
         db.session.commit()
         
@@ -324,3 +338,111 @@ def get_expense_summary(current_user=None):
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500 
+
+@expense_routes.route('/expenses/monthly-ledger', methods=['GET'])
+@login_required
+def get_monthly_ledger(current_user=None):
+    """Get daily opening/closing balances and in/out ledger for a specific month"""
+    try:
+        from models import CashReceived, Expense
+        from datetime import date
+        import calendar
+        
+        # Get target month, default to current month
+        month_param = request.args.get('month') # Format: YYYY-MM
+        if not month_param:
+            month_param = datetime.utcnow().strftime('%Y-%m')
+            
+        try:
+            year, month = map(int, month_param.split('-'))
+            start_date = date(year, month, 1)
+            # Find the last day of the month
+            _, last_day = calendar.monthrange(year, month)
+            end_date = date(year, month, last_day)
+        except ValueError:
+            return jsonify({'error': 'Invalid month format. Use YYYY-MM'}), 400
+            
+        # 1. Calculate opening balance prior to the start of this month
+        # Sum of all cash received prior to start_date
+        total_cash_prior = db.session.query(db.func.sum(CashReceived.amount)).filter(CashReceived.date < start_date).scalar() or 0.0
+        # Sum of all expenses prior to start_date
+        total_exp_prior = db.session.query(db.func.sum(Expense.amount)).filter(Expense.date < start_date).scalar() or 0.0
+        
+        initial_balance = float(total_cash_prior) - float(total_exp_prior)
+        
+        # 2. Get all cash received and expenses for the target month
+        cash_records = CashReceived.query.filter(CashReceived.date >= start_date, CashReceived.date <= end_date).all()
+        expense_records = Expense.query.filter(Expense.date >= start_date, Expense.date <= end_date).all()
+        
+        # Group records by date
+        cash_by_date = {}
+        for r in cash_records:
+            d_str = r.date.strftime('%Y-%m-%d')
+            cash_by_date.setdefault(d_str, []).append(r)
+            
+        expenses_by_date = {}
+        for r in expense_records:
+            d_str = r.date.strftime('%Y-%m-%d')
+            expenses_by_date.setdefault(d_str, []).append(r)
+            
+        # 3. Generate daily ledger entries
+        daily_ledger = []
+        current_balance = initial_balance
+        
+        # Iterate through every day of the month
+        for day in range(1, last_day + 1):
+            cur_date = date(year, month, day)
+            d_str = cur_date.strftime('%Y-%m-%d')
+            
+            day_cash_list = cash_by_date.get(d_str, [])
+            day_exp_list = expenses_by_date.get(d_str, [])
+            
+            day_inflow = sum(float(r.amount) for r in day_cash_list)
+            day_outflow = sum(float(r.amount) for r in day_exp_list)
+            
+            opening_bal = current_balance
+            net_change = day_inflow - day_outflow
+            closing_bal = opening_bal + net_change
+            current_balance = closing_bal
+            
+            daily_ledger.append({
+                'date': d_str,
+                'opening_balance': round(opening_bal, 2),
+                'inflow': round(day_inflow, 2),
+                'outflow': round(day_outflow, 2),
+                'closing_balance': round(closing_bal, 2)
+            })
+            
+        # 4. Detailed transactions list (sorted by date)
+        details = []
+        for r in cash_records:
+            details.append({
+                'id': f"in-{r.id}",
+                'date': r.date.strftime('%Y-%m-%d'),
+                'type': 'in',
+                'description': r.description,
+                'amount': float(r.amount),
+                'payment_method': r.payment_method,
+                'notes': r.notes or ""
+            })
+        for r in expense_records:
+            details.append({
+                'id': f"out-{r.id}",
+                'date': r.date.strftime('%Y-%m-%d'),
+                'type': 'out',
+                'description': r.description,
+                'amount': float(r.amount),
+                'category': r.category,
+                'notes': r.notes or ""
+            })
+        details.sort(key=lambda x: (x['date'], x['type'] == 'out'))
+        
+        return jsonify({
+            'month': month_param,
+            'initial_balance': round(initial_balance, 2),
+            'daily_ledger': daily_ledger,
+            'details': details
+        }), 200
+    except Exception as e:
+        logger.error(f"Error generating monthly ledger: {e}")
+        return jsonify({'error': 'Failed to generate monthly ledger'}), 500 

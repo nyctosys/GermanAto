@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Vendor, VendorLedger, VendorConsignment, User
+from models import db, Vendor, VendorLedger, PurchaseOrder, User
 from datetime import datetime, date
 from functools import wraps
+from log_utils import log_action, save_uploaded_file
 import logging
 
 # Create blueprint for vendor routes
@@ -144,6 +145,13 @@ def create_vendor():
         )
         
         db.session.add(vendor)
+        
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'CREATE', 'vendors', vendor.id, f"Created vendor {vendor.name} ({vendor.company_name})")
         db.session.commit()
         
         logger.info(f"Vendor created successfully: ID {vendor.id}")
@@ -181,6 +189,12 @@ def update_vendor(vendor_id):
         vendor.cnic = data.get('cnic', vendor.cnic)
         vendor.updated_at = datetime.utcnow()
         
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'UPDATE', 'vendors', vendor.id, f"Updated vendor details for {vendor.name}")
         db.session.commit()
         
         logger.info(f"Vendor updated successfully: ID {vendor.id}")
@@ -205,6 +219,12 @@ def delete_vendor(vendor_id):
             return jsonify({'error': 'Vendor not found'}), 404
         
         # Delete associated ledger entries and consignments (cascade should handle this)
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'DELETE', 'vendors', vendor_id, f"Deleted vendor ID {vendor_id} ({vendor.name})")
         db.session.delete(vendor)
         db.session.commit()
         
@@ -261,19 +281,34 @@ def get_vendor_ledger(vendor_id):
 def add_ledger_entry():
     """Add a new ledger entry"""
     try:
-        data = request.get_json()
+        # Check if multipart/form-data or JSON
+        data = {}
+        attachment_file = None
         
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            data = request.form
+            if 'attachment' in request.files:
+                attachment_file = request.files['attachment']
+        else:
+            data = request.get_json()
+            
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
         # Validate required fields
         required_fields = ['vendor_id', 'date', 'description', 'debit', 'credit']
         for field in required_fields:
-            if field not in data:
+            if field not in data or data.get(field) is None:
                 return jsonify({'error': f'{field} is required'}), 400
         
+        # Parse vendor_id
+        try:
+            vendor_id = int(data['vendor_id'])
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid vendor_id'}), 400
+            
         # Validate vendor exists
-        vendor = Vendor.query.get(data['vendor_id'])
+        vendor = Vendor.query.get(vendor_id)
         if not vendor:
             return jsonify({'error': 'Vendor not found'}), 404
         
@@ -288,7 +323,7 @@ def add_ledger_entry():
         credit = float(data['credit']) if data['credit'] else 0.0
         
         # Get the last balance for this vendor
-        last_entry = VendorLedger.query.filter_by(vendor_id=data['vendor_id'])\
+        last_entry = VendorLedger.query.filter_by(vendor_id=vendor_id)\
             .order_by(VendorLedger.date.desc(), VendorLedger.id.desc()).first()
         
         last_balance = float(last_entry.balance) if last_entry else 0.0
@@ -296,21 +331,37 @@ def add_ledger_entry():
         # Calculate new balance
         new_balance = last_balance + debit - credit
         
+        # Save optional attachment
+        attachment_path = None
+        if attachment_file:
+            attachment_path = save_uploaded_file(attachment_file)
+            
+        # Get current user
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
         # Create ledger entry
         ledger_entry = VendorLedger(
-            vendor_id=data['vendor_id'],
+            vendor_id=vendor_id,
             date=entry_date,
             description=data['description'],
             folio=data.get('folio'),
             debit=debit,
             credit=credit,
-            balance=new_balance
+            balance=new_balance,
+            created_by_user=current_user.username if current_user else None,
+            payment_notes=data.get('payment_notes'),
+            attachment_path=attachment_path
         )
         
         db.session.add(ledger_entry)
+        
+        log_action(current_user, 'CREATE_LEDGER', 'vendors', vendor_id, f"Added ledger entry: {data['description']} (Debit: {debit:.2f}, Credit: {credit:.2f})")
         db.session.commit()
         
-        logger.info(f"Ledger entry created successfully for vendor {data['vendor_id']}")
+        logger.info(f"Ledger entry created successfully for vendor {vendor_id}")
         
         return jsonify({
             'message': 'Ledger entry added successfully',
@@ -334,6 +385,12 @@ def delete_ledger_entry(ledger_id):
         vendor_id = ledger_entry.vendor_id
         
         # Delete the ledger entry
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'DELETE_LEDGER', 'vendors', vendor_id, f"Deleted ledger entry ID {ledger_id} ({ledger_entry.description})")
         db.session.delete(ledger_entry)
         db.session.commit()
         
@@ -346,12 +403,13 @@ def delete_ledger_entry(ledger_id):
         logger.error(f"Error deleting ledger entry: {e}")
         return jsonify({'error': 'Failed to delete ledger entry'}), 500
 
-# ===== VENDOR CONSIGNMENT ROUTES =====
+# ===== PURCHASE ORDER ROUTES =====
 
+@vendor_bp.route('/api/vendors/<int:vendor_id>/purchase-orders', methods=['GET'])
 @vendor_bp.route('/api/vendors/<int:vendor_id>/consignments', methods=['GET'])
 @role_required(['admin', 'accountant'])
-def get_vendor_consignments(vendor_id):
-    """Get consignment records for a specific vendor"""
+def get_vendor_purchase_orders(vendor_id):
+    """Get purchase order records for a specific vendor"""
     try:
         vendor = Vendor.query.get(vendor_id)
         if not vendor:
@@ -361,38 +419,43 @@ def get_vendor_consignments(vendor_id):
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         invoice_no = request.args.get('invoice_no')
+        status = request.args.get('status')
         
-        query = VendorConsignment.query.filter_by(vendor_id=vendor_id)
+        query = PurchaseOrder.query.filter_by(vendor_id=vendor_id)
         
         if start_date:
             try:
                 start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
-                query = query.filter(VendorConsignment.date >= start_date_obj)
+                query = query.filter(PurchaseOrder.date >= start_date_obj)
             except ValueError:
                 return jsonify({'error': 'Invalid start_date format. Use YYYY-MM-DD'}), 400
         
         if end_date:
             try:
                 end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
-                query = query.filter(VendorConsignment.date <= end_date_obj)
+                query = query.filter(PurchaseOrder.date <= end_date_obj)
             except ValueError:
                 return jsonify({'error': 'Invalid end_date format. Use YYYY-MM-DD'}), 400
         
         if invoice_no:
-            query = query.filter(VendorConsignment.invoice_no.ilike(f'%{invoice_no}%'))
+            query = query.filter(PurchaseOrder.invoice_no.ilike(f'%{invoice_no}%'))
+            
+        if status:
+            query = query.filter(PurchaseOrder.status == status)
         
-        consignments = query.order_by(VendorConsignment.date.desc(), VendorConsignment.id.desc()).all()
+        purchase_orders = query.order_by(PurchaseOrder.date.desc(), PurchaseOrder.id.desc()).all()
         
-        return jsonify([consignment.to_dict() for consignment in consignments]), 200
+        return jsonify([po.to_dict() for po in purchase_orders]), 200
         
     except Exception as e:
-        logger.error(f"Error fetching vendor consignments {vendor_id}: {e}")
-        return jsonify({'error': 'Failed to fetch vendor consignments'}), 500
+        logger.error(f"Error fetching vendor purchase orders {vendor_id}: {e}")
+        return jsonify({'error': 'Failed to fetch purchase orders'}), 500
 
+@vendor_bp.route('/api/purchase-orders/add', methods=['POST'])
 @vendor_bp.route('/api/consignments/add', methods=['POST'])
 @role_required(['admin', 'accountant'])
-def add_consignment():
-    """Add a new consignment record"""
+def add_purchase_order():
+    """Add a new purchase order record"""
     try:
         data = request.get_json()
         
@@ -412,7 +475,7 @@ def add_consignment():
         
         # Parse date
         try:
-            consignment_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+            po_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
         
@@ -421,50 +484,101 @@ def add_consignment():
         rate = float(data['rate'])
         amount = quantity * rate
         
-        # Create consignment record
-        consignment = VendorConsignment(
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        # Create purchase order record
+        po = PurchaseOrder(
             vendor_id=data['vendor_id'],
-            date=consignment_date,
+            date=po_date,
             invoice_no=data['invoice_no'],
             item_name=data['item_name'],
             quantity=quantity,
             rate=rate,
             amount=amount,
-            remarks=data.get('remarks')
+            remarks=data.get('remarks'),
+            status=data.get('status', 'ordered'),
+            created_by_user=current_user.username if current_user else None
         )
         
-        db.session.add(consignment)
+        db.session.add(po)
+        db.session.flush()
+        
+        log_action(current_user, 'CREATE_PO', 'vendors', po.vendor_id, f"Created Purchase Order {po.invoice_no}: {po.item_name} x{po.quantity} ({po.status})")
         db.session.commit()
         
-        logger.info(f"Consignment record created successfully for vendor {data['vendor_id']}")
+        logger.info(f"Purchase order record created successfully for vendor {data['vendor_id']}")
         
         return jsonify({
-            'message': 'Consignment record added successfully',
-            'consignment': consignment.to_dict()
+            'message': 'Purchase order record added successfully',
+            'consignment': po.to_dict()  # Keep key 'consignment' for frontend backwards compatibility
         }), 201
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error adding consignment record: {e}")
-        return jsonify({'error': 'Failed to add consignment record'}), 500
+        logger.error(f"Error adding purchase order: {e}")
+        return jsonify({'error': 'Failed to add purchase order record'}), 500
 
+@vendor_bp.route('/api/purchase-orders/<int:po_id>', methods=['DELETE'])
 @vendor_bp.route('/api/consignments/<int:consignment_id>', methods=['DELETE'])
 @role_required(['admin', 'accountant'])
-def delete_consignment(consignment_id):
-    """Delete a consignment record"""
+def delete_purchase_order(po_id=None, consignment_id=None):
+    """Delete a purchase order record"""
     try:
-        consignment = VendorConsignment.query.get(consignment_id)
-        if not consignment:
-            return jsonify({'error': 'Consignment record not found'}), 404
+        target_id = po_id if po_id is not None else consignment_id
+        po = PurchaseOrder.query.get(target_id)
+        if not po:
+            return jsonify({'error': 'Purchase order record not found'}), 404
         
-        db.session.delete(consignment)
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'DELETE_PO', 'vendors', po.vendor_id, f"Deleted Purchase Order {po.invoice_no}: {po.item_name}")
+        db.session.delete(po)
         db.session.commit()
         
-        logger.info(f"Consignment record deleted successfully: ID {consignment_id}")
+        logger.info(f"Purchase order record deleted successfully: ID {target_id}")
         
-        return jsonify({'message': 'Consignment record deleted successfully'}), 200
+        return jsonify({'message': 'Purchase order record deleted successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error deleting consignment {consignment_id}: {e}")
-        return jsonify({'error': 'Failed to delete consignment record'}), 500
+        logger.error(f"Error deleting purchase order: {e}")
+        return jsonify({'error': 'Failed to delete purchase order record'}), 500
+
+@vendor_bp.route('/api/purchase-orders/<int:po_id>/status', methods=['PUT'])
+@role_required(['admin', 'accountant'])
+def update_purchase_order_status(po_id):
+    """Update purchase order status"""
+    try:
+        po = PurchaseOrder.query.get(po_id)
+        if not po:
+            return jsonify({'error': 'Purchase order not found'}), 404
+        
+        data = request.get_json()
+        new_status = data.get('status')
+        if new_status not in ['ordered', 'in transit', 'received']:
+            return jsonify({'error': 'Invalid status'}), 400
+            
+        old_status = po.status
+        po.status = new_status
+        po.updated_at = datetime.utcnow()
+        
+        # Log action
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'UPDATE_PO_STATUS', 'vendors', po.vendor_id, f"Updated Purchase Order {po.invoice_no} status from '{old_status}' to '{new_status}'")
+        db.session.commit()
+        
+        return jsonify({'message': 'Status updated successfully', 'status': po.status}), 200
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating purchase order status: {e}")
+        return jsonify({'error': 'Failed to update status'}), 500

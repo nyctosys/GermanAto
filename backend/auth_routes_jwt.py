@@ -311,3 +311,74 @@ def delete_user(user_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to delete user'}), 500
+
+@auth_bp.route('/roles-permissions', methods=['GET'])
+@jwt_required()
+@role_required('admin')
+def get_roles_permissions():
+    """Get all role permissions (admin only)"""
+    from models import RolePermission
+    try:
+        roles = ['accountant', 'inventory_manager']
+        all_perms = RolePermission.query.all()
+        
+        result = {}
+        for r in roles:
+            result[r] = [p.permission for p in all_perms if p.role == r]
+            
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@auth_bp.route('/roles-permissions', methods=['PUT'])
+@jwt_required()
+@role_required('admin')
+def update_roles_permissions():
+    """Update role permissions (admin only)"""
+    from models import RolePermission
+    try:
+        data = request.get_json() or {}
+        valid_roles = ['accountant', 'inventory_manager']
+        
+        # Clear existing permissions
+        RolePermission.query.filter(RolePermission.role.in_(valid_roles)).delete(synchronize_session=False)
+        
+        # Insert new permissions
+        for role, permissions in data.items():
+            if role in valid_roles:
+                for perm in permissions:
+                    new_perm = RolePermission(role=role, permission=perm)
+                    db.session.add(new_perm)
+                    
+        db.session.commit()
+        return jsonify({'message': 'Permissions updated successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@auth_bp.route('/permissions/my', methods=['GET'])
+@jwt_required()
+def get_my_permissions():
+    """Get permissions for current user's role"""
+    from models import RolePermission
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(int(current_user_id))
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+            
+        if user.role == 'admin':
+            all_possible_perms = [
+                'home', 'invoice', 'search', 'inventory', 'car', 'reports', 
+                'admin', 'daily-expenses', 'major-expenses', 'vendors', 
+                'vendor-detail', 'hr', 'worker-detail', 'repair-order', 
+                'repair-orders-management', 'settings', 'logs'
+            ]
+            return jsonify({'role': user.role, 'permissions': all_possible_perms}), 200
+            
+        perms = RolePermission.query.filter_by(role=user.role).all()
+        result = [p.permission for p in perms]
+        
+        return jsonify({'role': user.role, 'permissions': result}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

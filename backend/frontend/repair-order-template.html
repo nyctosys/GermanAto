@@ -148,6 +148,26 @@
             <div class="worker-name" id="worker-name">{WORKER_NAME}</div>
           </div>
         </div>
+
+        <!-- ===== HISTORY LOGS ===== -->
+        <div class="logs-section" id="ro-logs-container" style="margin-top: 30px;">
+          <h3 class="section-title">REPAIR ORDER HISTORY LOGS</h3>
+          <div class="table-container">
+            <table id="ro-logs-table">
+              <thead>
+                <tr>
+                  <th style="width: 150px;">Timestamp</th>
+                  <th style="width: 100px;">User</th>
+                  <th style="width: 140px;">Action</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="ro-logs-table-body">
+                <!-- Log rows will be added dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- ===== FOOTER ===== -->
@@ -291,6 +311,37 @@
           // Update assigned worker
           document.getElementById("worker-name").textContent =
             data.worker_name || "Not assigned";
+
+          // Fetch and display repair order history logs
+          fetch(`/api/repair-orders/${repairOrderId}/logs`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          })
+          .then(res => res.json())
+          .then(logs => {
+            const logsTableBody = document.getElementById("ro-logs-table-body");
+            logsTableBody.innerHTML = "";
+            
+            if (logs && logs.length > 0) {
+              logs.forEach(log => {
+                const newRow = document.createElement("tr");
+                newRow.innerHTML = `
+                  <td style="font-family: monospace; font-size: 11px;">${log.created_at || "N/A"}</td>
+                  <td><strong>${log.username || "system"}</strong></td>
+                  <td><span class="role-badge" style="background: var(--primary-maroon); color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${log.action}</span></td>
+                  <td>${log.details}</td>
+                `;
+                logsTableBody.appendChild(newRow);
+              });
+            } else {
+              logsTableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No edit history logs found for this repair order.</td></tr>`;
+            }
+          })
+          .catch(err => {
+            console.error("Error loading RO logs:", err);
+            document.getElementById("ro-logs-table-body").innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Failed to load history logs.</td></tr>`;
+          });
 
           // Clear sessionStorage after loading
           sessionStorage.removeItem("repairOrderData");

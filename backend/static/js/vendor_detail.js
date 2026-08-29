@@ -296,7 +296,7 @@ function renderLedgerTable(entries) {
   if (entries.length === 0) {
     tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="text-center text-muted">
+                <td colspan="10" class="text-center text-muted">
                     <i class="fas fa-inbox"></i> No ledger entries found
                 </td>
             </tr>
@@ -308,7 +308,7 @@ function renderLedgerTable(entries) {
     .map(
       (entry) => `
         <tr>
-            <td>${formatDate(entry.created_at)}</td>
+            <td>${entry.created_at || entry.date}</td>
             <td>${entry.description}</td>
             <td>${entry.folio || "N/A"}</td>
             <td class="currency ${
@@ -320,6 +320,18 @@ function renderLedgerTable(entries) {
             <td class="currency ${
               entry.balance >= 0 ? "positive" : "negative"
             }">${formatCurrency(entry.balance)}</td>
+            <td>${entry.payment_notes || "N/A"}</td>
+            <td>
+              ${entry.attachment_path ? `
+                <a href="/${entry.attachment_path}" target="_blank" class="badge" style="background: #2b6cb0; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 10px; height: 10px;">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                  </svg>
+                  Proof
+                </a>
+              ` : "None"}
+            </td>
+            <td>${entry.created_by_user || "System"}</td>
             <td>
               <button
                 class="action-btn delete-btn"
@@ -365,7 +377,7 @@ async function loadConsignments() {
     const endDate = document.getElementById("consignmentEndDate").value;
     const invoiceNo = document.getElementById("consignmentInvoiceNo").value;
 
-    let url = `/api/vendors/${currentVendorId}/consignments`;
+    let url = `/api/vendors/${currentVendorId}/purchase-orders`;
     const params = new URLSearchParams();
 
     if (startDate) params.append("start_date", startDate);
@@ -394,8 +406,8 @@ function renderConsignmentsTable(consignmentsList) {
   if (consignmentsList.length === 0) {
     tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="text-center text-muted">
-                    <i class="fas fa-inbox"></i> No consignment records found
+                <td colspan="10" class="text-center text-muted">
+                    <i class="fas fa-inbox"></i> No purchase order records found
                 </td>
             </tr>
         `;
@@ -406,7 +418,7 @@ function renderConsignmentsTable(consignmentsList) {
     .map(
       (consignment) => `
         <tr>
-            <td>${formatDate(consignment.created_at)}</td>
+            <td>${consignment.date}</td>
             <td>${consignment.invoice_no}</td>
             <td>${consignment.item_name}</td>
             <td>${consignment.quantity}</td>
@@ -415,6 +427,16 @@ function renderConsignmentsTable(consignmentsList) {
               consignment.amount
             )}</td>
             <td>${consignment.remarks || "N/A"}</td>
+            <td>
+              <select class="po-status-dropdown" data-id="${consignment.id}" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e0; font-size: 0.85rem; font-weight: 600; background: #fff; cursor: pointer; color: ${
+                consignment.status === 'received' ? '#2f855a' : consignment.status === 'in transit' ? '#dd6b20' : '#2b6cb0'
+              };">
+                <option value="ordered" ${consignment.status === 'ordered' ? 'selected' : ''}>Ordered</option>
+                <option value="in transit" ${consignment.status === 'in transit' ? 'selected' : ''}>In Transit</option>
+                <option value="received" ${consignment.status === 'received' ? 'selected' : ''}>Received</option>
+              </select>
+            </td>
+            <td>${consignment.created_by_user || "System"}</td>
             <td>
                 <button class="action-btn delete-btn" onclick="deleteConsignment(${
                   consignment.id
@@ -426,6 +448,28 @@ function renderConsignmentsTable(consignmentsList) {
     `
     )
     .join("");
+
+  // Attach status change event listeners
+  document.querySelectorAll(".po-status-dropdown").forEach(dropdown => {
+    dropdown.addEventListener("change", async (e) => {
+      const poId = e.target.getAttribute("data-id");
+      const newStatus = e.target.value;
+      try {
+        const data = await APIHelper.request(`/api/purchase-orders/${poId}/status`, {
+          method: "PUT",
+          body: JSON.stringify({ status: newStatus })
+        });
+        if (data) {
+          showSuccess("Purchase order status updated successfully!");
+          loadConsignments();
+        }
+      } catch (err) {
+        console.error("Error updating status:", err);
+        showError("Failed to update status");
+        loadConsignments();
+      }
+    });
+  });
 }
 
 // Save ledger entry
@@ -436,17 +480,25 @@ async function saveLedgerEntry() {
     return;
   }
 
-  const entryData = {
-    vendor_id: currentVendorId,
-    date: document.getElementById("ledgerDate").value,
-    description: document.getElementById("ledgerDescription").value.trim(),
-    folio: document.getElementById("ledgerFolio").value.trim() || null,
-    debit: parseFloat(document.getElementById("ledgerDebit").value) || 0,
-    credit: parseFloat(document.getElementById("ledgerCredit").value) || 0,
-  };
+  const formData = new FormData();
+  formData.append("vendor_id", currentVendorId);
+  formData.append("date", document.getElementById("ledgerDate").value);
+  formData.append("description", document.getElementById("ledgerDescription").value.trim());
+  formData.append("folio", document.getElementById("ledgerFolio").value.trim());
+  formData.append("debit", parseFloat(document.getElementById("ledgerDebit").value) || 0);
+  formData.append("credit", parseFloat(document.getElementById("ledgerCredit").value) || 0);
+  formData.append("payment_notes", document.getElementById("ledgerPaymentNotes").value.trim());
+  
+  const fileInput = document.getElementById("ledgerAttachment");
+  if (fileInput && fileInput.files.length > 0) {
+    formData.append("attachment", fileInput.files[0]);
+  }
 
   try {
-    const data = await APIHelper.post("/api/ledger/add", entryData);
+    const data = await APIHelper.request("/api/ledger/add", {
+      method: "POST",
+      body: formData
+    });
     if (!data) return;
 
     showSuccess(data.message);
@@ -475,9 +527,10 @@ async function saveConsignment() {
   const quantity = document.getElementById("consignmentQuantity").value;
   const rate = document.getElementById("consignmentRate").value;
   const remarks = document.getElementById("consignmentRemarks").value.trim();
+  const status = document.getElementById("consignmentStatus").value;
 
   // Validate required fields
-  if (!date || !invoiceNo || !itemName || !quantity || !rate) {
+  if (!date || !invoiceNo || !itemName || !quantity || !rate || !status) {
     showError("Please fill in all required fields");
     return;
   }
@@ -490,10 +543,11 @@ async function saveConsignment() {
     quantity: parseInt(quantity),
     rate: parseFloat(rate),
     remarks: remarks || null,
+    status: status
   };
 
   try {
-    const data = await APIHelper.post("/api/consignments/add", consignmentData);
+    const data = await APIHelper.post("/api/purchase-orders/add", consignmentData);
     if (!data) return;
 
     showSuccess(data.message);
@@ -501,7 +555,7 @@ async function saveConsignment() {
     hideModal("consignmentModal");
     resetConsignmentForm();
   } catch (error) {
-    showError("Error saving consignment. Please try again.");
+    showError("Error saving purchase order. Please try again.");
   }
 }
 
@@ -564,8 +618,8 @@ async function confirmDelete() {
       url = `/api/vendors/${deleteItemId}`;
       message = "Vendor deleted successfully";
     } else if (deleteItemType === "consignment") {
-      url = `/api/consignments/${deleteItemId}`;
-      message = "Consignment record deleted successfully";
+      url = `/api/purchase-orders/${deleteItemId}`;
+      message = "Purchase order deleted successfully";
     } else if (deleteItemType === "ledger") {
       url = `/api/ledger/${deleteItemId}`;
       message = "Ledger entry deleted successfully";
@@ -627,17 +681,55 @@ function exportConsignment(format) {
 // Export ledger to Excel
 function exportLedgerToExcel() {
   try {
-    const table = document.getElementById("ledgerTable");
-    if (!table) {
-      showError("Ledger table not found");
+    if (!ledgerEntries || ledgerEntries.length === 0) {
+      showError("No ledger entries available to export");
       return;
     }
 
-    const ws = XLSX.utils.table_to_sheet(table);
+    const headers = [
+      "Date / Time",
+      "Description",
+      "Folio",
+      "Debit (PKR)",
+      "Credit (PKR)",
+      "Balance (PKR)",
+      "Payment Notes",
+      "Proof Attachment URL",
+      "Added By"
+    ];
+
+    const rows = ledgerEntries.map(entry => [
+      entry.created_at || entry.date,
+      entry.description,
+      entry.folio || "N/A",
+      entry.debit,
+      entry.credit,
+      entry.balance,
+      entry.payment_notes || "N/A",
+      entry.attachment_path ? `${window.location.origin}/${entry.attachment_path}` : "None",
+      entry.created_by_user || "System"
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+    // Set column widths
+    const wscols = [
+      { wch: 20 }, // Date/Time
+      { wch: 30 }, // Description
+      { wch: 10 }, // Folio
+      { wch: 15 }, // Debit
+      { wch: 15 }, // Credit
+      { wch: 15 }, // Balance
+      { wch: 35 }, // Notes
+      { wch: 45 }, // Attachment URL
+      { wch: 15 }  // Creator
+    ];
+    ws["!cols"] = wscols;
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Ledger Statement");
 
-    const fileName = `ledger_${currentVendorId}_${
+    const fileName = `vendor_ledger_${currentVendorId}_${
       new Date().toISOString().split("T")[0]
     }.xlsx`;
     XLSX.writeFile(wb, fileName);
@@ -652,25 +744,63 @@ function exportLedgerToExcel() {
 // Export consignments to Excel
 function exportConsignmentToExcel() {
   try {
-    const table = document.getElementById("consignmentsTable");
-    if (!table) {
-      showError("Consignment table not found");
+    if (!consignments || consignments.length === 0) {
+      showError("No purchase order records available to export");
       return;
     }
 
-    const ws = XLSX.utils.table_to_sheet(table);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Consignment Reports");
+    const headers = [
+      "Date",
+      "Invoice No",
+      "Item Name",
+      "Quantity",
+      "Rate (PKR)",
+      "Amount (PKR)",
+      "Remarks",
+      "Status",
+      "Added By"
+    ];
 
-    const fileName = `consignments_${currentVendorId}_${
+    const rows = consignments.map(po => [
+      po.date,
+      po.invoice_no,
+      po.item_name,
+      po.quantity,
+      po.rate,
+      po.amount,
+      po.remarks || "N/A",
+      po.status || "ordered",
+      po.created_by_user || "System"
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+    // Set column widths
+    const wscols = [
+      { wch: 15 }, // Date
+      { wch: 15 }, // Invoice No
+      { wch: 25 }, // Item Name
+      { wch: 10 }, // Quantity
+      { wch: 15 }, // Rate
+      { wch: 15 }, // Amount
+      { wch: 30 }, // Remarks
+      { wch: 15 }, // Status
+      { wch: 15 }  // Creator
+    ];
+    ws["!cols"] = wscols;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Purchase Orders");
+
+    const fileName = `vendor_purchase_orders_${currentVendorId}_${
       new Date().toISOString().split("T")[0]
     }.xlsx`;
     XLSX.writeFile(wb, fileName);
 
-    showInfo("Consignments exported to Excel successfully!");
+    showInfo("Purchase orders exported to Excel successfully!");
   } catch (error) {
-    console.error("Error exporting consignments to Excel:", error);
-    showError("Failed to export consignments to Excel");
+    console.error("Error exporting purchase orders to Excel:", error);
+    showError("Failed to export purchase orders to Excel");
   }
 }
 
@@ -687,6 +817,10 @@ function resetConsignmentForm() {
   document.getElementById("consignmentDate").value = new Date()
     .toISOString()
     .split("T")[0];
+  const statusSelect = document.getElementById("consignmentStatus");
+  if (statusSelect) {
+    statusSelect.value = "ordered";
+  }
 }
 
 // Show loading states

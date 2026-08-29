@@ -398,32 +398,53 @@ document.addEventListener("DOMContentLoaded", function () {
     if (problemDescField)
       problemDescField.value = repairOrderData.problem_description || "";
 
-    // Populate worker selection
-    if (repairOrderData.worker_id && workers.length > 0) {
-      const worker = workers.find((w) => w.id === repairOrderData.worker_id);
-      if (worker) {
-        const workerSelect = document.getElementById("worker-select");
-        const workerIdField = document.getElementById("worker-id");
-        const workerNameField = document.getElementById("worker-name");
-
-        if (workerSelect) {
-          workerSelect.value = `${worker.first_name} ${worker.last_name} - ${
-            worker.position || "Worker"
-          }`;
-        }
-        if (workerIdField) {
-          workerIdField.value = worker.id;
-        }
-        if (workerNameField) {
-          workerNameField.value = `${worker.first_name} ${worker.last_name}`;
-        }
-        selectedWorkerId = worker.id;
-      }
-    } else {
-      // Fallback to worker name if worker_id is not available
-      const workerNameField = document.getElementById("worker-name");
-      if (workerNameField) {
-        workerNameField.value = repairOrderData.worker_name || "";
+    // Populate multiple workers selection
+    selectedWorkerIds = [];
+    if (repairOrderData.workers_json && repairOrderData.workers_json.length > 0) {
+      repairOrderData.workers_json.forEach(w => {
+        if (w.id) selectedWorkerIds.push(w.id);
+      });
+    } else if (repairOrderData.worker_id) {
+      // Fallback for single worker compatibility
+      selectedWorkerIds.push(repairOrderData.worker_id);
+    }
+    
+    renderSelectedWorkers();
+    updateHiddenWorkerFields();
+    
+    // Clear search input so it doesn't show old singular worker text
+    const workerSelect = document.getElementById("worker-select");
+    if (workerSelect) {
+      workerSelect.value = "";
+    }
+    
+    // Check if repair order is completed and user is not admin - edit lock!
+    const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+    if (repairOrderData.current_status === "complete" && currentUser.role !== "admin") {
+      // Lock down the entire form!
+      const form = document.getElementById("repair-order-form");
+      if (form) {
+        // Disable all inputs, textareas, selects, and buttons
+        form.querySelectorAll("input, textarea, select, button").forEach(el => {
+          el.disabled = true;
+          if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+            el.readOnly = true;
+          }
+        });
+        
+        // Show warning banner
+        const warningBanner = document.createElement("div");
+        warningBanner.className = "alert alert-warning";
+        warningBanner.style.background = "#fff5f5";
+        warningBanner.style.border = "1px solid #fed7d7";
+        warningBanner.style.color = "#c53030";
+        warningBanner.style.padding = "16px";
+        warningBanner.style.borderRadius = "8px";
+        warningBanner.style.marginBottom = "20px";
+        warningBanner.style.fontWeight = "600";
+        warningBanner.style.gridColumn = "1 / -1";
+        warningBanner.textContent = "This repair order is Completed and Locked. Only administrators can make edits.";
+        form.insertBefore(warningBanner, form.firstChild);
       }
     }
 
@@ -491,6 +512,7 @@ document.addEventListener("DOMContentLoaded", function () {
       problem_description: formData.get("problem_description"),
       worker_id: formData.get("worker_id") || null,
       worker_name: formData.get("worker_name") || null,
+      worker_ids: selectedWorkerIds,
       parts: [],
       labour: [],
     };
@@ -1341,7 +1363,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const selectedValue = e.target.getAttribute("data-value");
           const selectedText = e.target.textContent;
 
-          workerInput.value = selectedText;
+          workerInput.value = "";
           workerDropdown.style.display = "none";
           workerInput.readOnly = false;
           workerInput.removeAttribute("readonly");
@@ -1757,23 +1779,83 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Handle worker selection change
-  function handleWorkerChange(workerId) {
-    selectedWorkerId = workerId;
+  let selectedWorkerIds = [];
 
-    if (workerId) {
+  function renderSelectedWorkers() {
+    const container = document.getElementById("selected-workers-container");
+    if (!container) return;
+    container.innerHTML = "";
+
+    selectedWorkerIds.forEach((workerId) => {
       const worker = workers.find((w) => w.id === workerId);
       if (worker) {
-        // Set the hidden fields
-        document.getElementById("worker-id").value = worker.id;
-        document.getElementById(
-          "worker-name"
-        ).value = `${worker.first_name} ${worker.last_name}`;
+        const tag = document.createElement("span");
+        tag.className = "role-badge role-accountant";
+        tag.style.display = "inline-flex";
+        tag.style.alignItems = "center";
+        tag.style.gap = "6px";
+        tag.style.padding = "6px 12px";
+        tag.style.borderRadius = "20px";
+        tag.style.background = "#ebf8ff";
+        tag.style.color = "#2b6cb0";
+        tag.style.fontSize = "0.85rem";
+        tag.style.fontWeight = "600";
+        tag.innerHTML = `
+          <span>${worker.first_name} ${worker.last_name}</span>
+          <span class="remove-worker" data-id="${worker.id}" style="cursor: pointer; font-size: 1.1rem; line-height: 1; color: #e53e3e;">&times;</span>
+        `;
+        container.appendChild(tag);
+      }
+    });
+
+    // Attach click events to "x" buttons
+    container.querySelectorAll(".remove-worker").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const idToRemove = parseInt(e.target.getAttribute("data-id"));
+        selectedWorkerIds = selectedWorkerIds.filter(id => id !== idToRemove);
+        renderSelectedWorkers();
+        updateHiddenWorkerFields();
+      });
+    });
+  }
+
+  function updateHiddenWorkerFields() {
+    const workerIdField = document.getElementById("worker-id");
+    const workerNameField = document.getElementById("worker-name");
+    
+    if (selectedWorkerIds.length > 0) {
+      const firstWorker = workers.find(w => w.id === selectedWorkerIds[0]);
+      if (workerIdField && firstWorker) {
+        workerIdField.value = firstWorker.id;
+      }
+      
+      if (workerNameField) {
+        const allNames = selectedWorkerIds
+          .map(id => workers.find(w => w.id === id))
+          .filter(Boolean)
+          .map(w => `${w.first_name} ${w.last_name}`)
+          .join(", ");
+        workerNameField.value = allNames;
       }
     } else {
-      // Clear the hidden fields
-      document.getElementById("worker-id").value = "";
-      document.getElementById("worker-name").value = "";
+      if (workerIdField) workerIdField.value = "";
+      if (workerNameField) workerNameField.value = "";
+    }
+  }
+
+  // Handle worker selection change
+  function handleWorkerChange(workerId) {
+    if (workerId && !selectedWorkerIds.includes(workerId)) {
+      selectedWorkerIds.push(workerId);
+      renderSelectedWorkers();
+      updateHiddenWorkerFields();
+      
+      // Clear the search input
+      const workerSelect = document.getElementById("worker-select");
+      if (workerSelect) {
+        workerSelect.value = "";
+        workerSelect.blur();
+      }
     }
   }
 

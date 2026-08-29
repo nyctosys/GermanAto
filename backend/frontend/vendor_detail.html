@@ -133,7 +133,7 @@
                 d="M18 8a2 2 0 0 1 2 2v4a2 2 0 1 1-4 0v-4a2 2 0 0 1 2-2z"
               ></path>
             </svg>
-            <span>Consignment Reports</span>
+            <span>Purchase Orders</span>
           </button>
         </div>
 
@@ -154,7 +154,7 @@
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
-                  <span>Add Entry</span>
+                  <span>Add Transaction</span>
                 </button>
                 <button class="nav-btn" onclick="exportLedger('excel')">
                   <svg
@@ -163,18 +163,22 @@
                     stroke="currentColor"
                     stroke-width="2"
                   >
-                    <line x1="18" y1="20" x2="18" y2="10"></line>
-                    <line x1="12" y1="20" x2="12" y2="4"></line>
-                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                    <path
+                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                    ></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
                   </svg>
                   <span>Export Excel</span>
                 </button>
               </div>
             </div>
 
-            <!-- Date Range Filter -->
-            <div class="filter-section">
-              <div class="filter-row">
+            <!-- Ledger Filter controls -->
+            <div class="filter-card">
+              <div class="filter-grid">
                 <div class="filter-group">
                   <label for="ledgerStartDate">Start Date</label>
                   <input
@@ -187,7 +191,7 @@
                   <label for="ledgerEndDate">End Date</label>
                   <input type="date" id="ledgerEndDate" class="input-fields" />
                 </div>
-                <div class="filter-group">
+                <div class="filter-actions-row">
                   <button class="btn-primary" onclick="filterLedger()">
                     <svg
                       viewBox="0 0 24 24"
@@ -196,12 +200,10 @@
                       stroke-width="2"
                     >
                       <circle cx="11" cy="11" r="8"></circle>
-                      <path d="m21 21-4.35-4.35"></path>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
                     <span>Filter</span>
                   </button>
-                </div>
-                <div class="filter-group">
                   <button class="btn-secondary" onclick="clearLedgerFilter()">
                     <svg
                       viewBox="0 0 24 24"
@@ -209,8 +211,10 @@
                       stroke="currentColor"
                       stroke-width="2"
                     >
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                      <path d="M23 4v6h-6M1 20v-6h6"></path>
+                      <path
+                        d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+                      ></path>
                     </svg>
                     <span>Clear</span>
                   </button>
@@ -223,18 +227,21 @@
               <table class="data-table" id="ledgerTable">
                 <thead>
                   <tr>
-                    <th>Date</th>
+                    <th>Date / Time</th>
                     <th>Description</th>
                     <th>Folio</th>
-                    <th>Debit</th>
-                    <th>Credit</th>
-                    <th>Balance</th>
+                    <th>Debit (PKR)</th>
+                    <th>Credit (PKR)</th>
+                    <th>Balance (PKR)</th>
+                    <th>Payment Notes</th>
+                    <th>Proof</th>
+                    <th>Added By</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="ledgerTableBody">
                   <tr>
-                    <td colspan="7" class="loading-cell">
+                    <td colspan="10" class="loading-cell">
                       <div class="loading-spinner"></div>
                       <span>Loading ledger entries...</span>
                     </td>
@@ -244,14 +251,14 @@
             </div>
 
             <!-- Ledger Totals -->
-            <div class="totals-section">
+            <div class="totals-grid">
               <div class="total-card">
-                <h4>Total Debit</h4>
-                <span class="total-amount debit" id="totalDebit">0.00</span>
+                <h4>Total Debits</h4>
+                <span class="total-amount debits" id="totalDebits">0.00</span>
               </div>
               <div class="total-card">
-                <h4>Total Credit</h4>
-                <span class="total-amount credit" id="totalCredit">0.00</span>
+                <h4>Total Credits</h4>
+                <span class="total-amount credits" id="totalCredits">0.00</span>
               </div>
               <div class="total-card">
                 <h4>Closing Balance</h4>
@@ -265,7 +272,7 @@
           <!-- Consignments Tab -->
           <div class="tab-pane" id="consignments">
             <div class="tab-header">
-              <h3>Consignment Reports</h3>
+              <h3>Purchase Orders</h3>
               <div class="tab-actions">
                 <button class="add-btn" onclick="openConsignmentModal()">
                   <svg
@@ -277,7 +284,7 @@
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
-                  <span>Add Consignment</span>
+                  <span>Add Purchase Order</span>
                 </button>
                 <button class="nav-btn" onclick="exportConsignment('excel')">
                   <svg
@@ -349,17 +356,19 @@
                     <th>Invoice No</th>
                     <th>Item Name</th>
                     <th>Quantity</th>
-                    <th>Rate</th>
-                    <th>Amount</th>
+                    <th>Rate (PKR)</th>
+                    <th>Amount (PKR)</th>
                     <th>Remarks</th>
+                    <th>Status</th>
+                    <th>Added By</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="consignmentsTableBody">
                   <tr>
-                    <td colspan="8" class="loading-cell">
+                    <td colspan="10" class="loading-cell">
                       <div class="loading-spinner"></div>
-                      <span>Loading consignments...</span>
+                      <span>Loading purchase orders...</span>
                     </td>
                   </tr>
                 </tbody>
@@ -431,6 +440,14 @@
                 />
               </div>
             </div>
+            <div class="form-group">
+              <label for="ledgerPaymentNotes">Payment Notes</label>
+              <textarea id="ledgerPaymentNotes" class="input-fields" rows="3" placeholder="Enter payment details, cheque number, bank receipt notes..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="ledgerAttachment">Proof Attachment (Optional)</label>
+              <input type="file" id="ledgerAttachment" class="input-fields" accept="image/*,application/pdf" style="padding: 6px; background: #fff;" />
+            </div>
           </form>
         </div>
         <div class="modal-footer">
@@ -452,7 +469,7 @@
     <div class="modal" id="consignmentModal">
       <div class="modal-content">
         <div class="modal-header">
-          <h2 id="consignmentModalTitle">Add Consignment</h2>
+          <h2 id="consignmentModalTitle">Add Purchase Order</h2>
           <span class="close" onclick="closeConsignmentModal()">&times;</span>
         </div>
         <div class="modal-body">
@@ -515,8 +532,16 @@
               <textarea
                 id="consignmentRemarks"
                 class="input-fields"
-                rows="3"
+                rows="2"
               ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="consignmentStatus">Status *</label>
+              <select id="consignmentStatus" class="input-fields" required>
+                <option value="ordered" selected>Ordered</option>
+                <option value="in transit">In Transit</option>
+                <option value="received">Received</option>
+              </select>
             </div>
           </form>
         </div>
@@ -529,7 +554,7 @@
             Cancel
           </button>
           <button type="button" class="btn-primary" id="saveConsignmentBtn">
-            Save Consignment
+            Save Purchase Order
           </button>
         </div>
       </div>

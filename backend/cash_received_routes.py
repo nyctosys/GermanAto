@@ -5,6 +5,7 @@ from sqlalchemy import desc
 from functools import wraps
 from jwt_auth import login_required, role_required, admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from log_utils import log_action
 
 cash_received_routes = Blueprint('cash_received_routes', __name__)
 
@@ -167,6 +168,7 @@ def create_cash_received(current_user=None):
         )
         
         db.session.add(new_cash)
+        log_action(current_user, 'CREATE', 'cash_received', new_cash.id, f"Created cash received: {new_cash.description} ({new_cash.amount} PKR, Method: {new_cash.payment_method})")
         db.session.commit()
         
         # Return the created cash received record
@@ -223,6 +225,12 @@ def update_cash_received(cash_id):
         cash_received.notes = data.get('notes', '')
         cash_received.updated_at = datetime.utcnow()
         
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'UPDATE', 'cash_received', cash_received.id, f"Updated cash received record ID {cash_received.id}: {cash_received.description} ({cash_received.amount} PKR)")
         db.session.commit()
         
         # Return the updated cash received record
@@ -250,6 +258,12 @@ def delete_cash_received(cash_id):
     try:
         cash_received = CashReceived.query.get_or_404(cash_id)
         
+        current_user = None
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(int(current_user_id))
+            
+        log_action(current_user, 'DELETE', 'cash_received', cash_id, f"Deleted cash received record ID {cash_id}: {cash_received.description} ({cash_received.amount} PKR)")
         db.session.delete(cash_received)
         db.session.commit()
         
