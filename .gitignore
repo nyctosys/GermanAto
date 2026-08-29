@@ -65,3 +65,6 @@ node_modules/
 
 # Local binaries/tools
 .bin/ 
+# Axon cache/index files
+.axon/
+backend/.axon/
