@@ -1,50 +1,14 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Invoice, Expense, Customer, Inventory, RepairOrder, Vendor, User
+from models import db, Invoice, Expense, Customer, Inventory, RepairOrder, Vendor
 from datetime import datetime, date, timedelta
-from functools import wraps
 import logging
+from jwt_auth import login_required, role_required
 
 # Create blueprint for reports routes
 reports_bp = Blueprint('reports', __name__)
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
-# JWT-based authentication decorators
-def login_required(f):
-    @wraps(f)
-    @jwt_required()
-    def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(int(current_user_id))
-        
-        if not user or not user.is_active:
-            return jsonify({'error': 'User not found or inactive'}), 401
-        
-        return f(*args, **kwargs)
-    return decorated_function
-
-def role_required(required_roles):
-    def decorator(f):
-        @wraps(f)
-        @jwt_required()
-        def decorated_function(*args, **kwargs):
-            current_user_id = get_jwt_identity()
-            user = User.query.get(int(current_user_id))
-            
-            if not user or not user.is_active:
-                return jsonify({'error': 'User not found or inactive'}), 401
-            
-            # Convert to list if string
-            roles_list = [required_roles] if isinstance(required_roles, str) else required_roles
-            
-            if user.role not in roles_list:
-                return jsonify({'error': 'Insufficient permissions'}), 403
-            
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
 
 # ===== REPORTS ROUTES =====
 

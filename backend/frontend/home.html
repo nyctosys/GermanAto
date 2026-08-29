@@ -64,6 +64,7 @@
             href="finance-management.html?from=home"
             class="nav-card"
             data-role="admin,accountant"
+            data-permission="invoice,daily-expenses,major-expenses"
           >
             <div class="card-icon">
               <svg
@@ -88,6 +89,7 @@
             href="inventory.html?from=home"
             class="nav-card"
             data-role="admin,inventory_manager"
+            data-permission="inventory"
           >
             <div class="card-icon">
               <svg
@@ -114,6 +116,7 @@
             href="car.html?from=home"
             class="nav-card"
             data-role="admin,accountant"
+            data-permission="car"
           >
             <div class="card-icon">
               <svg
@@ -140,6 +143,7 @@
             href="/vendors?from=home"
             class="nav-card"
             data-role="admin,accountant"
+            data-permission="vendors"
           >
             <div class="card-icon">
               <svg
@@ -159,7 +163,7 @@
           </a>
 
           <!-- HR Management -->
-          <a href="/hr?from=home" class="nav-card" data-role="admin,accountant">
+          <a href="/hr?from=home" class="nav-card" data-role="admin,accountant" data-permission="hr">
             <div class="card-icon">
               <svg
                 viewBox="0 0 24 24"
@@ -184,6 +188,7 @@
             href="repair-orders-management.html?from=home"
             class="nav-card"
             data-role="admin,accountant,inventory_manager"
+            data-permission="repair-orders-management"
           >
             <div class="card-icon">
               <svg
@@ -204,7 +209,7 @@
           </a>
 
           <!-- Reports & Analytics -->
-          <a href="reports.html?from=home" class="nav-card" data-role="admin">
+          <a href="reports.html?from=home" class="nav-card" data-role="admin" data-permission="reports">
             <div class="card-icon">
               <svg
                 viewBox="0 0 24 24"
@@ -224,7 +229,7 @@
           </a>
 
           <!-- Users Management -->
-          <a href="admin.html?from=home" class="nav-card" data-role="admin">
+          <a href="admin.html?from=home" class="nav-card" data-role="admin" data-permission="admin">
             <div class="card-icon">
               <svg
                 viewBox="0 0 24 24"
@@ -331,10 +336,18 @@
         let visibleButtonCount = 0;
 
         buttons.forEach((button) => {
-          const allowedRoles = button.getAttribute("data-role").split(",");
+          const permissions = (button.getAttribute("data-permission") || "")
+            .split(",")
+            .map((permission) => permission.trim())
+            .filter(Boolean);
+          const allowedRoles = (button.getAttribute("data-role") || "").split(",");
           const userRole = auth.getCurrentUser().role;
 
-          if (!allowedRoles.includes(userRole)) {
+          const canAccess = permissions.length
+            ? permissions.some((permission) => auth.canAccessPage(permission))
+            : allowedRoles.includes(userRole);
+
+          if (!canAccess) {
             button.style.display = "none";
           } else {
             visibleButtonCount++;

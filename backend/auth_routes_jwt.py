@@ -9,6 +9,8 @@ from flask_jwt_extended import (
 from models import db, User
 from datetime import datetime
 from functools import wraps
+from sqlalchemy.exc import SQLAlchemyError
+from jwt_auth import ADMIN_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -57,7 +59,6 @@ def login_required(f):
     return decorated_function
 
 @auth_bp.route('/register', methods=['POST'])
-@jwt_required()
 @role_required('admin')
 def register():
     """Register a new user (admin only)"""
@@ -214,7 +215,6 @@ def logout():
     return jsonify({'message': 'Logout successful'})
 
 @auth_bp.route('/users', methods=['GET'])
-@jwt_required()
 @role_required('admin')
 def get_users():
     """Get all users (admin only)"""
@@ -234,7 +234,6 @@ def get_users():
         return jsonify({'error': 'Failed to fetch users'}), 500
 
 @auth_bp.route('/users/<int:user_id>', methods=['PUT'])
-@jwt_required()
 @role_required('admin')
 def update_user(user_id):
     """Update user (admin only)"""
@@ -247,7 +246,7 @@ def update_user(user_id):
         
         # Prevent admin from updating themselves
         current_user_id = get_jwt_identity()
-        if user.id == current_user_id:
+        if user.id == int(current_user_id):
             return jsonify({'error': 'Cannot update your own account'}), 400
         
         # Update fields
@@ -291,7 +290,6 @@ def update_user(user_id):
         return jsonify({'error': 'Failed to update user'}), 500
 
 @auth_bp.route('/users/<int:user_id>', methods=['DELETE'])
-@jwt_required()
 @role_required('admin')
 def delete_user(user_id):
     """Delete user (admin only)"""
@@ -300,7 +298,7 @@ def delete_user(user_id):
         
         # Prevent admin from deleting themselves
         current_user_id = get_jwt_identity()
-        if user.id == current_user_id:
+        if user.id == int(current_user_id):
             return jsonify({'error': 'Cannot delete your own account'}), 400
         
         db.session.delete(user)
@@ -326,6 +324,12 @@ def get_roles_permissions():
             result[r] = [p.permission for p in all_perms if p.role == r]
             
         return jsonify(result), 200
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({
+            'accountant': DEFAULT_ROLE_PERMISSIONS['accountant'],
+            'inventory_manager': DEFAULT_ROLE_PERMISSIONS['inventory_manager'],
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -366,17 +370,17 @@ def get_my_permissions():
             return jsonify({'error': 'User not found'}), 404
             
         if user.role == 'admin':
-            all_possible_perms = [
-                'home', 'invoice', 'search', 'inventory', 'car', 'reports', 
-                'admin', 'daily-expenses', 'major-expenses', 'vendors', 
-                'vendor-detail', 'hr', 'worker-detail', 'repair-order', 
-                'repair-orders-management', 'settings', 'logs'
-            ]
-            return jsonify({'role': user.role, 'permissions': all_possible_perms}), 200
+            return jsonify({'role': user.role, 'permissions': ADMIN_PERMISSIONS}), 200
             
         perms = RolePermission.query.filter_by(role=user.role).all()
         result = [p.permission for p in perms]
+        if not result and RolePermission.query.first() is None:
+            result = DEFAULT_ROLE_PERMISSIONS.get(user.role, [])
         
         return jsonify({'role': user.role, 'permissions': result}), 200
+    except SQLAlchemyError:
+        db.session.rollback()
+        permissions = DEFAULT_ROLE_PERMISSIONS.get(user.role, []) if 'user' in locals() and user else []
+        return jsonify({'role': user.role if 'user' in locals() and user else None, 'permissions': permissions}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

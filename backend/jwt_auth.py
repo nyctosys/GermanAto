@@ -4,13 +4,111 @@ This module provides consistent JWT authentication decorators and utilities
 for all route files in the application.
 """
 
-from flask import jsonify
+from flask import jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from models import User
+from models import db, User
 from functools import wraps
+from inspect import Parameter, signature
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+
+ADMIN_PERMISSIONS = [
+    'home', 'invoice', 'search', 'inventory', 'car', 'reports',
+    'admin', 'daily-expenses', 'major-expenses', 'vendors',
+    'vendor-detail', 'hr', 'worker-detail', 'repair-order',
+    'repair-orders-management', 'settings', 'logs'
+]
+
+DEFAULT_ROLE_PERMISSIONS = {
+    'admin': ADMIN_PERMISSIONS,
+    'accountant': [
+        'home', 'invoice', 'search', 'car', 'daily-expenses', 'vendors',
+        'vendor-detail', 'hr', 'worker-detail', 'repair-order',
+        'repair-orders-management', 'settings'
+    ],
+    'inventory_manager': [
+        'home', 'inventory', 'repair-order', 'repair-orders-management',
+        'settings'
+    ],
+}
+
+PATH_PERMISSIONS = (
+    ('/api/admin/app-logs', 'logs'),
+    ('/api/reports', 'reports'),
+    ('/api/settings', 'settings'),
+    ('/api/inventory', 'inventory'),
+    ('/api/customers', 'car'),
+    ('/api/cars', 'car'),
+    ('/api/expenses/major', 'major-expenses'),
+    ('/api/expenses', 'daily-expenses'),
+    ('/api/cash-received', 'daily-expenses'),
+    ('/api/vendors', 'vendors'),
+    ('/api/ledger', 'vendors'),
+    ('/api/purchase-orders', 'vendors'),
+    ('/api/consignments', 'vendors'),
+    ('/api/workers', 'hr'),
+    ('/api/salaries', 'hr'),
+    ('/api/salary', 'hr'),
+    ('/api/attendance', 'hr'),
+    ('/api/zkteco', 'hr'),
+    ('/api/repair-orders', 'repair-order'),
+    ('/api/invoice', 'invoice'),
+    ('/api/quotes', 'invoice'),
+    ('/api/add', 'invoice'),
+    ('/api/search', 'invoice'),
+)
+
+
+def _accepts_current_user(f):
+    try:
+        params = signature(f).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(
+        p.name == 'current_user' or p.kind == Parameter.VAR_KEYWORD
+        for p in params
+    )
+
+
+def _call_route(f, user, *args, **kwargs):
+    if _accepts_current_user(f) and 'current_user' not in kwargs:
+        kwargs['current_user'] = user
+    return f(*args, **kwargs)
+
+
+def get_permission_for_path(path):
+    for prefix, permission in PATH_PERMISSIONS:
+        if path.startswith(prefix):
+            return permission
+    return None
+
+
+def has_configured_permission(user, permission, fallback_roles):
+    if user.role == 'admin':
+        return True
+
+    roles_list = [fallback_roles] if isinstance(fallback_roles, str) else fallback_roles
+    fallback_allowed = user.role in roles_list
+
+    if not permission:
+        return fallback_allowed
+
+    try:
+        from models import RolePermission
+
+        if RolePermission.query.first() is None:
+            return fallback_allowed
+
+        return RolePermission.query.filter_by(
+            role=user.role,
+            permission=permission
+        ).first() is not None
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.warning(f"Role permission lookup failed, using route fallback: {e}")
+        return fallback_allowed
 
 def login_required(f):
     """
@@ -30,10 +128,7 @@ def login_required(f):
             if not user or not user.is_active:
                 return jsonify({'error': 'User not found or inactive'}), 401
             
-            # Add user to kwargs for use in route functions
-            kwargs['current_user'] = user
-            
-            return f(*args, **kwargs)
+            return _call_route(f, user, *args, **kwargs)
         except (ValueError, TypeError) as e:
             logger.error(f"Invalid user ID format: {e}")
             return jsonify({'error': 'Invalid user ID format'}), 401
@@ -63,52 +158,11 @@ def role_required(required_roles):
                 if not user or not user.is_active:
                     return jsonify({'error': 'User not found or inactive'}), 401
                 
-                # Convert to list if string
-                roles_list = [required_roles] if isinstance(required_roles, str) else required_roles
-                
-                # Dynamic role permissions check
-                from models import RolePermission
-                from flask import request
-                
-                path = request.path
-                permission_needed = None
-                
-                if '/api/invoice' in path or '/api/quotes' in path:
-                    permission_needed = 'invoice'
-                elif '/api/inventory' in path:
-                    permission_needed = 'inventory'
-                elif '/api/cars' in path:
-                    permission_needed = 'car'
-                elif '/api/expenses' in path or '/api/cash-received' in path:
-                    if '/api/expenses/major' in path:
-                        permission_needed = 'major-expenses'
-                    else:
-                        permission_needed = 'daily-expenses'
-                elif '/api/vendors' in path or '/api/ledger' in path or '/api/purchase-orders' in path:
-                    permission_needed = 'vendors'
-                elif '/api/workers' in path or '/api/salaries' in path or '/api/attendance' in path:
-                    permission_needed = 'hr'
-                elif '/api/repair-orders' in path:
-                    permission_needed = 'repair-order'
-                elif '/api/admin' in path:
-                    permission_needed = 'admin'
+                permission_needed = get_permission_for_path(request.path)
+                if not has_configured_permission(user, permission_needed, required_roles):
+                    return jsonify({'error': 'Insufficient permissions'}), 403
 
-                # If user is admin, they always have access
-                if user.role == 'admin':
-                    pass
-                else:
-                    if permission_needed:
-                        has_perm = RolePermission.query.filter_by(role=user.role, permission=permission_needed).first() is not None
-                        if not has_perm:
-                            return jsonify({'error': 'Insufficient permissions'}), 403
-                    else:
-                        if user.role not in roles_list:
-                            return jsonify({'error': 'Insufficient permissions'}), 403
-                
-                # Add user to kwargs for use in route functions
-                kwargs['current_user'] = user
-                
-                return f(*args, **kwargs)
+                return _call_route(f, user, *args, **kwargs)
             except (ValueError, TypeError) as e:
                 logger.error(f"Invalid user ID format: {e}")
                 return jsonify({'error': 'Invalid user ID format'}), 401

@@ -871,7 +871,7 @@ def update_invoice_balance(invoice_id, current_user=None):
         logger.error(f"Error updating invoice balance {invoice_id}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@bp.route('/api/admin/app-logs', methods=['GET'])
+@bp.route('/admin/app-logs', methods=['GET'])
 @login_required
 @admin_required
 def get_app_logs(current_user=None):

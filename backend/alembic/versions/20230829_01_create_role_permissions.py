@@ -7,7 +7,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '20230829_01'
-down_revision = '<previous_revision_id>'  # replace with actual previous revision
+down_revision = None
 branch_labels = None
 depends_on = None
 
@@ -17,9 +17,9 @@ def upgrade():
     op.create_table(
         'role_permissions',
         sa.Column('id', sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column('role', sa.String(length=64), nullable=False),
-        sa.Column('permission', sa.String(length=64), nullable=False),
-        sa.UniqueConstraint('role', 'permission', name='uq_role_permission')
+        sa.Column('role', sa.String(length=50), nullable=False),
+        sa.Column('permission', sa.String(length=100), nullable=False),
+        sa.UniqueConstraint('role', 'permission', name='unique_role_permission')
     )
     # Seed default permissions (idempotent)
     role_perm_tbl = sa.table(
@@ -28,14 +28,23 @@ def upgrade():
         sa.column('permission')
     )
     default_matrix = [
+        {'role': 'accountant', 'permission': 'home'},
         {'role': 'accountant', 'permission': 'invoice'},
-        {'role': 'accountant', 'permission': 'vendors'},
+        {'role': 'accountant', 'permission': 'search'},
+        {'role': 'accountant', 'permission': 'car'},
         {'role': 'accountant', 'permission': 'daily-expenses'},
+        {'role': 'accountant', 'permission': 'vendors'},
+        {'role': 'accountant', 'permission': 'vendor-detail'},
         {'role': 'accountant', 'permission': 'hr'},
+        {'role': 'accountant', 'permission': 'worker-detail'},
+        {'role': 'accountant', 'permission': 'repair-order'},
+        {'role': 'accountant', 'permission': 'repair-orders-management'},
+        {'role': 'accountant', 'permission': 'settings'},
+        {'role': 'inventory_manager', 'permission': 'home'},
         {'role': 'inventory_manager', 'permission': 'inventory'},
-        {'role': 'inventory_manager', 'permission': 'vendors'},
-        {'role': 'inventory_manager', 'permission': 'daily-expenses'},
-        {'role': 'inventory_manager', 'permission': 'hr'},
+        {'role': 'inventory_manager', 'permission': 'repair-order'},
+        {'role': 'inventory_manager', 'permission': 'repair-orders-management'},
+        {'role': 'inventory_manager', 'permission': 'settings'},
     ]
     op.bulk_insert(role_perm_tbl, default_matrix)
     # ### end Alembic commands ###

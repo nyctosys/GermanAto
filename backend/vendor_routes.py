@@ -1,51 +1,16 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_from_directory
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity
 from models import db, Vendor, VendorLedger, PurchaseOrder, User
 from datetime import datetime, date
-from functools import wraps
 from log_utils import log_action, save_uploaded_file
 import logging
+from jwt_auth import login_required, role_required
 
 # Create blueprint for vendor routes
 vendor_bp = Blueprint('vendor', __name__)
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
-# JWT-based authentication decorators
-def login_required(f):
-    @wraps(f)
-    @jwt_required()
-    def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(int(current_user_id))
-        
-        if not user or not user.is_active:
-            return jsonify({'error': 'User not found or inactive'}), 401
-        
-        return f(*args, **kwargs)
-    return decorated_function
-
-def role_required(required_roles):
-    def decorator(f):
-        @wraps(f)
-        @jwt_required()
-        def decorated_function(*args, **kwargs):
-            current_user_id = get_jwt_identity()
-            user = User.query.get(int(current_user_id))
-            
-            if not user or not user.is_active:
-                return jsonify({'error': 'User not found or inactive'}), 401
-            
-            # Convert to list if string
-            roles_list = [required_roles] if isinstance(required_roles, str) else required_roles
-            
-            if user.role not in roles_list:
-                return jsonify({'error': 'Insufficient permissions'}), 403
-            
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
 
 # ===== VENDOR MANAGEMENT ROUTES =====
 

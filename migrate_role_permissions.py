@@ -87,16 +87,23 @@ def create_role_permissions_table(metadata: MetaData) -> Table:
 def seed_default_permissions(conn):
     """Insert the default permission matrix (idempotent)."""
     default_matrix = [
-        # Accountant
+        {"role": "accountant", "permission": "home"},
         {"role": "accountant", "permission": "invoice"},
-        {"role": "accountant", "permission": "vendors"},
+        {"role": "accountant", "permission": "search"},
+        {"role": "accountant", "permission": "car"},
         {"role": "accountant", "permission": "daily-expenses"},
+        {"role": "accountant", "permission": "vendors"},
+        {"role": "accountant", "permission": "vendor-detail"},
         {"role": "accountant", "permission": "hr"},
-        # Inventory Manager
+        {"role": "accountant", "permission": "worker-detail"},
+        {"role": "accountant", "permission": "repair-order"},
+        {"role": "accountant", "permission": "repair-orders-management"},
+        {"role": "accountant", "permission": "settings"},
+        {"role": "inventory_manager", "permission": "home"},
         {"role": "inventory_manager", "permission": "inventory"},
-        {"role": "inventory_manager", "permission": "vendors"},
-        {"role": "inventory_manager", "permission": "daily-expenses"},
-        {"role": "inventory_manager", "permission": "hr"},
+        {"role": "inventory_manager", "permission": "repair-order"},
+        {"role": "inventory_manager", "permission": "repair-orders-management"},
+        {"role": "inventory_manager", "permission": "settings"},
     ]
 
     # Use INSERT IGNORE / ON CONFLICT to avoid duplicate rows
@@ -113,7 +120,14 @@ def seed_default_permissions(conn):
             ON CONFLICT (role, permission) DO NOTHING
             """
         )
-    else:  # MySQL, MariaDB, SQLite fallback
+    elif dialect == "sqlite":
+        insert_stmt = text(
+            """
+            INSERT OR IGNORE INTO role_permissions (role, permission)
+            VALUES (:role, :permission)
+            """
+        )
+    else:  # MySQL, MariaDB
         insert_stmt = text(
             """
             INSERT IGNORE INTO role_permissions (role, permission)

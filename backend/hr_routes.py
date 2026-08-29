@@ -2,62 +2,17 @@ from flask import Blueprint, request, jsonify, send_from_directory, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Worker, User, AttendanceRecord, ZKTecoDevice
 from datetime import datetime, date, time, timedelta
-from functools import wraps
 from sqlalchemy import func, and_
 from sqlalchemy.exc import IntegrityError
 from collections import defaultdict
 import logging
+from jwt_auth import login_required, role_required
 
 # Create blueprint for HR routes
 hr_bp = Blueprint('hr', __name__)
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
-# JWT-based authentication decorators
-def login_required(f):
-    @wraps(f)
-    @jwt_required()
-    def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(int(current_user_id))
-        
-        if not user or not user.is_active:
-            return jsonify({'error': 'User not found or inactive'}), 401
-        
-        return f(*args, **kwargs)
-    return decorated_function
-
-def role_required(required_roles):
-    def decorator(f):
-        @wraps(f)
-        @jwt_required()
-        def decorated_function(*args, **kwargs):
-            try:
-                current_user_id = get_jwt_identity()
-                if not current_user_id:
-                    return jsonify({'error': 'Invalid token'}), 401
-                
-                user = User.query.get(int(current_user_id))
-                
-                if not user or not user.is_active:
-                    return jsonify({'error': 'User not found or inactive'}), 401
-                
-                # Convert to list if string
-                roles_list = [required_roles] if isinstance(required_roles, str) else required_roles
-                
-                if user.role not in roles_list:
-                    return jsonify({'error': 'Insufficient permissions'}), 403
-                
-                return f(*args, **kwargs)
-            except (ValueError, TypeError) as e:
-                logger.error(f"Error in role_required decorator: {e}")
-                return jsonify({'error': 'Invalid user ID format'}), 401
-            except Exception as e:
-                logger.error(f"Unexpected error in role_required decorator: {e}")
-                return jsonify({'error': 'Authentication error'}), 500
-        return decorated_function
-    return decorator
 
 # ===== HR MANAGEMENT ROUTES =====
 

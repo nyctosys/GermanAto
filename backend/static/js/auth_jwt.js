@@ -203,6 +203,10 @@ class AuthManager {
       return true;
     }
 
+    if (pageName === "home") {
+      return true;
+    }
+
     // Dynamic permissions check
     const cachedPermissions = localStorage.getItem("userPermissions");
     if (cachedPermissions) {
@@ -214,10 +218,9 @@ class AuthManager {
           if (pageName === "vendor-detail") checkedPage = "vendors";
           else if (pageName === "worker-detail") checkedPage = "hr";
           else if (pageName === "search") checkedPage = "invoice";
+          else if (pageName === "repair-orders-management") checkedPage = "repair-order";
 
-          if (perms.includes(checkedPage)) {
-            return true;
-          }
+          return perms.includes(checkedPage);
         }
       } catch (e) {
         console.error("Error parsing userPermissions:", e);

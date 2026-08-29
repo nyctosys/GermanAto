@@ -10,17 +10,16 @@ function navigateToDailyExpenses() {
 
 // Wait for DOM to be fully loaded
 document.addEventListener("DOMContentLoaded", function () {
-  // Hide major expenses card if user is not admin
-  const userStr = localStorage.getItem("user");
-  if (userStr) {
-    const user = JSON.parse(userStr);
-    if (user.role !== "admin") {
-      const majorExpensesCard = document.getElementById("major-expenses-card");
-      if (majorExpensesCard) {
-        majorExpensesCard.style.display = "none";
-      }
-    }
+  if (!auth.requireAuth()) {
+    return;
   }
+
+  document.querySelectorAll(".nav-card").forEach((card) => {
+    const permission = card.getAttribute("data-permission");
+    if (permission && !auth.canAccessPage(permission)) {
+      card.style.display = "none";
+    }
+  });
 
   // Find the back button
   const backBtn = document.getElementById("back-btn");
