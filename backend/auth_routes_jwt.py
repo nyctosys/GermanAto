@@ -313,7 +313,6 @@ def delete_user(user_id):
         return jsonify({'error': 'Failed to delete user'}), 500
 
 @auth_bp.route('/roles-permissions', methods=['GET'])
-@jwt_required()
 @role_required('admin')
 def get_roles_permissions():
     """Get all role permissions (admin only)"""
@@ -331,7 +330,6 @@ def get_roles_permissions():
         return jsonify({'error': str(e)}), 500
 
 @auth_bp.route('/roles-permissions', methods=['PUT'])
-@jwt_required()
 @role_required('admin')
 def update_roles_permissions():
     """Update role permissions (admin only)"""
