@@ -1,11 +1,20 @@
 // JWT-based Authentication Manager
+
+// Sub-pages that are covered by a parent page's permission.
+const SUB_PAGE_PERMISSIONS = {
+  "vendor-detail": "vendors",
+  "worker-detail": "hr",
+  search: "invoice",
+  "repair-orders-management": "repair-order",
+};
+
 class AuthManager {
   constructor() {
     this.user = null;
     this.isAuthenticated = false;
     this.accessToken = null;
     this.refreshToken = null;
-    this.init();
+    this.ready = this.init();
   }
 
   async init() {
@@ -17,7 +26,10 @@ class AuthManager {
 
     // If we have tokens, verify them with the server
     if (this.isAuthenticated) {
-      await this.verifyToken();
+      if (!(await this.verifyToken())) {
+        this.requireAuth();
+        return;
+      }
       await this.loadPermissions();
     }
   }
@@ -182,16 +194,18 @@ class AuthManager {
       return false;
     }
 
-    const roleHierarchy = {
-      admin: ["admin", "accountant", "inventory_manager"],
-      accountant: ["accountant"],
-      inventory_manager: ["inventory_manager"],
-    };
+    // admin covers every role; every other role covers only itself
+    return this.user.role === "admin" || this.user.role === requiredRole;
+  }
 
-    return (
-      roleHierarchy[requiredRole] &&
-      roleHierarchy[requiredRole].includes(this.user.role)
-    );
+  getCachedPermissions() {
+    try {
+      const perms = JSON.parse(localStorage.getItem("userPermissions"));
+      return Array.isArray(perms) ? perms : null;
+    } catch (e) {
+      console.error("Error parsing userPermissions:", e);
+      return null;
+    }
   }
 
   canAccessPage(pageName) {
@@ -199,63 +213,27 @@ class AuthManager {
       return false;
     }
 
-    if (this.user.role === "admin") {
+    if (this.user.role === "admin" || pageName === "home") {
       return true;
     }
 
-    if (pageName === "home") {
+    const perms = this.getCachedPermissions();
+
+    // Permissions have not arrived yet. The server is the authority on every
+    // API call anyway, so let the page start rather than guess and lock the
+    // user out of a page they are allowed to see.
+    if (!perms) {
       return true;
     }
 
-    // Dynamic permissions check
-    const cachedPermissions = localStorage.getItem("userPermissions");
-    if (cachedPermissions) {
-      try {
-        const perms = JSON.parse(cachedPermissions);
-        if (Array.isArray(perms)) {
-          // Normalize sub-pages to their parent permissions
-          let checkedPage = pageName;
-          if (pageName === "vendor-detail") checkedPage = "vendors";
-          else if (pageName === "worker-detail") checkedPage = "hr";
-          else if (pageName === "search") checkedPage = "invoice";
-          else if (pageName === "repair-orders-management") checkedPage = "repair-order";
-
-          return perms.includes(checkedPage);
-        }
-      } catch (e) {
-        console.error("Error parsing userPermissions:", e);
-      }
-    }
-
-    // Fallback static permissions
-    const pagePermissions = {
-      home: ["admin", "accountant", "inventory_manager"],
-      invoice: ["admin", "accountant"],
-      search: ["admin", "accountant"],
-      inventory: ["admin", "inventory_manager"],
-      car: ["admin", "accountant"],
-      reports: ["admin"],
-      admin: ["admin"],
-      "daily-expenses": ["admin", "accountant"],
-      "major-expenses": ["admin"],
-      vendors: ["admin", "accountant"],
-      "vendor-detail": ["admin", "accountant"],
-      hr: ["admin", "accountant"],
-      "worker-detail": ["admin", "accountant"],
-      "repair-order": ["admin", "accountant", "inventory_manager"],
-      "repair-orders-management": ["admin", "accountant", "inventory_manager"],
-      settings: ["admin", "accountant", "inventory_manager"],
-    };
-
-    return (
-      pagePermissions[pageName] &&
-      pagePermissions[pageName].includes(this.user.role)
-    );
+    return perms.includes(SUB_PAGE_PERMISSIONS[pageName] || pageName);
   }
 
   requireAuth() {
     if (!this.isAuthenticated) {
-      window.location.href = "login.html";
+      if (!/(^\/$|login\.html$)/.test(window.location.pathname)) {
+        window.location.href = "login.html";
+      }
       return false;
     }
     return true;
@@ -266,13 +244,24 @@ class AuthManager {
       return false;
     }
 
-    if (!this.canAccessPage(pageName)) {
-      alert("You do not have permission to access this page.");
-      this.redirectToHome();
-      return false;
+    if (this.getCachedPermissions()) {
+      return this.enforcePageAccess(pageName);
     }
 
+    // First load after signing in: permissions are still in flight. Let the
+    // page initialise and enforce as soon as they land.
+    this.ready.then(() => this.enforcePageAccess(pageName));
     return true;
+  }
+
+  enforcePageAccess(pageName) {
+    if (this.canAccessPage(pageName)) {
+      return true;
+    }
+
+    alert("You do not have permission to access this page.");
+    this.redirectToHome();
+    return false;
   }
 
   redirectToHome() {
@@ -281,11 +270,15 @@ class AuthManager {
       return;
     }
 
+    // Admins land on the full business report; everyone else on the dashboard
+    // of their own pending work.
     switch (this.user.role) {
       case "inventory_manager":
         window.location.href = "inventory.html";
         break;
       case "admin":
+        window.location.href = "reports.html";
+        break;
       case "accountant":
       default:
         window.location.href = "home.html";

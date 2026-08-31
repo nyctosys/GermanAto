@@ -51,19 +51,9 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function redirectBasedOnRole(role) {
-    switch (role) {
-      case "admin":
-        window.location.href = "home.html";
-        break;
-      case "accountant":
-        window.location.href = "home.html";
-        break;
-      case "inventory_manager":
-        window.location.href = "home.html";
-        break;
-      default:
-        window.location.href = "home.html";
-    }
+    // auth.redirectToHome() owns this decision so login and every in-app
+    // "go home" agree: admins land on reports, everyone else on the dashboard.
+    auth.redirectToHome();
   }
 
   async function checkAuthStatus() {
