@@ -13,7 +13,10 @@
 
 set -euo pipefail
 
-REPO="https://github.com/Al1Tar1q/germanato-app.git"
+# SSH, so a read-only deploy key does the authenticating and no token is
+# stored anywhere. Falls back to https://github.com/Al1Tar1q/germanato-app.git
+# if you have not set the key up yet - that form prompts for credentials.
+REPO="git@github.com:Al1Tar1q/germanato-app.git"
 APP_DIR="/opt/germanato"
 SERVICE="germanato"
 OWNER="www-data:www-data"          # the user gunicorn runs as - not 'germanato'
