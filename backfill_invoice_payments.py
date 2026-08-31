@@ -55,8 +55,10 @@ def main():
 
         amounts_filled = 0
         status_corrected = 0
+        overpayments_fixed = 0
         already_ok = 0
         money_backfilled = 0.0
+        money_removed = 0.0
 
         for inv in invoices:
             due = invoice_amount_due(inv)
@@ -91,6 +93,38 @@ def main():
                 })
                 inv.payments_history = json.dumps(history)
 
+            # Recorded more than the invoice was ever for. Treated as a keying
+            # error: the excess is taken back off, most recent figure first, and
+            # the correction is written into the history so the change is not
+            # silent. Anything that is genuinely a customer credit should be
+            # moved to the invoice it belongs to instead of corrected here.
+            excess = round(invoice_amount_paid(inv) - due, 2)
+            if excess > CENT:
+                removed = excess
+                take = min(inv.paid_amount or 0.0, excess)
+                inv.paid_amount = round((inv.paid_amount or 0.0) - take, 2)
+                excess = round(excess - take, 2)
+                if excess > CENT:
+                    inv.advance = round((inv.advance or 0.0) - excess, 2)
+                overpayments_fixed += 1
+                money_removed += removed
+                changed = True
+
+                try:
+                    history = json.loads(inv.payments_history) if inv.payments_history else []
+                except (ValueError, TypeError):
+                    history = []
+                history.append({
+                    "amount": -removed,
+                    "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                    "person": "system/overpayment-correction",
+                    "proof_path": None,
+                    "source": "overpayment_correction",
+                    "note": (f"Recorded payments exceeded the {due:.2f} PKR due by "
+                             f"{removed:.2f} PKR. Corrected as a keying error."),
+                })
+                inv.payments_history = json.dumps(history)
+
             # Now that amounts are trustworthy, let them define the status.
             derived = calculate_invoice_status(inv)
             if derived != inv.status:
@@ -117,6 +151,8 @@ def main():
 
         print(f"invoices examined      : {len(invoices)}")
         print(f"payment amounts filled : {amounts_filled}")
+        print(f"overpayments corrected : {overpayments_fixed}"
+              + (f"   (-{money_removed:,.2f} PKR)" if money_removed else ""))
         print(f"statuses corrected     : {status_corrected}")
         print(f"already consistent     : {already_ok}")
         print(f"money backfilled       : {money_backfilled:,.2f} PKR")

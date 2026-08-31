@@ -1,10 +1,14 @@
-"""Database constraints: keep the historical data, stop repeating its mistakes.
+"""Database constraints: one set of rules, applied to every row.
 
-Everything recorded before the cutoff is legacy. It stays exactly as it is and
-is exempted from the rules it would fail - notably the 313 invoices marked
-`paid` with no payment amount ever recorded. From the cutoff onwards the
-database itself refuses those entries, so the rule holds no matter which code
-path (or hand-written SQL) tries it.
+The historical data has been cleaned rather than grandfathered - the backfill
+reconciles the 313 invoices marked `paid` with no payment recorded, and
+corrects the single overpaid invoice - so there is no need for a date-based
+exemption. The rules mean the same thing for a record from last year as for one
+entered today, which is the point of having them.
+
+Run backfill_invoice_payments.py --apply first. Without it this script reports
+which rows block each rule and adds only the ones that pass, rather than
+forcing anything through.
 
 Requires MySQL 8.0.16+ for CHECK enforcement. MySQL 5.7 parses CHECK and then
 silently ignores it, so running this against 5.7 gives false confidence - the
@@ -32,9 +36,6 @@ APPLY = "--apply" in sys.argv
 
 from sqlalchemy import text                                # noqa: E402
 from app import app, db                                    # noqa: E402
-
-# Anything created before this is legacy: preserved untouched and exempt.
-LEGACY_CUTOFF = "2026-09-01"
 
 # Amount owed on an invoice, written the same way as invoice_amount_due() in
 # routes.py. Kept as one string so the constraints cannot drift from each other.
@@ -66,17 +67,14 @@ CHECKS = [
      "SELECT COUNT(*) FROM repair_order WHERE current_status NOT IN "
      "('received','diagnosis','repair','testing','complete')"),
 
-    # --- legacy-exempt: historical rows break these and must stay as they are ---
     ("invoice", "chk_invoice_no_overpayment",
-     f"created_at < '{LEGACY_CUTOFF}' OR type_of <> 'invoice' OR {PAID} <= ({DUE}) + 0.01",
-     f"SELECT COUNT(*) FROM invoice WHERE created_at >= '{LEGACY_CUTOFF}' "
-     f"AND type_of='invoice' AND {PAID} > ({DUE}) + 0.01"),
+     f"type_of <> 'invoice' OR {PAID} <= ({DUE}) + 0.01",
+     f"SELECT COUNT(*) FROM invoice WHERE type_of='invoice' AND {PAID} > ({DUE}) + 0.01"),
 
     # The mistake this whole exercise is about: marked paid, money never recorded.
     ("invoice", "chk_invoice_paid_requires_payment",
-     f"created_at < '{LEGACY_CUTOFF}' OR status <> 'paid' OR {PAID} >= ({DUE}) - 0.01",
-     f"SELECT COUNT(*) FROM invoice WHERE created_at >= '{LEGACY_CUTOFF}' "
-     f"AND status='paid' AND {PAID} < ({DUE}) - 0.01"),
+     f"status <> 'paid' OR {PAID} >= ({DUE}) - 0.01",
+     f"SELECT COUNT(*) FROM invoice WHERE status='paid' AND {PAID} < ({DUE}) - 0.01"),
 ]
 
 UNIQUES = [
@@ -105,8 +103,8 @@ def main():
                     "(needs 8.0.16+). Refusing to run - it would report success "
                     "while enforcing nothing."
                 )
-            print(f"MySQL {version} - CHECK constraints are enforced.\n")
-            print(f"Legacy cutoff: rows created before {LEGACY_CUTOFF} are exempt.\n")
+            print(f"MySQL {version} - CHECK constraints are enforced.")
+            print("Rules apply to every row; nothing is exempt by date.\n")
 
             blocked = False
 
