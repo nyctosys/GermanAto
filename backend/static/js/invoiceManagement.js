@@ -8,12 +8,14 @@ document.addEventListener("DOMContentLoaded", () => {
     "invoiceSystem";
 
   // Set back button destination based on where user came from
-  if (fromPage === "home") {
-    backBtn.href = "home.html";
-  } else if (fromPage === "invoiceSystem") {
-    backBtn.href = "invoiceSystem.html";
-  } else {
-    backBtn.href = "invoiceSystem.html"; // Default fallback
+  if (backBtn) {
+    if (fromPage === "home") {
+      backBtn.href = "home.html";
+    } else if (fromPage === "invoiceSystem") {
+      backBtn.href = "invoiceSystem.html";
+    } else {
+      backBtn.href = "invoiceSystem.html"; // Default fallback
+    }
   }
 
   // Track current page for back button logic
@@ -127,7 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadInvoices(status, keywordQuery = "", idQuery = "", dateFrom = "", dateTo = "") {
-    resultsDiv.innerHTML = "<p>Loading...</p>";
+    APIHelper.renderLoading(resultsDiv, "Loading invoices...");
     try {
       let url = `/api/search?type=invoice`;
 
@@ -199,7 +201,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   <strong>Payment Proofs:</strong>
                   <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
                     ${paymentsWithProof.map((p, idx) => `
-                      <a href="/${p.proof_path}" target="_blank" class="badge" style="background: #2b6cb0; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;" title="Paid on ${p.timestamp} by ${p.person}">
+                      <a href="/static/${p.proof_path}" target="_blank" class="badge" style="background: #2b6cb0; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;" title="Paid on ${p.timestamp} by ${p.person}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 10px; height: 10px;">
                           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                         </svg>
@@ -382,7 +384,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     } catch (err) {
       console.error("Error fetching invoices:", err);
-      resultsDiv.innerHTML = `<p>Error fetching invoices.</p>`;
+      APIHelper.renderError(resultsDiv, err, () => loadInvoices(status));
     }
   }
 
@@ -558,6 +560,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // The balance modal's helpers are defined outside this closure, so give them
+  // one way back in. Reuses the active tab and filters instead of resetting the
+  // view to "all", which a bare loadInvoices() would have done.
+  window.refreshInvoiceList = () =>
+    loadInvoices(
+      currentStatus,
+      currentKeywordQuery,
+      currentIdQuery,
+      currentDateFrom,
+      currentDateTo
+    );
+
   // Initial load
   loadInvoices("all");
 });
@@ -569,7 +583,12 @@ function openUpdateBalanceModal(invoiceId, total, paid, remaining) {
   document.getElementById("balance-info-total").textContent = `${total.toFixed(2)} PKR`;
   document.getElementById("balance-info-paid").textContent = `${paid.toFixed(2)} PKR`;
   document.getElementById("balance-info-remaining").textContent = `${remaining.toFixed(2)} PKR`;
-  document.getElementById("balance-paid-amount").value = "";
+  const amountInput = document.getElementById("balance-paid-amount");
+  amountInput.value = "";
+  // The server rejects overpayment; mirror that here so the limit is visible
+  // before the user submits rather than after.
+  amountInput.max = remaining.toFixed(2);
+  amountInput.dataset.remaining = String(remaining);
   document.getElementById("balance-proof-file").value = "";
   document.getElementById("update-balance-modal").style.display = "block";
 }
@@ -585,8 +604,21 @@ async function handleBalanceFormSubmit(e) {
   const paidAmount = document.getElementById("balance-paid-amount").value;
   const fileInput = document.getElementById("balance-proof-file");
   
-  if (!paidAmount || parseFloat(paidAmount) < 0) {
-    alert("Please enter a valid positive amount.");
+  const amount = parseFloat(paidAmount);
+  if (!paidAmount || isNaN(amount) || amount <= 0) {
+    alert("Enter a payment amount greater than zero.");
+    return;
+  }
+
+  const remaining = parseFloat(
+    document.getElementById("balance-paid-amount").dataset.remaining
+  );
+  if (!isNaN(remaining) && Math.round(amount * 100) > Math.round(remaining * 100)) {
+    alert(
+      `Payment of ${amount.toFixed(2)} PKR exceeds the ${remaining.toFixed(
+        2
+      )} PKR still owed on this invoice.`
+    );
     return;
   }
   
@@ -605,7 +637,7 @@ async function handleBalanceFormSubmit(e) {
     if (result) {
       alert(result.message || "Balance updated successfully!");
       closeUpdateBalanceModal();
-      loadInvoices(); // Reload lists
+      window.refreshInvoiceList?.();
     } else {
       alert("Failed to update balance.");
     }

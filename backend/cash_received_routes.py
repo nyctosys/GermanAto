@@ -1,13 +1,72 @@
 from flask import Blueprint, request, jsonify, session
-from models import db, CashReceived, User
+from models import db, CashReceived, User, Invoice
 from datetime import datetime, timedelta
 from sqlalchemy import desc
 from functools import wraps
 from jwt_auth import login_required, role_required, admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from log_utils import log_action
+from period_lock import guard_period, guard_both, body_date, record_date
 
 cash_received_routes = Blueprint('cash_received_routes', __name__)
+
+
+def resolve_invoice(data):
+    """Validate an optional invoice link. Returns (invoice, error_response)."""
+    raw = data.get('invoice_id')
+    if raw in (None, '', 'null'):
+        return None, None
+    try:
+        invoice = Invoice.query.get(int(raw))
+    except (TypeError, ValueError):
+        return None, (jsonify({'error': 'invoice_id must be a number'}), 400)
+    if not invoice:
+        return None, (jsonify({'error': 'That invoice does not exist'}), 404)
+    if (invoice.type_of or '').lower() != 'invoice':
+        return None, (jsonify({
+            'error': 'Payments can only be linked to an invoice, not a quote.'
+        }), 400)
+    return invoice, None
+
+
+def apply_receipt_to_invoice(invoice, amount, method, user, receipt_id):
+    """Record the receipt against the invoice so the money is entered once.
+
+    Without this the link would be decorative: staff would still have to key the
+    payment a second time through Update Balance, which is exactly the habit that
+    left 313 invoices marked paid with no amount on them.
+    """
+    import json
+    from invoice_math import invoice_amount_remaining, calculate_invoice_status
+
+    remaining = invoice_amount_remaining(invoice)
+    if amount > remaining + 0.005:
+        return jsonify({
+            'error': (f'This receipt of {amount:.2f} PKR is more than the '
+                      f'{remaining:.2f} PKR still owed on invoice #{invoice.id}.'),
+            'remaining': remaining
+        }), 400
+
+    invoice.paid_amount = round((invoice.paid_amount or 0.0) + amount, 2)
+    invoice.balance = invoice_amount_remaining(invoice)
+    invoice.status = calculate_invoice_status(invoice)
+
+    try:
+        history = json.loads(invoice.payments_history) if invoice.payments_history else []
+    except (ValueError, TypeError):
+        history = []
+    history.append({
+        'amount': amount,
+        'timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+        'person': user.username if user else 'system',
+        'proof_path': None,
+        'source': 'cash_received',
+        'payment_method': method,
+        'cash_received_id': receipt_id,
+    })
+    invoice.payments_history = json.dumps(history)
+    return None
+
 
 # Decorator to check if user can edit cash received based on role and time
 def can_edit_cash_received(f):
@@ -99,6 +158,7 @@ def get_cash_received(current_user=None):
                 'amount': cash.amount,
                 'payment_method': cash.payment_method,
                 'notes': cash.notes,
+                'invoice_id': cash.invoice_id,
                 'created_at': cash.created_at.isoformat() if cash.created_at else None,
                 'updated_at': cash.updated_at.isoformat() if cash.updated_at else None
             })
@@ -122,6 +182,7 @@ def get_cash_received_by_id(cash_id, current_user=None):
             'amount': cash_received.amount,
             'payment_method': cash_received.payment_method,
             'notes': cash_received.notes,
+            'invoice_id': cash_received.invoice_id,
             'created_at': cash_received.created_at.isoformat() if cash_received.created_at else None,
             'updated_at': cash_received.updated_at.isoformat() if cash_received.updated_at else None
         }
@@ -133,6 +194,7 @@ def get_cash_received_by_id(cash_id, current_user=None):
 
 @cash_received_routes.route('/cash-received', methods=['POST'])
 @role_required(['admin', 'accountant'])
+@guard_period(body_date('date'))
 def create_cash_received(current_user=None):
     """Create a new cash received record"""
     try:
@@ -158,16 +220,32 @@ def create_cash_received(current_user=None):
         except (ValueError, TypeError):
             return jsonify({'error': 'Invalid amount'}), 400
         
+        invoice, err = resolve_invoice(data)
+        if err:
+            return err
+
         # Create new cash received record
         new_cash = CashReceived(
             date=cash_date,
             description=data['description'],
             amount=amount,
             payment_method=data['payment_method'],
-            notes=data.get('notes', '')
+            notes=data.get('notes', ''),
+            invoice_id=invoice.id if invoice else None
         )
-        
+
         db.session.add(new_cash)
+        # flush so the receipt has an id to reference from the invoice history
+        # and from the audit log, which used to record None here.
+        db.session.flush()
+
+        if invoice:
+            err = apply_receipt_to_invoice(
+                invoice, amount, new_cash.payment_method, current_user, new_cash.id)
+            if err:
+                db.session.rollback()
+                return err
+
         log_action(current_user, 'CREATE', 'cash_received', new_cash.id, f"Created cash received: {new_cash.description} ({new_cash.amount} PKR, Method: {new_cash.payment_method})")
         db.session.commit()
         
@@ -179,6 +257,7 @@ def create_cash_received(current_user=None):
             'amount': new_cash.amount,
             'payment_method': new_cash.payment_method,
             'notes': new_cash.notes,
+            'invoice_id': new_cash.invoice_id,
             'created_at': new_cash.created_at.isoformat() if new_cash.created_at else None,
             'updated_at': new_cash.updated_at.isoformat() if new_cash.updated_at else None
         }
@@ -191,6 +270,7 @@ def create_cash_received(current_user=None):
 
 @cash_received_routes.route('/cash-received/<int:cash_id>', methods=['PUT'])
 @can_edit_cash_received
+@guard_both(CashReceived, 'cash_id')
 def update_cash_received(cash_id):
     """Update an existing cash received record"""
     try:
@@ -241,6 +321,7 @@ def update_cash_received(cash_id):
             'amount': cash_received.amount,
             'payment_method': cash_received.payment_method,
             'notes': cash_received.notes,
+            'invoice_id': cash_received.invoice_id,
             'created_at': cash_received.created_at.isoformat() if cash_received.created_at else None,
             'updated_at': cash_received.updated_at.isoformat() if cash_received.updated_at else None
         }
@@ -253,6 +334,7 @@ def update_cash_received(cash_id):
 
 @cash_received_routes.route('/cash-received/<int:cash_id>', methods=['DELETE'])
 @can_edit_cash_received
+@guard_period(record_date(CashReceived, 'cash_id'))
 def delete_cash_received(cash_id):
     """Delete a cash received record"""
     try:

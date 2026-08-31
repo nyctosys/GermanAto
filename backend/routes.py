@@ -11,31 +11,19 @@ from whatsapp_notifications import whatsapp_notifier
 from jwt_auth import login_required, role_required, admin_required, get_current_user
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from log_utils import log_action, save_uploaded_file
+from search_suggestions import suggestions_for
+from invoice_math import (
+    invoice_amount_due,
+    invoice_amount_paid,
+    invoice_amount_remaining,
+    calculate_invoice_status,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('invoice', __name__)
-
-def calculate_invoice_status(invoice):
-    """Automatically calculate invoice status based on advance, paid_amount and total due"""
-    if invoice.type_of.lower() == 'quote':
-        return 'pending'
-        
-    total_due = invoice.net_total
-    if invoice.include_tax and invoice.tax_amount:
-        total_due += invoice.tax_amount
-    total_due -= invoice.discount
-    
-    total_paid = (invoice.advance or 0.0) + (invoice.paid_amount or 0.0)
-    
-    if total_paid <= 0:
-        return 'unpaid'
-    elif total_paid >= total_due or invoice.balance <= 0:
-        return 'paid'
-    else:
-        return 'partially_paid'
 
 def calculate_totals(items, labours):
     """Calculate total from items and labours"""
@@ -702,10 +690,15 @@ def search_invoices(current_user=None):
         quotes = [item for item in invoice_list if item['type_of'].lower() == 'quote']
         invoices = [item for item in invoice_list if item['type_of'].lower() == 'invoice']
         
-        return jsonify({
-            'quotes': quotes,
-            'invoices': invoices
-        }), 200
+        payload = {'quotes': quotes, 'invoices': invoices}
+
+        # A keyword search that matched nothing: suggest a spelling and the
+        # nearest customer names actually on file.
+        if query and not invoice_list:
+            corpus = [row[0] for row in db.session.query(Invoice.customer_name).distinct().all()]
+            payload.update(suggestions_for(query, corpus))
+
+        return jsonify(payload), 200
         
     except Exception as e:
         logger.error(f"Error searching invoices: {e}")
@@ -802,15 +795,42 @@ def update_invoice_balance(invoice_id, current_user=None):
             
         try:
             additional_amount = float(paid_amount_str)
-            if additional_amount < 0:
-                return jsonify({'error': 'Additional amount cannot be negative'}), 400
+            # Zero used to be accepted, recording an empty payment (and its
+            # proof) against the invoice for no money.
+            if additional_amount <= 0:
+                return jsonify({'error': 'Payment amount must be greater than zero.'}), 400
         except (ValueError, TypeError):
             return jsonify({'error': 'Invalid paid_amount value'}), 400
         
         invoice = Invoice.query.get(invoice_id)
         if not invoice:
             return jsonify({'error': 'Invoice not found'}), 404
-        
+
+        # Quotes are not owed yet, so they cannot take payments. The UI only
+        # offers this on invoice cards, but the endpoint is reachable directly.
+        if (invoice.type_of or '').lower() != 'invoice':
+            return jsonify({
+                'error': 'Payments can only be recorded against an invoice. '
+                         'Convert this quote to an invoice first.'
+            }), 400
+
+        # A payment may not exceed what is still owed. Checked before the proof
+        # file is saved so a rejected payment leaves no orphaned upload.
+        remaining = invoice_amount_remaining(invoice)
+        if remaining <= 0:
+            return jsonify({
+                'error': 'This invoice is already fully paid.',
+                'remaining': 0.0
+            }), 400
+        if round(additional_amount, 2) > remaining:
+            return jsonify({
+                'error': (
+                    f'Payment of {additional_amount:.2f} PKR exceeds the '
+                    f'{remaining:.2f} PKR still owed on this invoice.'
+                ),
+                'remaining': remaining
+            }), 400
+
         # Save optional proof file
         proof_path = None
         if proof_file:
@@ -821,15 +841,7 @@ def update_invoice_balance(invoice_id, current_user=None):
         invoice.paid_amount = current_paid + additional_amount
         
         # Calculate balance
-        balance = invoice.net_total
-        if invoice.include_tax and invoice.tax_amount:
-            balance += invoice.tax_amount
-        if invoice.discount:
-            balance -= invoice.discount
-        if invoice.advance:
-            balance -= invoice.advance
-        balance -= invoice.paid_amount
-        invoice.balance = round(balance, 2)
+        invoice.balance = invoice_amount_remaining(invoice)
         
         # Auto-calculate status
         invoice.status = calculate_invoice_status(invoice)
