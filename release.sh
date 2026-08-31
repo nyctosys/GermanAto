@@ -46,7 +46,10 @@ echo "    $COMMIT"
 say "Changes this release would make"
 # Captured rather than piped: under `set -o pipefail` a failing rsync would
 # otherwise be swallowed by the grep fallback and reported as "up to date".
-CHANGES=$(sudo rsync -a --delete --dry-run --itemize-changes "${EXCLUDES[@]}" \
+# -rlc, not -a: compare by checksum and ignore times/owner/perms. A fresh
+# clone carries today's mtimes and the cloning user's ownership, so -a would
+# itemize every file in the tree on every release and bury the real changes.
+CHANGES=$(sudo rsync -rlc --delete --dry-run --itemize-changes "${EXCLUDES[@]}" \
     "$STAGE/repo/backend/" "$APP_DIR/backend/") || die "could not read $APP_DIR - wrong path, or no permission"
 echo "$CHANGES" | grep -E '^(\*deleting|[<>]f)' | sed 's/^/    /' \
   || echo "    (nothing - already up to date)"
