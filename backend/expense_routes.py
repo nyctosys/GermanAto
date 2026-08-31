@@ -7,6 +7,7 @@ from jwt_auth import login_required, role_required, admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from log_utils import log_action
 from period_lock import guard_period, guard_both, body_date, record_date
+from petty_cash import wants_till, till_expenses
 
 expense_routes = Blueprint('expense_routes', __name__)
 
@@ -60,7 +61,12 @@ def get_expenses(current_user=None):
         
         # Start with base query
         query = Expense.query
-        
+
+        # The Daily Expenses page asks for the till only: parts, payroll and
+        # capital spending are owned by other ledgers and would double-count.
+        if wants_till(request.args):
+            query = till_expenses(query)
+
         # Apply filters
         if category:
             query = query.filter(Expense.category == category)
@@ -288,6 +294,10 @@ def get_expense_summary(current_user=None):
         
         # Start with base query
         query = Expense.query
+
+        # Same narrowing as the list, so the cards and the table agree.
+        if wants_till(request.args):
+            query = till_expenses(query)
         
         # Apply date filters if provided
         if start_date:

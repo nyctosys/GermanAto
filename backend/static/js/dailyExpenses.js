@@ -127,6 +127,10 @@ async function loadExpenses() {
     const params = new URLSearchParams();
     if (fromDate) params.append("start_date", fromDate);
     if (toDate) params.append("end_date", toDate);
+    // This page is the till: parts, payroll and capital spending belong to
+    // their own ledgers, and a receipt settling an invoice belongs to that
+    // invoice. Reports and the monthly ledger still see every row.
+    params.append("scope", "till");
     if (category) params.append("category", category);
     if (keyword) params.append("keyword", keyword);
 
@@ -217,6 +221,10 @@ function updateSummary(expenses = null) {
     const params = new URLSearchParams();
     if (fromDate) params.append("start_date", fromDate);
     if (toDate) params.append("end_date", toDate);
+    // This page is the till: parts, payroll and capital spending belong to
+    // their own ledgers, and a receipt settling an invoice belongs to that
+    // invoice. Reports and the monthly ledger still see every row.
+    params.append("scope", "till");
     APIHelper.request(`/api/expenses?${params.toString()}`)
       .then((expenses) => updateSummary(expenses))
       .catch((error) => console.error("Error updating summary:", error));
@@ -585,6 +593,10 @@ async function loadCashReceived() {
     const params = new URLSearchParams();
     if (fromDate) params.append("start_date", fromDate);
     if (toDate) params.append("end_date", toDate);
+    // This page is the till: parts, payroll and capital spending belong to
+    // their own ledgers, and a receipt settling an invoice belongs to that
+    // invoice. Reports and the monthly ledger still see every row.
+    params.append("scope", "till");
 
     const cashRecords = await APIHelper.get(
       `/api/cash-received?${params.toString()}`
@@ -666,6 +678,10 @@ function updateCashSummary(cashRecords = null) {
     const params = new URLSearchParams();
     if (fromDate) params.append("start_date", fromDate);
     if (toDate) params.append("end_date", toDate);
+    // This page is the till: parts, payroll and capital spending belong to
+    // their own ledgers, and a receipt settling an invoice belongs to that
+    // invoice. Reports and the monthly ledger still see every row.
+    params.append("scope", "till");
     APIHelper.get(`/api/cash-received?${params.toString()}`)
       .then((cashRecords) => updateCashSummary(cashRecords))
       .catch((error) => console.error("Error updating cash summary:", error));

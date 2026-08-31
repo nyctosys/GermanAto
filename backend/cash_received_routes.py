@@ -7,6 +7,7 @@ from jwt_auth import login_required, role_required, admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from log_utils import log_action
 from period_lock import guard_period, guard_both, body_date, record_date
+from petty_cash import wants_till, till_receipts
 
 cash_received_routes = Blueprint('cash_received_routes', __name__)
 
@@ -118,7 +119,12 @@ def get_cash_received(current_user=None):
         
         # Start with base query
         query = CashReceived.query
-        
+
+        # Till view: money settling a customer invoice belongs to that invoice,
+        # not to the drawer.
+        if wants_till(request.args):
+            query = till_receipts(query)
+
         # Apply filters
         if payment_method:
             query = query.filter(CashReceived.payment_method == payment_method)
@@ -366,6 +372,10 @@ def get_cash_received_summary(current_user=None):
         
         # Start with base query
         query = CashReceived.query
+
+        # Same narrowing as the list, so the cards and the table agree.
+        if wants_till(request.args):
+            query = till_receipts(query)
         
         # Apply date filters if provided
         if start_date:
