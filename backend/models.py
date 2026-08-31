@@ -270,8 +270,62 @@ class CashReceived(db.Model):
     amount = db.Column(db.Float, nullable=False)
     payment_method = db.Column(db.String(50), nullable=False)  # Cash, Bank Transfer, Card, etc.
     notes = db.Column(db.Text, nullable=True)
+
+    # Which invoice this money settles. Nullable on purpose: genuine non-invoice
+    # income exists, and every receipt taken before this column was added has no
+    # recoverable link - the description never recorded one.
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=True, index=True)
+    invoice = db.relationship('Invoice', backref='cash_receipts')
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'date': self.date.isoformat() if self.date else None,
+            'description': self.description,
+            'amount': self.amount,
+            'payment_method': self.payment_method,
+            'notes': self.notes,
+            'invoice_id': self.invoice_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class FinancialPeriod(db.Model):
+    """A month of financial records, and whether it is still open for editing.
+
+    Months roll closed on their own once they end, so nobody has to remember to
+    do it. A row exists here only when someone has deliberately departed from
+    that default - reopening a month to fix something, or closing the current
+    month early.
+    """
+    __tablename__ = 'financial_periods'
+
+    id = db.Column(db.Integer, primary_key=True)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)      # 1-12
+    is_open = db.Column(db.Boolean, nullable=False, default=False)
+
+    changed_by = db.Column(db.String(80), nullable=True)
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reason = db.Column(db.String(255), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('year', 'month', name='uq_financial_period'),
+    )
+
+    def to_dict(self):
+        return {
+            'year': self.year,
+            'month': self.month,
+            'is_open': self.is_open,
+            'changed_by': self.changed_by,
+            'changed_at': self.changed_at.isoformat() if self.changed_at else None,
+            'reason': self.reason,
+        }
 
 
 class WhatsAppNotification(db.Model):
@@ -298,6 +352,26 @@ class WhatsAppNotification(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     sent_at = db.Column(db.DateTime, nullable=True)
     delivered_at = db.Column(db.DateTime, nullable=True)
+
+    def to_dict(self):
+        """The routes have always called this; it was never defined, so the
+        WhatsApp notifications page returned a 500 on every load."""
+        stamp = lambda v: v.isoformat() if v else None
+        return {
+            'id': self.id,
+            'customer_name': self.customer_name,
+            'customer_phone': self.customer_phone,
+            'notification_type': self.notification_type,
+            'message_content': self.message_content,
+            'related_document_type': self.related_document_type,
+            'related_document_id': self.related_document_id,
+            'whatsapp_message_id': self.whatsapp_message_id,
+            'status': self.status,
+            'error_message': self.error_message,
+            'created_at': stamp(self.created_at),
+            'sent_at': stamp(self.sent_at),
+            'delivered_at': stamp(self.delivered_at),
+        }
 
 
 # ===== VENDOR MANAGEMENT MODELS =====

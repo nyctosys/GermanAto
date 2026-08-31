@@ -17,6 +17,7 @@ from cash_received_routes import cash_received_routes
 from vendor_routes import vendor_bp
 from hr_routes import hr_bp
 from settings_routes import settings_bp
+from period_lock import period_bp
 from flask_cors import CORS
 from flask_compress import Compress
 import webbrowser
@@ -104,6 +105,9 @@ app.register_blueprint(hr_bp, url_prefix='')
 # Register the blueprint for settings routes
 app.register_blueprint(settings_bp, url_prefix='/api')
 
+# Register the blueprint for financial period locking
+app.register_blueprint(period_bp, url_prefix='/api')
+
 # Helper function to get the frontend directory
 def get_frontend_dir():
     return os.path.join(os.path.dirname(__file__), './frontend')
@@ -129,6 +133,11 @@ def favicon():
 def serve_home_page():
     response = send_from_directory(get_frontend_dir(), 'home.html')
     return response
+
+# Route to serve the monthly financial ledger
+@app.route('/monthly-ledger.html')
+def serve_monthly_ledger():
+    return send_from_directory(get_frontend_dir(), 'monthly-ledger.html')
 
 # Route to serve invoiceSystem.html page at /invoiceSystem.html
 @app.route('/invoiceSystem.html')

@@ -6,6 +6,7 @@ from functools import wraps
 from jwt_auth import login_required, role_required, admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from log_utils import log_action
+from period_lock import guard_period, guard_both, body_date, record_date
 
 expense_routes = Blueprint('expense_routes', __name__)
 
@@ -133,6 +134,7 @@ def get_expense(expense_id, current_user=None):
 
 @expense_routes.route('/expenses', methods=['POST'])
 @role_required(['admin', 'accountant'])
+@guard_period(body_date('date'))
 def create_expense(current_user=None):
     """Create a new expense"""
     try:
@@ -191,6 +193,7 @@ def create_expense(current_user=None):
 
 @expense_routes.route('/expenses/<int:expense_id>', methods=['PUT'])
 @can_edit_expense
+@guard_both(Expense, 'expense_id')
 def update_expense(expense_id):
     """Update an existing expense"""
     try:
@@ -253,6 +256,7 @@ def update_expense(expense_id):
 
 @expense_routes.route('/expenses/<int:expense_id>', methods=['DELETE'])
 @can_edit_expense
+@guard_period(record_date(Expense, 'expense_id'))
 def delete_expense(expense_id):
     """Delete an expense"""
     try:

@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import inspect, text
+from sqlalchemy import Boolean, Date, DateTime, Float, Integer, Numeric, String, Text, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 
 ROOT = Path(__file__).resolve().parent
@@ -86,6 +86,15 @@ MISSING_COLUMNS = {
     },
 }
 
+TYPE_DEFINITIONS = {
+    Boolean: "BOOLEAN",
+    Date: "DATE",
+    DateTime: "DATETIME",
+    Float: "FLOAT",
+    Integer: "INT",
+    Text: "TEXT",
+}
+
 UNIQUE_INDEXES = {
     "inventory": {
         "uq_inventory_barcode": "barcode",
@@ -106,6 +115,18 @@ def index_names(connection, table):
     return {index["name"] for index in inspect(connection).get_indexes(table)}
 
 
+def has_duplicate_values(connection, table, column):
+    duplicate = connection.execute(text(f"""
+        SELECT {column}
+        FROM {table}
+        WHERE {column} IS NOT NULL AND {column} != ''
+        GROUP BY {column}
+        HAVING COUNT(*) > 1
+        LIMIT 1
+    """)).first()
+    return duplicate is not None
+
+
 def add_missing_columns(connection):
     tables = table_names(connection)
     for table, columns in MISSING_COLUMNS.items():
@@ -122,6 +143,42 @@ def add_missing_columns(connection):
             print(f"Added column {table}.{column}")
 
 
+def column_definition(column):
+    for type_class, definition in TYPE_DEFINITIONS.items():
+        if isinstance(column.type, type_class):
+            return definition
+
+    if isinstance(column.type, String):
+        return f"VARCHAR({column.type.length or 255})"
+
+    if isinstance(column.type, Numeric):
+        precision = column.type.precision or 10
+        scale = column.type.scale or 2
+        return f"NUMERIC({precision}, {scale})"
+
+    return None
+
+
+def add_model_columns(connection):
+    tables = table_names(connection)
+    for table in sorted(db.metadata.tables.values(), key=lambda item: item.name):
+        if table.name not in tables:
+            continue
+
+        existing = column_names(connection, table.name)
+        for column in table.columns:
+            if column.primary_key or column.name in existing:
+                continue
+
+            definition = column_definition(column)
+            if not definition:
+                print(f"Skipped {table.name}.{column.name}; unsupported column type {column.type}")
+                continue
+
+            connection.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {column.name} {definition} NULL"))
+            print(f"Added model column {table.name}.{column.name}")
+
+
 def add_missing_indexes(connection):
     tables = table_names(connection)
     for table, indexes in UNIQUE_INDEXES.items():
@@ -132,6 +189,9 @@ def add_missing_indexes(connection):
         for index, columns in indexes.items():
             if index in existing:
                 print(f"Index {index} already exists")
+                continue
+            if has_duplicate_values(connection, table, columns):
+                print(f"Skipped index {index}; duplicate {table}.{columns} values exist")
                 continue
 
             connection.execute(text(f"CREATE UNIQUE INDEX {index} ON {table} ({columns})"))
@@ -178,6 +238,7 @@ def run():
 
         with db.engine.begin() as connection:
             add_missing_columns(connection)
+            add_model_columns(connection)
             add_missing_indexes(connection)
             seed_role_permissions(connection)
 
