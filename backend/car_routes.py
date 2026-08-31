@@ -3,6 +3,7 @@ from models import db, Car, Customer
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 from jwt_auth import login_required, role_required, admin_required
+from search_suggestions import suggestions_for
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -582,11 +583,17 @@ def search_cars(current_user=None):
                 'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
             })
         
-        return jsonify({
+        payload = {
             'query': query,
             'results': cars_data,
             'count': len(cars_data)
-        }), 200
+        }
+
+        if query and not cars_data:
+            corpus = [row[0] for row in db.session.query(Car.plate_no).distinct().all()]
+            payload.update(suggestions_for(query, corpus))
+
+        return jsonify(payload), 200
         
     except Exception as e:
         logger.error(f"Error searching cars: {e}")
@@ -622,11 +629,17 @@ def search_customers(current_user=None):
                 'updated_at': customer.updated_at.strftime("%Y-%m-%d %H:%M:%S")
             })
         
-        return jsonify({
+        payload = {
             'query': query,
             'results': customers_data,
             'count': len(customers_data)
-        }), 200
+        }
+
+        if query and not customers_data:
+            corpus = [row[0] for row in db.session.query(Customer.name).distinct().all()]
+            payload.update(suggestions_for(query, corpus))
+
+        return jsonify(payload), 200
         
     except Exception as e:
         logger.error(f"Error searching customers: {e}")

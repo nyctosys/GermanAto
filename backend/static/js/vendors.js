@@ -83,7 +83,6 @@ function setupEventListeners() {
 // Modal functions
 function openAddVendorModal() {
   currentVendorId = null;
-  isEditMode = false;
   document.getElementById("vendorModalTitle").textContent = "Add New Vendor";
   resetVendorForm();
   showModal("vendorModal");
@@ -134,13 +133,16 @@ async function loadVendors() {
   try {
     showLoading();
     const data = await APIHelper.get("/api/vendors");
-    if (!data) return;
+    // The endpoint returns { vendors: [...] }; tolerate the older bare array
+    // so a stale cached script cannot blank the page.
+    const rows = Array.isArray(data) ? data : data && data.vendors;
+    if (!Array.isArray(rows)) return;
 
-    vendors = data;
+    vendors = rows;
     renderVendorsTable(vendors);
   } catch (error) {
     console.error("Error loading vendors:", error);
-    showError("Error loading vendors. Please try again.");
+    APIHelper.renderError("vendorsTableBody", error, loadVendors);
   }
 }
 
@@ -149,26 +151,22 @@ function renderVendorsTable(vendorsList) {
   const tbody = document.getElementById("vendorsTableBody");
 
   if (vendorsList.length === 0) {
-    tbody.innerHTML = `
-            <tr>
-                <td colspan="8" class="text-center text-muted">
-                    <i class="fas fa-inbox"></i> No vendors found
-                </td>
-            </tr>
-        `;
+    APIHelper.renderEmpty(tbody, "No vendors found");
     return;
   }
+
+  const esc = (value) => APIHelper.escapeHtml(value ?? "");
 
   tbody.innerHTML = vendorsList
     .map(
       (vendor) => `
         <tr>
             <td>${vendor.id}</td>
-            <td>${vendor.name}</td>
-            <td>${vendor.company_name}</td>
-            <td>${vendor.contact_person}</td>
-            <td>${vendor.phone}</td>
-            <td>${vendor.email || "N/A"}</td>
+            <td>${esc(vendor.name)}</td>
+            <td>${esc(vendor.company_name)}</td>
+            <td>${esc(vendor.contact_person)}</td>
+            <td>${esc(vendor.phone)}</td>
+            <td>${esc(vendor.email || "N/A")}</td>
             <td>${formatDate(vendor.created_at)}</td>
             <td>
                 <div class="action-buttons">
@@ -197,13 +195,12 @@ function renderVendorsTable(vendorsList) {
 
 // Filter vendors based on search term
 function filterVendors(searchTerm) {
-  const filteredVendors = vendors.filter(
-    (vendor) =>
-      vendor.name.toLowerCase().includes(searchTerm) ||
-      vendor.company_name.toLowerCase().includes(searchTerm) ||
-      vendor.contact_person.toLowerCase().includes(searchTerm) ||
-      vendor.phone.toLowerCase().includes(searchTerm) ||
-      (vendor.email && vendor.email.toLowerCase().includes(searchTerm))
+  const filteredVendors = vendors.filter((vendor) =>
+    ["name", "company_name", "contact_person", "phone", "email"].some((field) =>
+      String(vendor[field] || "")
+        .toLowerCase()
+        .includes(searchTerm)
+    )
   );
   renderVendorsTable(filteredVendors);
 }
@@ -259,7 +256,7 @@ async function confirmDelete() {
     hideModal("deleteModal");
   } catch (error) {
     console.error("Error deleting vendor:", error);
-    showError("Error deleting vendor. Please try again.");
+    showError(error.message || "Error deleting vendor. Please try again.");
   }
 }
 
@@ -299,7 +296,7 @@ async function saveVendor() {
     hideModal("vendorModal");
   } catch (error) {
     console.error("Error saving vendor:", error);
-    showError("Error saving vendor. Please try again.");
+    showError(error.message || "Error saving vendor. Please try again.");
   }
 }
 
@@ -313,16 +310,7 @@ function resetVendorForm() {
 
 // Show loading state
 function showLoading() {
-  const tbody = document.getElementById("vendorsTableBody");
-  tbody.innerHTML = `
-        <tr>
-            <td colspan="8" class="text-center">
-                <div class="spinner-border" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-            </td>
-        </tr>
-    `;
+  APIHelper.renderLoading("vendorsTableBody", "Loading vendors...");
 }
 
 // Using global notification functions from notification-utils.js

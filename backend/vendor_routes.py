@@ -5,6 +5,7 @@ from datetime import datetime, date
 from log_utils import log_action, save_uploaded_file
 import logging
 from jwt_auth import login_required, role_required
+from search_suggestions import suggestions_for
 
 # Create blueprint for vendor routes
 vendor_bp = Blueprint('vendor', __name__)
@@ -46,8 +47,17 @@ def get_vendors():
             )
         
         vendors = query.order_by(Vendor.created_at.desc()).all()
-        
-        return jsonify([vendor.to_dict() for vendor in vendors]), 200
+        rows = [vendor.to_dict() for vendor in vendors]
+
+        # An envelope rather than a bare array, so a search that finds nothing
+        # can carry suggestions like every other list endpoint here.
+        payload = {'vendors': rows}
+        if search_query and not rows:
+            corpus = [row[0] for row in db.session.query(Vendor.name).distinct().all()]
+            corpus += [row[0] for row in db.session.query(Vendor.company_name).distinct().all()]
+            payload.update(suggestions_for(search_query, corpus))
+
+        return jsonify(payload), 200
         
     except Exception as e:
         logger.error(f"Error fetching vendors: {e}")

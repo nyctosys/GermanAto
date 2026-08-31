@@ -1,4 +1,6 @@
 from flask import Blueprint, request, jsonify
+import re
+from sqlalchemy import func, false
 from models import db, Inventory, InventoryTransaction, RepairOrderPart
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime, time, timezone, timedelta
@@ -8,6 +10,7 @@ import os
 import uuid
 from werkzeug.utils import secure_filename
 from jwt_auth import login_required, role_required, admin_required
+from search_suggestions import suggestions_for
 from inventory_transaction_utils import log_issue_out, log_received, log_adjustment, get_inventory_transactions
 
 # Business day boundary for opening/closing rollover (matches frontend Asia/Karachi usage)
@@ -286,6 +289,21 @@ def build_item_daily_ledger(item):
     }
 
 
+def code_matches(column, term):
+    """Match a manufacturer/OEM code ignoring spaces, hyphens and case.
+
+    Codes are written differently everywhere they appear - "11 427 583 220" in
+    the system, "11427583220" on the box, "11-427-583-220" on an invoice. A
+    plain LIKE finds none of the others, which makes searching by the code (the
+    way a parts person actually works) fail.
+    """
+    stripped = re.sub(r"[^A-Za-z0-9]", "", term or "")
+    if not stripped:
+        return false()          # a no-op inside or_(), never None
+    bare = func.replace(func.replace(func.replace(column, " ", ""), "-", ""), ".", "")
+    return bare.ilike(f"%{stripped}%")
+
+
 def inventory_item_to_dict(item, movement_totals=None):
     item_data = {
         'id': item.id,
@@ -377,6 +395,8 @@ def get_inventory(current_user=None):
                     Inventory.part_number.ilike(search_filter),
                     Inventory.barcode.ilike(search_filter),
                     Inventory.manufacturer_part_number.ilike(search_filter),
+                    code_matches(Inventory.manufacturer_part_number, search),
+                    code_matches(Inventory.barcode, search),
                     Inventory.description.ilike(search_filter)
                 )
             )
@@ -444,6 +464,8 @@ def get_inventory_by_category(current_user=None):
                     Inventory.part_number.ilike(search_filter),
                     Inventory.barcode.ilike(search_filter),
                     Inventory.manufacturer_part_number.ilike(search_filter),
+                    code_matches(Inventory.manufacturer_part_number, search),
+                    code_matches(Inventory.barcode, search),
                     Inventory.description.ilike(search_filter),
                     Inventory.location.ilike(search_filter),
                     Inventory.category.ilike(search_filter)
@@ -756,19 +778,27 @@ def search_inventory(current_user=None):
         if not query:
             return jsonify({'error': 'Search query is required'}), 400
         
-        # Search in part_number, name, description, location, and category
-        search_results = Inventory.query.filter(
+        # Cap the result set. A short common term used to match every row and
+        # ship the whole table in one response; the client shows a "refine your
+        # search" hint when total_count exceeds what was returned.
+        limit = min(request.args.get('limit', 200, type=int), 500)
+
+        search_query = Inventory.query.filter(
             db.or_(
                 Inventory.part_number.ilike(f'%{query}%'),
                 Inventory.barcode.ilike(f'%{query}%'),
                 Inventory.manufacturer_part_number.ilike(f'%{query}%'),
+                code_matches(Inventory.manufacturer_part_number, query),
+                code_matches(Inventory.barcode, query),
                 Inventory.name.ilike(f'%{query}%'),
                 Inventory.description.ilike(f'%{query}%'),
                 Inventory.location.ilike(f'%{query}%'),
                 Inventory.category.ilike(f'%{query}%')
             )
-        ).all()
-        
+        )
+        total_count = search_query.count()
+        search_results = search_query.order_by(Inventory.name).limit(limit).all()
+
         movement_totals = get_inventory_movement_totals(search_results)
         items_data = [
             inventory_item_to_dict(item, movement_totals)
@@ -795,19 +825,27 @@ def search_inventory_grouped(current_user=None):
         if not query:
             return jsonify({'error': 'Search query is required'}), 400
         
-        # Search in part_number, name, description, location, and category
-        search_results = Inventory.query.filter(
+        # Cap the result set. A short common term used to match every row and
+        # ship the whole table in one response; the client shows a "refine your
+        # search" hint when total_count exceeds what was returned.
+        limit = min(request.args.get('limit', 200, type=int), 500)
+
+        search_query = Inventory.query.filter(
             db.or_(
                 Inventory.part_number.ilike(f'%{query}%'),
                 Inventory.barcode.ilike(f'%{query}%'),
                 Inventory.manufacturer_part_number.ilike(f'%{query}%'),
+                code_matches(Inventory.manufacturer_part_number, query),
+                code_matches(Inventory.barcode, query),
                 Inventory.name.ilike(f'%{query}%'),
                 Inventory.description.ilike(f'%{query}%'),
                 Inventory.location.ilike(f'%{query}%'),
                 Inventory.category.ilike(f'%{query}%')
             )
-        ).all()
-        
+        )
+        total_count = search_query.count()
+        search_results = search_query.order_by(Inventory.name).limit(limit).all()
+
         movement_totals = get_inventory_movement_totals(search_results)
 
         # Group results by category
@@ -821,12 +859,22 @@ def search_inventory_grouped(current_user=None):
                 inventory_item_to_dict(item, movement_totals)
             )
         
-        return jsonify({
+        payload = {
             'query': query,
             'results': grouped_results,
-            'total_count': len(search_results),
+            'total_count': total_count,
+            'returned_count': len(search_results),
+            'truncated': total_count > len(search_results),
             'category_count': len(grouped_results)
-        }), 200
+        }
+
+        # Nothing matched. Offer a corrected spelling and the nearest items,
+        # which between them cover a typo in the query and a typo in the data.
+        if total_count == 0:
+            corpus = [row[0] for row in db.session.query(Inventory.name).all()]
+            payload.update(suggestions_for(query, corpus))
+
+        return jsonify(payload), 200
         
     except Exception as e:
         logger.error(f"Error searching inventory grouped: {e}")

@@ -72,14 +72,16 @@ document.addEventListener("DOMContentLoaded", function () {
     urlParams.get("from") || localStorage.getItem("lastPage") || "home";
 
   // Set back button destination based on where user came from
-  if (fromPage === "admin") {
-    backBtn.href = "admin.html";
-  } else if (fromPage === "home") {
-    backBtn.href = "home.html";
-  } else if (fromPage === "invoiceSystem") {
-    backBtn.href = "invoiceSystem.html";
-  } else {
-    backBtn.href = "home.html"; // Default fallback to home instead of admin
+  if (backBtn) {
+    if (fromPage === "admin") {
+      backBtn.href = "admin.html";
+    } else if (fromPage === "home") {
+      backBtn.href = "home.html";
+    } else if (fromPage === "invoiceSystem") {
+      backBtn.href = "invoiceSystem.html";
+    } else {
+      backBtn.href = "home.html"; // Default fallback to home instead of admin
+    }
   }
 
   // Track current page for back button logic
@@ -181,13 +183,20 @@ async function loadInventory(page = 1, search = "") {
 
     if (search && search.trim()) {
       // Use grouped search for better performance when searching
-      await loadInventoryWithSearch(search);
+      const outcome = await loadInventoryWithSearch(search);
+      // The search already painted a "no matches" panel with suggestions;
+      // repainting the grid over it would wipe them.
+      if (outcome === "no-matches") return;
     } else {
       // Use dynamic category list from API so new categories are loaded
       await ensureCategoryList();
-      for (const category of inventoryCategoryOrder) {
-        await loadInventoryByCategory(category, 1, search);
-      }
+      // In parallel: these requests do not depend on each other, and
+      // renderInventory() below paints them all once they land.
+      await Promise.all(
+        inventoryCategoryOrder.map((category) =>
+          loadInventoryByCategory(category, 1, search, { defer: true })
+        )
+      );
     }
 
     // Render all categories after loading
@@ -215,6 +224,17 @@ async function loadInventoryWithSearch(search) {
     const data = await utils.fetchWithRetry(
       `/api/inventory/search-grouped?q=${encodeURIComponent(search)}`
     );
+
+    // Nothing matched: offer a spelling correction and the closest items,
+    // and let either one re-run the search.
+    if (data && data.total_count === 0) {
+      APIHelper.renderNoMatches("inventory-grid", search, data, (term) => {
+        const box = document.getElementById("search-input");
+        if (box) box.value = term;
+        loadInventory(1, term);
+      });
+      return "no-matches";
+    }
 
     if (data && data.results) {
       // Clear all category pagination states
@@ -245,6 +265,13 @@ async function loadInventoryWithSearch(search) {
         categoryPagination[category].items = data.results[category];
         categoryPagination[category].totalItems = data.results[category].length;
       });
+
+      // Never let a capped result set look like the complete answer.
+      if (data.truncated) {
+        showError(
+          `Showing the first ${data.returned_count} of ${data.total_count} matches. Refine your search to narrow it down.`
+        );
+      }
     }
   } catch (error) {
     console.error("Error searching inventory:", error);
@@ -253,7 +280,7 @@ async function loadInventoryWithSearch(search) {
 }
 
 // Load inventory items by category with pagination
-async function loadInventoryByCategory(category, page = 1, search = "") {
+async function loadInventoryByCategory(category, page = 1, search = "", { defer = false } = {}) {
   // Get utils once at the beginning of the function
   const utils = window.PerformanceUtils || FallbackUtils;
 
@@ -282,7 +309,7 @@ async function loadInventoryByCategory(category, page = 1, search = "") {
       if (page === 1) {
         categoryPagination[category].items = data.items;
         // Re-render the entire category section for first page
-        renderCategorySection(category);
+        if (!defer) renderCategorySection(category);
       } else {
         // For subsequent pages, just append new items
         const newItems = data.items;

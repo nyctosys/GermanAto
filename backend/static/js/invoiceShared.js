@@ -545,6 +545,7 @@ function setupItemDropdown(itemContainer) {
   itemContainer.querySelector(".quantity").addEventListener("input", updateTotal);
   itemContainer.querySelector(".price").addEventListener("input", updateTotal);
 
+
   // Function to refresh dropdown options
   const refreshDropdownOptions = () => {
     const items = Array.isArray(state.inventoryItems) ? state.inventoryItems : [];
@@ -555,7 +556,7 @@ function setupItemDropdown(itemContainer) {
         dropdownOpts.innerHTML = items
           .map(
             (item) =>
-              `<div class="dropdown-option" data-value="${item.name}" data-price="${item.price}" data-part-number="${item.part_number || ""}">${item.part_number ? item.part_number + " - " : ""}${item.name} - PKR ${item.price.toFixed(2)}</div>`
+              `<div class="dropdown-option" data-value="${item.name}" data-price="${item.price}" data-part-number="${item.part_number || ""}">${inventoryOptionLabel(item)}</div>`
           )
           .join("");
       } else {
@@ -681,6 +682,23 @@ window.updateDocumentTypeToggle = updateDocumentTypeToggle;
 // ===== INVENTORY SEARCH =====
 
 // Search inventory items for invoice
+/**
+ * How a stock item reads in a picker.
+ *
+ * The manufacturer code is what actually identifies a part - after the codes
+ * were moved out of the names, thirteen different filters are all called
+ * "BMW OIL FILTER", so the name alone cannot tell them apart.
+ */
+function inventoryOptionLabel(item) {
+  const code = (item.manufacturer_part_number || "").trim();
+  const bits = [item.name];
+  if (code) bits.push(code);
+  // 116 items carry no price, and "PKR 0.00" reads as broken rather than blank.
+  const price = Number(item.price || 0);
+  if (price > 0) bits.push(`PKR ${price.toFixed(2)}`);
+  return bits.join("  \u00b7  ");
+}
+
 export async function searchInventoryItemsForInvoice(itemContainer, searchTerm) {
   const dropdownOptions = itemContainer.querySelector(".dropdown-options");
   if (!dropdownOptions) return;
@@ -719,7 +737,7 @@ export function populateInvoiceDropdownOptions(dropdownOptions, items) {
     option.setAttribute("data-value", item.name);
     option.setAttribute("data-price", item.price);
     option.setAttribute("data-part-number", item.part_number || "");
-    option.innerHTML = `${item.part_number ? item.part_number + " - " : ""}${item.name} - PKR ${item.price.toFixed(2)}`;
+    option.textContent = inventoryOptionLabel(item);
     dropdownOptions.appendChild(option);
   });
 }

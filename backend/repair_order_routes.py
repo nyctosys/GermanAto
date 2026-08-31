@@ -6,6 +6,7 @@ from datetime import datetime
 import json
 from repair_order_inventory_utils import process_repair_order_parts, handle_repair_order_edit_inventory, restore_inventory_for_deleted_repair_order
 from jwt_auth import login_required, role_required, admin_required, get_current_user
+from search_suggestions import suggestions_for
 from log_utils import log_action
 
 repair_order_bp = Blueprint('repair_order', __name__)
@@ -108,7 +109,15 @@ def get_repair_orders(current_user=None):
             }
             result.append(repair_order_data)
         
-        return jsonify({'repair_orders': result})
+        payload = {'repair_orders': result}
+
+        # Keyword found nothing: suggest a spelling and the nearest customers.
+        if keyword and not result:
+            corpus = [row[0] for row in
+                      db.session.query(RepairOrder.customer_name).distinct().all()]
+            payload.update(suggestions_for(keyword, corpus))
+
+        return jsonify(payload)
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
