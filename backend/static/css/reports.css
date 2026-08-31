@@ -507,6 +507,12 @@ body {
   background: rgba(245, 158, 11, 0.1);
 }
 
+.kpi-content {
+  /* Flex items default to min-width:auto, so this refused to shrink below its
+     text, overflowed the card, and the card's overflow:hidden clipped it. */
+  min-width: 0;
+}
+
 .kpi-content h3 {
   font-size: 0.8125rem;
   font-weight: 600;
@@ -517,11 +523,15 @@ body {
 }
 
 .kpi-value {
-  font-size: 1.75rem;
+  /* Scales down across the four-column range; wraps rather than clips if a
+     figure still outgrows its card. */
+  font-size: clamp(1.15rem, 1.45vw, 1.75rem);
   font-weight: 700;
   color: var(--text-dark);
   margin-bottom: 4px;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
 }
 
 .kpi-period {
