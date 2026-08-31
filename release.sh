@@ -41,9 +41,12 @@ echo "    $COMMIT"
 [[ -d "$STAGE/repo/backend" ]] || die "clone has no backend/ - wrong repository?"
 
 say "Changes this release would make"
-sudo rsync -a --delete --dry-run --itemize-changes "${EXCLUDES[@]}" \
-    "$STAGE/repo/backend/" "$APP_DIR/backend/" \
-  | grep -E '^(\*deleting|[<>]f)' | sed 's/^/    /' || echo "    (nothing - already up to date)"
+# Captured rather than piped: under `set -o pipefail` a failing rsync would
+# otherwise be swallowed by the grep fallback and reported as "up to date".
+CHANGES=$(sudo rsync -a --delete --dry-run --itemize-changes "${EXCLUDES[@]}" \
+    "$STAGE/repo/backend/" "$APP_DIR/backend/") || die "could not read $APP_DIR - wrong path, or no permission"
+echo "$CHANGES" | grep -E '^(\*deleting|[<>]f)' | sed 's/^/    /' \
+  || echo "    (nothing - already up to date)"
 
 if $DRY_RUN; then
     say "Dry run - nothing was written."
