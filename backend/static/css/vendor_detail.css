@@ -304,6 +304,15 @@ body {
   border: 1px solid var(--border-light);
 }
 
+.filter-card {
+  background: var(--bg-white);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
 .filter-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -561,6 +570,13 @@ body {
   margin-top: 2rem;
 }
 
+.totals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
 .total-card {
   background: var(--bg-white);
   border-radius: 8px;
@@ -592,11 +608,11 @@ body {
   display: block;
 }
 
-.total-amount.debit {
+.total-amount.debits {
   color: #dc3545;
 }
 
-.total-amount.credit {
+.total-amount.credits {
   color: #28a745;
 }
 
@@ -784,6 +800,10 @@ body {
   }
 
   .filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .totals-grid {
     grid-template-columns: 1fr;
   }
 
