@@ -5,6 +5,9 @@ let currentPage = 1;
 let totalPages = 1;
 let isLoading = false;
 let searchTimeout = null;
+// Set when a search matches more rows than the server will return, so the
+// grid can say so instead of quietly looking like the complete answer.
+let truncationNotice = "";
 
 // Default category order for stable display (known categories first)
 const DEFAULT_CATEGORY_ORDER = ["parts", "tools", "fluids", "accessories", "other"];
@@ -188,6 +191,7 @@ async function loadInventory(page = 1, search = "") {
       // repainting the grid over it would wipe them.
       if (outcome === "no-matches") return;
     } else {
+      truncationNotice = "";
       // Use dynamic category list from API so new categories are loaded
       await ensureCategoryList();
       // In parallel: these requests do not depend on each other, and
@@ -267,11 +271,9 @@ async function loadInventoryWithSearch(search) {
       });
 
       // Never let a capped result set look like the complete answer.
-      if (data.truncated) {
-        showError(
-          `Showing the first ${data.returned_count} of ${data.total_count} matches. Refine your search to narrow it down.`
-        );
-      }
+      truncationNotice = data.truncated
+        ? `Showing the first ${data.returned_count} of ${data.total_count} matches. Refine your search to narrow it down.`
+        : "";
     }
   } catch (error) {
     console.error("Error searching inventory:", error);
@@ -472,7 +474,9 @@ function loadSampleData() {
 // Render inventory items grouped by category with collapsible sections
 function renderInventory() {
   const grid = document.getElementById("inventory-grid");
-  grid.innerHTML = "";
+  grid.innerHTML = truncationNotice
+    ? `<div class="inventory-truncated-notice">${truncationNotice}</div>`
+    : "";
 
   // Check if we have any items in any category
   const hasAnyItems = Object.values(categoryPagination).some(
@@ -480,7 +484,7 @@ function renderInventory() {
   );
 
   if (!hasAnyItems) {
-    grid.innerHTML = `
+    grid.innerHTML += `
             <div class="empty-state">
                 <h3>No inventory items found</h3>
                 <p>Click "Add New Item" to get started</p>

@@ -1873,3 +1873,16 @@ body.modal-open {
   transform: none;
   box-shadow: none;
 }
+
+/* Shown when a search matches more rows than the server returns, so a capped
+   result set never reads as the complete answer. */
+.inventory-truncated-notice {
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--primary-maroon);
+  border-radius: 8px;
+  background: var(--bg-light);
+  color: var(--text-muted);
+  font-size: 14px;
+}
