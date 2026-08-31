@@ -6,6 +6,7 @@
     <title>Bill Management - GermanATO</title>
     <link rel="stylesheet" href="static/css/theme.css" />
     <link rel="stylesheet" href="static/css/invoiceSystem.css" />
+    <link rel="stylesheet" href="../static/css/app-shell.css" />
     <script src="static/js/theme.js"></script>
   </head>
   <body>
@@ -163,6 +164,7 @@
     </footer>
 
     <script src="static/js/auth_jwt.js"></script>
+    <script src="../static/js/app-shell.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
         // Check authentication and page access
@@ -177,14 +179,16 @@
           urlParams.get("from") || localStorage.getItem("lastPage") || "home";
 
         // Set back button destination based on where user came from
-        if (fromPage === "home") {
-          backBtn.href = "home.html";
-        } else if (fromPage === "admin") {
-          backBtn.href = "admin.html";
-        } else if (fromPage === "finance-management") {
-          backBtn.href = "finance-management.html";
-        } else {
-          backBtn.href = "home.html"; // Default fallback
+        if (backBtn) {
+          if (fromPage === "home") {
+            backBtn.href = "home.html";
+          } else if (fromPage === "admin") {
+            backBtn.href = "admin.html";
+          } else if (fromPage === "finance-management") {
+            backBtn.href = "finance-management.html";
+          } else {
+            backBtn.href = "home.html"; // Default fallback
+          }
         }
 
         // Track current page for back button logic

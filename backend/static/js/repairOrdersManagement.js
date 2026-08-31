@@ -11,18 +11,20 @@ document.addEventListener("DOMContentLoaded", () => {
     urlParams.get("from") || localStorage.getItem("lastPage") || "admin";
 
   // Set back button destination based on where user came from
-  if (fromPage === "home") {
-    backBtn.href = "home.html";
-  } else if (fromPage === "invoiceSystem") {
-    backBtn.href = "invoiceSystem.html";
-  } else if (fromPage === "dashboard") {
-    backBtn.href = "invoiceSystem.html";
-  } else if (fromPage === "inventory") {
-    backBtn.href = "inventory.html";
-  } else if (fromPage === "admin") {
-    backBtn.href = "home.html"; // Redirect to home instead of admin panel
-  } else {
-    backBtn.href = "home.html"; // Default fallback to home
+  if (backBtn) {
+    if (fromPage === "home") {
+      backBtn.href = "home.html";
+    } else if (fromPage === "invoiceSystem") {
+      backBtn.href = "invoiceSystem.html";
+    } else if (fromPage === "dashboard") {
+      backBtn.href = "invoiceSystem.html";
+    } else if (fromPage === "inventory") {
+      backBtn.href = "inventory.html";
+    } else if (fromPage === "admin") {
+      backBtn.href = "home.html"; // Redirect to home instead of admin panel
+    } else {
+      backBtn.href = "home.html"; // Default fallback to home
+    }
   }
 
   // Track current page for back button logic
@@ -59,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
 
   async function loadRepairOrders(status, searchParams = null) {
-    resultsDiv.innerHTML = "<p>Loading...</p>";
+    APIHelper.renderLoading(resultsDiv, "Loading repair orders...");
     try {
       let url = `/api/repair-orders`;
       const params = new URLSearchParams();
@@ -409,7 +411,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       }, 100); // Small delay to ensure DOM is updated
     } catch (err) {
-      resultsDiv.innerHTML = `<p>Error fetching repair orders: ${err.message}</p>`;
+      console.error("Error fetching repair orders:", err);
+      APIHelper.renderError(resultsDiv, err, () =>
+        loadRepairOrders(status, searchParams)
+      );
     }
   }
 

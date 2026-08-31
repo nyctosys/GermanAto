@@ -65,8 +65,7 @@ async function loadWorkers() {
     applyFiltersAndRender();
   } catch (err) {
     console.error("Error loading workers:", err);
-    renderTable([]);
-    showError("Failed to load workers.");
+    APIHelper.renderError("salariesTableBody", err, loadWorkers);
   }
 }
 

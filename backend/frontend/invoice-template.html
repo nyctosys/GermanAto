@@ -361,14 +361,16 @@
           urlParams.get("from") || localStorage.getItem("lastPage") || "search";
 
         // Set back button destination
-        if (fromPage === "invoice") {
-          backBtn.href = "invoice.html";
-        } else if (fromPage === "invoice-management") {
-          backBtn.href = "invoice-management.html";
-        } else if (fromPage === "pending-quotes") {
-          backBtn.href = "pending-quotes.html";
-        } else {
-          backBtn.href = "invoiceSystem.html";
+        if (backBtn) {
+          if (fromPage === "invoice") {
+            backBtn.href = "invoice.html";
+          } else if (fromPage === "invoice-management") {
+            backBtn.href = "invoice-management.html";
+          } else if (fromPage === "pending-quotes") {
+            backBtn.href = "pending-quotes.html";
+          } else {
+            backBtn.href = "invoiceSystem.html";
+          }
         }
 
         const invoiceDataRaw = sessionStorage.getItem("invoiceData");

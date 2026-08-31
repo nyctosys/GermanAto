@@ -22,14 +22,16 @@ document.addEventListener("DOMContentLoaded", function () {
     urlParams.get("from") || localStorage.getItem("lastPage") || "admin";
 
   // Set back button destination based on where user came from
-  if (fromPage === "admin") {
-    backBtn.href = "admin.html";
-  } else if (fromPage === "home") {
-    backBtn.href = "home.html";
-  } else if (fromPage === "invoiceSystem") {
-    backBtn.href = "invoiceSystem.html";
-  } else {
-    backBtn.href = "admin.html"; // Default fallback
+  if (backBtn) {
+    if (fromPage === "admin") {
+      backBtn.href = "admin.html";
+    } else if (fromPage === "home") {
+      backBtn.href = "home.html";
+    } else if (fromPage === "invoiceSystem") {
+      backBtn.href = "invoiceSystem.html";
+    } else {
+      backBtn.href = "admin.html"; // Default fallback
+    }
   }
 
   // Track current page for back button logic

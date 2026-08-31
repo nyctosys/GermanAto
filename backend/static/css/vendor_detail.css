@@ -311,9 +311,23 @@ body {
   align-items: end;
 }
 
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.filter-actions-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .filter-group {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .filter-group label {
@@ -412,13 +426,15 @@ body {
   background: var(--bg-white);
   border-radius: 8px;
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border-light);
   margin-bottom: 2rem;
 }
 
 .data-table {
   width: 100%;
+  min-width: 940px;
   border-collapse: collapse;
   font-size: 0.875rem;
 }

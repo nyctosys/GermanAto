@@ -6,7 +6,10 @@ import time
 
 logger = logging.getLogger(__name__)
 
-UPLOAD_FOLDER = 'static/uploads'
+# Anchored to this file, not the working directory. As a relative path,
+# uploads landed wherever the process happened to be started - which could be
+# outside the folder Flask serves, leaving every proof link a 404.
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
 
 def save_uploaded_file(file):
     """Save an uploaded file securely with a unique timestamp prefix."""

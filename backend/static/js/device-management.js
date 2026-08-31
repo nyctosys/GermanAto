@@ -44,7 +44,7 @@ async function loadDevices() {
     renderDevices();
   } catch (err) {
     console.error("Error loading devices:", err);
-    el.innerHTML = '<div class="empty-cell">Failed to load devices.</div>';
+    APIHelper.renderError(el, err, loadDevices);
   }
 }
 

@@ -197,7 +197,7 @@ async function loadVendorDetails() {
     loadLedgerEntries(); // Load ledger by default
   } catch (error) {
     console.error("Error loading vendor details:", error);
-    showError("Error loading vendor details. Please try again.");
+    APIHelper.renderError("vendorInfo", error, loadVendorDetails);
   }
 }
 
@@ -285,7 +285,7 @@ async function loadLedgerEntries() {
     calculateLedgerTotals(data);
   } catch (error) {
     console.error("Error loading ledger entries:", error);
-    showError("Error loading ledger entries. Please try again.");
+    APIHelper.renderError("ledgerTableBody", error, loadLedgerEntries);
   }
 }
 
@@ -294,13 +294,7 @@ function renderLedgerTable(entries) {
   const tbody = document.getElementById("ledgerTableBody");
 
   if (entries.length === 0) {
-    tbody.innerHTML = `
-            <tr>
-                <td colspan="10" class="text-center text-muted">
-                    <i class="fas fa-inbox"></i> No ledger entries found
-                </td>
-            </tr>
-        `;
+    APIHelper.renderEmpty(tbody, "No ledger entries found");
     return;
   }
 
@@ -323,7 +317,7 @@ function renderLedgerTable(entries) {
             <td>${entry.payment_notes || "N/A"}</td>
             <td>
               ${entry.attachment_path ? `
-                <a href="/${entry.attachment_path}" target="_blank" class="badge" style="background: #2b6cb0; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
+                <a href="/static/${entry.attachment_path}" target="_blank" class="badge" style="background: #2b6cb0; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 10px; height: 10px;">
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                   </svg>
@@ -360,9 +354,9 @@ function calculateLedgerTotals(entries) {
   const closingBalance =
     entries.length > 0 ? parseFloat(entries[0].balance) : 0;
 
-  document.getElementById("totalDebit").textContent =
+  document.getElementById("totalDebits").textContent =
     formatCurrency(totalDebit);
-  document.getElementById("totalCredit").textContent =
+  document.getElementById("totalCredits").textContent =
     formatCurrency(totalCredit);
   document.getElementById("closingBalance").textContent =
     formatCurrency(closingBalance);
@@ -395,7 +389,7 @@ async function loadConsignments() {
     renderConsignmentsTable(data);
   } catch (error) {
     console.error("Error loading consignments:", error);
-    showError("Error loading consignments. Please try again.");
+    APIHelper.renderError("consignmentsTableBody", error, loadConsignments);
   }
 }
 
@@ -404,13 +398,7 @@ function renderConsignmentsTable(consignmentsList) {
   const tbody = document.getElementById("consignmentsTableBody");
 
   if (consignmentsList.length === 0) {
-    tbody.innerHTML = `
-            <tr>
-                <td colspan="10" class="text-center text-muted">
-                    <i class="fas fa-inbox"></i> No purchase order records found
-                </td>
-            </tr>
-        `;
+    APIHelper.renderEmpty(tbody, "No purchase order records found");
     return;
   }
 
@@ -825,29 +813,11 @@ function resetConsignmentForm() {
 
 // Show loading states
 function showLedgerLoading() {
-  const tbody = document.getElementById("ledgerTableBody");
-  tbody.innerHTML = `
-        <tr>
-            <td colspan="6" class="text-center">
-                <div class="spinner-border" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-            </td>
-        </tr>
-    `;
+  APIHelper.renderLoading("ledgerTableBody", "Loading ledger entries...");
 }
 
 function showConsignmentLoading() {
-  const tbody = document.getElementById("consignmentsTableBody");
-  tbody.innerHTML = `
-        <tr>
-            <td colspan="8" class="text-center">
-                <div class="spinner-border" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-            </td>
-        </tr>
-    `;
+  APIHelper.renderLoading("consignmentsTableBody", "Loading purchase orders...");
 }
 
 // Notification functions are now imported from notification-utils.js

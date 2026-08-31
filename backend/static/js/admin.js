@@ -34,12 +34,14 @@ function initializeAdmin() {
     urlParams.get("from") || localStorage.getItem("lastPage") || "home";
 
   // Set back button destination based on where user came from
-  if (fromPage === "home") {
-    backBtn.href = "home.html";
-  } else if (fromPage === "invoiceSystem") {
-    backBtn.href = "invoiceSystem.html";
-  } else {
-    backBtn.href = "home.html"; // Default fallback
+  if (backBtn) {
+    if (fromPage === "home") {
+      backBtn.href = "home.html";
+    } else if (fromPage === "invoiceSystem") {
+      backBtn.href = "invoiceSystem.html";
+    } else {
+      backBtn.href = "home.html"; // Default fallback
+    }
   }
 
   // Track current page for back button logic

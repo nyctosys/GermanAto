@@ -68,3 +68,8 @@ node_modules/
 # Axon cache/index files
 .axon/
 backend/.axon/
+
+# Customer uploads: payment proofs and ledger attachments are financial
+# documents and must not go into version control.
+backend/static/uploads/
+static/uploads/

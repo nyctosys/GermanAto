@@ -103,7 +103,7 @@ async function loadWorkers() {
     renderWorkersTable();
   } catch (error) {
     console.error("Error loading workers:", error);
-    showError("Error loading workers. Please try again.");
+    APIHelper.renderError("workersTableBody", error, loadWorkers);
   }
 }
 
@@ -155,13 +155,7 @@ function renderWorkersTable() {
   if (!tbody) return;
 
   if (workers.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" class="loading-cell">
-          <span>No workers found</span>
-        </td>
-      </tr>
-    `;
+    APIHelper.renderEmpty(tbody, "No workers found");
     return;
   }
 

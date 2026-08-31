@@ -25,16 +25,18 @@ document.addEventListener("DOMContentLoaded", function () {
   const repairOrderId = urlParams.get("id");
 
   // Set back button destination
-  if (fromPage === "pending-quotes") {
-    backBtn.href = "pending-quotes.html";
-  } else if (fromPage === "admin") {
-    backBtn.href = "admin.html";
-  } else if (fromPage === "invoiceSystem") {
-    backBtn.href = "invoiceSystem.html";
-  } else if (fromPage === "repair-orders-management") {
-    backBtn.href = "repair-orders-management.html";
-  } else {
-    backBtn.href = "repair-orders-management.html"; // Default fallback
+  if (backBtn) {
+    if (fromPage === "pending-quotes") {
+      backBtn.href = "pending-quotes.html";
+    } else if (fromPage === "admin") {
+      backBtn.href = "admin.html";
+    } else if (fromPage === "invoiceSystem") {
+      backBtn.href = "invoiceSystem.html";
+    } else if (fromPage === "repair-orders-management") {
+      backBtn.href = "repair-orders-management.html";
+    } else {
+      backBtn.href = "repair-orders-management.html"; // Default fallback
+    }
   }
 
   // Track current page for back button logic

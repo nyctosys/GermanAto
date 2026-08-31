@@ -197,18 +197,20 @@
           urlFrom || localStorageFrom || "repair-orders-management";
 
         // Set back button destination
-        if (fromPage === "repair-order") {
-          backBtn.href = "repair-order.html";
-        } else if (fromPage === "repair-orders-management") {
-          // Preserve the original navigation chain by checking localStorage
-          const originalFrom = localStorage.getItem("originalFrom") || "admin";
-          backBtn.href = `repair-orders-management.html?from=${originalFrom}`;
-        } else if (fromPage === "admin") {
-          backBtn.href = "admin.html";
-        } else if (fromPage === "home") {
-          backBtn.href = "home.html";
-        } else {
-          backBtn.href = "repair-orders-management.html"; // Default fallback
+        if (backBtn) {
+          if (fromPage === "repair-order") {
+            backBtn.href = "repair-order.html";
+          } else if (fromPage === "repair-orders-management") {
+            // Preserve the original navigation chain by checking localStorage
+            const originalFrom = localStorage.getItem("originalFrom") || "admin";
+            backBtn.href = `repair-orders-management.html?from=${originalFrom}`;
+          } else if (fromPage === "admin") {
+            backBtn.href = "admin.html";
+          } else if (fromPage === "home") {
+            backBtn.href = "home.html";
+          } else {
+            backBtn.href = "repair-orders-management.html"; // Default fallback
+          }
         }
 
         const repairOrderData = sessionStorage.getItem("repairOrderData");

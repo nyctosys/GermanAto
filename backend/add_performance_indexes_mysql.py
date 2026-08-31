@@ -60,6 +60,12 @@ def add_performance_indexes():
             "CREATE INDEX idx_inventory_part_number ON inventory(part_number)",
             "CREATE INDEX idx_inventory_created_at ON inventory(created_at)",
             
+            # Inventory transaction indexes - the inventory grid filters this
+            # table by (inventory_id, created_at) on every category request
+            "CREATE INDEX idx_invtx_inventory_created ON inventory_transactions(inventory_id, created_at)",
+            "CREATE INDEX idx_invtx_created_at ON inventory_transactions(created_at)",
+            "CREATE INDEX idx_invtx_repair_order_id ON inventory_transactions(repair_order_id)",
+            
             # Customer indexes
             "CREATE INDEX idx_customer_name ON customer(name)",
             "CREATE INDEX idx_customer_phone ON customer(phone)",

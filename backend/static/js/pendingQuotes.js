@@ -8,14 +8,16 @@ document.addEventListener("DOMContentLoaded", () => {
     "invoiceSystem";
 
   // Set back button destination based on where user came from
-  if (fromPage === "admin") {
-    backBtn.href = "admin.html";
-  } else if (fromPage === "home") {
-    backBtn.href = "home.html";
-  } else if (fromPage === "invoiceSystem") {
-    backBtn.href = "invoiceSystem.html";
-  } else {
-    backBtn.href = "invoiceSystem.html"; // Default fallback
+  if (backBtn) {
+    if (fromPage === "admin") {
+      backBtn.href = "admin.html";
+    } else if (fromPage === "home") {
+      backBtn.href = "home.html";
+    } else if (fromPage === "invoiceSystem") {
+      backBtn.href = "invoiceSystem.html";
+    } else {
+      backBtn.href = "invoiceSystem.html"; // Default fallback
+    }
   }
 
   // Track current page for back button logic
@@ -103,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadQuotes(status, keywordQuery = "", idQuery = "", dateFrom = "", dateTo = "") {
-    resultsDiv.innerHTML = "<p>Loading...</p>";
+    APIHelper.renderLoading(resultsDiv, "Loading quotes...");
     try {
       let url = `/api/search?type=quote`;
 
@@ -318,7 +320,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     } catch (err) {
-      resultsDiv.innerHTML = `<p>Error fetching ${status} quotes.</p>`;
+      console.error("Error fetching quotes:", err);
+      APIHelper.renderError(resultsDiv, err, () => loadQuotes(status));
     }
   }
 

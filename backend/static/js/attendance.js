@@ -78,7 +78,7 @@ function getFilterParams() {
 async function loadAttendance() {
   const tbody = document.getElementById("attendanceTableBody");
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" class="loading-cell"><div class="loading-spinner"></div> Loading...</td></tr>';
+  APIHelper.renderLoading(tbody, "Loading attendance...");
   try {
     const url = getFilterParams();
     const data = await APIHelper.get(url || "/api/attendance");
@@ -86,7 +86,7 @@ async function loadAttendance() {
     renderTable();
   } catch (err) {
     console.error("Error loading attendance:", err);
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">Failed to load attendance.</td></tr>';
+    APIHelper.renderError(tbody, err, loadAttendance);
   }
 }
 
@@ -94,7 +94,7 @@ function renderTable() {
   const tbody = document.getElementById("attendanceTableBody");
   if (!tbody) return;
   if (attendance.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">No attendance records.</td></tr>';
+    APIHelper.renderEmpty(tbody, "No attendance records.");
     return;
   }
   tbody.innerHTML = attendance
