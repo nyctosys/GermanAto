@@ -9,7 +9,11 @@ drowning that.
     "Cash - Expenses" balance meant nothing at all.
   * Parts bought from vendors. Keyed in here by hand *and* recorded against
     the vendor in the vendor ledger, so every parts purchase was counted twice.
-  * Payroll and capital spending, which each have their own page.
+
+Payroll is NOT excluded. Wages are paid out of this drawer in cash, day by
+day, and the hand-keyed Labor entries are the only record of them - salary
+advances live in HR and post no expense until payroll runs. Leaving them out
+hid 435 entries worth Rs 8.7M from the very page they belong on.
 
 None of it is hidden. Reports, the monthly ledger and every export still count
 all of it exactly as before - this narrowing applies only where a caller asks
@@ -24,7 +28,10 @@ migrate_cash_received_invoice_link.py.
 from models import CashReceived, Expense
 
 # Expense categories whose money is owned by another ledger.
-LEDGER_OWNED_CATEGORIES = ('Parts', 'Labor', 'Major Expenses')
+# Only Parts: those are recorded against the vendor as well, so counting
+# them here too double-counts them. Everything else a workshop spends in a
+# day - wages, fuel, utilities, supplies - is genuinely petty cash.
+LEDGER_OWNED_CATEGORIES = ('Parts',)
 
 # Callers opt in with this, so nothing else changes shape by accident.
 TILL_SCOPE = 'till'
