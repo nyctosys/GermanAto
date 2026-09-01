@@ -111,6 +111,9 @@ function renderTable(list) {
       <td>${formatSalary(w.salary)}</td>
       <td>
         <button type="button" class="btn-slip" data-worker-id="${w.id}">Print slip</button>
+        <button type="button" class="btn-advance" data-worker-id="${w.id}"
+                data-worker-name="${escapeHtml([w.first_name, w.last_name].filter(Boolean).join(" "))}"
+                data-worker-salary="${w.salary || 0}">Advance</button>
       </td>
     </tr>
   `
@@ -120,6 +123,16 @@ function renderTable(list) {
   tbody.querySelectorAll(".btn-slip").forEach((btn) => {
     btn.addEventListener("click", function () {
       openSlipModal(Number(this.getAttribute("data-worker-id")));
+    });
+  });
+
+  tbody.querySelectorAll(".btn-advance").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      openAdvanceModal({
+        id: Number(this.getAttribute("data-worker-id")),
+        name: this.getAttribute("data-worker-name"),
+        salary: Number(this.getAttribute("data-worker-salary")) || 0,
+      });
     });
   });
 }
@@ -252,11 +265,33 @@ function renderSlipHtml(payload) {
   const incompleteRow = payload.requires_manual_review
     ? `<tr><td>Incomplete attendance</td><td>${payload.incomplete_records_count || 0} record(s)</td></tr>`
     : "";
+
+  // A slip that showed only the net would leave a worker who drew an advance
+  // wondering where the rest went, so show the arithmetic.
+  const money = (v) =>
+    "PKR " + Number(v || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const advancesTotal = Number(payload.advances_total || 0);
+  const advanceRows = advancesTotal
+    ? `<tr><td>Earned this month</td><td>${money(payload.earned_salary)}</td></tr>
+       <tr><td>Less advances taken</td><td>&minus;${money(advancesTotal)}</td></tr>` +
+      (payload.advances || [])
+        .map(
+          (a) =>
+            `<tr class="slip-subrow"><td>&nbsp;&nbsp;${escapeHtml(a.date)}${
+              a.notes ? " &middot; " + escapeHtml(a.notes) : ""
+            }</td><td>&minus;${money(a.amount)}</td></tr>`
+        )
+        .join("")
+    : "";
+  const overdrawnWarning = payload.overdrawn
+    ? `<p class="slip-review-warning">${escapeHtml(payload.advance_notes || "")}</p>`
+    : "";
   return `
     <div class="slip-content">
       <h3>GermanATO</h3>
       <p class="slip-title">Salary Slip (based on attendance)</p>
       ${reviewWarning}
+      ${overdrawnWarning}
       <table class="slip-table">
         <tr><td>Employee ID</td><td>${escapeHtml(String(payload.employee_id || "—"))}</td></tr>
         <tr><td>Name</td><td>${escapeHtml(name)}</td></tr>
@@ -266,7 +301,8 @@ function renderSlipHtml(payload) {
         ${daysRow}
         ${hoursRow}
         ${incompleteRow}
-        <tr><td>Net Salary</td><td><strong>${formatted}</strong></td></tr>
+        ${advanceRows}
+        <tr><td>${payload.overdrawn ? "To recover" : "Net Salary"}</td><td><strong>${formatted}</strong></td></tr>
       </table>
     </div>
   `;
@@ -317,3 +353,136 @@ function showError(msg) {
   if (typeof showNotification === "function") showNotification(msg, "error");
   else console.error(msg);
 }
+
+// ===== SALARY ADVANCES =====
+// Partial salary drawn mid-month. Recorded against the worker only - the
+// expense is the full month's salary at payroll, and calculate_salary() nets
+// these off, so the same rupee is never handed over twice.
+
+let advanceWorker = null;
+
+const advanceMoney = (v) =>
+  "PKR " +
+  Number(v || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function openAdvanceModal(worker) {
+  advanceWorker = worker;
+  const modal = document.getElementById("advanceModal");
+  if (!modal) return;
+
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("advanceDate").value = today;
+  document.getElementById("advanceAmount").value = "";
+  document.getElementById("advanceNotes").value = "";
+  document.getElementById("advanceWorkerLine").textContent =
+    `${worker.name} · monthly salary ${advanceMoney(worker.salary)}`;
+
+  modal.classList.add("active");
+  loadAdvanceHistory();
+}
+
+function closeAdvanceModal() {
+  const modal = document.getElementById("advanceModal");
+  if (modal) modal.classList.remove("active");
+  advanceWorker = null;
+}
+
+async function loadAdvanceHistory() {
+  if (!advanceWorker) return;
+  const box = document.getElementById("advanceHistory");
+  const remaining = document.getElementById("advanceRemaining");
+  const when = new Date(document.getElementById("advanceDate").value || Date.now());
+
+  try {
+    const data = await APIHelper.get(
+      `/api/salary/advances?worker_id=${advanceWorker.id}` +
+        `&year=${when.getFullYear()}&month=${when.getMonth() + 1}`
+    );
+    if (!data) return;
+
+    const left = Math.max(advanceWorker.salary - data.total, 0);
+    remaining.textContent = advanceWorker.salary
+      ? `Drawn this month: ${advanceMoney(data.total)} · still available: ${advanceMoney(left)}`
+      : "This worker has no monthly salary set, so nothing can be advanced.";
+
+    box.innerHTML = data.advances.length
+      ? data.advances
+          .map(
+            (a) => `<div class="advance-row">
+              <span class="advance-row__date">${escapeHtml(a.date)}</span>
+              <span class="advance-row__amt">${advanceMoney(a.amount)}</span>
+              <span class="advance-row__note">${escapeHtml(a.notes || a.payment_method || "")}</span>
+              <button type="button" class="advance-row__del" data-advance-id="${a.id}"
+                      title="Remove this advance">&times;</button>
+            </div>`
+          )
+          .join("")
+      : `<p class="advance-empty">Nothing drawn this month.</p>`;
+
+    box.querySelectorAll(".advance-row__del").forEach((b) =>
+      b.addEventListener("click", () => deleteAdvance(Number(b.dataset.advanceId)))
+    );
+  } catch (error) {
+    console.error("Error loading advances:", error);
+    box.innerHTML = `<p class="advance-empty">Could not load this month's advances.</p>`;
+  }
+}
+
+async function submitAdvance(event) {
+  event.preventDefault();
+  if (!advanceWorker) return;
+
+  const btn = document.getElementById("saveAdvanceBtn");
+  const amount = Number(document.getElementById("advanceAmount").value);
+  if (!(amount > 0)) return showError("Enter an amount above zero");
+
+  btn.disabled = true;
+  try {
+    const res = await APIHelper.post("/api/salary/advances", {
+      worker_id: advanceWorker.id,
+      date: document.getElementById("advanceDate").value,
+      amount: amount,
+      payment_method: document.getElementById("advanceMethod").value,
+      notes: document.getElementById("advanceNotes").value,
+    });
+    if (res) {
+      showSuccess("Advance recorded");
+      document.getElementById("advanceAmount").value = "";
+      document.getElementById("advanceNotes").value = "";
+      loadAdvanceHistory();
+    }
+  } catch (error) {
+    // The server rejects an advance that would exceed the month's salary, and
+    // its message names the amount still available - worth showing verbatim.
+    showError(error?.message || "Could not record the advance");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteAdvance(id) {
+  if (!confirm("Remove this advance? The salary calculation will go back up by that amount.")) return;
+  try {
+    const res = await APIHelper.delete(`/api/salary/advances/${id}`);
+    if (res) {
+      showSuccess("Advance removed");
+      loadAdvanceHistory();
+    }
+  } catch (error) {
+    showError(error?.message || "Could not remove the advance");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("advanceModal");
+  if (!modal) return;
+
+  document.getElementById("closeAdvanceModal").addEventListener("click", closeAdvanceModal);
+  document.getElementById("cancelAdvanceBtn").addEventListener("click", closeAdvanceModal);
+  document.getElementById("advanceForm").addEventListener("submit", submitAdvance);
+  // A different date can mean a different month, so the remaining figure moves.
+  document.getElementById("advanceDate").addEventListener("change", loadAdvanceHistory);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeAdvanceModal();
+  });
+});

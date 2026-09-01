@@ -498,3 +498,103 @@ body::before {
     max-width: 100%;
   }
 }
+
+/* ===== SALARY ADVANCES ===== */
+
+.btn-advance {
+  margin-left: 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dark, #2d3748);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-advance:hover {
+  border-color: var(--primary-maroon, #8b1538);
+  color: var(--primary-maroon, #8b1538);
+}
+
+.advance-intro {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--text-muted, #718096);
+}
+
+.advance-form__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.advance-remaining {
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted, #718096);
+}
+
+.advance-history-title {
+  margin: 22px 0 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light, #e2e8f0);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #718096);
+}
+
+.advance-history { display: flex; flex-direction: column; gap: 6px; }
+
+.advance-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: 6px;
+  font-size: 13.5px;
+}
+.advance-row__date { color: var(--text-muted, #718096); white-space: nowrap; }
+.advance-row__amt {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.advance-row__note {
+  color: var(--text-muted, #718096);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.advance-row__del {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted, #718096);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+.advance-row__del:hover { background: #fff5f5; color: #c53030; }
+
+.advance-empty {
+  margin: 0;
+  padding: 14px 0;
+  font-size: 13.5px;
+  color: var(--text-muted, #718096);
+}
+
+/* Slip: the advance breakdown under the earned figure */
+.slip-subrow td {
+  font-size: 12.5px;
+  color: var(--text-muted, #718096);
+  padding-top: 2px;
+  padding-bottom: 2px;
+}

@@ -89,6 +89,52 @@
     </main>
 
     <!-- Print slip modal -->
+    <!-- Record a partial salary payment -->
+    <div id="advanceModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Record advance</h2>
+          <button type="button" class="close-modal" id="closeAdvanceModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="advance-intro" id="advanceWorkerLine"></p>
+
+          <form id="advanceForm" class="advance-form">
+            <div class="advance-form__row">
+              <div class="filter-group">
+                <label for="advanceDate">Date</label>
+                <input type="date" id="advanceDate" class="filter-select" required />
+              </div>
+              <div class="filter-group">
+                <label for="advanceAmount">Amount (PKR)</label>
+                <input type="number" id="advanceAmount" class="filter-select" min="1" step="0.01" required />
+              </div>
+              <div class="filter-group">
+                <label for="advanceMethod">Paid by</label>
+                <select id="advanceMethod" class="filter-select">
+                  <option value="Cash">Cash</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Cheque">Cheque</option>
+                </select>
+              </div>
+            </div>
+            <div class="filter-group">
+              <label for="advanceNotes">Notes</label>
+              <input type="text" id="advanceNotes" class="filter-select" placeholder="Optional" />
+            </div>
+            <p class="advance-remaining" id="advanceRemaining"></p>
+            <div class="modal-footer">
+              <button type="button" class="clear-filter-btn" id="cancelAdvanceBtn">Cancel</button>
+              <button type="submit" class="btn-slip" id="saveAdvanceBtn">Record advance</button>
+            </div>
+          </form>
+
+          <h3 class="advance-history-title">This month so far</h3>
+          <div id="advanceHistory" class="advance-history"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="slipModal" class="modal">
       <div class="modal-content slip-modal-content">
         <div class="modal-header">
@@ -138,7 +184,6 @@
       <p>&copy; 2025 GermanATO. All rights reserved.</p>
     </footer>
 
-    <script src="../static/js/notification-utils.js"></script>
     <script src="../static/js/auth_jwt.js"></script>
     <script src="../static/js/app-shell.js"></script>
     <script src="../static/js/api-helper.js"></script>

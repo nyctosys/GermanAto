@@ -1,12 +1,14 @@
 from flask import Blueprint, request, jsonify, send_from_directory, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Worker, User, AttendanceRecord, ZKTecoDevice
+from models import db, Worker, User, AttendanceRecord, ZKTecoDevice, SalaryAdvance
 from datetime import datetime, date, time, timedelta
 from sqlalchemy import func, and_
 from sqlalchemy.exc import IntegrityError
 from collections import defaultdict
 import logging
 from jwt_auth import login_required, role_required
+from period_lock import guard_period, body_date, record_date
+from log_utils import log_action
 
 # Create blueprint for HR routes
 hr_bp = Blueprint('hr', __name__)
@@ -643,7 +645,17 @@ def calculate_salary():
 
         # Salary = (base_salary / 30) * days_worked (proportional to days present)
         daily_rate = base_salary / 30.0 if base_salary else 0
-        net_salary = round(daily_rate * days_worked, 2)
+        earned_salary = round(daily_rate * days_worked, 2)
+
+        # Money already drawn this month against this salary. Paying the full
+        # earned amount now would hand it over twice.
+        advances = advances_for_month(worker_id, year, month)
+        advances_total = round(sum(float(a.amount) for a in advances), 2)
+        net_salary = round(earned_salary - advances_total, 2)
+
+        # Advances are capped at the monthly salary, but a worker who drew
+        # early and then missed days can still end up owing rather than owed.
+        overdrawn = net_salary < 0
 
         return jsonify({
             'worker_id': worker_id,
@@ -658,17 +670,159 @@ def calculate_salary():
             'days_worked': days_worked,
             'total_hours': round(total_hours, 2),
             'daily_rate': round(daily_rate, 2),
+            'earned_salary': earned_salary,
             'net_salary': net_salary,
-            'deductions': 0,
+            'deductions': advances_total,
+            'advances_total': advances_total,
+            'advances': [a.to_dict() for a in advances],
+            'overdrawn': overdrawn,
             'bonuses': 0,
             'incomplete_records_count': len(incomplete_records),
             'incomplete_dates': incomplete_dates,
             'requires_manual_review': requires_manual_review,
-            'review_notes': 'Incomplete attendance exists. Please review missing check-in/check-out entries before final payroll.' if requires_manual_review else None
+            'review_notes': 'Incomplete attendance exists. Please review missing check-in/check-out entries before final payroll.' if requires_manual_review else None,
+            'advance_notes': (
+                f'{worker.first_name} drew {advances_total:,.2f} in advances but only earned '
+                f'{earned_salary:,.2f} this month. Recover {abs(net_salary):,.2f} rather than paying it.'
+            ) if overdrawn else None
         })
     except Exception as e:
         logger.error(f"Error calculating salary: {e}", exc_info=True)
         return jsonify({'error': 'Failed to calculate salary'}), 500
+
+
+# ===== SALARY ADVANCES =====
+# Partial salary drawn during the month. Recorded against the worker only -
+# the expense is the full month's salary at payroll, and calculate_salary()
+# nets these off so the same rupee is never paid or booked twice.
+
+def _month_bounds(year, month):
+    start = date(year, month, 1)
+    end = (date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)) - timedelta(days=1)
+    return start, end
+
+
+def advances_for_month(worker_id, year, month):
+    """Every advance a worker drew in one month."""
+    start, end = _month_bounds(year, month)
+    return SalaryAdvance.query.filter(
+        SalaryAdvance.worker_id == worker_id,
+        SalaryAdvance.date >= start,
+        SalaryAdvance.date <= end,
+    ).order_by(SalaryAdvance.date).all()
+
+
+@hr_bp.route('/api/salary/advances', methods=['GET'])
+@role_required(['admin', 'accountant'])
+def list_salary_advances():
+    """Advances, optionally narrowed to one worker and one month."""
+    try:
+        worker_id = request.args.get('worker_id', type=int)
+        year = request.args.get('year', type=int)
+        month = request.args.get('month', type=int)
+
+        query = SalaryAdvance.query
+        if worker_id:
+            query = query.filter(SalaryAdvance.worker_id == worker_id)
+        if year and month:
+            start, end = _month_bounds(year, month)
+            query = query.filter(SalaryAdvance.date >= start, SalaryAdvance.date <= end)
+
+        rows = query.order_by(SalaryAdvance.date.desc(), SalaryAdvance.id.desc()).all()
+        return jsonify({
+            'advances': [r.to_dict() for r in rows],
+            'total': round(sum(float(r.amount) for r in rows), 2),
+            'count': len(rows),
+        }), 200
+    except Exception as e:
+        logger.error(f"Error listing salary advances: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load salary advances'}), 500
+
+
+@hr_bp.route('/api/salary/advances', methods=['POST'])
+@role_required(['admin', 'accountant'])
+@guard_period(body_date('date'))
+def create_salary_advance(current_user=None):
+    """Record a partial salary payment."""
+    try:
+        data = request.get_json() or {}
+
+        worker_id = data.get('worker_id')
+        if not worker_id:
+            return jsonify({'error': 'Choose a worker'}), 400
+
+        worker = Worker.query.get(worker_id)
+        if not worker:
+            return jsonify({'error': 'Worker not found'}), 404
+
+        try:
+            amount = round(float(data.get('amount')), 2)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Enter a valid amount'}), 400
+        if amount <= 0:
+            return jsonify({'error': 'An advance must be more than zero'}), 400
+
+        try:
+            when = datetime.strptime(data.get('date'), '%Y-%m-%d').date()
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Enter a valid date (YYYY-MM-DD)'}), 400
+
+        # A worker cannot draw more than a month's salary in that month -
+        # payroll would otherwise owe them nothing and still be short.
+        base = float(worker.salary) if worker.salary else 0.0
+        if base <= 0:
+            return jsonify({'error': f'{worker.first_name} has no monthly salary set, '
+                                     'so there is nothing to advance against'}), 400
+
+        already = sum(float(a.amount) for a in advances_for_month(worker.id, when.year, when.month))
+        if already + amount > base + 0.01:
+            remaining = round(base - already, 2)
+            return jsonify({
+                'error': f'That would take {worker.first_name} to '
+                         f'{already + amount:,.2f} against a monthly salary of {base:,.2f}. '
+                         f'At most {remaining:,.2f} can still be advanced this month.'
+            }), 400
+
+        advance = SalaryAdvance(
+            worker_id=worker.id,
+            date=when,
+            amount=amount,
+            payment_method=(data.get('payment_method') or 'Cash').strip(),
+            notes=(data.get('notes') or '').strip() or None,
+            created_by=getattr(current_user, 'username', None),
+        )
+        db.session.add(advance)
+        db.session.commit()
+
+        log_action('create', 'salary_advance', advance.id,
+                   f'Advance {amount} to {worker.employee_id} on {when}')
+        return jsonify({'message': 'Advance recorded', 'advance': advance.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error recording salary advance: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to record the advance'}), 500
+
+
+@hr_bp.route('/api/salary/advances/<int:advance_id>', methods=['DELETE'])
+@role_required(['admin', 'accountant'])
+@guard_period(record_date(SalaryAdvance, 'advance_id'))
+def delete_salary_advance(advance_id, current_user=None):
+    """Remove an advance - use this to correct a wrong amount, then re-add it."""
+    try:
+        advance = SalaryAdvance.query.get(advance_id)
+        if not advance:
+            return jsonify({'error': 'Advance not found'}), 404
+
+        summary = f'Advance {float(advance.amount)} on {advance.date}'
+        db.session.delete(advance)
+        db.session.commit()
+
+        log_action('delete', 'salary_advance', advance_id, summary)
+        return jsonify({'message': 'Advance removed'}), 200
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting salary advance: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to remove the advance'}), 500
 
 
 # ===== ZKTECO PUSH PROTOCOL (device sends data to server; no auth) =====

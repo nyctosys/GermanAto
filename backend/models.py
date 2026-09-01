@@ -544,6 +544,48 @@ class Worker(db.Model):
         }
 
 
+class SalaryAdvance(db.Model):
+    """Money paid to a worker part-way through the month, against that month's salary.
+
+    Deliberately not an Expense. The full month's salary is the expense when
+    payroll runs; recording the advance there too would count the same rupee
+    twice. It lives here, and calculate_salary() subtracts it - so what payroll
+    finally hands over is already net of what was taken early.
+
+    The month is taken from the advance's own date: money drawn on 5 September
+    reduces the September salary.
+    """
+    __tablename__ = 'salary_advances'
+
+    id = db.Column(db.Integer, primary_key=True)
+    worker_id = db.Column(db.Integer, db.ForeignKey('workers.id', ondelete='CASCADE'),
+                          nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    payment_method = db.Column(db.String(50), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.String(100), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    worker = db.relationship('Worker', backref=db.backref('salary_advances', lazy='dynamic',
+                                                          cascade='all, delete-orphan'))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'worker_id': self.worker_id,
+            'worker_name': f"{self.worker.first_name} {self.worker.last_name}" if self.worker else None,
+            'employee_id': self.worker.employee_id if self.worker else None,
+            'date': self.date.strftime('%Y-%m-%d'),
+            'amount': float(self.amount),
+            'payment_method': self.payment_method,
+            'notes': self.notes,
+            'created_by': self.created_by,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+        }
+
+
 # ===== ATTENDANCE MODEL =====
 
 class AttendanceRecord(db.Model):
