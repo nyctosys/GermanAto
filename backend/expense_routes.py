@@ -356,107 +356,159 @@ def get_expense_summary(current_user=None):
 @expense_routes.route('/expenses/monthly-ledger', methods=['GET'])
 @login_required
 def get_monthly_ledger(current_user=None):
-    """Get daily opening/closing balances and in/out ledger for a specific month"""
+    """Every rupee in and out over a period, with running balances.
+
+    This is the full picture on purpose - unlike the Daily Expenses till, it
+    counts parts, payroll, capital spending and invoice settlements too.
+
+    Accepts either ?month=YYYY-MM or an explicit ?start_date=&end_date= range.
+    """
     try:
         from models import CashReceived, Expense
         from datetime import date
         import calendar
-        
-        # Get target month, default to current month
-        month_param = request.args.get('month') # Format: YYYY-MM
-        if not month_param:
-            month_param = datetime.utcnow().strftime('%Y-%m')
-            
-        try:
-            year, month = map(int, month_param.split('-'))
-            start_date = date(year, month, 1)
-            # Find the last day of the month
-            _, last_day = calendar.monthrange(year, month)
-            end_date = date(year, month, last_day)
-        except ValueError:
-            return jsonify({'error': 'Invalid month format. Use YYYY-MM'}), 400
-            
-        # 1. Calculate opening balance prior to the start of this month
-        # Sum of all cash received prior to start_date
-        total_cash_prior = db.session.query(db.func.sum(CashReceived.amount)).filter(CashReceived.date < start_date).scalar() or 0.0
-        # Sum of all expenses prior to start_date
-        total_exp_prior = db.session.query(db.func.sum(Expense.amount)).filter(Expense.date < start_date).scalar() or 0.0
-        
-        initial_balance = float(total_cash_prior) - float(total_exp_prior)
-        
-        # 2. Get all cash received and expenses for the target month
-        cash_records = CashReceived.query.filter(CashReceived.date >= start_date, CashReceived.date <= end_date).all()
-        expense_records = Expense.query.filter(Expense.date >= start_date, Expense.date <= end_date).all()
-        
-        # Group records by date
-        cash_by_date = {}
+
+        def parse_day(value):
+            return datetime.strptime(value, '%Y-%m-%d').date()
+
+        start_param = request.args.get('start_date')
+        end_param = request.args.get('end_date')
+        month_param = request.args.get('month')
+
+        if start_param and end_param:
+            # Explicit range wins, so "last 90 days" and "this quarter" work.
+            try:
+                start_date = parse_day(start_param)
+                end_date = parse_day(end_param)
+            except ValueError:
+                return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+            if end_date < start_date:
+                return jsonify({'error': 'end_date is before start_date'}), 400
+            label = f"{start_date.isoformat()} to {end_date.isoformat()}"
+        else:
+            if not month_param:
+                month_param = datetime.utcnow().strftime('%Y-%m')
+            try:
+                year, month = map(int, month_param.split('-'))
+                start_date = date(year, month, 1)
+                end_date = date(year, month, calendar.monthrange(year, month)[1])
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid month format. Use YYYY-MM'}), 400
+            label = month_param
+
+        span_days = (end_date - start_date).days + 1
+        if span_days > 400:
+            return jsonify({'error': 'Range is too long. Choose 400 days or fewer.'}), 400
+
+        # Opening balance: everything that happened before this period.
+        cash_prior = db.session.query(db.func.sum(CashReceived.amount)).filter(
+            CashReceived.date < start_date).scalar() or 0.0
+        exp_prior = db.session.query(db.func.sum(Expense.amount)).filter(
+            Expense.date < start_date).scalar() or 0.0
+        initial_balance = float(cash_prior) - float(exp_prior)
+
+        cash_records = CashReceived.query.filter(
+            CashReceived.date >= start_date, CashReceived.date <= end_date).all()
+        expense_records = Expense.query.filter(
+            Expense.date >= start_date, Expense.date <= end_date).all()
+
+        cash_by_date, expenses_by_date = {}, {}
         for r in cash_records:
-            d_str = r.date.strftime('%Y-%m-%d')
-            cash_by_date.setdefault(d_str, []).append(r)
-            
-        expenses_by_date = {}
+            cash_by_date.setdefault(r.date.isoformat(), []).append(r)
         for r in expense_records:
-            d_str = r.date.strftime('%Y-%m-%d')
-            expenses_by_date.setdefault(d_str, []).append(r)
-            
-        # 3. Generate daily ledger entries
+            expenses_by_date.setdefault(r.date.isoformat(), []).append(r)
+
+        # Day-by-day balances across every day in the range, including quiet ones.
         daily_ledger = []
-        current_balance = initial_balance
-        
-        # Iterate through every day of the month
-        for day in range(1, last_day + 1):
-            cur_date = date(year, month, day)
-            d_str = cur_date.strftime('%Y-%m-%d')
-            
-            day_cash_list = cash_by_date.get(d_str, [])
-            day_exp_list = expenses_by_date.get(d_str, [])
-            
-            day_inflow = sum(float(r.amount) for r in day_cash_list)
-            day_outflow = sum(float(r.amount) for r in day_exp_list)
-            
-            opening_bal = current_balance
-            net_change = day_inflow - day_outflow
-            closing_bal = opening_bal + net_change
-            current_balance = closing_bal
-            
+        running = initial_balance
+        for offset in range(span_days):
+            cur = start_date + timedelta(days=offset)
+            key = cur.isoformat()
+            inflow = sum(float(r.amount) for r in cash_by_date.get(key, []))
+            outflow = sum(float(r.amount) for r in expenses_by_date.get(key, []))
+            opening = running
+            running = opening + inflow - outflow
             daily_ledger.append({
-                'date': d_str,
-                'opening_balance': round(opening_bal, 2),
-                'inflow': round(day_inflow, 2),
-                'outflow': round(day_outflow, 2),
-                'closing_balance': round(closing_bal, 2)
+                'date': key,
+                'opening_balance': round(opening, 2),
+                'inflow': round(inflow, 2),
+                'outflow': round(outflow, 2),
+                'entry_count': len(cash_by_date.get(key, [])) + len(expenses_by_date.get(key, [])),
+                'closing_balance': round(running, 2),
             })
-            
-        # 4. Detailed transactions list (sorted by date)
+
+        # Every individual movement, carrying its own running balance so a row
+        # can be read on its own without re-deriving the arithmetic.
         details = []
         for r in cash_records:
             details.append({
                 'id': f"in-{r.id}",
-                'date': r.date.strftime('%Y-%m-%d'),
+                'record_id': r.id,
+                'date': r.date.isoformat(),
                 'type': 'in',
                 'description': r.description,
                 'amount': float(r.amount),
-                'payment_method': r.payment_method,
-                'notes': r.notes or ""
+                'bucket': r.payment_method or 'Unspecified',
+                'invoice_id': getattr(r, 'invoice_id', None),
+                'notes': r.notes or '',
             })
         for r in expense_records:
             details.append({
                 'id': f"out-{r.id}",
-                'date': r.date.strftime('%Y-%m-%d'),
+                'record_id': r.id,
+                'date': r.date.isoformat(),
                 'type': 'out',
                 'description': r.description,
                 'amount': float(r.amount),
-                'category': r.category,
-                'notes': r.notes or ""
+                'bucket': r.category or 'Uncategorised',
+                'invoice_id': None,
+                'notes': r.notes or '',
             })
-        details.sort(key=lambda x: (x['date'], x['type'] == 'out'))
-        
+        details.sort(key=lambda x: (x['date'], x['type'] == 'out', x['id']))
+
+        running = initial_balance
+        for d in details:
+            running += d['amount'] if d['type'] == 'in' else -d['amount']
+            d['balance'] = round(running, 2)
+
+        # Where the money actually went, biggest first.
+        def breakdown(rows, kind):
+            totals = {}
+            for d in rows:
+                if d['type'] != kind:
+                    continue
+                b = totals.setdefault(d['bucket'], {'bucket': d['bucket'], 'total': 0.0, 'count': 0})
+                b['total'] += d['amount']
+                b['count'] += 1
+            out = sorted(totals.values(), key=lambda x: x['total'], reverse=True)
+            for b in out:
+                b['total'] = round(b['total'], 2)
+            return out
+
+        total_in = round(sum(float(r.amount) for r in cash_records), 2)
+        total_out = round(sum(float(r.amount) for r in expense_records), 2)
+        settled = [d for d in details if d['type'] == 'in' and d['invoice_id']]
+
         return jsonify({
-            'month': month_param,
+            'month': label,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'days': span_days,
             'initial_balance': round(initial_balance, 2),
+            'total_in': total_in,
+            'total_out': total_out,
+            'net_change': round(total_in - total_out, 2),
+            'closing_balance': round(initial_balance + total_in - total_out, 2),
+            'entry_count': len(details),
+            'invoice_settlements': {
+                'count': len(settled),
+                'total': round(sum(d['amount'] for d in settled), 2),
+            },
+            'expense_breakdown': breakdown(details, 'out'),
+            'income_breakdown': breakdown(details, 'in'),
             'daily_ledger': daily_ledger,
-            'details': details
+            'details': details,
         }), 200
     except Exception as e:
         logger.error(f"Error generating monthly ledger: {e}")
-        return jsonify({'error': 'Failed to generate monthly ledger'}), 500 
+        return jsonify({'error': 'Failed to generate monthly ledger'}), 500

@@ -54,21 +54,6 @@ function initializeDailyExpenses() {
   updateSummary();
 }
 
-/**
- * The monthly ledger has its own page. Set it up independently so it does not
- * depend on the Daily Expenses bootstrap, whose elements are absent there.
- */
-function initializeMonthlyLedger() {
-  const monthSelect = document.getElementById("ledger-month-select");
-  if (!monthSelect) return;
-
-  if (!monthSelect.value) {
-    monthSelect.value = new Date().toISOString().split("T")[0].substring(0, 7);
-  }
-  monthSelect.addEventListener("change", () => loadMonthlyLedger());
-  loadMonthlyLedger();
-}
-
 function setupEventListeners() {
   // Form submission
   document
@@ -140,9 +125,6 @@ async function loadExpenses() {
     if (expenses) {
       displayExpenses(expenses);
       updateSummary(expenses);
-      if (typeof loadMonthlyLedger === "function") {
-        loadMonthlyLedger();
-      }
     } else {
       showToast("Error loading expenses", "error");
     }
@@ -604,9 +586,6 @@ async function loadCashReceived() {
     if (cashRecords) {
       displayCashReceived(cashRecords);
       updateCashSummary(cashRecords);
-      if (typeof loadMonthlyLedger === "function") {
-        loadMonthlyLedger();
-      }
     } else {
       showToast("Error loading cash received records", "error");
     }
@@ -936,105 +915,4 @@ document.addEventListener("DOMContentLoaded", function () {
     loadUnpaidInvoicesForCashForm();
     setupCashInvoiceHint();
   }
-  initializeMonthlyLedger();
 });
-
-// Monthly Ledger Functionality
-let currentLedgerData = null;
-
-async function loadMonthlyLedger() {
-  const monthInput = document.getElementById("ledger-month-select");
-  // The ledger lives on its own page now; on Daily Expenses there is nothing to fill.
-  if (!monthInput) return;
-  if (!monthInput) return;
-  const month = monthInput.value;
-  if (!month) return;
-
-  try {
-    const data = await APIHelper.get(`/api/expenses/monthly-ledger?month=${month}`);
-    currentLedgerData = data;
-
-    // Update Overview Cards
-    document.getElementById("ledger-opening-balance").textContent = `PKR ${formatCurrency(data.initial_balance)}`;
-    
-    const totalIn = data.daily_ledger.reduce((acc, curr) => acc + curr.inflow, 0);
-    const totalOut = data.daily_ledger.reduce((acc, curr) => acc + curr.outflow, 0);
-    const closingBalance = data.daily_ledger.length > 0 ? data.daily_ledger[data.daily_ledger.length - 1].closing_balance : data.initial_balance;
-
-    document.getElementById("ledger-total-in").textContent = `PKR ${formatCurrency(totalIn)}`;
-    document.getElementById("ledger-total-out").textContent = `PKR ${formatCurrency(totalOut)}`;
-    document.getElementById("ledger-closing-balance").textContent = `PKR ${formatCurrency(closingBalance)}`;
-
-    // Render Daily Rolling Balance Ledger Table
-    const tbody = document.getElementById("daily-ledger-tbody");
-    tbody.innerHTML = "";
-
-    if (!data.daily_ledger || data.daily_ledger.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No daily records found.</td></tr>`;
-      return;
-    }
-
-    data.daily_ledger.forEach(row => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><strong>${row.date}</strong></td>
-        <td>PKR ${formatCurrency(row.opening_balance)}</td>
-        <td style="color: #2c7a7b; font-weight: 500;">+ PKR ${formatCurrency(row.inflow)}</td>
-        <td style="color: #c53030; font-weight: 500;">- PKR ${formatCurrency(row.outflow)}</td>
-        <td style="font-weight: bold; color: #44337a;">PKR ${formatCurrency(row.closing_balance)}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-
-  } catch (error) {
-    console.error("Error loading monthly ledger:", error);
-    showToast("Error loading monthly ledger", "error");
-  }
-}
-
-function formatCurrency(amount) {
-  return parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function exportMonthlyLedger() {
-  if (!currentLedgerData) {
-    showToast("No ledger data available to export.", "error");
-    return;
-  }
-
-  try {
-    const wb = XLSX.utils.book_new();
-
-    // 1. Prepare Daily Statement Sheet
-    const dailyRows = currentLedgerData.daily_ledger.map(row => ({
-      "Date": row.date,
-      "Opening Balance (PKR)": row.opening_balance,
-      "Cash Inflow (PKR)": row.inflow,
-      "Expenses Outflow (PKR)": row.outflow,
-      "Closing Balance (PKR)": row.closing_balance
-    }));
-    const wsDaily = XLSX.utils.json_to_sheet(dailyRows);
-    XLSX.utils.book_append_sheet(wb, wsDaily, "Daily Balances Statement");
-
-    // 2. Prepare Detailed Ledger Sheet
-    const detailedRows = currentLedgerData.details.map(t => ({
-      "Date": t.date,
-      "Type": t.type === 'in' ? "Cash Inflow" : "Expense Outflow",
-      "Description": t.description,
-      "Category/Payment Method": t.type === 'in' ? t.payment_method : t.category,
-      "Amount (PKR)": t.amount,
-      "Notes": t.notes
-    }));
-    const wsDetailed = XLSX.utils.json_to_sheet(detailedRows);
-    XLSX.utils.book_append_sheet(wb, wsDetailed, "Detailed Transactions");
-
-    // Write file
-    const monthName = currentLedgerData.month;
-    XLSX.writeFile(wb, `GermanATO_Ledger_${monthName}.xlsx`);
-    showToast("Ledger exported successfully!", "success");
-    
-  } catch (error) {
-    console.error("Error exporting ledger:", error);
-    showToast("Failed to export ledger to Excel.", "error");
-  }
-}
