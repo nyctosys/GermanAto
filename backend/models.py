@@ -101,6 +101,16 @@ class Invoice(db.Model):
     customer_vin = db.Column(db.String(17), nullable=True)  # VIN can be up to 17 characters
     customer_color = db.Column(db.String(50), nullable=True)  # Car color
     customer_chasis = db.Column(db.String(50), nullable=True)  # Chassis number
+    # A document is a historical record: the customer_* text above is what was
+    # true the day it was written, and must never be rewritten from the
+    # customer's current details. These links say *who* it was for, so
+    # selecting a customer can find their documents and their cars without
+    # matching on names that get retyped, misspelled and reformatted.
+    # SET NULL, not CASCADE: deleting a customer must not delete their history.
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id', ondelete='SET NULL'),
+                            nullable=True, index=True)
+    car_id = db.Column(db.Integer, db.ForeignKey('car.id', ondelete='SET NULL'),
+                       nullable=True, index=True)
     balance = db.Column(db.Float, nullable=False)
     advance = db.Column(db.Float, nullable=False)
     net_total = db.Column(db.Float, nullable=False)
@@ -222,6 +232,16 @@ class RepairOrder(db.Model):
     current_status = db.Column(db.String(20), default='received', nullable=False)
     status_timeline = db.Column(db.Text, nullable=True)  # JSON string for timeline
     vehicle_condition = db.Column(db.Text, nullable=True)  # JSON string for vehicle condition
+    # A document is a historical record: the customer_* text above is what was
+    # true the day it was written, and must never be rewritten from the
+    # customer's current details. These links say *who* it was for, so
+    # selecting a customer can find their documents and their cars without
+    # matching on names that get retyped, misspelled and reformatted.
+    # SET NULL, not CASCADE: deleting a customer must not delete their history.
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id', ondelete='SET NULL'),
+                            nullable=True, index=True)
+    car_id = db.Column(db.Integer, db.ForeignKey('car.id', ondelete='SET NULL'),
+                       nullable=True, index=True)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

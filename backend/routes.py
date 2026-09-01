@@ -18,6 +18,7 @@ from invoice_math import (
     invoice_amount_remaining,
     calculate_invoice_status,
 )
+from document_links import apply_links
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -223,7 +224,11 @@ def create_invoice(current_user=None):
                 created_by_user=current_user.username if current_user else None
             )
             invoice.status = calculate_invoice_status(invoice)
-            
+
+            # Link the document to the customer and car it was written for, and
+            # claim the car for that customer if it had no owner yet.
+            apply_links(invoice, data)
+
             db.session.add(invoice)
             db.session.flush()  # Get the ID without committing
             
@@ -357,6 +362,8 @@ def get_invoice(invoice_id, current_user=None):
             "customer_vin": invoice.customer_vin,
             "customer_color": invoice.customer_color or "",
             "customer_chasis": invoice.customer_chasis or "",
+            "customer_id": invoice.customer_id,
+            "car_id": invoice.car_id,
             "created_at": invoice.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "balance": float(invoice.balance),
             "advance": float(invoice.advance),
@@ -487,6 +494,10 @@ def update_invoice(invoice_id):
                 invoice.customer_color = str(data['customer_color']).strip() if data['customer_color'] else None
             if 'customer_chasis' in data:
                 invoice.customer_chasis = str(data['customer_chasis']).strip() if data['customer_chasis'] else None
+            # Re-link on every save: an edit can move an invoice to a
+            # different customer or car, and a car added mid-edit needs claiming.
+            apply_links(invoice, data)
+
             if 'type_of' in data:
                 invoice.type_of = str(data['type_of']).strip().lower()
             if 'advance' in data:

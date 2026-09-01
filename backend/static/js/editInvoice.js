@@ -121,13 +121,27 @@ async function loadInvoiceForEdit(invoiceId) {
     // Wait for customers and cars to be loaded
     await waitForData();
 
+    // The invoice's own text is what it recorded, so paint it first and
+    // unconditionally. Before this, an invoice naming a customer with no
+    // record fell through every match below and opened with the customer and
+    // vehicle boxes empty - which read as "the edit did not save".
+    fillDocumentFields(data);
+
     // Find and select the customer based on name and phone
     const customerSelect = document.getElementById("customer-select");
 
+    // The stored link is what the user actually picked; the name and phone
+    // matching below is only for invoices written before that link existed.
+    let customer = data.customer_id
+      ? state.customers?.find((c) => c.id === data.customer_id)
+      : null;
+
     // Try exact match first (name AND phone)
-    let customer = state.customers?.find(
-      (c) => c.name === data.customer_name && c.phone === data.customer_phone
-    );
+    if (!customer) {
+      customer = state.customers?.find(
+        (c) => c.name === data.customer_name && c.phone === data.customer_phone
+      );
+    }
     // Fallback: match by phone only
     if (!customer && data.customer_phone) {
       customer = state.customers?.find((c) => c.phone === data.customer_phone);
@@ -145,26 +159,22 @@ async function loadInvoiceForEdit(invoiceId) {
       // Wait for car dropdown to be populated with customer's cars
       setTimeout(() => {
         const carSelect = document.getElementById("car-select");
-        // Find car by plate number, but only from the selected customer's cars
-        const car = state.cars?.find(
-          (c) => c.plate_no === data.customer_reg_no && c.customer_id === customer.id
-        );
+        const car =
+          (data.car_id && state.cars?.find((c) => c.id === data.car_id)) ||
+          state.cars?.find(
+            (c) => c.plate_no === data.customer_reg_no && c.customer_id === customer.id
+          );
 
         if (car) {
           const carDisplayText = `${car.make} ${car.model} - ${car.plate_no}`;
           carSelect.value = carDisplayText;
           handleCarChange(car.id);
-        } else if (data.customer_reg_no) {
-          // If car not found for this customer, still populate the fields manually
-          // This handles cases where the car might have been reassigned or deleted
-          document.getElementById("customer_reg").value = data.customer_reg_no || "";
-          document.getElementById("customer_made").value = data.customer_made || "";
-          document.getElementById("customer_mileage").value = data.customer_mileage || "";
-          document.getElementById("customer_vin").value = data.customer_vin || "";
-          document.getElementById("customer_color").value = data.customer_color || "";
-          document.getElementById("customer_chasis").value = data.customer_chasis || "";
-          document.getElementById("car-details").style.display = "block";
+          // handleCarChange paints the car's *current* details over the form.
+          // This invoice recorded a mileage, and possibly an address, that were
+          // true on the day it was written - put them back.
+          fillDocumentFields(data);
         }
+        document.getElementById("car-details").style.display = "block";
       }, 100);
     }
 
@@ -299,6 +309,30 @@ function waitForData() {
     };
     checkData();
   });
+}
+
+/**
+ * Paint the document's own stored values into the form.
+ *
+ * An invoice is a historical record: its mileage, address and vehicle details
+ * are what were true the day it was written, not what the customer and car
+ * records say today. Selecting a customer or car overwrites those boxes with
+ * current details, so this puts the document's own values back.
+ */
+function fillDocumentFields(data) {
+  const set = (id, value) => {
+    const field = document.getElementById(id);
+    if (field) field.value = value || "";
+  };
+  set("customer_name", data.customer_name);
+  set("customer_address", data.customer_address);
+  set("customer_phone", data.customer_phone);
+  set("customer_reg", data.customer_reg_no);
+  set("customer_made", data.customer_made);
+  set("customer_mileage", data.customer_mileage);
+  set("customer_vin", data.customer_vin);
+  set("customer_color", data.customer_color);
+  set("customer_chasis", data.customer_chasis);
 }
 
 // Function to prepare Update Button

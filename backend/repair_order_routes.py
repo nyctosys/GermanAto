@@ -7,6 +7,7 @@ import json
 from repair_order_inventory_utils import process_repair_order_parts, handle_repair_order_edit_inventory, restore_inventory_for_deleted_repair_order
 from jwt_auth import login_required, role_required, admin_required, get_current_user
 from search_suggestions import suggestions_for
+from document_links import apply_links
 from log_utils import log_action
 
 repair_order_bp = Blueprint('repair_order', __name__)
@@ -76,6 +77,8 @@ def get_repair_orders(current_user=None):
                 'customer_vin': ro.customer_vin,
                 'customer_color': ro.customer_color,
                 'customer_chasis': ro.customer_chasis,
+                'customer_id': ro.customer_id,
+                'car_id': ro.car_id,
                 'problem_description': ro.problem_description,
                 'diagnosis_plan': ro.diagnosis_plan,
                 'worker_id': ro.worker_id,
@@ -152,6 +155,8 @@ def get_repair_order(repair_order_id, current_user=None):
             'customer_vin': repair_order.customer_vin,
             'customer_color': repair_order.customer_color,
             'customer_chasis': repair_order.customer_chasis,
+            'customer_id': repair_order.customer_id,
+            'car_id': repair_order.car_id,
             'problem_description': repair_order.problem_description,
             'diagnosis_plan': repair_order.diagnosis_plan,
             'worker_id': repair_order.worker_id,
@@ -256,6 +261,10 @@ def create_repair_order(current_user=None):
             workers_json=json.dumps(workers_list) if workers_list else None
         )
         
+        # Link to the customer and car this order was written for, and claim
+        # the car for that customer if it had no owner yet.
+        apply_links(repair_order, data)
+
         db.session.add(repair_order)
         db.session.flush()  # Get the ID
         
@@ -397,6 +406,10 @@ def update_repair_order(repair_order_id, current_user=None):
             repair_order.customer_color = data['customer_color']
         if 'customer_chasis' in data and data['customer_chasis'] is not None:
             repair_order.customer_chasis = data['customer_chasis']
+        # Re-link on every save: an edit can move the order to another
+        # customer or car, and a car added mid-edit needs claiming.
+        apply_links(repair_order, data)
+
         if 'problem_description' in data:
             repair_order.problem_description = data['problem_description']
             

@@ -1056,8 +1056,22 @@ export function closeCarModal() {
 export async function handleCarSubmit(e) {
   e.preventDefault();
 
+  // A car saved with no owner is invisible from the customer forever - 29 of
+  // them had accumulated that way. The owner is the one field worth insisting
+  // on, so refuse rather than quietly orphan another.
+  const ownerId = parseInt(document.getElementById("modal-car-customer").value) || null;
+  if (!ownerId) {
+    const message =
+      "Choose which customer this car belongs to. Without it the car will not " +
+      "appear when you pick that customer later.";
+    if (typeof showNotification === "function") showNotification(message, "error");
+    else alert(message);
+    document.getElementById("modal-car-customer").focus();
+    return;
+  }
+
   const carData = {
-    customer_id: parseInt(document.getElementById("modal-car-customer").value) || null,
+    customer_id: ownerId,
     make: document.getElementById("modal-car-make").value.trim(),
     model: document.getElementById("modal-car-model").value.trim(),
     plate_no: document.getElementById("modal-car-plate").value.trim(),
@@ -1228,6 +1242,11 @@ export function collectFormData() {
   );
 
   return {
+    // The ids the user actually picked. The customer_* text below stays as the
+    // document's own record of the day; these say who it was for, so a later
+    // "show me this customer's cars" does not have to match on a retyped name.
+    customer_id: state.selectedCustomerId || null,
+    car_id: state.selectedCarId || null,
     customer_name: customerName,
     customer_address: customerAddress,
     customer_phone: customerPhone,

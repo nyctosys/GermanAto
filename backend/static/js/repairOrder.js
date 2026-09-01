@@ -502,6 +502,10 @@ document.addEventListener("DOMContentLoaded", function () {
     // Collect form data
     const formData = new FormData(form);
     const repairOrderData = {
+      // Who this order is for. The customer_* text below is the order's own
+      // record; these ids are the link back to the customer and their car.
+      customer_id: selectedCustomerId || null,
+      car_id: selectedCarId || null,
       customer_name: formData.get("customer_name"),
       customer_phone: formData.get("customer_phone"),
       customer_address: formData.get("customer_address"),
