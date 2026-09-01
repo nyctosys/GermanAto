@@ -686,7 +686,13 @@ function exportLedgerToExcel() {
       "Added By"
     ];
 
-    const rows = ledgerEntries.map(entry => [
+    // The screen lists newest first, which is right for reading "what just
+    // happened". A statement is read the other way - opening balance at the
+    // top, working down - and the stored running balance only makes sense in
+    // that direction. Copy before reversing so the table on screen is untouched.
+    const chronological = [...ledgerEntries].reverse();
+
+    const rows = chronological.map(entry => [
       entry.created_at || entry.date,
       entry.description,
       entry.folio || "N/A",
