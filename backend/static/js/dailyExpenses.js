@@ -508,61 +508,8 @@ function shouldDisableCashEditButton(cashRecord) {
  * Recording the receipt against the invoice is what stops the payment having to
  * be keyed a second time through Update Balance.
  */
-async function loadUnpaidInvoicesForCashForm() {
-  const select = document.getElementById("cash-invoice");
-  const hint = document.getElementById("cash-invoice-hint");
-  if (!select) return;
-
-  try {
-    const data = await APIHelper.get("/api/search?type=invoice");
-    const owing = (data.invoices || []).filter((i) => (i.balance || 0) > 0.005);
-
-    select.innerHTML =
-      '<option value="">Not against an invoice</option>' +
-      owing
-        .map(
-          (i) =>
-            `<option value="${i.id}" data-owed="${i.balance}">#${i.id} — ${APIHelper.escapeHtml(
-              i.customer_name || ""
-            )} — ${Number(i.balance).toLocaleString("en-PK")} PKR owing</option>`
-        )
-        .join("");
-
-    if (hint) {
-      hint.textContent = owing.length
-        ? `${owing.length} invoice${owing.length === 1 ? "" : "s"} still owing.`
-        : "No invoices are currently owing.";
-    }
-  } catch (error) {
-    console.error("Could not load invoices for the cash form:", error);
-    if (hint) hint.textContent = "Could not load invoices — you can still record the cash without linking it.";
-  }
-}
 
 /** Warn before submitting if the amount does not match what is owed. */
-function setupCashInvoiceHint() {
-  const select = document.getElementById("cash-invoice");
-  const amount = document.getElementById("cash-amount");
-  const hint = document.getElementById("cash-invoice-hint");
-  if (!select || !amount || !hint) return;
-
-  const check = () => {
-    const opt = select.selectedOptions[0];
-    const owed = opt && opt.dataset.owed ? parseFloat(opt.dataset.owed) : null;
-    const paid = parseFloat(amount.value);
-    if (owed === null || isNaN(paid) || paid <= 0) return;
-    if (paid > owed + 0.005) {
-      hint.textContent = `That is more than the ${owed.toLocaleString("en-PK")} PKR owing on this invoice.`;
-    } else if (paid < owed - 0.005) {
-      hint.textContent = `Part payment — ${(owed - paid).toLocaleString("en-PK")} PKR will remain owing.`;
-    } else {
-      hint.textContent = "Settles this invoice in full.";
-    }
-  };
-
-  select.addEventListener("change", check);
-  amount.addEventListener("input", check);
-}
 
 async function loadCashReceived() {
   try {
@@ -704,7 +651,9 @@ async function handleAddCashReceived(event) {
     amount: parseFloat(formData.get("amount")),
     payment_method: formData.get("payment_method"),
     notes: formData.get("notes") || "",
-    invoice_id: formData.get("invoice_id") || null,
+    // No invoice_id: this page is the till. A receipt that settles an invoice
+    // is recorded on the invoice, and the till filters those rows out - so a
+    // linked receipt entered here would vanish the moment it was saved.
   };
 
   try {
@@ -714,7 +663,6 @@ async function handleAddCashReceived(event) {
       showToast("Cash received added successfully", "success");
       clearCashForm();
       loadCashReceived();
-      loadUnpaidInvoicesForCashForm();
     } else {
       showToast("Error adding cash received", "error");
     }
@@ -912,7 +860,5 @@ document.addEventListener("DOMContentLoaded", function () {
   if (document.getElementById("expense-form")) {
     initializeDailyExpenses();
     initializeCashReceived();
-    loadUnpaidInvoicesForCashForm();
-    setupCashInvoiceHint();
   }
 });
