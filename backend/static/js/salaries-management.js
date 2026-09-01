@@ -486,3 +486,152 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target === modal) closeAdvanceModal();
   });
 });
+
+// ===== PAYROLL =====
+// Booking a month of wages into the books. The preview writes nothing, so it
+// is safe to open and read; only "Run payroll" commits, and the server refuses
+// to pay anyone twice for the same month.
+
+let payrollData = null;
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const payrollMoney = (v) =>
+  Number(v || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function openPayrollModal() {
+  const modal = document.getElementById("payrollModal");
+  if (!modal) return;
+
+  const now = new Date();
+  // Payroll is normally run for the month that just ended.
+  const previous = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const monthSelect = document.getElementById("payrollMonth");
+  monthSelect.innerHTML = MONTHS.map(
+    (m, i) => `<option value="${i + 1}">${m}</option>`
+  ).join("");
+  monthSelect.value = previous.getMonth() + 1;
+  document.getElementById("payrollYear").value = previous.getFullYear();
+  document.getElementById("payrollPayDate").value = now.toISOString().split("T")[0];
+
+  modal.classList.add("active");
+  loadPayrollPreview();
+}
+
+function closePayrollModal() {
+  const modal = document.getElementById("payrollModal");
+  if (modal) modal.classList.remove("active");
+  payrollData = null;
+}
+
+async function loadPayrollPreview() {
+  const year = document.getElementById("payrollYear").value;
+  const month = document.getElementById("payrollMonth").value;
+  const body = document.getElementById("payrollTableBody");
+  const runBtn = document.getElementById("runPayrollBtn");
+
+  runBtn.disabled = true;
+  body.innerHTML = `<tr><td colspan="6" class="empty-row">Working it out…</td></tr>`;
+
+  try {
+    const data = await APIHelper.get(
+      `/api/salary/payroll/preview?year=${year}&month=${month}`
+    );
+    if (!data) return;
+    payrollData = data;
+    renderPayrollPreview();
+  } catch (error) {
+    console.error("Error loading payroll preview:", error);
+    body.innerHTML = `<tr><td colspan="6" class="empty-row">Could not build the preview.</td></tr>`;
+  }
+}
+
+function renderPayrollPreview() {
+  const d = payrollData;
+  const body = document.getElementById("payrollTableBody");
+  const runBtn = document.getElementById("runPayrollBtn");
+
+  document.getElementById("payrollSummary").innerHTML = `
+    <div class="psum"><span>Workers to pay</span><b>${d.payable_count}</b></div>
+    <div class="psum"><span>Will be booked</span><b>PKR ${payrollMoney(d.total_earned)}</b></div>
+    <div class="psum"><span>Already drawn</span><b>PKR ${payrollMoney(d.total_advances)}</b></div>
+    <div class="psum psum--hand"><span>To hand over</span><b>PKR ${payrollMoney(d.total_to_hand_over)}</b></div>`;
+
+  body.innerHTML = d.workers.length
+    ? d.workers
+        .map(
+          (w) => `<tr class="${w.blocked ? "payroll-blocked" : ""}">
+            <td>${escapeHtml(w.name)}<span class="emp-id">${escapeHtml(w.employee_id || "")}</span></td>
+            <td class="num">${w.days_worked}</td>
+            <td class="num">${payrollMoney(w.earned_salary)}</td>
+            <td class="num">${w.advances_total ? payrollMoney(w.advances_total) : "—"}</td>
+            <td class="num ${w.overdrawn ? "amt-negative" : ""}">${payrollMoney(w.net_salary)}</td>
+            <td>${
+              w.blocked
+                ? `<span class="pill pill--blocked">${escapeHtml(w.blocked)}</span>`
+                : `<span class="pill pill--ready">Ready</span>`
+            }</td>
+          </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="6" class="empty-row">No active workers.</td></tr>`;
+
+  runBtn.disabled = d.payable_count === 0;
+  runBtn.textContent = d.payable_count
+    ? `Run payroll for ${d.payable_count} worker${d.payable_count === 1 ? "" : "s"}`
+    : "Nothing to pay";
+}
+
+async function runPayroll() {
+  if (!payrollData || !payrollData.payable_count) return;
+
+  const d = payrollData;
+  const monthName = MONTHS[d.month - 1];
+  const confirmed = confirm(
+    `Book PKR ${payrollMoney(d.total_earned)} of wages for ${monthName} ${d.year}, ` +
+      `covering ${d.payable_count} worker(s)?\n\n` +
+      `PKR ${payrollMoney(d.total_to_hand_over)} is what you hand over — the rest ` +
+      `was already drawn as advances.\n\nThis cannot be undone from here.`
+  );
+  if (!confirmed) return;
+
+  const btn = document.getElementById("runPayrollBtn");
+  btn.disabled = true;
+
+  try {
+    const res = await APIHelper.post("/api/salary/payroll/run", {
+      year: d.year,
+      month: d.month,
+      pay_date: document.getElementById("payrollPayDate").value,
+    });
+    if (res) {
+      showSuccess(
+        `Payroll booked: PKR ${payrollMoney(res.total_expensed)} across ${res.posted.length} worker(s)`
+      );
+      loadPayrollPreview();
+    }
+  } catch (error) {
+    showError(error?.message || "Could not run payroll");
+    btn.disabled = false;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const openBtn = document.getElementById("openPayrollBtn");
+  if (!openBtn) return;
+
+  openBtn.addEventListener("click", openPayrollModal);
+  document.getElementById("closePayrollModal").addEventListener("click", closePayrollModal);
+  document.getElementById("cancelPayrollBtn").addEventListener("click", closePayrollModal);
+  document.getElementById("runPayrollBtn").addEventListener("click", runPayroll);
+  ["payrollMonth", "payrollYear"].forEach((id) =>
+    document.getElementById(id).addEventListener("change", loadPayrollPreview)
+  );
+  document.getElementById("payrollModal").addEventListener("click", (e) => {
+    if (e.target.id === "payrollModal") closePayrollModal();
+  });
+});

@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, send_from_directory, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Worker, User, AttendanceRecord, ZKTecoDevice, SalaryAdvance
+from models import db, Worker, User, AttendanceRecord, ZKTecoDevice, SalaryAdvance, PayrollRun
 from datetime import datetime, date, time, timedelta
 from sqlalchemy import func, and_
 from sqlalchemy.exc import IntegrityError
@@ -9,6 +9,7 @@ import logging
 from jwt_auth import login_required, role_required
 from period_lock import guard_period, body_date, record_date
 from log_utils import log_action
+import payroll
 
 # Create blueprint for HR routes
 hr_bp = Blueprint('hr', __name__)
@@ -604,7 +605,12 @@ def get_attendance_summary():
 @hr_bp.route('/api/salary/calculate', methods=['GET'])
 @role_required(['admin', 'accountant', 'inventory_manager'])
 def calculate_salary():
-    """Calculate salary for a worker for a given month based on attendance. Returns net_salary, days_worked, total_hours."""
+    """One worker's salary for one month, for the slip.
+
+    Delegates to payroll.compute_salary so the figure on the slip and the
+    figure payroll books are the same number, not two implementations that
+    agree today.
+    """
     try:
         worker_id = request.args.get('worker_id', type=int)
         month = request.args.get('month', type=int)
@@ -616,100 +622,43 @@ def calculate_salary():
         if not worker:
             return jsonify({'error': 'Worker not found'}), 404
 
-        base_salary = float(worker.salary) if worker.salary else 0
-
-        start_date = date(year, month, 1)
-        if month == 12:
-            end_date = date(year + 1, 1, 1) - timedelta(days=1)
-        else:
-            end_date = date(year, month + 1, 1) - timedelta(days=1)
-
-        records = AttendanceRecord.query.filter(
-            and_(
-                AttendanceRecord.worker_id == worker_id,
-                AttendanceRecord.date >= start_date,
-                AttendanceRecord.date <= end_date)
-        ).all()
-
-        days_worked = len(set(r.date for r in records))
-        total_hours = sum(r.work_hours or 0 for r in records)
-        incomplete_records = [
-            r for r in records
-            if (
-                (r.check_in_time is not None and r.check_out_time is None) or
-                (r.check_in_time is None and r.check_out_time is not None)
-            )
-        ]
-        incomplete_dates = sorted({r.date.strftime('%Y-%m-%d') for r in incomplete_records})
-        requires_manual_review = len(incomplete_records) > 0
-
-        # Salary = (base_salary / 30) * days_worked (proportional to days present)
-        daily_rate = base_salary / 30.0 if base_salary else 0
-        earned_salary = round(daily_rate * days_worked, 2)
-
-        # Money already drawn this month against this salary. Paying the full
-        # earned amount now would hand it over twice.
-        advances = advances_for_month(worker_id, year, month)
-        advances_total = round(sum(float(a.amount) for a in advances), 2)
-        net_salary = round(earned_salary - advances_total, 2)
-
-        # Advances are capped at the monthly salary, but a worker who drew
-        # early and then missed days can still end up owing rather than owed.
-        overdrawn = net_salary < 0
+        figures = payroll.compute_salary(worker, year, month)
+        run = payroll.already_run(worker_id, year, month)
 
         return jsonify({
-            'worker_id': worker_id,
-            'employee_id': worker.employee_id,
+            **figures,
             'first_name': worker.first_name,
             'last_name': worker.last_name,
-            'position': worker.position,
-            'department': worker.department,
             'month': month,
             'year': year,
-            'base_salary': base_salary,
-            'days_worked': days_worked,
-            'total_hours': round(total_hours, 2),
-            'daily_rate': round(daily_rate, 2),
-            'earned_salary': earned_salary,
-            'net_salary': net_salary,
-            'deductions': advances_total,
-            'advances_total': advances_total,
-            'advances': [a.to_dict() for a in advances],
-            'overdrawn': overdrawn,
+            # The slip calls advances deductions, because that is what they are
+            # from the worker's side.
+            'deductions': figures['advances_total'],
             'bonuses': 0,
-            'incomplete_records_count': len(incomplete_records),
-            'incomplete_dates': incomplete_dates,
-            'requires_manual_review': requires_manual_review,
-            'review_notes': 'Incomplete attendance exists. Please review missing check-in/check-out entries before final payroll.' if requires_manual_review else None,
+            'already_paid': bool(run),
+            'paid_on': run.run_at.strftime('%Y-%m-%d') if run and run.run_at else None,
+            'review_notes': (
+                'Incomplete attendance exists. Please review missing '
+                'check-in/check-out entries before final payroll.'
+            ) if figures['requires_manual_review'] else None,
             'advance_notes': (
-                f'{worker.first_name} drew {advances_total:,.2f} in advances but only earned '
-                f'{earned_salary:,.2f} this month. Recover {abs(net_salary):,.2f} rather than paying it.'
-            ) if overdrawn else None
+                f"{worker.first_name} drew {figures['advances_total']:,.2f} in advances "
+                f"but only earned {figures['earned_salary']:,.2f} this month. "
+                f"Recover {abs(figures['net_salary']):,.2f} rather than paying it."
+            ) if figures['overdrawn'] else None,
         })
     except Exception as e:
         logger.error(f"Error calculating salary: {e}", exc_info=True)
         return jsonify({'error': 'Failed to calculate salary'}), 500
-
 
 # ===== SALARY ADVANCES =====
 # Partial salary drawn during the month. Recorded against the worker only -
 # the expense is the full month's salary at payroll, and calculate_salary()
 # nets these off so the same rupee is never paid or booked twice.
 
-def _month_bounds(year, month):
-    start = date(year, month, 1)
-    end = (date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)) - timedelta(days=1)
-    return start, end
-
-
-def advances_for_month(worker_id, year, month):
-    """Every advance a worker drew in one month."""
-    start, end = _month_bounds(year, month)
-    return SalaryAdvance.query.filter(
-        SalaryAdvance.worker_id == worker_id,
-        SalaryAdvance.date >= start,
-        SalaryAdvance.date <= end,
-    ).order_by(SalaryAdvance.date).all()
+# Shared with the payroll run so the slip and the books cannot disagree.
+_month_bounds = payroll.month_bounds
+advances_for_month = payroll.advances_for_month
 
 
 @hr_bp.route('/api/salary/advances', methods=['GET'])
@@ -823,6 +772,93 @@ def delete_salary_advance(advance_id, current_user=None):
         db.session.rollback()
         logger.error(f"Error deleting salary advance: {e}", exc_info=True)
         return jsonify({'error': 'Failed to remove the advance'}), 500
+
+
+# ===== PAYROLL =====
+# Running payroll is what turns a month of attendance into a cost in the
+# books. It books the *earned* salary, not the net handed over: an advance
+# already left the till without being expensed, so booking only the net would
+# understate the month by exactly what was drawn early. See payroll.py.
+
+@hr_bp.route('/api/salary/payroll/preview', methods=['GET'])
+@role_required(['admin', 'accountant'])
+def payroll_preview():
+    """What running payroll for a month would do - writes nothing."""
+    try:
+        year = request.args.get('year', type=int)
+        month = request.args.get('month', type=int)
+        if not year or not month or not 1 <= month <= 12:
+            return jsonify({'error': 'Provide a valid year and month'}), 400
+        return jsonify(payroll.preview(year, month)), 200
+    except Exception as e:
+        logger.error(f"Error building payroll preview: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to build the payroll preview'}), 500
+
+
+@hr_bp.route('/api/salary/payroll/run', methods=['POST'])
+@role_required(['admin'])
+@guard_period(body_date('pay_date'))
+def payroll_run(current_user=None):
+    """Book the month's salaries. Safe to re-run: nobody is paid twice."""
+    try:
+        data = request.get_json() or {}
+        year, month = data.get('year'), data.get('month')
+        try:
+            year, month = int(year), int(month)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Provide a valid year and month'}), 400
+        if not 1 <= month <= 12:
+            return jsonify({'error': 'Provide a valid month'}), 400
+
+        try:
+            pay_date = datetime.strptime(data.get('pay_date'), '%Y-%m-%d').date()
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Enter a valid pay date (YYYY-MM-DD)'}), 400
+
+        summary = payroll.run_payroll(year, month, pay_date,
+                                      getattr(current_user, 'username', None))
+
+        if not summary['posted']:
+            return jsonify({
+                'error': 'Nothing to pay for this month.',
+                'skipped': summary['skipped'],
+            }), 400
+
+        log_action('create', 'payroll', None,
+                   f"Payroll {month:02d}/{year}: {len(summary['posted'])} workers, "
+                   f"{summary['total_expensed']:,.2f} booked")
+        return jsonify({
+            'message': f"Payroll booked for {len(summary['posted'])} worker(s)",
+            **summary,
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error running payroll: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to run payroll'}), 500
+
+
+@hr_bp.route('/api/salary/payroll', methods=['GET'])
+@role_required(['admin', 'accountant'])
+def payroll_history():
+    """What has already been paid, newest first."""
+    try:
+        query = PayrollRun.query
+        year = request.args.get('year', type=int)
+        month = request.args.get('month', type=int)
+        if year:
+            query = query.filter(PayrollRun.year == year)
+        if month:
+            query = query.filter(PayrollRun.month == month)
+
+        rows = query.order_by(PayrollRun.year.desc(), PayrollRun.month.desc(),
+                              PayrollRun.id.desc()).all()
+        return jsonify({
+            'runs': [r.to_dict() for r in rows],
+            'total_expensed': round(sum(float(r.earned_salary) for r in rows), 2),
+        }), 200
+    except Exception as e:
+        logger.error(f"Error loading payroll history: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load payroll history'}), 500
 
 
 # ===== ZKTECO PUSH PROTOCOL (device sends data to server; no auth) =====

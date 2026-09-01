@@ -618,6 +618,58 @@ class SalaryAdvance(db.Model):
         }
 
 
+
+class PayrollRun(db.Model):
+    """One worker's salary, booked for one month.
+
+    Exists to make payroll idempotent. Without it, running payroll twice for
+    September would book September's wages twice, and nothing downstream would
+    notice. The unique key is the guard: a second run skips anyone already paid.
+
+    It doubles as the payroll history - which month was paid, when, by whom,
+    and which expense row it produced.
+    """
+    __tablename__ = 'payroll_runs'
+    __table_args__ = (
+        db.UniqueConstraint('worker_id', 'year', 'month', name='uq_payroll_worker_month'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    worker_id = db.Column(db.Integer, db.ForeignKey('workers.id', ondelete='CASCADE'),
+                          nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+
+    # What the month cost, and what was actually handed over at the end of it.
+    # They differ by whatever the worker drew early.
+    earned_salary = db.Column(db.Numeric(10, 2), nullable=False)
+    advances_total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    net_paid = db.Column(db.Numeric(10, 2), nullable=False)
+
+    # SET NULL: deleting the expense row must not erase the fact of payment.
+    expense_id = db.Column(db.Integer, db.ForeignKey('expense.id', ondelete='SET NULL'),
+                           nullable=True)
+    run_by = db.Column(db.String(100), nullable=True)
+    run_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    worker = db.relationship('Worker', backref=db.backref('payroll_runs', lazy='dynamic'))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'worker_id': self.worker_id,
+            'worker_name': f"{self.worker.first_name} {self.worker.last_name}" if self.worker else None,
+            'employee_id': self.worker.employee_id if self.worker else None,
+            'year': self.year,
+            'month': self.month,
+            'earned_salary': float(self.earned_salary),
+            'advances_total': float(self.advances_total or 0),
+            'net_paid': float(self.net_paid),
+            'expense_id': self.expense_id,
+            'run_by': self.run_by,
+            'run_at': self.run_at.strftime('%Y-%m-%d %H:%M:%S') if self.run_at else None,
+        }
+
 # ===== ATTENDANCE MODEL =====
 
 class AttendanceRecord(db.Model):

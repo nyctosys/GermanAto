@@ -598,3 +598,69 @@ body::before {
   padding-top: 2px;
   padding-bottom: 2px;
 }
+
+/* ===== PAYROLL ===== */
+
+.payroll-modal-content { max-width: 900px; width: 94%; }
+
+.payroll-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.payroll-note {
+  margin: 0 0 16px;
+  padding: 11px 14px;
+  border-left: 3px solid var(--primary-maroon, #8b1538);
+  border-radius: 6px;
+  background: var(--bg-light, #f8f9fa);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-muted, #718096);
+}
+.payroll-note strong { color: var(--text-dark, #2d3748); }
+
+.payroll-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.psum {
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: 8px;
+  padding: 11px 13px;
+  min-width: 0;
+}
+.psum span {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted, #718096);
+  margin-bottom: 4px;
+}
+.psum b {
+  display: block;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dark, #2d3748);
+  overflow-wrap: break-word;
+}
+.psum--hand { border-left: 3px solid var(--primary-maroon, #8b1538); }
+.psum--hand b { color: var(--primary-maroon, #8b1538); }
+
+#payrollTable .num { text-align: right; font-variant-numeric: tabular-nums; }
+#payrollTable .emp-id {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-muted, #718096);
+}
+.payroll-blocked { opacity: 0.55; }
+.amt-negative { color: #c53030; font-weight: 600; }
+
+.pill--ready { background: #e6fffa; color: #2f855a; }
+.pill--blocked { background: var(--bg-light, #f8f9fa); color: var(--text-muted, #718096); }
