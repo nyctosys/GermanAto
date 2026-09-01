@@ -43,41 +43,6 @@
     <!-- Main Content -->
     <main class="main-content">
       <form id="invoice-form" method="post">
-        <!-- Document Type Toggle Section -->
-        <div class="section-card">
-          <div class="section-header">
-            <div class="icon">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path
-                  d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 0 0 1.946-.806 3.42 3.42 0 0 1 4.438 0 3.42 3.42 0 0 0 1.946.806 3.42 3.42 0 0 1 3.138 3.138 3.42 3.42 0 0 0 .806 1.946 3.42 3.42 0 0 1 0 4.438 3.42 3.42 0 0 0-.806 1.946 3.42 3.42 0 0 1-3.138 3.138 3.42 3.42 0 0 0-1.946.806 3.42 3.42 0 0 1-4.438 0 3.42 3.42 0 0 0-1.946-.806 3.42 3.42 0 0 1-3.138-3.138 3.42 3.42 0 0 0-.806-1.946 3.42 3.42 0 0 1 0-4.438 3.42 3.42 0 0 0 .806-1.946 3.42 3.42 0 0 1 3.138-3.138z"
-                ></path>
-              </svg>
-            </div>
-            <h2>Document Type</h2>
-          </div>
-          <div class="document-type-toggle">
-            <label class="toggle-label">
-              <input
-                type="checkbox"
-                id="direct-invoice-toggle"
-                class="toggle-checkbox"
-              />
-              <span class="toggle-slider"></span>
-              <span class="toggle-text">Direct Invoice Mode</span>
-            </label>
-            <div class="toggle-description">
-              <span id="toggle-description-text"
-                >Quote Mode: Generate quotes for customer approval</span
-              >
-            </div>
-          </div>
-        </div>
-
         <!-- Customer Information Section -->
         <div class="section-card">
           <div class="section-header">
@@ -428,14 +393,7 @@
             </div>
           </div>
           <div class="btns-submit">
-            <button type="submit" class="wide-btn-submit" data-type="invoice">
-              Generate <br />
-              Invoice
-            </button>
-            <button type="submit" class="wide-btn-submit" data-type="quote">
-              Generate <br />
-              Quote
-            </button>
+            <button type="submit" class="wide-btn-submit">Generate Invoice</button>
           </div>
         </div>
       </form>

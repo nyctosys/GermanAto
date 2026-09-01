@@ -52,7 +52,8 @@
     {
       group: "Create",
       items: [
-        { label: "New invoice or quote", href: "/invoice.html", permission: "invoice", icon: "plus" },
+        { label: "New invoice", href: "/invoice.html", permission: "invoice", icon: "plus" },
+        { label: "New quote", href: "/quote.html", permission: "invoice", icon: "plus" },
         { label: "New repair order", href: "/repair-order.html", permission: "repair-order", icon: "plus" },
       ],
     },

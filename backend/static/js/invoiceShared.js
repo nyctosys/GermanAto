@@ -599,7 +599,10 @@ export function updateTotal() {
 export function updateBalance() {
   const totalText = document.getElementById("total-amount").innerText;
   const total = parseFloat(totalText.replace(/[^\d.-]/g, ""));
-  const advance = parseFloat(document.querySelector(".advance").value) || 0;
+  // The quote form has no advance field - nothing is owed on a quote until
+  // it becomes an invoice.
+  const advanceInput = document.querySelector(".advance");
+  const advance = advanceInput ? parseFloat(advanceInput.value) || 0 : 0;
   const discount = parseFloat(document.getElementById("discount").value) || 0;
   const balance = total - advance - discount;
 
@@ -632,52 +635,7 @@ window.updateTaxDisplay = updateTaxDisplay;
 // ===== DOCUMENT TYPE TOGGLE =====
 
 // Update document type toggle (Quote/Invoice mode)
-export function updateDocumentTypeToggle() {
-  const toggle = document.getElementById("direct-invoice-toggle");
-  const descriptionText = document.getElementById("toggle-description-text");
-  const submitButtons = document.querySelectorAll(".wide-btn-submit");
-  const inventoryDeductionSection = document.querySelector(".inventory-deduction-section");
 
-  if (toggle.checked) {
-    // Direct Invoice Mode
-    descriptionText.textContent = "Direct Invoice Mode: Generate invoices immediately";
-    descriptionText.style.color = "#28a745";
-
-    if (inventoryDeductionSection) {
-      inventoryDeductionSection.style.display = "block";
-    }
-
-    submitButtons.forEach((button) => {
-      if (button.getAttribute("data-type") === "invoice") {
-        button.style.display = "block";
-        button.innerHTML = "Generate<br/>Invoice";
-        button.style.backgroundColor = "#28a745";
-      } else if (button.getAttribute("data-type") === "quote") {
-        button.style.display = "none";
-      }
-    });
-  } else {
-    // Quote Mode
-    descriptionText.textContent = "Quote Mode: Generate quotes for customer approval";
-    descriptionText.style.color = "#6c757d";
-
-    if (inventoryDeductionSection) {
-      inventoryDeductionSection.style.display = "none";
-    }
-
-    submitButtons.forEach((button) => {
-      if (button.getAttribute("data-type") === "invoice") {
-        button.style.display = "none";
-      } else if (button.getAttribute("data-type") === "quote") {
-        button.style.display = "block";
-        button.innerHTML = "Generate<br/>Quote";
-        button.style.backgroundColor = "#6c757d";
-      }
-    });
-  }
-}
-
-window.updateDocumentTypeToggle = updateDocumentTypeToggle;
 
 // ===== INVENTORY SEARCH =====
 
@@ -1201,7 +1159,10 @@ export function collectFormData() {
   const customerVin = document.getElementById("customer_vin").value.trim();
   const customerColor = document.getElementById("customer_color").value || "";
   const customerChasis = document.getElementById("customer_chasis").value || "";
-  const advance = parseFloat(document.querySelector(".advance").value) || 0;
+  // The quote form has no advance field - nothing is owed on a quote until
+  // it becomes an invoice.
+  const advanceInput = document.querySelector(".advance");
+  const advance = advanceInput ? parseFloat(advanceInput.value) || 0 : 0;
   const discount = parseFloat(document.getElementById("discount").value) || 0;
 
   let items = [];

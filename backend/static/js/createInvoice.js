@@ -1,6 +1,10 @@
 /**
- * Create Invoice Module
- * Handles creating new invoices and quotes
+ * Create Invoice.
+ *
+ * Invoices only. Quotes have their own page and module - they reserve no
+ * stock, nothing is owed on them, and their status is always 'pending', so
+ * the shared form used to need a mode toggle to keep the two apart. It is
+ * clearer to have two forms than one form with a switch on it.
  */
 
 import {
@@ -10,7 +14,6 @@ import {
   loadInventory,
   setupSearchableDropdowns,
   setupCommonEventListeners,
-  updateDocumentTypeToggle,
   handleInventoryDeduction,
   collectFormData,
   validateFormData,
@@ -45,12 +48,6 @@ async function initializeCreateInvoice() {
 
   if (fromRepairOrder) {
     // Set to invoice mode when coming from repair order
-    const directInvoiceToggle = document.getElementById("direct-invoice-toggle");
-    if (directInvoiceToggle) {
-      directInvoiceToggle.checked = true;
-      updateDocumentTypeToggle();
-    }
-
     // Wait for data to load before loading repair order data
     setTimeout(() => {
       loadRepairOrderData();
@@ -61,27 +58,10 @@ async function initializeCreateInvoice() {
   setupSearchableDropdowns();
   setupCommonEventListeners();
 
-  // Document type toggle functionality
-  document
-    .getElementById("direct-invoice-toggle")
-    .addEventListener("change", updateDocumentTypeToggle);
-
   // Inventory deduction button
   document
     .getElementById("deduct-inventory-btn")
     .addEventListener("click", handleInventoryDeduction);
-
-  // Set initial state of inventory deduction section (hidden by default in Quote Mode)
-  const inventoryDeductionSection = document.querySelector(".inventory-deduction-section");
-  if (inventoryDeductionSection) {
-    inventoryDeductionSection.style.display = "none";
-  }
-
-  // Ensure quote mode is properly set on page load
-  const toggle = document.getElementById("direct-invoice-toggle");
-  if (toggle && !toggle.checked) {
-    updateDocumentTypeToggle();
-  }
 
   // Set up form submission
   document
@@ -101,18 +81,7 @@ if (document.readyState === "loading") {
 async function handleFormSubmit(event) {
   event.preventDefault();
 
-  const submitButton = event.submitter;
-  const directInvoiceToggle = document.getElementById("direct-invoice-toggle");
-
-  // Determine document type based on toggle and button clicked
-  let documentType;
-  if (directInvoiceToggle.checked) {
-    // Direct Invoice Mode - always create invoice
-    documentType = "invoice";
-  } else {
-    // Quote Mode - use the button that was clicked
-    documentType = submitButton.getAttribute("data-type") || "quote";
-  }
+  const documentType = "invoice";
 
   // Collect form data
   const formData = collectFormData();

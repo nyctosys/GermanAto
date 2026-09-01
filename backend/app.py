@@ -152,6 +152,15 @@ def serve_invoice():
     return response
 
 
+# Quotes have their own form: they reserve no stock, nothing is owed on them,
+# and their status is always pending - so the shared page needed a mode toggle
+# to keep the two apart.
+@app.route('/quote.html')
+def serve_quote():
+    response = send_from_directory(get_frontend_dir(), 'quote.html')
+    return response
+
+
 
 # Route to serve invoice-template.html page
 @app.route('/invoice-template.html')

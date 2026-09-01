@@ -291,7 +291,8 @@ document.addEventListener("DOMContentLoaded", () => {
         );
         if (editBtn) {
           editBtn.addEventListener("click", () => {
-            window.location.href = `invoice.html?id=${quote.id}`;
+            // Quotes are edited on the quote form, which has no payment fields.
+            window.location.href = `quote.html?id=${quote.id}`;
           });
         }
         const deleteBtn = document.querySelector(
