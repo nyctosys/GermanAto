@@ -58,6 +58,7 @@
           <div class="info-box">
             <h3 class="info-title">CUSTOMER & VEHICLE INFORMATION</h3>
             <p class="info-content">
+              Customer ID: <span id="customer-code">{CUSTOMER_CODE}</span><br />
               Customer Name: <span id="customer-name">{CUSTOMER_NAME}</span
               ><br />
               Address: <span id="customer-address">{CUSTOMER_ADDRESS}</span
@@ -231,6 +232,8 @@
             createdDate.toLocaleString();
 
           // Update customer and vehicle information
+          const codeEl = document.getElementById("customer-code");
+          if (codeEl) codeEl.textContent = data.customer_code || "N/A";
           document.getElementById("customer-name").textContent =
             data.customer_name || "N/A";
           document.getElementById("customer-address").textContent =

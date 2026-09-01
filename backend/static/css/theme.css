@@ -1170,3 +1170,20 @@ body.dark-theme input:-webkit-autofill:active {
   -webkit-text-fill-color: #e2e8f0 !important;
   caret-color: #e2e8f0 !important;
 }
+
+/* ===== CUSTOMER ID ===== */
+/* A name does not identify a customer here - two 'MR NOMAN SB' is ordinary -
+   so the id travels with the name wherever a customer is shown. Quiet by
+   design: it is for confirming you have the right person, not for reading. */
+.customer-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted, #718096);
+  white-space: nowrap;
+}
+
+td.customer-code {
+  color: var(--text-dark, #2d3748);
+}

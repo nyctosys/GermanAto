@@ -393,7 +393,7 @@ const CustomerCarUtils = {
           customers.forEach((customer) => {
             const option = document.createElement("option");
             option.value = customer.id;
-            option.textContent = `${customer.name} - ${customer.phone}`;
+            option.textContent = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
             customerSelect.appendChild(option);
           });
         }

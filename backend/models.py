@@ -199,6 +199,18 @@ class Customer(db.Model):
     
     cars = db.relationship('Car', backref='customer', cascade='all, delete-orphan', lazy=True)
 
+    @property
+    def code(self):
+        """A short, stable reference staff can say out loud.
+
+        Two customers called 'MR NOMAN SB' are not unusual here, so a name is
+        not enough to identify one. Derived from the primary key rather than
+        stored: nothing to generate, backfill, or keep unique, and it can never
+        disagree with the record it belongs to. Matches the PN001 style already
+        used for parts.
+        """
+        return f"CN{self.id:03d}" if self.id else ""
+
 
 class Car(db.Model):
     id = db.Column(db.Integer, primary_key=True)

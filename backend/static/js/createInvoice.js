@@ -149,11 +149,11 @@ function loadRepairOrderData() {
         c.phone === repairOrderData.customer_phone
     );
     if (customer) {
-      const customerDisplayText = `${customer.name} - ${customer.phone}`;
+      const customerDisplayText = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
       document.getElementById("customer-select").value = customerDisplayText;
       handleCustomerChange(customer.id);
     } else {
-      const customerDisplayText = `${repairOrderData.customer_name} - ${repairOrderData.customer_phone}`;
+      const customerDisplayText = `${repairOrderData.customer_code ? repairOrderData.customer_code + " · " : ""}${repairOrderData.customer_name} - ${repairOrderData.customer_phone}`;
       document.getElementById("customer-select").value = customerDisplayText;
     }
 

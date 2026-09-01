@@ -152,7 +152,7 @@ async function loadInvoiceForEdit(invoiceId) {
     }
 
     if (customer) {
-      const customerDisplayText = `${customer.name} - ${customer.phone}`;
+      const customerDisplayText = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
       customerSelect.value = customerDisplayText;
       handleCustomerChange(customer.id);
 

@@ -85,6 +85,7 @@ def get_customers(current_user=None):
         for customer in customers:
             customers_data.append({
                 'id': customer.id,
+                'code': customer.code,
                 'name': customer.name,
                 'phone': customer.phone,
                 'address': customer.address,
@@ -148,6 +149,7 @@ def create_customer(current_user=None):
                 'message': 'Customer created successfully',
                 'customer': {
                     'id': customer.id,
+                    'code': customer.code,
                     'name': customer.name,
                     'phone': customer.phone,
                     'address': customer.address,
@@ -207,6 +209,7 @@ def update_customer(customer_id, current_user=None):
                 'message': 'Customer updated successfully',
                 'customer': {
                     'id': customer.id,
+                    'code': customer.code,
                     'name': customer.name,
                     'phone': customer.phone,
                     'address': customer.address,
@@ -279,6 +282,7 @@ def get_cars(current_user=None):
                 'chasis_no': car.chasis_no,
                 'customer_id': car.customer_id,
                 'customer_name': car.customer.name,
+                'customer_code': car.customer.code,
                 'customer_phone': car.customer.phone,
                 'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
@@ -313,6 +317,7 @@ def get_car(car_id, current_user=None):
             'chasis_no': car.chasis_no,
             'customer_id': car.customer_id,
             'customer_name': car.customer.name,
+            'customer_code': car.customer.code,
             'customer_phone': car.customer.phone,
             'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
@@ -578,6 +583,7 @@ def search_cars(current_user=None):
                 'mileage': car.mileage,
                 'customer_id': car.customer_id,
                 'customer_name': car.customer.name,
+                'customer_code': car.customer.code,
                 'customer_phone': car.customer.phone,
                 'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
@@ -622,6 +628,7 @@ def search_customers(current_user=None):
         for customer in search_results:
             customers_data.append({
                 'id': customer.id,
+                'code': customer.code,
                 'name': customer.name,
                 'phone': customer.phone,
                 'address': customer.address,
@@ -678,6 +685,7 @@ def get_cars_by_customer(customer_id, current_user=None):
         return jsonify({
             'customer': {
                 'id': customer.id,
+                'code': customer.code,
                 'name': customer.name,
                 'phone': customer.phone,
                 'address': customer.address

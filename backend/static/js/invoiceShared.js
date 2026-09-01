@@ -80,7 +80,7 @@ export function populateCustomerSelect() {
     const option = document.createElement("div");
     option.className = "dropdown-option";
     option.setAttribute("data-value", customer.id);
-    option.textContent = `${customer.name} - ${customer.phone}`;
+    option.textContent = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
     customerDropdown.appendChild(option);
   });
 }
@@ -852,7 +852,11 @@ export function openEditCustomerModal() {
   window.editingCustomerId = state.selectedCustomerId;
   const modalTitle = document.getElementById("customer-modal-title");
   if (modalTitle) {
-    modalTitle.textContent = "Edit Customer";
+    // Name the customer being edited, so it is obvious which of two
+    // similarly-named records this is.
+    modalTitle.textContent = customer.code
+      ? `Edit Customer ${customer.code}`
+      : "Edit Customer";
   }
 
   // Populate form with customer data
@@ -909,7 +913,7 @@ export async function handleCustomerSubmit(e) {
     document.getElementById("customer_address").value = updatedCustomer.address;
     document.getElementById("customer_phone").value = updatedCustomer.phone;
 
-    const customerDisplayText = `${updatedCustomer.name} - ${updatedCustomer.phone}`;
+    const customerDisplayText = `${updatedCustomer.code ? updatedCustomer.code + " · " : ""}${updatedCustomer.name} - ${updatedCustomer.phone}`;
     document.getElementById("customer-select").value = customerDisplayText;
 
     // Update selected customer ID if it changed
@@ -946,7 +950,7 @@ export function openCarModal() {
   state.customers.forEach((customer) => {
     const option = document.createElement("option");
     option.value = customer.id;
-    option.textContent = `${customer.name} - ${customer.phone}`;
+    option.textContent = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
     customerSelect.appendChild(option);
   });
 
@@ -989,7 +993,7 @@ export function openEditCarModal() {
   state.customers.forEach((customer) => {
     const option = document.createElement("option");
     option.value = customer.id;
-    option.textContent = `${customer.name} - ${customer.phone}`;
+    option.textContent = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
     customerSelect.appendChild(option);
   });
 

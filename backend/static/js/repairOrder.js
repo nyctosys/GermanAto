@@ -346,7 +346,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       
       if (customer) {
-        const customerDisplayText = `${customer.name} - ${customer.phone}`;
+        const customerDisplayText = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
         customerSelect.value = customerDisplayText;
         handleCustomerChange(customer.id);
         
@@ -1176,7 +1176,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const option = document.createElement("div");
       option.className = "dropdown-option";
       option.setAttribute("data-value", customer.id);
-      option.textContent = `${customer.name} - ${customer.phone}`;
+      option.textContent = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
       customerDropdown.appendChild(option);
     });
   }
@@ -1880,7 +1880,7 @@ document.addEventListener("DOMContentLoaded", function () {
         customers.forEach((customer) => {
           const option = document.createElement("option");
           option.value = customer.id;
-          option.textContent = `${customer.name} - ${customer.phone}`;
+          option.textContent = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
           customerSelect.appendChild(option);
         });
         
@@ -2085,7 +2085,7 @@ document.addEventListener("DOMContentLoaded", function () {
       customers.forEach((customer) => {
         const option = document.createElement("option");
         option.value = customer.id;
-        option.textContent = `${customer.name} - ${customer.phone}`;
+        option.textContent = `${customer.code ? customer.code + " · " : ""}${customer.name} - ${customer.phone}`;
         customerSelect.appendChild(option);
       });
     }

@@ -202,7 +202,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="card-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; font-size: 0.875rem;">
               <div class="info-block">
                 <span style="display: block; font-size: 0.75rem; color: #a0aec0; text-transform: uppercase; font-weight: 600;">Customer</span>
-                <strong>${quote.customer_name}</strong>
+                <strong>${quote.customer_name}</strong>${quote.customer_code ? ` <span class="customer-code">${quote.customer_code}</span>` : ""}
                 <div style="font-size: 0.8rem; color: #4a5568; margin-top: 2px;">${quote.customer_phone}</div>
                 <div style="font-size: 0.8rem; color: #718096; font-style: italic;">Reg: ${quote.customer_reg_no}</div>
               </div>

@@ -138,6 +138,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="info-label">Customer Name</div>
                 <div class="info-value">${
                   repairOrder.customer_name || "N/A"
+                }${
+                  repairOrder.customer_code
+                    ? ` <span class="customer-code">${repairOrder.customer_code}</span>`
+                    : ""
                 }</div>
               </div>
               <div class="info-group">

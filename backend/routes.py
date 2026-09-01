@@ -363,6 +363,7 @@ def get_invoice(invoice_id, current_user=None):
             "customer_color": invoice.customer_color or "",
             "customer_chasis": invoice.customer_chasis or "",
             "customer_id": invoice.customer_id,
+            "customer_code": f"CN{invoice.customer_id:03d}" if invoice.customer_id else "",
             "car_id": invoice.car_id,
             "created_at": invoice.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "balance": float(invoice.balance),
