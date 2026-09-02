@@ -23,6 +23,45 @@ import {
 // Store the invoice ID being edited
 let editId = null;
 
+/**
+ * The car a document was written against.
+ *
+ * Mirrors document_links.resolve_car on the server, deliberately: the id
+ * first, then the VIN, then the plate - and the plate compared with spacing
+ * and punctuation stripped, because 'ABC-123' and 'ABC 123' are the same car
+ * to everyone except a string comparison. Exact matching alone failed on 18
+ * of the 500 invoices on file for that reason.
+ *
+ * The customer's own car wins when two share a plate. A car with no owner is
+ * still accepted - it is almost certainly theirs, and saving the document
+ * claims it.
+ */
+function resolveCarForDocument(data, customer) {
+  const cars = state.cars || [];
+  const plate = (v) => String(v || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
+  if (data.car_id) {
+    const linked = cars.find((c) => c.id === data.car_id);
+    if (linked) return linked;
+  }
+
+  const vin = String(data.customer_vin || "").trim().toUpperCase();
+  if (vin) {
+    const byVin = cars.find((c) => String(c.vin || "").trim().toUpperCase() === vin);
+    if (byVin) return byVin;
+  }
+
+  const wanted = plate(data.customer_reg_no);
+  if (!wanted) return null;
+
+  const samePlate = cars.filter((c) => plate(c.plate_no) === wanted);
+  return (
+    samePlate.find((c) => c.customer_id === customer.id) ||
+    samePlate.find((c) => !c.customer_id) ||
+    null
+  );
+}
+
 /** The form on whichever page we are editing from - invoice or quote. */
 function getDocumentForm() {
   return (
@@ -167,11 +206,7 @@ async function loadInvoiceForEdit(invoiceId) {
       // Wait for car dropdown to be populated with customer's cars
       setTimeout(() => {
         const carSelect = document.getElementById("car-select");
-        const car =
-          (data.car_id && state.cars?.find((c) => c.id === data.car_id)) ||
-          state.cars?.find(
-            (c) => c.plate_no === data.customer_reg_no && c.customer_id === customer.id
-          );
+        const car = resolveCarForDocument(data, customer);
 
         if (car) {
           const carDisplayText = `${car.make} ${car.model} - ${car.plate_no}`;
