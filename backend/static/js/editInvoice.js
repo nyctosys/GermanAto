@@ -23,10 +23,20 @@ import {
 // Store the invoice ID being edited
 let editId = null;
 
+/** The form on whichever page we are editing from - invoice or quote. */
+function getDocumentForm() {
+  return (
+    document.getElementById("invoice-form") || document.getElementById("quote-form")
+  );
+}
+
 // Initialize edit invoice page
 async function initializeEditInvoice() {
   // Wait for required elements to be available
-  const invoiceForm = document.getElementById("invoice-form");
+  // Editing is shared, but the two forms have different ids - a quote is
+  // edited on the quote page, where the form is #quote-form. Looking only for
+  // #invoice-form left the quote page retrying forever with an empty form.
+  const invoiceForm = getDocumentForm();
   if (!invoiceForm) {
     console.error("Invoice form not found, retrying...");
     setTimeout(initializeEditInvoice, 100);
@@ -58,9 +68,7 @@ async function initializeEditInvoice() {
   setupCommonEventListeners();
 
   // Set up form submission for update
-  document
-    .getElementById("invoice-form")
-    .addEventListener("submit", handleFormSubmit);
+  getDocumentForm().addEventListener("submit", handleFormSubmit);
 }
 
 // Initialize when DOM is ready or immediately if already loaded
@@ -178,8 +186,11 @@ async function loadInvoiceForEdit(invoiceId) {
       }, 100);
     }
 
-    // Set advance payment
-    document.querySelector(".advance").value = data.advance || 0;
+    // The quote form has no advance field - nothing is owed on a quote. Left
+    // unguarded this threw, and everything below it (discount, tax, items,
+    // totals) never ran, leaving the form half empty with no error shown.
+    const advanceInput = document.querySelector(".advance");
+    if (advanceInput) advanceInput.value = data.advance || 0;
 
     // Set discount
     document.getElementById("discount").value = data.discount || 0;
