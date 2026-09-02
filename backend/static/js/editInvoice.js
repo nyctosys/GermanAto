@@ -209,14 +209,17 @@ async function loadInvoiceForEdit(invoiceId) {
         const car = resolveCarForDocument(data, customer);
 
         if (car) {
-          const carDisplayText = `${car.make} ${car.model} - ${car.plate_no}`;
-          carSelect.value = carDisplayText;
+          carSelect.value = `${car.make} ${car.model} - ${car.plate_no}`;
           handleCarChange(car.id);
-          // handleCarChange paints the car's *current* details over the form.
-          // This invoice recorded a mileage, and possibly an address, that were
-          // true on the day it was written - put them back.
-          fillDocumentFields(data);
         }
+
+        // Always, whether a car matched or not. handleCustomerChange clears
+        // all six vehicle boxes, and handleCarChange repaints them from the
+        // car's *current* details - but this invoice recorded the mileage and
+        // vehicle as they were the day it was written, and that is what it
+        // must show. With no car match and no refill, the panel opened with
+        // every field blank even though the invoice held the answers.
+        fillDocumentFields(data);
         document.getElementById("car-details").style.display = "block";
       }, 100);
     }
@@ -332,22 +335,34 @@ async function loadInvoiceForEdit(invoiceId) {
 // ===== HELPER FUNCTIONS =====
 
 // Function to wait for customers, cars, and inventory data to be loaded
-function waitForData() {
+/**
+ * Wait for both customers and cars before matching the document to them.
+ *
+ * This used to resolve as soon as *either* had arrived. Customers usually win
+ * that race, so the car lookup then ran against an empty list and silently
+ * matched nothing - the customer selected, the vehicle boxes blank, and no
+ * error anywhere. Both loads are fired without await in init, so this is the
+ * only thing holding the order together.
+ *
+ * Gives up after a few seconds rather than looping forever: a workshop with no
+ * cars on file is unusual but not impossible, and a page that never finishes
+ * loading is worse than one that opens with the document's own text.
+ */
+function waitForData(timeoutMs = 4000) {
   return new Promise((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+
     const checkData = () => {
-      if (
-        state.customers.length > 0 ||
-        state.cars.length > 0 ||
-        window.customers ||
-        window.cars
-      ) {
-        // Use window globals if state is not populated yet
-        if (state.customers.length === 0 && window.customers) {
-          state.customers = window.customers;
-        }
-        if (state.cars.length === 0 && window.cars) {
-          state.cars = window.cars;
-        }
+      // The two loaders publish to window before state in some paths.
+      if (state.customers.length === 0 && window.customers) {
+        state.customers = window.customers;
+      }
+      if (state.cars.length === 0 && window.cars) {
+        state.cars = window.cars;
+      }
+
+      const ready = state.customers.length > 0 && state.cars.length > 0;
+      if (ready || Date.now() > deadline) {
         resolve();
       } else {
         setTimeout(checkData, 50);
