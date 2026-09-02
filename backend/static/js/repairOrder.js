@@ -1656,7 +1656,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Load workers from API
   async function loadWorkers() {
     try {
-      const data = await APIHelper.get("/api/workers");
+      // Names and positions only, under the repair-order permission - so an
+      // inventory manager can assign a mechanic without HR access.
+      const data = await APIHelper.get("/api/repair-orders/assignable-workers");
       if (!data) return;
 
       workers = data.workers || data;

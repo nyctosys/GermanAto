@@ -12,6 +12,39 @@ from log_utils import log_action
 
 repair_order_bp = Blueprint('repair_order', __name__)
 
+@repair_order_bp.route('/repair-orders/assignable-workers', methods=['GET'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
+def get_assignable_workers(current_user=None):
+    """Just enough about each worker to put them on a job.
+
+    Assigning a mechanic is part of writing a repair order, not part of HR, so
+    it must not require the hr permission - an inventory manager needs to name
+    who did the work without being able to see salaries, CNICs, addresses or
+    phone numbers.
+
+    Living under /api/repair-orders is what gives it the repair-order
+    permission: PATH_PERMISSIONS matches on prefix, so /api/workers would have
+    demanded hr no matter which roles the decorator allowed.
+
+    Name, position and id only. Nothing here is worth withholding, and nothing
+    withheld is needed.
+    """
+    try:
+        workers = Worker.query.filter(Worker.status == 'active').order_by(
+            Worker.first_name, Worker.last_name).all()
+        return jsonify({
+            'workers': [{
+                'id': w.id,
+                'first_name': w.first_name,
+                'last_name': w.last_name,
+                'position': w.position,
+            } for w in workers]
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # Get all repair orders with optional status filter
 @repair_order_bp.route('/repair-orders', methods=['GET'])
 @login_required

@@ -149,7 +149,10 @@ async function loadDepartments() {
     // Load departments from central Settings
     const [departmentsResponse, workersResponse] = await Promise.all([
       APIHelper.get("/api/settings/departments?include_inactive=true"),
-      APIHelper.get("/api/workers")
+      // Head-count per department is a nicety, and reading workers needs the
+      // hr permission. Without this catch, a user who can manage settings but
+      // not HR - the inventory manager - got no departments list at all.
+      APIHelper.get("/api/workers").catch(() => null)
     ]);
     
     if (departmentsResponse && departmentsResponse.departments) {
