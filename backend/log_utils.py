@@ -65,3 +65,38 @@ def log_action(user, action, module, reference_id, details):
         logger.info(f"AppLog: [{username}] {action} in {module} ({reference_id}): {details}")
     except Exception as e:
         logger.error(f"Failed to write app log: {e}")
+
+
+# Modules that log_action has used for each document type. The names drifted -
+# 'invoice' and 'invoices' both appear, and a quote is a row in the invoice
+# table - so a document's history has to be gathered under all of its aliases.
+DOCUMENT_LOG_MODULES = {
+    'invoice': ('invoice', 'invoices', 'quote', 'quotes'),
+    'repair-order': ('repair_order', 'repair_orders'),
+}
+
+
+def document_log_entries(kind, reference_id):
+    """Everything recorded against one document, oldest first.
+
+    The audit log already held this; nothing surfaced it per document, so it
+    was only reachable by an admin scrolling the whole application log.
+    """
+    from models import AppLog
+
+    modules = DOCUMENT_LOG_MODULES.get(kind)
+    if not modules:
+        return []
+
+    rows = AppLog.query.filter(
+        AppLog.module.in_(modules),
+        AppLog.reference_id == reference_id,
+    ).order_by(AppLog.created_at.asc(), AppLog.id.asc()).all()
+
+    return [{
+        'when': r.created_at.strftime('%Y-%m-%d %H:%M:%S') if r.created_at else '',
+        'action': r.action,
+        'details': r.details,
+        'user': r.username or 'system',
+        'ip_address': r.ip_address or '',
+    } for r in rows]

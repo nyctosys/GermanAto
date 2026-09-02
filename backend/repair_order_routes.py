@@ -8,9 +8,35 @@ from repair_order_inventory_utils import process_repair_order_parts, handle_repa
 from jwt_auth import login_required, role_required, admin_required, get_current_user
 from search_suggestions import suggestions_for
 from document_links import apply_links
+from log_utils import document_log_entries
 from log_utils import log_action
 
 repair_order_bp = Blueprint('repair_order', __name__)
+
+@repair_order_bp.route('/repair-orders/<int:repair_order_id>/log', methods=['GET'])
+@login_required
+@role_required(['admin', 'accountant', 'inventory_manager'])
+def get_repair_order_log(repair_order_id, current_user=None):
+    """One repair order's history - status changes, edits, who did what."""
+    try:
+        order = RepairOrder.query.get(repair_order_id)
+        if not order:
+            return jsonify({'error': 'Repair order not found'}), 404
+
+        return jsonify({
+            'kind': 'repair-order',
+            'document_id': order.id,
+            'reference': f"#{order.id}",
+            'customer_name': order.customer_name,
+            'created_at': order.created_at.strftime('%Y-%m-%d %H:%M:%S') if order.created_at else '',
+            'created_by': order.created_by_user,
+            'current_status': order.current_status,
+            'payments': [],
+            'entries': document_log_entries('repair-order', order.id),
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @repair_order_bp.route('/repair-orders/assignable-workers', methods=['GET'])
 @login_required

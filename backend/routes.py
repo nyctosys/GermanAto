@@ -10,7 +10,7 @@ from functools import wraps
 from whatsapp_notifications import whatsapp_notifier
 from jwt_auth import login_required, role_required, admin_required, get_current_user
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from log_utils import log_action, save_uploaded_file
+from log_utils import log_action, save_uploaded_file, document_log_entries
 from search_suggestions import suggestions_for
 from invoice_math import (
     invoice_amount_due,
@@ -783,6 +783,46 @@ def update_invoice_status(invoice_id, current_user=None):
     except Exception as e:
         logger.error(f"Error auto-updating invoice status {invoice_id}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
+
+@bp.route('/invoice/<int:invoice_id>/log', methods=['GET'])
+@role_required(['admin', 'accountant'])
+def get_invoice_log(invoice_id, current_user=None):
+    """One invoice or quote's full history: what was done to it, and every
+    payment against it.
+
+    Serves quotes too - a quote is a row in the same table. It simply has no
+    payments, because nothing is owed on one until it becomes an invoice.
+    """
+    try:
+        invoice = Invoice.query.get(invoice_id)
+        if not invoice:
+            return jsonify({'error': 'Invoice not found'}), 404
+
+        payments = []
+        if invoice.payments_history:
+            try:
+                payments = json.loads(invoice.payments_history)
+            except (ValueError, TypeError):
+                payments = []
+
+        return jsonify({
+            'kind': (invoice.type_of or 'invoice').lower(),
+            'document_id': invoice.id,
+            'reference': f"#{invoice.id}",
+            'customer_name': invoice.customer_name,
+            'created_at': invoice.created_at.strftime('%Y-%m-%d %H:%M:%S') if invoice.created_at else '',
+            'created_by': invoice.created_by_user,
+            'advance': float(invoice.advance or 0),
+            'amount_due': round(invoice_amount_due(invoice), 2),
+            'amount_paid': round(invoice_amount_paid(invoice), 2),
+            'amount_remaining': invoice_amount_remaining(invoice),
+            'payments': payments,
+            'entries': document_log_entries('invoice', invoice.id),
+        }), 200
+    except Exception as e:
+        logger.error(f"Error loading invoice log {invoice_id}: {e}")
+        return jsonify({'error': 'Failed to load the log'}), 500
+
 
 @bp.route('/invoice/<int:invoice_id>/update-balance', methods=['PUT'])
 @role_required(['admin', 'accountant'])

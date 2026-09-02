@@ -224,6 +224,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="invoice-actions" style="display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #edf2f7; padding-top: 12px; margin-top: 12px; flex-wrap: wrap;">
               <button class="wide-btn-submit view-btn">View</button>
               <button class="wide-btn-edit edit-btn">Edit</button>
+              <button class="wide-btn-submit history-btn">History</button>
               <button class="wide-btn-delete delete-btn">Delete</button>
               ${approveBtn}
             </div>
@@ -286,6 +287,13 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           });
         }
+        const historyBtn = document.querySelector(
+          `#invoice-card-${quote.id} .history-btn`
+        );
+        if (historyBtn) {
+          historyBtn.addEventListener("click", () => DocumentLog.open("quote", quote.id));
+        }
+
         const editBtn = document.querySelector(
           `#invoice-card-${quote.id} .edit-btn`
         );

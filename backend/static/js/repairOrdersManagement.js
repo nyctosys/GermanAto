@@ -189,6 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="repair-order-actions">
               <div class="action-buttons">
                 <button class="view-btn">View</button>
+                <button class="history-btn">History</button>
                 <button class="edit-btn" ${(currentStatus === "complete" && auth.getCurrentUser().role !== "admin") ? "disabled style='opacity: 0.5; cursor: not-allowed;'" : ""}>Edit</button>
                 ${
                   currentStatus === "complete"
@@ -302,6 +303,15 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           // View button
+          const historyBtn = document.querySelector(
+            `#repair-order-card-${repairOrder.id} .history-btn`
+          );
+          if (historyBtn) {
+            historyBtn.addEventListener("click", () =>
+              DocumentLog.open("repair-order", repairOrder.id)
+            );
+          }
+
           const viewBtn = document.querySelector(
             `#repair-order-card-${repairOrder.id} .view-btn`
           );

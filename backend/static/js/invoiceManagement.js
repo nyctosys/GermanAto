@@ -282,6 +282,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <button class="wide-btn-submit view-btn">View</button>
               <button class="${editButtonClass}" ${editButtonDisabled}>${editButtonText}</button>
               <button class="wide-btn-update update-balance-btn">Update Balance</button>
+              <button class="wide-btn-submit payment-log-btn">Payments</button>
               <button class="wide-btn-delete delete-btn">Delete</button>
             </div>
           </div>
@@ -333,6 +334,13 @@ document.addEventListener("DOMContentLoaded", () => {
             window.location.href = `invoice.html?id=${invoice.id}`;
           });
         }
+        const paymentLogBtn = document.querySelector(
+          `#invoice-card-${invoice.id} .payment-log-btn`
+        );
+        if (paymentLogBtn) {
+          paymentLogBtn.addEventListener("click", () => DocumentLog.open("invoice", invoice.id));
+        }
+
         const updateBalanceBtn = document.querySelector(
           `#invoice-card-${invoice.id} .update-balance-btn`
         );
