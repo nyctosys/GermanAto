@@ -497,6 +497,18 @@ body::before {
   .slip-print-area .slip-content {
     max-width: 100%;
   }
+
+  /* The advance lines are muted grey on screen; on paper they have to be
+     readable, since they are the reason the net differs from the earned. */
+  .slip-print-area .slip-subrow td {
+    color: #333 !important;
+  }
+
+  .slip-print-area .slip-review-warning {
+    border: 1px solid #999;
+    padding: 8px 10px;
+    color: #000 !important;
+  }
 }
 
 /* ===== SALARY ADVANCES ===== */

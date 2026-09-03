@@ -172,6 +172,15 @@ async function getSlipPayload(workerId, month, year) {
     base_salary: worker.salary != null ? Number(worker.salary) : 0,
     deductions: 0,
     bonuses: 0,
+    // The fallback runs when the salary API is unreachable, so it cannot know
+    // about advances. Say so on the slip rather than printing a net figure
+    // that quietly ignores whatever the worker already drew.
+    advances: [],
+    advances_total: 0,
+    earned_salary: worker.salary != null ? Number(worker.salary) : 0,
+    overdrawn: false,
+    advance_notes: null,
+    unverified: true,
     net_salary: worker.salary != null ? Number(worker.salary) : 0,
     days_worked: null,
     total_hours: null,
@@ -187,25 +196,20 @@ async function getSlipPayload(workerId, month, year) {
       "/api/salary/calculate?worker_id=" + workerId + "&month=" + month + "&year=" + year
     );
     if (res && res.net_salary !== undefined) {
+      // Spread rather than hand-copy. This used to list each field it wanted,
+      // so anything the server learned to send - the advances, what was
+      // earned before them, the overdrawn warning - was dropped on the floor
+      // and never reached the slip, printed or on screen.
       return {
-        worker_id: res.worker_id,
-        employee_id: res.employee_id,
-        first_name: res.first_name,
-        last_name: res.last_name,
-        position: res.position,
-        department: res.department,
-        base_salary: res.base_salary,
+        ...res,
         deductions: res.deductions || 0,
         bonuses: res.bonuses || 0,
-        net_salary: res.net_salary,
-        days_worked: res.days_worked,
-        total_hours: res.total_hours,
+        advances: Array.isArray(res.advances) ? res.advances : [],
+        advances_total: res.advances_total || 0,
         incomplete_records_count: res.incomplete_records_count || 0,
         incomplete_dates: Array.isArray(res.incomplete_dates) ? res.incomplete_dates : [],
         requires_manual_review: Boolean(res.requires_manual_review),
         review_notes: res.review_notes || null,
-        month: res.month,
-        year: res.year
       };
     }
   } catch (e) {
@@ -286,12 +290,23 @@ function renderSlipHtml(payload) {
   const overdrawnWarning = payload.overdrawn
     ? `<p class="slip-review-warning">${escapeHtml(payload.advance_notes || "")}</p>`
     : "";
+
+  // The salary API was unreachable, so this slip is the worker's full monthly
+  // figure - not adjusted for attendance, and with no knowledge of any advance
+  // already drawn. Printing that silently would hand someone a slip claiming
+  // they are owed money they have already been paid.
+  const unverifiedWarning = payload.unverified
+    ? `<p class="slip-review-warning">Could not reach the salary records. This shows the
+       full monthly salary only &mdash; it is not adjusted for days worked, and does not
+       account for any advance already taken. Do not pay from this slip.</p>`
+    : "";
   return `
     <div class="slip-content">
       <h3>GermanATO</h3>
       <p class="slip-title">Salary Slip (based on attendance)</p>
       ${reviewWarning}
       ${overdrawnWarning}
+      ${unverifiedWarning}
       <table class="slip-table">
         <tr><td>Employee ID</td><td>${escapeHtml(String(payload.employee_id || "—"))}</td></tr>
         <tr><td>Name</td><td>${escapeHtml(name)}</td></tr>

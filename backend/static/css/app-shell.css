@@ -605,3 +605,26 @@ body.has-app-shell .main-footer {
     padding-top: 64px;
   }
 }
+
+/* ===== PRINT =====
+   The shell is navigation: it belongs on screen and never on paper. Nothing
+   hid it, so every printed page - salary slips, invoices, repair orders -
+   carried the sidebar down one side and the content squeezed into what was
+   left. Handled here rather than per page, because the shell is on every page
+   and each printable one would otherwise have to remember. */
+@media print {
+  .app-shell,
+  .app-shell__toggle,
+  .app-shell__scrim,
+  .cmdk {
+    display: none !important;
+  }
+
+  /* The body is padded to clear the sidebar. With the sidebar gone that
+     padding is just a wasted margin down the left of every sheet. */
+  body.has-app-shell,
+  body.has-app-shell.shell-collapsed {
+    padding-left: 0 !important;
+    min-height: 0;
+  }
+}
