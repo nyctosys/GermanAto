@@ -743,8 +743,8 @@ def create_salary_advance(current_user=None):
         db.session.add(advance)
         db.session.commit()
 
-        log_action('create', 'salary_advance', advance.id,
-                   f'Advance {amount} to {worker.employee_id} on {when}')
+        log_action(current_user, 'CREATE', 'salary_advances', advance.id,
+                   f'Advance of {amount:.2f} PKR to {worker.employee_id} dated {when}')
         return jsonify({'message': 'Advance recorded', 'advance': advance.to_dict()}), 201
     except Exception as e:
         db.session.rollback()
@@ -766,7 +766,7 @@ def delete_salary_advance(advance_id, current_user=None):
         db.session.delete(advance)
         db.session.commit()
 
-        log_action('delete', 'salary_advance', advance_id, summary)
+        log_action(current_user, 'DELETE', 'salary_advances', advance_id, summary)
         return jsonify({'message': 'Advance removed'}), 200
     except Exception as e:
         db.session.rollback()
@@ -824,7 +824,7 @@ def payroll_run(current_user=None):
                 'skipped': summary['skipped'],
             }), 400
 
-        log_action('create', 'payroll', None,
+        log_action(current_user, 'CREATE', 'payroll', None,
                    f"Payroll {month:02d}/{year}: {len(summary['posted'])} workers, "
                    f"{summary['total_expensed']:,.2f} booked")
         return jsonify({

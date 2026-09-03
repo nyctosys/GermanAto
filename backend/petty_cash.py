@@ -27,11 +27,24 @@ migrate_cash_received_invoice_link.py.
 """
 from models import CashReceived, Expense
 
-# Expense categories whose money is owned by another ledger.
-# Only Parts: those are recorded against the vendor as well, so counting
-# them here too double-counts them. Everything else a workshop spends in a
-# day - wages, fuel, utilities, supplies - is genuinely petty cash.
-LEDGER_OWNED_CATEGORIES = ('Parts',)
+# What the till may hold, matching the category list on the form exactly.
+#
+# An allowlist, not a blocklist, on purpose: naming what is excluded means
+# anything unexpected still leaks onto the page - a typo, a blank category, one
+# added later, or the Labor rows the payroll run writes. Naming what is
+# included cannot leak.
+#
+# Parts belong to the vendor ledger, Labor is written by payroll, and major
+# expenses have their own page. All three are still counted in full by Reports
+# and the monthly ledger; they are simply not petty cash.
+TILL_CATEGORIES = (
+    'Fuel',
+    'Maintenance',
+    'Utilities',
+    'Office Supplies',
+    'Transportation',
+    'Other',
+)
 
 # Callers opt in with this, so nothing else changes shape by accident.
 TILL_SCOPE = 'till'
@@ -44,7 +57,7 @@ def wants_till(args):
 
 def till_expenses(query):
     """Expenses that are genuinely petty cash."""
-    return query.filter(~Expense.category.in_(LEDGER_OWNED_CATEGORIES))
+    return query.filter(Expense.category.in_(TILL_CATEGORIES))
 
 
 def till_receipts(query):
