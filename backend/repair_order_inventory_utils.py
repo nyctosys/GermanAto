@@ -131,65 +131,131 @@ def process_repair_order_parts(parts_data, repair_order_id=None):
         return False, [], [f"Unexpected error: {str(e)}"]
 
 
+def _get_part_inventory_key(part):
+    """Stable identity for matching repair-order part lines to inventory."""
+    inv_id = part.get('inventory_id')
+    if inv_id is not None and inv_id != '':
+        try:
+            # Cast string/float ids to int for reliable comparison (e.g., "9" vs 9)
+            return int(float(inv_id))
+        except (ValueError, TypeError):
+            pass
+
+    part_number = (part.get('part_number') or '').strip()
+    if part_number:
+        return f"pn:{part_number}"
+
+    description = (part.get('description') or '').strip()
+    if description:
+        return f"desc:{description}"
+
+    return None
+
+
+def _parse_part_quantity(part):
+    try:
+        return int(part.get('quantity', 0) or 0)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _aggregate_parts_by_inventory_key(parts):
+    """
+    Sum quantities for duplicate line items that share the same inventory identity.
+
+    Repair orders allow the same part number on multiple rows. Inventory must
+    compare total quantity per part, not last-row-wins, or a second PN line
+    produces no stock deduction and no sale transaction.
+    """
+    aggregated = {}
+
+    for part in parts:
+        key = _get_part_inventory_key(part)
+        if not key:
+            continue
+
+        quantity = _parse_part_quantity(part)
+        if key in aggregated:
+            aggregated[key]['quantity'] = _parse_part_quantity(aggregated[key]) + quantity
+            if not aggregated[key].get('inventory_id') and part.get('inventory_id'):
+                aggregated[key]['inventory_id'] = part.get('inventory_id')
+            if not (aggregated[key].get('part_number') or '').strip() and (part.get('part_number') or '').strip():
+                aggregated[key]['part_number'] = part.get('part_number')
+            if not (aggregated[key].get('description') or '').strip() and (part.get('description') or '').strip():
+                aggregated[key]['description'] = part.get('description')
+        else:
+            aggregated[key] = dict(part)
+            aggregated[key]['quantity'] = quantity
+
+    return aggregated
+
+
+def _resolve_inventory_id(part):
+    """Resolve inventory row id from explicit id, part number, or description."""
+    inventory_id = part.get('inventory_id')
+    if inventory_id is not None and inventory_id != '':
+        try:
+            return int(float(inventory_id))
+        except (ValueError, TypeError):
+            pass
+
+    part_number = (part.get('part_number') or '').strip()
+    if part_number:
+        inventory_item = find_inventory_item_by_part_number(part_number)
+        if inventory_item:
+            return inventory_item.id
+
+    description = (part.get('description') or '').strip()
+    if description:
+        inventory_item = find_inventory_item_by_name(description)
+        if inventory_item:
+            return inventory_item.id
+
+    return None
+
+
 def calculate_inventory_changes(old_parts, new_parts):
     """
-    Calculate inventory changes when editing a repair order
+    Calculate inventory changes when editing a repair order.
+
+    Duplicate lines for the same inventory item are aggregated by quantity so
+    re-adding the same part number is treated as an additional sale.
+
     Returns a tuple: (items_to_add, items_to_remove, items_to_modify)
     """
-    # Convert to dictionaries for easier comparison
-    old_parts_dict = {}
-    new_parts_dict = {}
-    
-    def get_part_key(part):
-        inv_id = part.get('inventory_id')
-        if inv_id is not None:
-            try:
-                # Cast string/float ids to int for reliable comparison (e.g., "9" vs 9)
-                return int(float(inv_id))
-            except (ValueError, TypeError):
-                pass
-        return part.get('part_number') or part.get('description')
-    
-    for part in old_parts:
-        key = get_part_key(part)
-        if key:
-            old_parts_dict[key] = part
-    
-    for part in new_parts:
-        key = get_part_key(part)
-        if key:
-            new_parts_dict[key] = part
-    
+    old_parts_dict = _aggregate_parts_by_inventory_key(old_parts)
+    new_parts_dict = _aggregate_parts_by_inventory_key(new_parts)
+
     items_to_add = []
     items_to_remove = []
     items_to_modify = []
-    
+
     # Find items to add (in new but not in old)
     for key, new_part in new_parts_dict.items():
         if key not in old_parts_dict:
             items_to_add.append(new_part)
-    
+
     # Find items to remove (in old but not in new)
     for key, old_part in old_parts_dict.items():
         if key not in new_parts_dict:
             items_to_remove.append(old_part)
-    
-    # Find items to modify (in both but with different quantities)
+
+    # Find items to modify (in both but with different total quantities)
     for key in old_parts_dict:
         if key in new_parts_dict:
             old_part = old_parts_dict[key]
             new_part = new_parts_dict[key]
-            
-            old_quantity = int(old_part.get('quantity', 0))
-            new_quantity = int(new_part.get('quantity', 0))
-            
+
+            old_quantity = _parse_part_quantity(old_part)
+            new_quantity = _parse_part_quantity(new_part)
+
             if old_quantity != new_quantity:
                 items_to_modify.append({
                     'old': old_part,
                     'new': new_part,
                     'quantity_change': new_quantity - old_quantity
                 })
-    
+
     return items_to_add, items_to_remove, items_to_modify
 
 
@@ -199,21 +265,21 @@ def handle_repair_order_edit_inventory(old_parts, new_parts, repair_order_id=Non
     Returns a tuple: (success, errors)
     """
     errors = []
-    
+
     try:
         items_to_add, items_to_remove, items_to_modify = calculate_inventory_changes(old_parts, new_parts)
-        
+
         # Handle items to remove (restore inventory - parts removed from repair order)
         for item in items_to_remove:
-            inventory_id = item.get('inventory_id')
-            quantity = int(item.get('quantity', 0))
-            
+            inventory_id = _resolve_inventory_id(item)
+            quantity = _parse_part_quantity(item)
+
             if inventory_id and quantity > 0:
                 inventory_item = Inventory.query.get(inventory_id)
                 if inventory_item:
                     previous_quantity = inventory_item.quantity
                     inventory_item.quantity += quantity
-                    
+
                     # Log the adjustment (items returned to inventory)
                     log_adjustment(
                         inventory_id=inventory_id,
@@ -224,49 +290,67 @@ def handle_repair_order_edit_inventory(old_parts, new_parts, repair_order_id=Non
                         reference_description=f"Part removed from Repair Order #{repair_order_id}" if repair_order_id else "Part removed from repair order",
                         notes=f"Part: {inventory_item.name} - Returned to stock"
                     )
-                    
+
                     logger.info(f"Restored {quantity} units to {inventory_item.name} (ID: {inventory_id})")
                 else:
                     errors.append(f"Inventory item with ID {inventory_id} not found for restoration")
-        
-        # Handle items to modify (adjust inventory - quantity changed)
+
+        # Handle items to modify (quantity changed for an existing inventory identity)
         for item in items_to_modify:
-            inventory_id = item['new'].get('inventory_id')
+            inventory_id = _resolve_inventory_id(item['new']) or _resolve_inventory_id(item['old'])
             quantity_change = item['quantity_change']
-            
-            if inventory_id and quantity_change != 0:
-                inventory_item = Inventory.query.get(inventory_id)
-                if inventory_item:
-                    previous_quantity = inventory_item.quantity
-                    inventory_item.quantity -= quantity_change  # Subtract because we're deducting more
-                    
-                    # Log the adjustment
-                    log_adjustment(
-                        inventory_id=inventory_id,
-                        quantity_change=-quantity_change,  # Negate because we subtracted
-                        previous_quantity=previous_quantity,
-                        new_quantity=inventory_item.quantity,
-                        repair_order_id=repair_order_id,
-                        reference_description=f"Part quantity changed in Repair Order #{repair_order_id}" if repair_order_id else "Part quantity changed in repair order",
-                        notes=f"Part: {inventory_item.name} - Quantity change: {quantity_change:+d}"
+
+            if not inventory_id or quantity_change == 0:
+                continue
+
+            if quantity_change > 0:
+                # Extra units issued for the RO — must be issue_out so it counts as a sale
+                success = deduct_inventory_quantity(inventory_id, quantity_change, repair_order_id)
+                if not success:
+                    part_label = (
+                        item['new'].get('part_number')
+                        or item['new'].get('description')
+                        or inventory_id
                     )
-                    
-                    logger.info(f"Adjusted inventory for {inventory_item.name} by {quantity_change} units")
-                else:
-                    errors.append(f"Inventory item with ID {inventory_id} not found for modification")
-        
+                    errors.append(f"Failed to deduct additional inventory for part: {part_label}")
+                continue
+
+            # quantity_change < 0: return units to stock
+            quantity_to_restore = abs(quantity_change)
+            inventory_item = Inventory.query.get(inventory_id)
+            if inventory_item:
+                previous_quantity = inventory_item.quantity
+                inventory_item.quantity += quantity_to_restore
+
+                log_adjustment(
+                    inventory_id=inventory_id,
+                    quantity_change=quantity_to_restore,
+                    previous_quantity=previous_quantity,
+                    new_quantity=inventory_item.quantity,
+                    repair_order_id=repair_order_id,
+                    reference_description=f"Part quantity reduced in Repair Order #{repair_order_id}" if repair_order_id else "Part quantity reduced in repair order",
+                    notes=f"Part: {inventory_item.name} - Returned to stock: {quantity_to_restore}"
+                )
+
+                logger.info(
+                    f"Restored {quantity_to_restore} units to {inventory_item.name} "
+                    f"after quantity reduction on repair order"
+                )
+            else:
+                errors.append(f"Inventory item with ID {inventory_id} not found for modification")
+
         # Handle items to add (deduct inventory - new parts added)
         if items_to_add:
             success, processed_parts, add_errors = process_repair_order_parts(items_to_add, repair_order_id)
             errors.extend(add_errors)
-        
+
         if not errors:
             db.session.commit()
             return True, []
         else:
             db.session.rollback()
             return False, errors
-            
+
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error handling repair order edit inventory: {e}")
