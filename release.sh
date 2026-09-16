@@ -5,8 +5,8 @@
 #   ./release.sh              deploy
 #   ./release.sh --dry-run    show what would change, touch nothing
 #
-# Code only. Database migrations are deliberate and run separately - a release
-# that needs one will say so in its commit message, and you run it by hand.
+# Deploys code, then runs migrate_release_schema.py (idempotent column/index
+# adds). Heavier data migrations still run by hand when a release says so.
 #
 # Run as yourself, not with sudo: the clone uses your GitHub credentials, and
 # the script escalates only for the steps that write to /opt.
@@ -71,6 +71,10 @@ sudo rsync -a --delete --chown="$OWNER" "${EXCLUDES[@]}" \
     "$STAGE/repo/backend/" "$APP_DIR/backend/"
 sudo cp "$STAGE"/repo/*.py "$APP_DIR/"
 sudo chown "$OWNER" "$APP_DIR"/*.py
+
+say "Applying schema migrations"
+sudo -u "${OWNER%%:*}" bash -c "cd '$APP_DIR/backend' && source env/bin/activate && python ../migrate_release_schema.py" \
+    || die "schema migration failed - restore with: sudo tar xzf $BACKUP -C $APP_DIR"
 
 say "Restarting $SERVICE"
 sudo systemctl restart "$SERVICE"

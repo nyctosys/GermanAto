@@ -858,23 +858,62 @@ function toggleCategory(category) {
 // Load categories from database
 async function loadCategories() {
   try {
-    // Load from settings API WITHOUT sync to prevent recreating old categories
-    const data = await APIHelper.get("/api/settings/categories");
-    if (!data || !data.categories) return;
+    if (window.auth?.ready) {
+      await auth.ready;
+    }
 
-    const categories = data.categories;
-    const categorySelect = document.getElementById("item-category");
-    
-    if (categorySelect) {
-      // Clear existing options except the first one
-      categorySelect.innerHTML = '<option value="">Select Category</option>';
-
-      categories.forEach((cat) => {
-        const option = document.createElement("option");
-        option.value = cat.name;
-        option.textContent = cat.name;
-        categorySelect.appendChild(option);
+    let categories = [];
+    try {
+      const data = await APIHelper.request("/api/settings/categories", {
+        method: "GET",
+        silent: true,
       });
+      if (data?.categories?.length) {
+        categories = data.categories;
+      }
+    } catch (settingsError) {
+      console.warn("Settings categories unavailable, using inventory categories:", settingsError);
+    }
+
+    if (!categories.length) {
+      try {
+        const data = await APIHelper.request("/api/inventory/categories", {
+          method: "GET",
+          silent: true,
+        });
+        const names = data?.categories || [];
+        categories = names.map((name) => ({ name }));
+      } catch (inventoryError) {
+        console.warn("Inventory categories unavailable:", inventoryError);
+      }
+    }
+
+    if (!categories.length) {
+      categories = (inventoryCategoryOrder.length
+        ? inventoryCategoryOrder
+        : DEFAULT_CATEGORY_ORDER
+      ).map((name) => ({ name }));
+    }
+
+    const categorySelect = document.getElementById("item-category");
+    if (!categorySelect) return;
+
+    const currentValue = categorySelect.value;
+    categorySelect.innerHTML = '<option value="">Select Category</option>';
+
+    const seen = new Set();
+    categories.forEach((cat) => {
+      const name = typeof cat === "string" ? cat : cat?.name;
+      if (!name || seen.has(name)) return;
+      seen.add(name);
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      categorySelect.appendChild(option);
+    });
+
+    if (currentValue && seen.has(currentValue)) {
+      categorySelect.value = currentValue;
     }
   } catch (error) {
     console.error("Error loading categories:", error);
@@ -1364,7 +1403,7 @@ async function handleFormSubmit(e) {
     closeModal();
   } catch (error) {
     console.error("Error saving item:", error);
-    alert("Error saving item. Please try again.");
+    alert(error?.message || "Error saving item. Please try again.");
   }
 }
 

@@ -464,7 +464,28 @@ body {
     color: #d39e00;
 }
 
-/* Quantity Display */
+/* Quantity = stock before the transaction */
+.transaction-quantity {
+    color: var(--text-dark);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+/* Stock change = signed delta */
+.transaction-stock-change {
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+/* Total = stock after the transaction */
+.transaction-total {
+    color: var(--text-dark);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
 .quantity-negative {
     color: #dc3545;
     font-weight: 700;
@@ -491,27 +512,6 @@ body {
 
 .quantity-neutral {
     color: var(--text-muted);
-    font-weight: 600;
-}
-
-/* Stock Change */
-.transaction-stock-change {
-    font-family: 'Courier New', monospace;
-    font-size: 0.875rem;
-}
-
-.stock-previous {
-    color: var(--text-muted);
-}
-
-.stock-arrow {
-    color: var(--primary-maroon);
-    margin: 0 6px;
-    font-weight: bold;
-}
-
-.stock-new {
-    color: var(--text-dark);
     font-weight: 600;
 }
 

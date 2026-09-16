@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 import re
 from sqlalchemy import func, false
 from models import db, Inventory, InventoryTransaction, RepairOrderPart
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from datetime import datetime, time, timezone, timedelta
 from zoneinfo import ZoneInfo
 import logging
@@ -368,6 +368,39 @@ def ensure_unique_inventory_codes(barcode=None, manufacturer_part_number=None, i
 
     return None
 
+
+def inventory_database_error_message(error):
+    """Turn opaque SQLAlchemy failures into actionable API errors."""
+    original = getattr(error, 'orig', None)
+    detail = str(original or error)
+
+    if isinstance(error, OperationalError) or 'Unknown column' in detail:
+        missing = None
+        if 'barcode' in detail:
+            missing = 'barcode'
+        elif 'manufacturer_part_number' in detail:
+            missing = 'manufacturer_part_number'
+        if missing:
+            return (
+                f"Database schema is missing the '{missing}' column. "
+                "Run: python migrate_release_schema.py"
+            )
+        return (
+            "Database schema is out of date for inventory. "
+            "Run: python migrate_release_schema.py"
+        )
+
+    if isinstance(error, IntegrityError) or 'Duplicate entry' in detail:
+        if 'barcode' in detail:
+            return "That barcode is already assigned to another inventory item"
+        if 'manufacturer_part_number' in detail:
+            return "That manufacturer part number is already assigned to another inventory item"
+        if 'part_number' in detail:
+            return "Could not allocate a unique part number. Please try saving again."
+        return "That inventory item conflicts with an existing unique value"
+
+    return "Database error occurred"
+
 @inventory_bp.route('/inventory', methods=['GET'])
 @login_required
 def get_inventory(current_user=None):
@@ -580,6 +613,7 @@ def create_inventory_item(current_user=None):
                 barcode=barcode,
                 manufacturer_part_number=manufacturer_part_number,
                 quantity=quantity,
+                price=0.0,
                 description=description,
                 location=location,
                 reorder_level=reorder_level,
@@ -598,7 +632,8 @@ def create_inventory_item(current_user=None):
         except SQLAlchemyError as e:
             db.session.rollback()
             logger.error(f"Database error creating inventory item: {e}")
-            return jsonify({'error': 'Database error occurred'}), 500
+            status = 400 if isinstance(e, IntegrityError) else 500
+            return jsonify({'error': inventory_database_error_message(e)}), status
             
     except Exception as e:
         logger.error(f"Unexpected error creating inventory item: {e}")
@@ -722,7 +757,8 @@ def update_inventory_item(item_id, current_user=None):
         except SQLAlchemyError as e:
             db.session.rollback()
             logger.error(f"Database error updating inventory item {item_id}: {e}")
-            return jsonify({'error': 'Database error occurred'}), 500
+            status = 400 if isinstance(e, IntegrityError) else 500
+            return jsonify({'error': inventory_database_error_message(e)}), status
             
     except Exception as e:
         logger.error(f"Unexpected error updating inventory item {item_id}: {e}")

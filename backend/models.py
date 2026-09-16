@@ -170,23 +170,31 @@ class Inventory(db.Model):
             self.part_number = self.generate_part_number()
     
     def generate_part_number(self):
-        """Generate a sequential part number"""
-        from sqlalchemy import func
-        # Get the highest part number
-        max_part = db.session.query(func.max(Inventory.part_number)).scalar()
-        
-        if max_part:
-            # Extract the number from the part number (e.g., "PN001" -> 1)
-            try:
-                current_num = int(max_part[2:])  # Remove "PN" prefix
-                next_num = current_num + 1
-            except (ValueError, IndexError):
-                next_num = 1
-        else:
-            next_num = 1
-        
-        # Format as PN001, PN002, etc.
-        return f"PN{next_num:03d}"
+        """Generate the next unused PN### code.
+
+        Do not use SQL MAX(part_number): that is lexicographic, so once codes
+        pass PN999 (PN1000+) MAX stays on PN999 and every new row collides.
+        """
+        rows = db.session.query(Inventory.part_number).all()
+        max_num = 0
+        for (part_number,) in rows:
+            if not part_number or not str(part_number).startswith('PN'):
+                continue
+            suffix = str(part_number)[2:]
+            if suffix.isdigit():
+                max_num = max(max_num, int(suffix))
+
+        next_num = max_num + 1
+        while True:
+            candidate = f"PN{next_num:03d}"
+            exists = (
+                db.session.query(Inventory.id)
+                .filter_by(part_number=candidate)
+                .first()
+            )
+            if not exists:
+                return candidate
+            next_num += 1
 
 
 class Customer(db.Model):

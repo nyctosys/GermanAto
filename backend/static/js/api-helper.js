@@ -492,7 +492,9 @@ class APIHelper {
     } catch (error) {
       if (this._unloading) throw error;
       console.error("API request failed:", error);
-      this.showErrorState(error, url);
+      if (!options.silent) {
+        this.showErrorState(error, url);
+      }
       throw error;
     }
   }

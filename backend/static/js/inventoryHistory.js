@@ -122,8 +122,12 @@ function createTransactionRow(transaction) {
     row.className = `transaction-row ${transaction.transaction_type}`;
     
     const formattedDate = formatDateTime(transaction.created_at);
-    const quantityDisplay = formatQuantity(transaction.quantity, transaction.transaction_type);
-    const stockChange = formatStockChange(transaction.previous_quantity, transaction.new_quantity);
+    const previousQuantity = Number(transaction.previous_quantity ?? 0);
+    const newQuantity = Number(transaction.new_quantity ?? 0);
+    const stockChangeDisplay = formatStockChange(
+        transaction.quantity,
+        transaction.transaction_type
+    );
     const typeBadge = createTypeBadge(transaction.transaction_type);
     const repairOrderLink = createRepairOrderLink(transaction.repair_order_id);
     
@@ -137,8 +141,9 @@ function createTransactionRow(transaction) {
             </div>
         </td>
         <td class="transaction-type">${typeBadge}</td>
-        <td class="transaction-quantity">${quantityDisplay}</td>
-        <td class="transaction-stock-change">${stockChange}</td>
+        <td class="transaction-quantity" title="Quantity before this transaction">${previousQuantity}</td>
+        <td class="transaction-stock-change">${stockChangeDisplay}</td>
+        <td class="transaction-total" title="Quantity after this transaction">${newQuantity}</td>
         <td class="transaction-repair-order">${repairOrderLink}</td>
         <td class="transaction-description">
             <span class="description-text" title="${transaction.reference_description || ''}">${transaction.reference_description || '-'}</span>
@@ -178,41 +183,22 @@ function formatDateTime(dateString) {
 }
 
 /**
- * Format quantity display with color coding
+ * Format stock change with an explicit sign (+5 / -1).
  */
-function formatQuantity(quantity, transactionType) {
-    let className = '';
-    let prefix = '';
-    
-    if (transactionType === 'issue_out') {
-        className = 'quantity-negative';
-        prefix = '';  // Already negative
-    } else if (transactionType === 'received') {
-        className = 'quantity-positive';
-        prefix = '+';
-    } else if (transactionType === 'adjustment') {
-        if (quantity > 0) {
-            className = 'quantity-adjustment-positive';
-            prefix = '+';
-        } else if (quantity < 0) {
-            className = 'quantity-adjustment-negative';
-            prefix = '';
-        } else {
-            className = 'quantity-neutral';
-            prefix = '';
-        }
-    }
-    
-    return `<span class="${className}">${prefix}${quantity}</span>`;
-}
+function formatStockChange(quantity, transactionType) {
+    const amount = Number(quantity ?? 0);
+    let className = 'quantity-neutral';
+    let display = String(amount);
 
-/**
- * Format stock change display
- */
-function formatStockChange(previousQuantity, newQuantity) {
-    return `<span class="stock-previous">${previousQuantity}</span>
-            <span class="stock-arrow">→</span>
-            <span class="stock-new">${newQuantity}</span>`;
+    if (transactionType === 'issue_out' || amount < 0) {
+        className = 'quantity-negative';
+        display = String(amount); // already negative for issue_out
+    } else if (transactionType === 'received' || amount > 0) {
+        className = 'quantity-positive';
+        display = `+${amount}`;
+    }
+
+    return `<span class="${className}">${display}</span>`;
 }
 
 /**
