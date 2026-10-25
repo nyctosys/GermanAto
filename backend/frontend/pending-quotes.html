@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pending Quotes - GermanATO</title>
+    <link rel="stylesheet" href="static/css/theme.css" />
+    <link rel="stylesheet" href="static/css/search.css" />
+    <link rel="stylesheet" href="../static/css/app-shell.css" />
+    <script src="static/js/theme.js"></script>
+  </head>
+  <body>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1>Quotes Management</h1>
+            <p>View and manage quotes by status</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Search Section -->
+      <div class="search-section">
+        <div class="search-container">
+          <div class="search-field-group">
+            <label for="keyword-search-input">Keyword Search</label>
+            <input
+              type="text"
+              id="keyword-search-input"
+              placeholder="Customer name, phone, reg number..."
+              class="search-input"
+            />
+          </div>
+          <div class="search-field-group">
+            <label for="id-search-input">ID Search</label>
+            <input
+              type="number"
+              id="id-search-input"
+              placeholder="Quote ID"
+              class="search-input"
+              min="1"
+            />
+          </div>
+          <div class="search-buttons">
+            <button id="search-btn" class="search-btn">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+              </svg>
+            </button>
+            <button
+              id="clear-search-btn"
+              class="clear-search-btn"
+              style="display: none"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date Filter Section -->
+      <div class="date-filter-section">
+        <div class="date-filter-label">Filter by Date:</div>
+        <div class="date-filter-buttons">
+          <button class="date-filter-btn" id="filter-today">Today</button>
+          <button class="date-filter-btn" id="filter-this-week">This Week</button>
+          <button class="date-filter-btn" id="filter-this-month">This Month</button>
+          <button class="date-filter-btn" id="filter-this-year">This Year</button>
+          <button class="date-filter-btn" id="filter-custom">Custom Range</button>
+          <button class="date-filter-btn date-filter-clear" id="clear-date-filter" style="display: none;">Clear Date</button>
+        </div>
+        <div class="custom-range-container" id="custom-range-container" style="display: none;">
+          <div class="custom-range-inputs">
+            <div class="date-input-group">
+              <label for="date-from">From Date</label>
+              <input type="date" id="date-from" class="date-input" />
+            </div>
+            <div class="date-input-group">
+              <label for="date-to">To Date</label>
+              <input type="date" id="date-to" class="date-input" />
+            </div>
+            <div class="custom-range-actions">
+              <button class="date-filter-btn apply-btn" id="apply-custom-range">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="quote-status-toggle">
+        <button class="quote-status-btn active" id="show-all">
+          All Quotes
+        </button>
+        <button class="quote-status-btn" id="show-pending">
+          Pending Quotes
+        </button>
+        <button class="quote-status-btn" id="show-approved">
+          Approved Quotes
+        </button>
+      </div>
+      <div id="pending-quotes-results"></div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+    <script src="static/js/auth_jwt.js"></script>
+    <script src="../static/js/app-shell.js"></script>
+    <script src="static/js/api-helper.js"></script>
+    <script src="static/js/libs/xlsx.full.min.js"></script>
+    <script src="static/js/documentLog.js"></script>
+    <script src="static/js/pendingQuotes.js"></script>
+  </body>
+</html>

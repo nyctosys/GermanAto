@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Attendance</title>
+    <link rel="stylesheet" href="../static/css/theme.css" />
+    <link rel="stylesheet" href="../static/css/attendance.css" />
+    <link rel="stylesheet" href="../static/css/app-shell.css" />
+    <script src="../static/js/theme.js"></script>
+    <script src="../static/js/notification-utils.js"></script>
+  </head>
+  <body>
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="../static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1>Attendance</h1>
+            <p>Record and view check-in / check-out</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="/hr" id="back-btn" class="back-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="container">
+        <div class="filters-section">
+          <div class="filter-group">
+            <label for="workerFilter">Worker</label>
+            <select id="workerFilter" class="filter-select">
+              <option value="">All Workers</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="startDate">From</label>
+            <input type="date" id="startDate" class="filter-input" />
+          </div>
+          <div class="filter-group">
+            <label for="endDate">To</label>
+            <input type="date" id="endDate" class="filter-input" />
+          </div>
+          <button type="button" class="btn-primary" id="applyFiltersBtn">Apply</button>
+          <button type="button" class="btn-secondary" id="clearFiltersBtn">Clear</button>
+          <a href="/hr/device-management" class="add-btn btn-sm btn-device-mgmt" id="deviceManagementBtn">Manage devices</a>
+          <button type="button" class="add-btn btn-sm" id="addAttendanceBtn">+ Add Record</button>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="attendanceTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Check-in</th>
+                <th>Check-out</th>
+                <th>Hours</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="attendanceTableBody">
+              <tr>
+                <td colspan="8" class="loading-cell"><div class="loading-spinner"></div> Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <!-- Add/Edit Attendance Modal -->
+    <div id="attendanceModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="attendanceModalTitle">Add Attendance</h2>
+          <button type="button" class="close" id="closeAttendanceModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="attendanceForm">
+            <input type="hidden" id="attendanceRecordId" />
+            <div class="form-group">
+              <label for="attWorkerId">Worker *</label>
+              <select id="attWorkerId" class="input-fields" required>
+                <option value="">Select worker</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="attDate">Date *</label>
+              <input type="date" id="attDate" class="input-fields" required />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="attCheckIn">Check-in (e.g. 09:00)</label>
+                <input type="text" id="attCheckIn" class="input-fields" placeholder="09:00" />
+              </div>
+              <div class="form-group">
+                <label for="attCheckOut">Check-out (e.g. 17:00)</label>
+                <input type="text" id="attCheckOut" class="input-fields" placeholder="17:00" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="attNotes">Notes</label>
+              <input type="text" id="attNotes" class="input-fields" />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="cancelAttendanceBtn">Cancel</button>
+          <button type="button" class="btn-primary" id="saveAttendanceBtn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="../static/js/notification-utils.js"></script>
+    <script src="../static/js/auth_jwt.js"></script>
+    <script src="../static/js/app-shell.js"></script>
+    <script src="../static/js/api-helper.js"></script>
+    <script src="../static/js/attendance.js"></script>
+  </body>
+</html>

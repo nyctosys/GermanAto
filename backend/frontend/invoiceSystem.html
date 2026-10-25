@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bill Management - GermanATO</title>
+    <link rel="stylesheet" href="static/css/theme.css" />
+    <link rel="stylesheet" href="static/css/invoiceSystem.css" />
+    <link rel="stylesheet" href="../static/css/app-shell.css" />
+    <script src="static/js/theme.js"></script>
+  </head>
+  <body>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1>Bill Management</h1>
+            <p>Invoices, Quotes and Repair Orders</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Page Header -->
+      <div class="page-header">
+        <h2>Bill Management</h2>
+        <p>Manage invoices, quotes, and repair orders</p>
+      </div>
+
+      <!-- Navigation Cards -->
+      <div class="nav-cards">
+        <!-- Create Invoice / Quote Card -->
+        <a href="invoice.html?from=invoiceSystem" class="nav-card">
+          <div class="card-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              ></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div class="card-content">
+            <h3>Create Invoice</h3>
+            <p>Bill a customer for work done, and deduct the parts used</p>
+          </div>
+        </a>
+
+        <a href="quote.html?from=invoiceSystem" class="nav-card">
+          <div class="card-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              ></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div class="card-content">
+            <h3>Create Quote</h3>
+            <p>Price up work for approval &mdash; no stock is deducted</p>
+          </div>
+        </a>
+
+        <!-- Manage Quotes Card -->
+        <a href="pending-quotes.html?from=invoiceSystem" class="nav-card">
+          <div class="card-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path
+                d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 0 0 1.946-.806 3.42 3.42 0 0 1 4.438 0 3.42 3.42 0 0 0 1.946.806 3.42 3.42 0 0 1 3.138 3.138 3.42 3.42 0 0 0 .806 1.946 3.42 3.42 0 0 1 0 4.438 3.42 3.42 0 0 0-.806 1.946 3.42 3.42 0 0 1-3.138 3.138 3.42 3.42 0 0 0-1.946.806 3.42 3.42 0 0 1-4.438 0 3.42 3.42 0 0 0-1.946-.806 3.42 3.42 0 0 1-3.138-3.138 3.42 3.42 0 0 0-.806-1.946 3.42 3.42 0 0 1 0-4.438 3.42 3.42 0 0 0 .806-1.946 3.42 3.42 0 0 1 3.138-3.138z"
+              ></path>
+            </svg>
+          </div>
+          <div class="card-content">
+            <h3>Manage Quotes</h3>
+            <p>View and manage pending customer quotes</p>
+          </div>
+        </a>
+
+        <!-- Manage Invoices Card -->
+        <a href="invoice-management.html?from=invoiceSystem" class="nav-card">
+          <div class="card-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"
+              ></path>
+            </svg>
+          </div>
+          <div class="card-content">
+            <h3>Manage Invoices</h3>
+            <p>View, edit, and track invoice status</p>
+          </div>
+        </a>
+
+        <!-- Manage Repair Orders Card -->
+        <a
+          href="repair-orders-management.html?from=invoiceSystem"
+          class="nav-card"
+        >
+          <div class="card-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <path d="M9 12l2 2 4-4"></path>
+            </svg>
+          </div>
+          <div class="card-content">
+            <h3>Manage Repair Orders</h3>
+            <p>View and manage all repair orders</p>
+          </div>
+        </a>
+
+        <!-- Create Repair Order Card -->
+        <a href="repair-order.html?from=invoiceSystem" class="nav-card">
+          <div class="card-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path
+                d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+              ></path>
+            </svg>
+          </div>
+          <div class="card-content">
+            <h3>Create Repair Order</h3>
+            <p>Create new repair orders for vehicles</p>
+          </div>
+        </a>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="static/js/auth_jwt.js"></script>
+    <script src="../static/js/app-shell.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Check authentication and page access
+        if (!auth.requirePageAccess("invoice")) {
+          return;
+        }
+
+        // Set up smart back button logic
+        const backBtn = document.getElementById("back-btn");
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromPage =
+          urlParams.get("from") || localStorage.getItem("lastPage") || "home";
+
+        // Set back button destination based on where user came from
+        if (backBtn) {
+          if (fromPage === "home") {
+            backBtn.href = "home.html";
+          } else if (fromPage === "admin") {
+            backBtn.href = "admin.html";
+          } else if (fromPage === "finance-management") {
+            backBtn.href = "finance-management.html";
+          } else {
+            backBtn.href = "home.html"; // Default fallback
+          }
+        }
+
+        // Track current page for back button logic
+        localStorage.setItem("lastPage", "invoiceSystem");
+      });
+    </script>
+  </body>
+</html>

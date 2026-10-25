@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monthly Financial Ledger - GermanATO</title>
+    <link rel="stylesheet" href="static/css/theme.css" />
+    <link rel="stylesheet" href="static/css/dailyExpenses.css" />
+    <link rel="stylesheet" href="static/css/monthlyLedger.css" />
+    <link rel="stylesheet" href="../static/css/app-shell.css" />
+    <script src="static/js/theme.js"></script>
+  </head>
+  <body>
+<header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1>Monthly Financial Ledger</h1>
+            <p>Opening and closing balances, day by day</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Period picker -->
+      <div class="section-card ledger-filter">
+        <div class="ledger-filter__presets">
+          <button type="button" class="chip" data-preset="this-month">This month</button>
+          <button type="button" class="chip" data-preset="last-month">Last month</button>
+          <button type="button" class="chip" data-preset="last-3">Last 3 months</button>
+          <button type="button" class="chip" data-preset="this-year">This year</button>
+        </div>
+
+        <div class="ledger-filter__controls">
+          <div class="ledger-filter__field">
+            <label for="ledger-month-select">Month</label>
+            <div class="month-stepper">
+              <button type="button" id="month-prev" class="step" aria-label="Previous month">&#8249;</button>
+              <input type="month" id="ledger-month-select" class="input-fields" />
+              <button type="button" id="month-next" class="step" aria-label="Next month">&#8250;</button>
+            </div>
+          </div>
+
+          <div class="ledger-filter__or">or</div>
+
+          <div class="ledger-filter__field">
+            <label for="ledger-start-date">From</label>
+            <input type="date" id="ledger-start-date" class="input-fields" />
+          </div>
+          <div class="ledger-filter__field">
+            <label for="ledger-end-date">To</label>
+            <input type="date" id="ledger-end-date" class="input-fields" />
+          </div>
+          <button type="button" id="btn-apply-range" class="btn btn-primary">Apply range</button>
+          <button type="button" id="btn-export-ledger" class="btn btn-success">Export Excel</button>
+        </div>
+
+        <p class="ledger-filter__scope" id="ledger-scope">Loading&hellip;</p>
+      </div>
+
+      <!-- Totals -->
+      <div class="ledger-stats" id="ledger-stats">
+        <div class="lstat"><span>Opening balance</span><b id="ledger-opening-balance">PKR 0.00</b></div>
+        <div class="lstat lstat--in"><span>Money in</span><b id="ledger-total-in">PKR 0.00</b></div>
+        <div class="lstat lstat--out"><span>Money out</span><b id="ledger-total-out">PKR 0.00</b></div>
+        <div class="lstat"><span>Net change</span><b id="ledger-net-change">PKR 0.00</b></div>
+        <div class="lstat lstat--closing"><span>Closing balance</span><b id="ledger-closing-balance">PKR 0.00</b></div>
+      </div>
+
+      <!-- Where it went -->
+      <div class="ledger-breakdowns">
+        <div class="section-card">
+          <h2>Money out, by category</h2>
+          <div id="expense-breakdown" class="breakdown"></div>
+        </div>
+        <div class="section-card">
+          <h2>Money in, by method</h2>
+          <div id="income-breakdown" class="breakdown"></div>
+        </div>
+      </div>
+
+      <!-- Every movement -->
+      <div class="section-card">
+        <div class="section-header ledger-section-header">
+          <h2>Every transaction</h2>
+          <div class="ledger-tools">
+            <input type="search" id="ledger-search" class="input-fields"
+                   placeholder="Search description, category or notes" />
+            <select id="ledger-type-filter" class="input-fields">
+              <option value="">In and out</option>
+              <option value="in">Money in only</option>
+              <option value="out">Money out only</option>
+            </select>
+            <select id="ledger-bucket-filter" class="input-fields">
+              <option value="">All categories</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="expenses-table" id="ledger-details-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Category / method</th>
+                <th>Notes</th>
+                <th class="num">Amount</th>
+                <th class="num">Balance</th>
+              </tr>
+            </thead>
+            <tbody id="ledger-details-tbody"></tbody>
+          </table>
+        </div>
+        <p class="ledger-count" id="ledger-details-count"></p>
+      </div>
+
+      <!-- Day by day -->
+      <div class="section-card">
+        <div class="section-header ledger-section-header">
+          <h2>Balances by day</h2>
+          <label class="ledger-toggle">
+            <input type="checkbox" id="hide-quiet-days" checked />
+            Hide days with no activity
+          </label>
+        </div>
+        <div class="table-container">
+          <table class="expenses-table" id="daily-ledger-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th class="num">Opening</th>
+                <th class="num">In</th>
+                <th class="num">Out</th>
+                <th class="num">Entries</th>
+                <th class="num">Closing</th>
+              </tr>
+            </thead>
+            <tbody id="daily-ledger-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+
+    
+
+    <script src="static/js/libs/xlsx.full.min.js"></script>
+
+    <script src="static/js/auth_jwt.js"></script>
+
+    <script src="../static/js/app-shell.js"></script>
+
+    <script src="static/js/api-helper.js"></script>
+
+    <script src="static/js/monthlyLedger.js"></script>
+  </body>
+</html>

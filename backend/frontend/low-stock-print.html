@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventory Status Report - GermanATO</title>
+    <style>
+      /* Reset and base styles */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        color: #2c3e50;
+        background: white;
+        padding: 20px;
+        font-size: 14px;
+      }
+
+      /* Header */
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding: 30px 0;
+        background: white;
+        color: #2c3e50;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        border: 2px solid #e9ecef;
+      }
+
+      .header h1 {
+        font-size: 2.8rem;
+        font-weight: 300;
+        margin-bottom: 10px;
+        letter-spacing: -1px;
+      }
+
+      .header p {
+        font-size: 1.2rem;
+        opacity: 0.9;
+        font-weight: 300;
+      }
+
+      .header .subtitle {
+        font-size: 1rem;
+        opacity: 0.8;
+        margin-top: 10px;
+      }
+
+      /* Report info */
+      .report-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        border: 1px solid #e9ecef;
+      }
+
+      .info-item {
+        text-align: center;
+        padding: 15px;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+
+      .info-item strong {
+        display: block;
+        font-size: 1.5rem;
+        color: #495057;
+        margin-bottom: 5px;
+        font-weight: 600;
+      }
+
+      .info-item span {
+        color: #6c757d;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      /* Summary cards */
+      .summary-section {
+        margin-bottom: 30px;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .summary-card {
+        padding: 25px;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease;
+      }
+
+      .summary-card:hover {
+        transform: translateY(-2px);
+      }
+
+      .summary-card.urgent {
+        background: #dc3545;
+        color: white;
+      }
+
+      .summary-card.out-of-stock {
+        background: #fd7e14;
+        color: white;
+      }
+
+      .summary-card.low-stock {
+        background: #ffc107;
+        color: #2c3e50;
+      }
+
+      .summary-card.total-value {
+        background: #6c757d;
+        color: white;
+      }
+
+      .summary-card .number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 10px;
+        display: block;
+      }
+
+      .summary-card .label {
+        font-size: 1rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      /* Section headers */
+      .section-header {
+        margin-bottom: 20px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+
+      .section-header.urgent {
+        background: #dc3545;
+        color: white;
+      }
+
+      .section-header.low-stock {
+        background: #ffc107;
+        color: #2c3e50;
+      }
+
+      .section-header h2 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin: 0;
+      }
+
+      .section-header .count {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+
+      /* Table styles */
+      .table-container {
+        margin-bottom: 30px;
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th {
+        background: #495057;
+        color: white;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        padding: 15px 12px;
+        text-align: left;
+      }
+
+      td {
+        padding: 12px;
+        border-bottom: 1px solid #e9ecef;
+        vertical-align: middle;
+      }
+
+      tr:nth-child(even) {
+        background: #f8f9fa;
+      }
+
+      tr:hover {
+        background: #e9ecef;
+      }
+
+      .urgent-row {
+        background: #fff5f5 !important;
+        border-left: 4px solid #dc3545;
+      }
+
+      .urgent-row:hover {
+        background: #ffe6e6 !important;
+      }
+
+      .out-of-stock-row {
+        background: #fffbf0 !important;
+        border-left: 4px solid #ffc107;
+      }
+
+      .out-of-stock-row:hover {
+        background: #fff3cd !important;
+      }
+
+      .low-stock-row {
+        background: #f0f8ff !important;
+        border-left: 4px solid #007bff;
+      }
+
+      .low-stock-row:hover {
+        background: #e6f3ff !important;
+      }
+
+      /* Status badges */
+      .status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-block;
+      }
+
+      .status-urgent {
+        background: #dc3545;
+        color: white;
+        animation: urgentBlink 2s infinite;
+      }
+
+      @keyframes urgentBlink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
+
+      .status-out-of-stock {
+        background: #ffc107;
+        color: #2c3e50;
+      }
+
+      .status-low-stock {
+        background: #007bff;
+        color: white;
+      }
+
+      /* Priority indicators */
+      .priority-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+      }
+
+      .priority-critical {
+        background: #dc3545;
+        box-shadow: 0 0 8px rgba(220, 53, 69, 0.5);
+      }
+
+      .priority-high {
+        background: #ffc107;
+        box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+      }
+
+      .priority-medium {
+        background: #007bff;
+        box-shadow: 0 0 8px rgba(0, 123, 255, 0.5);
+      }
+
+      /* Footer */
+      .footer {
+        margin-top: 40px;
+        padding: 30px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        text-align: center;
+        border: 1px solid #dee2e6;
+      }
+
+      .footer h3 {
+        color: #495057;
+        margin-bottom: 10px;
+        font-size: 1.2rem;
+      }
+
+      .footer p {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-bottom: 5px;
+      }
+
+      /* Action buttons */
+      .actions {
+        margin-bottom: 30px;
+        text-align: left;
+        display: flex;
+        gap: 15px;
+        justify-content: flex-start;
+      }
+
+      .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      .btn-primary {
+        background: #007bff;
+        color: white;
+      }
+
+      .btn-success {
+        background: #28a745;
+        color: white;
+      }
+
+      .btn-secondary {
+        background: #6c757d;
+        color: white;
+      }
+
+      /* No items message */
+      .no-items {
+        text-align: center;
+        padding: 60px 40px;
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 12px;
+        color: #155724;
+        margin: 30px 0;
+      }
+
+      .no-items h3 {
+        font-size: 1.8rem;
+        margin-bottom: 15px;
+        font-weight: 600;
+      }
+
+      .no-items p {
+        font-size: 1.1rem;
+        opacity: 0.8;
+      }
+
+      /* Print styles */
+      @media print {
+        body {
+          padding: 0;
+          margin: 0;
+          font-size: 12px;
+        }
+
+        .actions {
+          display: none;
+        }
+
+        .header {
+          margin-bottom: 20px;
+          padding: 20px 0;
+        }
+
+        .header h1 {
+          font-size: 2rem;
+        }
+
+        .summary-grid {
+          grid-template-columns: repeat(4, 1fr);
+          gap: 15px;
+        }
+
+        .summary-card {
+          padding: 15px;
+        }
+
+        .summary-card .number {
+          font-size: 1.8rem;
+        }
+
+        table {
+          font-size: 11px;
+        }
+
+        th,
+        td {
+          padding: 8px 6px;
+        }
+
+        .status-badge {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .urgent-row,
+        .out-of-stock-row,
+        .low-stock-row {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .section-header {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .summary-card {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+      }
+
+      /* Responsive */
+      @media (max-width: 768px) {
+        body {
+          padding: 10px;
+          font-size: 12px;
+        }
+
+        .header h1 {
+          font-size: 2rem;
+        }
+
+        .summary-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .report-info {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        table {
+          font-size: 11px;
+        }
+
+        th,
+        td {
+          padding: 8px 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="actions">
+      <button class="btn btn-success" onclick="exportToPDF()">
+        Export Excel
+      </button>
+      <button class="btn btn-secondary" onclick="goBack()">
+        ← Back to Inventory
+      </button>
+    </div>
+
+    <div class="header">
+      <h1>GermanATO</h1>
+      <p>Inventory Status Report</p>
+      <div class="subtitle">
+        Comprehensive overview of stock levels and reorder requirements
+      </div>
+    </div>
+
+    <div class="report-info">
+      <div class="info-item">
+        <strong id="report-date"></strong>
+        <span>Report Date</span>
+      </div>
+      <div class="info-item">
+        <strong id="total-items">0</strong>
+        <span>Total Items</span>
+      </div>
+      <div class="info-item">
+        <strong id="urgent-count">0</strong>
+        <span>Urgent Items</span>
+      </div>
+      <div class="info-item">
+        <strong id="out-of-stock-count">0</strong>
+        <span>Out of Stock</span>
+      </div>
+      <div class="info-item">
+        <strong id="low-stock-count">0</strong>
+        <span>Low Stock</span>
+      </div>
+    </div>
+
+    <div class="summary-section">
+      <div class="summary-grid">
+        <div class="summary-card urgent">
+          <span class="number" id="summary-urgent">0</span>
+          <span class="label">Urgent Items</span>
+        </div>
+        <div class="summary-card out-of-stock">
+          <span class="number" id="summary-out">0</span>
+          <span class="label">Out of Stock</span>
+        </div>
+        <div class="summary-card low-stock">
+          <span class="number" id="summary-low">0</span>
+          <span class="label">Low Stock</span>
+        </div>
+        <div class="summary-card total-value">
+          <span class="number" id="summary-value">PKR 0</span>
+          <span class="label">Total Value</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="content">
+      <!-- Content will be loaded here -->
+    </div>
+
+    <div class="footer">
+      <h3>GermanATO - Professional Auto Services</h3>
+      <p>This report was generated on <span id="footer-date"></span></p>
+      <p>For questions or concerns, please contact the inventory manager.</p>
+    </div>
+
+    <script src="static/js/libs/xlsx.full.min.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Set current date
+        const now = new Date();
+        const dateString = now.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        document.getElementById("report-date").textContent = dateString;
+        document.getElementById("footer-date").textContent = dateString;
+
+        // Load low stock items from sessionStorage
+        const data = JSON.parse(
+          sessionStorage.getItem("lowStockItems") || "{}"
+        );
+
+        // Handle both new format (with urgent_items and low_stock_items) and old format (single array)
+        let urgentItems = [];
+        let outOfStockItems = [];
+        let lowStockItemsOnly = [];
+        let allItems = [];
+
+        if (data.urgent_items && data.low_stock_items) {
+          // New format
+          urgentItems = data.urgent_items || [];
+          const allLowStockItems = data.low_stock_items || [];
+          outOfStockItems = allLowStockItems.filter(
+            (item) => item.quantity === 0
+          );
+          lowStockItemsOnly = allLowStockItems.filter(
+            (item) => item.quantity > 0
+          );
+          allItems = [...urgentItems, ...allLowStockItems];
+        } else if (Array.isArray(data)) {
+          // Old format (fallback)
+          urgentItems = data.filter((item) => item.quantity < 0);
+          outOfStockItems = data.filter((item) => item.quantity === 0);
+          lowStockItemsOnly = data.filter(
+            (item) => item.quantity > 0 && item.quantity <= item.reorder_level
+          );
+          allItems = data;
+        }
+
+        if (allItems.length === 0) {
+          document.getElementById("content").innerHTML = `
+            <div class="no-items">
+              <h3>🎉 Excellent Inventory Management!</h3>
+              <p>All inventory items are above their reorder levels. No action required.</p>
+            </div>
+          `;
+          return;
+        }
+
+        const totalValue = allItems.reduce(
+          (sum, item) => sum + item.reorder_quantity * item.price,
+          0
+        );
+
+        // Update summary
+        document.getElementById("total-items").textContent = allItems.length;
+        document.getElementById("urgent-count").textContent =
+          urgentItems.length;
+        document.getElementById("out-of-stock-count").textContent =
+          outOfStockItems.length;
+        document.getElementById("low-stock-count").textContent =
+          lowStockItemsOnly.length;
+
+        document.getElementById("summary-urgent").textContent =
+          urgentItems.length;
+        document.getElementById("summary-out").textContent =
+          outOfStockItems.length;
+        document.getElementById("summary-low").textContent =
+          lowStockItemsOnly.length;
+        document.getElementById(
+          "summary-value"
+        ).textContent = `PKR ${totalValue.toFixed(2)}`;
+
+        // Generate content
+        let content = "";
+
+        // Urgent Items (Negative Stock)
+        if (urgentItems.length > 0) {
+          content += `
+            <div class="table-container">
+              <div class="section-header urgent">
+                <h2>🚨 URGENT - Negative Stock Items</h2>
+                <span class="count">${urgentItems.length}</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Priority</th>
+                    <th>Part Number</th>
+                    <th>Item Name</th>
+                    <th>Category</th>
+                    <th>Current Stock</th>
+                    <th>Location</th>
+                    <th>Price</th>
+                    <th>Reorder Qty</th>
+                    <th>Total Cost</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+
+          urgentItems.forEach((item) => {
+            const totalCost = item.reorder_quantity * item.price;
+            content += `
+              <tr class="urgent-row">
+                <td><span class="priority-indicator priority-critical"></span>Critical</td>
+                <td><strong>${item.part_number || "N/A"}</strong></td>
+                <td><strong>${item.name}</strong></td>
+                <td>${getCategoryDisplayName(item.category)}</td>
+                <td><strong style="color: #dc3545;">${
+                  item.quantity
+                }</strong></td>
+                <td>${item.location || "N/A"}</td>
+                <td>PKR ${item.price.toFixed(2)}</td>
+                <td>${item.reorder_quantity}</td>
+                <td><strong>PKR ${totalCost.toFixed(2)}</strong></td>
+                <td><span class="status-badge status-urgent">URGENT</span></td>
+              </tr>
+            `;
+          });
+
+          content += `
+                </tbody>
+              </table>
+            </div>
+          `;
+        }
+
+        // Out of Stock Items
+        if (outOfStockItems.length > 0) {
+          content += `
+            <div class="table-container">
+              <div class="section-header low-stock">
+                <h2>Out of Stock Items</h2>
+                <span class="count">${outOfStockItems.length}</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Priority</th>
+                    <th>Part Number</th>
+                    <th>Item Name</th>
+                    <th>Category</th>
+                    <th>Location</th>
+                    <th>Price</th>
+                    <th>Reorder Qty</th>
+                    <th>Total Cost</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+
+          outOfStockItems.forEach((item) => {
+            const totalCost = item.reorder_quantity * item.price;
+            content += `
+              <tr class="out-of-stock-row">
+                <td><span class="priority-indicator priority-high"></span>High</td>
+                <td><strong>${item.part_number || "N/A"}</strong></td>
+                <td><strong>${item.name}</strong></td>
+                <td>${getCategoryDisplayName(item.category)}</td>
+                <td>${item.location || "N/A"}</td>
+                <td>PKR ${item.price.toFixed(2)}</td>
+                <td>${item.reorder_quantity}</td>
+                <td><strong>PKR ${totalCost.toFixed(2)}</strong></td>
+                <td><span class="status-badge status-out-of-stock">Out of Stock</span></td>
+              </tr>
+            `;
+          });
+
+          content += `
+                </tbody>
+              </table>
+            </div>
+          `;
+        }
+
+        // Low Stock Items
+        if (lowStockItemsOnly.length > 0) {
+          content += `
+            <div class="table-container">
+              <div class="section-header low-stock">
+                <h2>Low Stock Items</h2>
+                <span class="count">${lowStockItemsOnly.length}</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Priority</th>
+                    <th>Part Number</th>
+                    <th>Item Name</th>
+                    <th>Category</th>
+                    <th>Current Stock</th>
+                    <th>Reorder Level</th>
+                    <th>Location</th>
+                    <th>Price</th>
+                    <th>Reorder Qty</th>
+                    <th>Total Cost</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+
+          lowStockItemsOnly.forEach((item) => {
+            const totalCost = item.reorder_quantity * item.price;
+            const priorityClass =
+              item.quantity <= item.reorder_level / 2
+                ? "priority-high"
+                : "priority-medium";
+            const priorityText =
+              item.quantity <= item.reorder_level / 2 ? "High" : "Medium";
+            content += `
+              <tr class="low-stock-row">
+                <td><span class="priority-indicator ${priorityClass}"></span>${priorityText}</td>
+                <td><strong>${item.part_number || "N/A"}</strong></td>
+                <td><strong>${item.name}</strong></td>
+                <td>${getCategoryDisplayName(item.category)}</td>
+                <td>${item.quantity}</td>
+                <td>${item.reorder_level}</td>
+                <td>${item.location || "N/A"}</td>
+                <td>PKR ${item.price.toFixed(2)}</td>
+                <td>${item.reorder_quantity}</td>
+                <td><strong>PKR ${totalCost.toFixed(2)}</strong></td>
+                <td><span class="status-badge status-low-stock">Low Stock</span></td>
+              </tr>
+            `;
+          });
+
+          content += `
+                </tbody>
+              </table>
+            </div>
+          `;
+        }
+
+        document.getElementById("content").innerHTML = content;
+      });
+
+      function getCategoryDisplayName(category) {
+        const categories = {
+          parts: "Auto Parts",
+          tools: "Tools",
+          fluids: "Fluids & Lubricants",
+          accessories: "Accessories",
+          other: "Other",
+        };
+        return categories[category] || category;
+      }
+
+      function goBack() {
+        window.location.href = "inventory.html";
+      }
+
+      function exportToPDF() {
+        // Get the processed data
+        const data = JSON.parse(
+          sessionStorage.getItem("lowStockItems") || "{}"
+        );
+
+        let urgentItems = [];
+        let outOfStockItems = [];
+        let lowStockItemsOnly = [];
+        let allItems = [];
+
+        if (data.urgent_items && data.low_stock_items) {
+          urgentItems = data.urgent_items || [];
+          const allLowStockItems = data.low_stock_items || [];
+          outOfStockItems = allLowStockItems.filter(
+            (item) => item.quantity === 0
+          );
+          lowStockItemsOnly = allLowStockItems.filter(
+            (item) => item.quantity > 0
+          );
+          allItems = [...urgentItems, ...allLowStockItems];
+        } else if (Array.isArray(data)) {
+          urgentItems = data.filter((item) => item.quantity < 0);
+          outOfStockItems = data.filter((item) => item.quantity === 0);
+          lowStockItemsOnly = data.filter(
+            (item) => item.quantity > 0 && item.quantity <= item.reorder_level
+          );
+          allItems = data;
+        }
+
+        if (allItems.length === 0) {
+          alert("No items to export!");
+          return;
+        }
+
+        // Create workbook and worksheets
+        const wb = XLSX.utils.book_new();
+
+        // Prepare data for Excel
+        const excelData = allItems.map((item) => ({
+          Priority:
+            item.quantity < 0
+              ? "Critical"
+              : item.quantity === 0
+              ? "High"
+              : "Medium",
+          "Part Number": item.part_number || "N/A",
+          "Item Name": item.name,
+          Category: getCategoryDisplayName(item.category),
+          "Current Stock": item.quantity,
+          "Reorder Level": item.reorder_level,
+          Location: item.location || "N/A",
+          "Price (PKR)": item.price,
+          "Reorder Quantity": item.reorder_quantity,
+          "Total Cost (PKR)": (item.reorder_quantity * item.price).toFixed(2),
+          Status:
+            item.stock_status ||
+            (item.quantity < 0
+              ? "URGENT - Negative Stock"
+              : item.quantity === 0
+              ? "Out of Stock"
+              : "Low Stock"),
+          Description: item.description || "N/A",
+          "Last Updated": item.updated_at || "N/A",
+        }));
+
+        // Create worksheet
+        const ws = XLSX.utils.json_to_sheet(excelData);
+
+        // Set column widths
+        const colWidths = [
+          { wch: 10 }, // Priority
+          { wch: 12 }, // Part Number
+          { wch: 25 }, // Item Name
+          { wch: 15 }, // Category
+          { wch: 12 }, // Current Stock
+          { wch: 12 }, // Reorder Level
+          { wch: 15 }, // Location
+          { wch: 12 }, // Price
+          { wch: 15 }, // Reorder Quantity
+          { wch: 15 }, // Total Cost
+          { wch: 20 }, // Status
+          { wch: 30 }, // Description
+          { wch: 20 }, // Last Updated
+        ];
+        ws["!cols"] = colWidths;
+
+        // Add worksheet to workbook
+        XLSX.utils.book_append_sheet(wb, ws, "Inventory Status");
+
+        // Generate filename with current date
+        const now = new Date();
+        const dateString = now.toISOString().split("T")[0]; // YYYY-MM-DD format
+        const filename = `GermanATO_Inventory_Status_${dateString}.xlsx`;
+
+        // Download the file
+        XLSX.writeFile(wb, filename);
+      }
+    </script>
+  </body>
+</html>

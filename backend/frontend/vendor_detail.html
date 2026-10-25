@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Vendor Details</title>
+    <link rel="stylesheet" href="../static/css/theme.css" />
+    <link rel="stylesheet" href="../static/css/vendor_detail.css" />
+    <link rel="stylesheet" href="../static/css/app-shell.css" />
+    <script src="../static/js/theme.js"></script>
+    <script src="../static/js/libs/xlsx.full.min.js"></script>
+    <script src="../static/js/notification-utils.js"></script>
+  </head>
+  <body>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="../static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1 id="vendorName">Vendor Details</h1>
+            <p id="vendorCompany">Loading vendor information...</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Vendor Info Card -->
+      <div class="vendor-info-card">
+        <div class="vendor-header">
+          <div>
+            <h2 id="vendorInfoName">Vendor Name</h2>
+            <p id="vendorInfoCompany">Company Name</p>
+          </div>
+          <div class="action-buttons">
+            <button
+              class="action-btn edit-btn"
+              onclick="editVendor()"
+              title="Edit Vendor"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                ></path>
+                <path
+                  d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                ></path>
+              </svg>
+            </button>
+            <button
+              class="action-btn delete-btn"
+              onclick="deleteVendor()"
+              title="Delete Vendor"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path
+                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                ></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="vendor-details" id="vendorInfo">
+          <!-- Vendor info will be loaded here -->
+        </div>
+      </div>
+
+      <!-- Tabs Navigation -->
+      <div class="tabs-container">
+        <div class="tabs-nav">
+          <button
+            class="tab-btn active"
+            onclick="switchTab('ledger')"
+            id="ledger-tab"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            <span>Ledger Statement</span>
+          </button>
+          <button
+            class="tab-btn"
+            onclick="switchTab('consignments')"
+            id="consignments-tab"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M1 3h15v13H1zM16 8h4l3 3v5h-7V8z"></path>
+              <path
+                d="M5 8a2 2 0 0 1 2 2v4a2 2 0 1 1-4 0v-4a2 2 0 0 1 2-2z"
+              ></path>
+              <path
+                d="M18 8a2 2 0 0 1 2 2v4a2 2 0 1 1-4 0v-4a2 2 0 0 1 2-2z"
+              ></path>
+            </svg>
+            <span>Purchase Orders</span>
+          </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+          <!-- Ledger Tab -->
+          <div class="tab-pane active" id="ledger">
+            <div class="tab-header">
+              <h3>Ledger Statement</h3>
+              <div class="tab-actions">
+                <button class="add-btn" onclick="openLedgerModal()">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  <span>Add Transaction</span>
+                </button>
+                <button class="nav-btn" onclick="exportLedger('excel')">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                    ></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                  <span>Export Excel</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Ledger Filter controls -->
+            <div class="filter-card">
+              <div class="filter-grid">
+                <div class="filter-group">
+                  <label for="ledgerStartDate">Start Date</label>
+                  <input
+                    type="date"
+                    id="ledgerStartDate"
+                    class="input-fields"
+                  />
+                </div>
+                <div class="filter-group">
+                  <label for="ledgerEndDate">End Date</label>
+                  <input type="date" id="ledgerEndDate" class="input-fields" />
+                </div>
+                <div class="filter-actions-row">
+                  <button class="btn-primary" onclick="filterLedger()">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <span>Filter</span>
+                  </button>
+                  <button class="btn-secondary" onclick="clearLedgerFilter()">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M23 4v6h-6M1 20v-6h6"></path>
+                      <path
+                        d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+                      ></path>
+                    </svg>
+                    <span>Clear</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ledger Table -->
+            <div class="table-container">
+              <table class="data-table" id="ledgerTable">
+                <thead>
+                  <tr>
+                    <th>Date / Time</th>
+                    <th>Description</th>
+                    <th>Folio</th>
+                    <th>Debit (PKR)</th>
+                    <th>Credit (PKR)</th>
+                    <th>Balance (PKR)</th>
+                    <th>Payment Notes</th>
+                    <th>Proof</th>
+                    <th>Added By</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="ledgerTableBody">
+                  <tr>
+                    <td colspan="10" class="loading-cell">
+                      <div class="loading-spinner"></div>
+                      <span>Loading ledger entries...</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Ledger Totals -->
+            <div class="totals-grid">
+              <div class="total-card">
+                <h4>Total Debits</h4>
+                <span class="total-amount debits" id="totalDebits">0.00</span>
+              </div>
+              <div class="total-card">
+                <h4>Total Credits</h4>
+                <span class="total-amount credits" id="totalCredits">0.00</span>
+              </div>
+              <div class="total-card">
+                <h4>Closing Balance</h4>
+                <span class="total-amount balance" id="closingBalance"
+                  >0.00</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- Consignments Tab -->
+          <div class="tab-pane" id="consignments">
+            <div class="tab-header">
+              <h3>Purchase Orders</h3>
+              <div class="tab-actions">
+                <button class="add-btn" onclick="openConsignmentModal()">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  <span>Add Purchase Order</span>
+                </button>
+                <button class="nav-btn" onclick="exportConsignment('excel')">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                  </svg>
+                  <span>Export Excel</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Filter Section -->
+            <div class="filter-section">
+              <div class="filter-row">
+                <div class="filter-group">
+                  <label for="consignmentStartDate">Start Date</label>
+                  <input
+                    type="date"
+                    id="consignmentStartDate"
+                    class="input-fields"
+                  />
+                </div>
+                <div class="filter-group">
+                  <label for="consignmentEndDate">End Date</label>
+                  <input
+                    type="date"
+                    id="consignmentEndDate"
+                    class="input-fields"
+                  />
+                </div>
+                <div class="filter-group">
+                  <label for="consignmentInvoiceNo">Invoice No</label>
+                  <input
+                    type="text"
+                    id="consignmentInvoiceNo"
+                    class="input-fields"
+                    placeholder="Search by invoice number..."
+                  />
+                </div>
+                <div class="filter-group">
+                  <button class="btn-primary" onclick="filterConsignments()">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <span>Filter</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Consignments Table -->
+            <div class="table-container">
+              <table class="data-table" id="consignmentsTable">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Invoice No</th>
+                    <th>Item Name</th>
+                    <th>Quantity</th>
+                    <th>Rate (PKR)</th>
+                    <th>Amount (PKR)</th>
+                    <th>Remarks</th>
+                    <th>Status</th>
+                    <th>Added By</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="consignmentsTableBody">
+                  <tr>
+                    <td colspan="10" class="loading-cell">
+                      <div class="loading-spinner"></div>
+                      <span>Loading purchase orders...</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <!-- Add/Edit Ledger Entry Modal -->
+    <div class="modal" id="ledgerModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="ledgerModalTitle">Add Ledger Entry</h2>
+          <span class="close" onclick="closeLedgerModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="ledgerForm">
+            <input type="hidden" id="ledgerId" />
+            <div class="form-row">
+              <div class="form-group">
+                <label for="ledgerDate">Date *</label>
+                <input
+                  type="date"
+                  id="ledgerDate"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="ledgerFolio">Folio</label>
+                <input type="text" id="ledgerFolio" class="input-fields" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="ledgerDescription">Description *</label>
+              <input
+                type="text"
+                id="ledgerDescription"
+                class="input-fields"
+                required
+              />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="ledgerDebit">Debit Amount</label>
+                <input
+                  type="number"
+                  id="ledgerDebit"
+                  class="input-fields"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ledgerCredit">Credit Amount</label>
+                <input
+                  type="number"
+                  id="ledgerCredit"
+                  class="input-fields"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="ledgerPaymentNotes">Payment Notes</label>
+              <textarea id="ledgerPaymentNotes" class="input-fields" rows="3" placeholder="Enter payment details, cheque number, bank receipt notes..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="ledgerAttachment">Proof Attachment (Optional)</label>
+              <input type="file" id="ledgerAttachment" class="input-fields" accept="image/*,application/pdf" style="padding: 6px; background: #fff;" />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn-secondary"
+            onclick="closeLedgerModal()"
+          >
+            Cancel
+          </button>
+          <button type="button" class="btn-primary" id="saveLedgerBtn">
+            Save Entry
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit Consignment Modal -->
+    <div class="modal" id="consignmentModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="consignmentModalTitle">Add Purchase Order</h2>
+          <span class="close" onclick="closeConsignmentModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="consignmentForm">
+            <input type="hidden" id="consignmentId" />
+            <div class="form-row">
+              <div class="form-group">
+                <label for="consignmentDate">Date *</label>
+                <input
+                  type="date"
+                  id="consignmentDate"
+                  class="input-fields"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="consignmentFormInvoiceNo">Invoice No *</label>
+                <input
+                  type="text"
+                  id="consignmentFormInvoiceNo"
+                  class="input-fields"
+                  required
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="consignmentItemName">Item Name *</label>
+              <input
+                type="text"
+                id="consignmentItemName"
+                class="input-fields"
+                required
+              />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="consignmentQuantity">Quantity *</label>
+                <input
+                  type="number"
+                  id="consignmentQuantity"
+                  class="input-fields"
+                  required
+                  min="1"
+                />
+              </div>
+              <div class="form-group">
+                <label for="consignmentRate">Rate *</label>
+                <input
+                  type="number"
+                  id="consignmentRate"
+                  class="input-fields"
+                  required
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="consignmentRemarks">Remarks</label>
+              <textarea
+                id="consignmentRemarks"
+                class="input-fields"
+                rows="2"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="consignmentStatus">Status *</label>
+              <select id="consignmentStatus" class="input-fields" required>
+                <option value="ordered" selected>Ordered</option>
+                <option value="in transit">In Transit</option>
+                <option value="received">Received</option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn-secondary"
+            onclick="closeConsignmentModal()"
+          >
+            Cancel
+          </button>
+          <button type="button" class="btn-primary" id="saveConsignmentBtn">
+            Save Purchase Order
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="deleteModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Confirm Delete</h2>
+          <span class="close" onclick="closeDeleteModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <p id="deleteMessage">
+            Are you sure you want to delete this item? This action cannot be
+            undone.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn-secondary"
+            onclick="closeDeleteModal()"
+          >
+            Cancel
+          </button>
+          <button type="button" class="btn-danger" id="confirmDeleteBtn">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="../static/js/notification-utils.js"></script>
+    <script src="../static/js/auth_jwt.js"></script>
+    <script src="../static/js/app-shell.js"></script>
+    <script src="../static/js/api-helper.js"></script>
+    <script src="../static/js/vendor_detail.js"></script>
+  </body>
+</html>

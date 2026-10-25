@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GermanATO - Users Management</title>
+    <link rel="stylesheet" href="../static/css/theme.css" />
+    <link rel="stylesheet" href="../static/css/admin.css" />
+    <link rel="stylesheet" href="../static/css/app-shell.css" />
+    <script src="../static/js/theme.js"></script>
+    <script src="../static/js/notification-utils.js"></script>
+  </head>
+  <body>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-container">
+        <div class="brand">
+          <img
+            src="../static/images/logo-without-background.png"
+            alt="GermanATO Logo"
+            class="header-logo"
+          />
+          <div class="brand-text">
+            <h1>Users Management</h1>
+            <p>Manage users and system settings</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="#" id="back-btn" class="back-btn">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Back</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="content-container">
+        <!-- Tabs Navigation -->
+        <div class="tabs-navigation">
+          <button class="tab-btn active" id="users-tab-btn" onclick="switchTab('users')">Users Management</button>
+          <button class="tab-btn" id="permissions-tab-btn" onclick="switchTab('permissions')">Roles & Permissions</button>
+          <button class="tab-btn" id="logs-tab-btn" onclick="switchTab('logs')">App Action Logs</button>
+        </div>
+
+        <!-- Users Management Tab Section -->
+        <div id="users-section" class="tab-section active">
+          <div class="controls-section">
+            <button class="add-btn" onclick="openAddUserModal()">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>Add New User</span>
+            </button>
+          </div>
+
+          <div class="users-table-container" id="user-management-section">
+            <div class="users-table" id="users-table">
+              <!-- Users will be loaded here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Roles & Permissions Tab Section -->
+        <div id="permissions-section" class="tab-section" style="display: none;">
+          <div class="filter-card" style="padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 20px;">
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: #8b1538; margin-bottom: 20px;">Roles & Permissions Matrix</h3>
+            <p style="font-size: 0.9rem; color: #718096; margin-bottom: 24px;">Configure module permissions for system roles below. Changes take effect on the next login or page refresh.</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 30px;">
+              
+              <!-- Accountant Permissions Card -->
+              <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; background: #f8fafc;">
+                <h4 style="font-size: 1.1rem; font-weight: 700; color: #2d3748; border-bottom: 2px solid #cbd5e0; padding-bottom: 8px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                  <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #3182ce;"></span>
+                  Accountant Role
+                </h4>
+                <div class="checkbox-grid" style="display: flex; flex-direction: column; gap: 12px;">
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="invoice" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Invoices & Quotes</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="vendors" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Vendors & Ledgers</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="daily-expenses" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Daily Expenses & Cash Flow</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="major-expenses" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Major Expenses (Restricted)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="inventory" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Inventory Management</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="car" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Car & Customer</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="hr" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>HR & Employee Salaries</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="repair-order" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Repair Orders (ROs)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="reports" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Reports & Analytics</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="logs" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>App Action Logs</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk accountant-chk" value="settings" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Settings</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Inventory Manager Permissions Card -->
+              <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; background: #f8fafc;">
+                <h4 style="font-size: 1.1rem; font-weight: 700; color: #2d3748; border-bottom: 2px solid #cbd5e0; padding-bottom: 8px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                  <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #48bb78;"></span>
+                  Inventory Manager Role
+                </h4>
+                <div class="checkbox-grid" style="display: flex; flex-direction: column; gap: 12px;">
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="invoice" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Invoices & Quotes</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="vendors" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Vendors & Ledgers</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="daily-expenses" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Daily Expenses & Cash Flow</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="major-expenses" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Major Expenses (Restricted)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="inventory" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Inventory Management</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="car" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Car & Customer</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="hr" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>HR & Employee Salaries</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="repair-order" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Repair Orders (ROs)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="reports" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Reports & Analytics</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="logs" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>App Action Logs</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                    <input type="checkbox" class="perm-chk inventory-chk" value="settings" style="width: 18px; height: 18px; cursor: pointer;" />
+                    <span>Settings</span>
+                  </label>
+                </div>
+              </div>
+              
+            </div>
+            
+            <div style="display: flex; justify-content: flex-end; border-top: 1px solid #edf2f7; padding-top: 20px;">
+              <button class="btn-primary" onclick="saveRolePermissions()" style="padding: 10px 24px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                  <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+                <span>Save Permissions</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- App Action Logs Tab Section -->
+        <div id="logs-section" class="tab-section" style="display: none;">
+          <!-- Filter Controls -->
+          <div class="logs-filters">
+            <div class="filter-group">
+              <label for="filter-username">User</label>
+              <input type="text" id="filter-username" placeholder="Username" />
+            </div>
+            <div class="filter-group">
+              <label for="filter-module">Module</label>
+              <select id="filter-module">
+                <option value="">All Modules</option>
+                <option value="invoices">Invoices</option>
+                <option value="quotes">Quotes</option>
+                <option value="repair_orders">Repair Orders</option>
+                <option value="vendors">Vendors</option>
+                <option value="expenses">Expenses</option>
+                <option value="cash_received">Cash Received</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-action">Action</label>
+              <select id="filter-action">
+                <option value="">All Actions</option>
+                <option value="CREATE">CREATE</option>
+                <option value="UPDATE">UPDATE</option>
+                <option value="DELETE">DELETE</option>
+                <option value="UPDATE_STATUS">UPDATE STATUS</option>
+                <option value="UPDATE_BALANCE">UPDATE BALANCE</option>
+                <option value="CREATE_LEDGER">CREATE LEDGER</option>
+                <option value="DELETE_LEDGER">DELETE LEDGER</option>
+                <option value="CREATE_PO">CREATE PO</option>
+                <option value="DELETE_PO">DELETE PO</option>
+                <option value="UPDATE_PO_STATUS">UPDATE PO STATUS</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-start-date">Start Date</label>
+              <input type="date" id="filter-start-date" />
+            </div>
+            <div class="filter-group">
+              <label for="filter-end-date">End Date</label>
+              <input type="date" id="filter-end-date" />
+            </div>
+            <div class="filter-group">
+              <label for="filter-keyword">Keyword Search</label>
+              <input type="text" id="filter-keyword" placeholder="Search details..." />
+            </div>
+            <div class="filter-actions">
+              <button class="btn-primary" onclick="applyLogsFilters()">Apply</button>
+              <button class="btn-secondary" onclick="resetLogsFilters()">Reset</button>
+            </div>
+          </div>
+
+          <!-- Logs Table -->
+          <div class="users-table-container">
+            <div class="users-table" id="logs-table">
+              <!-- Logs will be loaded here -->
+            </div>
+            <div class="logs-pagination" id="logs-pagination">
+              <!-- Pagination controls will be loaded here -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Add/Edit User Modal -->
+    <div id="user-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title">Add New User</h2>
+          <span class="close" onclick="closeModal()">&times;</span>
+        </div>
+        <form id="user-form">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required />
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required />
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required />
+          </div>
+          <div class="form-group">
+            <label for="role">Role</label>
+            <select id="role" name="role" required>
+              <option value="">Select Role</option>
+              <option value="admin">Admin</option>
+              <option value="accountant">Accountant</option>
+              <option value="inventory_manager">Inventory Manager</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" onclick="closeModal()">
+              Cancel
+            </button>
+            <button type="submit" class="save-btn">Save User</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>&copy; 2025 GermanATO. All rights reserved.</p>
+    </footer>
+
+    <script src="../static/js/auth_jwt.js"></script>
+    <script src="../static/js/app-shell.js"></script>
+    <script src="../static/js/api-helper.js"></script>
+    <script src="../static/js/admin.js"></script>
+  </body>
+</html>

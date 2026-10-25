@@ -1,0 +1,1287 @@
+/* ===== BASE ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Segoe UI", Arial, sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  background: #f8f9fa;
+  min-height: 100vh;
+  color: #2d3748;
+  overflow-x: hidden;
+}
+
+/* ===== BACK BUTTON ===== */
+.back-btn {
+  /* touch-friendly padding */
+  padding: 12px 20px;
+  background: #4a5568;
+  color: #fff;
+  text-transform: uppercase;
+  border-radius: 8px;
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+.back-btn::before {
+  content: "←";
+  font-size: 16px;
+  font-weight: bold;
+}
+.back-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  background: #2d3748;
+}
+
+/* ===== INVOICE ALWAYS LIGHT (ignore dark mode on screen and print) ===== */
+.invoice-iframe-wrapper {
+  color-scheme: light;
+  /* Reset theme variables so dark-theme rules render light inside the invoice */
+  --theme-primary: #8b1538;
+  --theme-primary-dark: #6d1029;
+  --theme-primary-light: #a91d45;
+  --theme-text: #2d3748;
+  --theme-text-muted: #718096;
+  --theme-text-light: #a0aec0;
+  --theme-bg: #ffffff;
+  --theme-bg-card: #ffffff;
+  --theme-bg-hover: #f1f5f9;
+  --theme-border: #e2e8f0;
+  --theme-input-bg: #ffffff;
+  --theme-table-header: #f0f0f0;
+  --theme-table-hover: #f1f5f9;
+  --primary-maroon: #8b1538;
+  --primary-maroon-dark: #6d1029;
+  --primary-maroon-light: #a91d45;
+  --text-dark: #2d3748;
+  --text-muted: #718096;
+  --text-light: #a0aec0;
+  --bg-white: #ffffff;
+  --bg-light: #f8f9fa;
+  --border-light: #e2e8f0;
+  background: #ffffff !important;
+  color: #2d3748 !important;
+}
+
+.invoice-iframe-wrapper .invoice-container {
+  background: #ffffff !important;
+  color: #2d3748 !important;
+}
+
+.invoice-iframe-wrapper .header {
+  background: #ffffff !important;
+  color: #2d3748 !important;
+}
+
+.invoice-iframe-wrapper .invoice-info,
+.invoice-iframe-wrapper .invoice-title,
+.invoice-iframe-wrapper .invoice-id,
+.invoice-iframe-wrapper .invoice-date {
+  color: #000000 !important;
+}
+
+.invoice-iframe-wrapper .content,
+.invoice-iframe-wrapper .info-section,
+.invoice-iframe-wrapper .info-box,
+.invoice-iframe-wrapper .notes-section {
+  background: #ffffff !important;
+  color: #2d3748 !important;
+}
+
+.invoice-iframe-wrapper .info-title,
+.invoice-iframe-wrapper .info-content,
+.invoice-iframe-wrapper .info-content span {
+  color: #2d3748 !important;
+}
+
+.invoice-iframe-wrapper .info-title {
+  color: #000000 !important;
+  border-bottom-color: #000000 !important;
+}
+
+.invoice-iframe-wrapper table {
+  background: #ffffff !important;
+}
+
+.invoice-iframe-wrapper th {
+  background: #f0f0f0 !important;
+  color: #000000 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.invoice-iframe-wrapper td {
+  color: #2d3748 !important;
+  border-color: rgba(139, 0, 0, 0.1) !important;
+}
+
+.invoice-iframe-wrapper tbody tr:hover {
+  background: #f1f5f9 !important;
+}
+
+.invoice-iframe-wrapper .total-section {
+  background: #f0f0f0 !important;
+  color: #000000 !important;
+}
+
+.invoice-iframe-wrapper .total-row,
+.invoice-iframe-wrapper .notes-content {
+  color: #2d3748 !important;
+}
+
+.invoice-iframe-wrapper .terms-container {
+  background: #ffffff !important;
+  color: #2d3748 !important;
+}
+
+.invoice-iframe-wrapper .terms-container h2,
+.invoice-iframe-wrapper .terms-list {
+  color: #2d3748 !important;
+}
+
+@media print {
+  .invoice-iframe-wrapper,
+  .invoice-iframe-wrapper .invoice-container,
+  .invoice-iframe-wrapper .header,
+  .invoice-iframe-wrapper .content,
+  .invoice-iframe-wrapper .info-section,
+  .invoice-iframe-wrapper .notes-section,
+  .invoice-iframe-wrapper .terms-container,
+  .invoice-iframe-wrapper table {
+    background: #ffffff !important;
+    color: #2d3748 !important;
+  }
+  .invoice-iframe-wrapper th {
+    background: #f0f0f0 !important;
+    color: #000000 !important;
+  }
+  .invoice-iframe-wrapper .total-section {
+    background: #f0f0f0 !important;
+    color: #000000 !important;
+  }
+  .invoice-iframe-wrapper .invoice-info,
+  .invoice-iframe-wrapper .invoice-title,
+  .invoice-iframe-wrapper .invoice-id,
+  .invoice-iframe-wrapper .invoice-date {
+    color: #000000 !important;
+  }
+}
+
+/* ===== INVOICE CONTAINER ===== */
+.invoice-container {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* ===== HEADER ===== */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25px 30px;
+  background-color: #fff;
+  color: #2d3748;
+  position: relative;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.05);
+  transform: skewX(-15deg);
+}
+.logo {
+  width: 140px;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+  position: relative;
+  z-index: 1;
+}
+.invoice-info {
+  text-align: right;
+  position: relative;
+  z-index: 1;
+}
+.invoice-title {
+  font-size: 36px;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  color: black;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+.invoice-id {
+  font-size: 18px;
+  font-weight: 700;
+  color: black;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+}
+.invoice-date {
+  font-size: 14px;
+  color: black;
+}
+
+/* ===== INFO SECTION ===== */
+.content {
+  padding: 40px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.info-section {
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+  background: #ffffff;
+  padding: 25px;
+  margin-bottom: 30px;
+}
+.info-box {
+  flex: 1;
+}
+.info-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: black;
+  text-transform: uppercase;
+  border-bottom: 2px solid black;
+  padding-bottom: 8px;
+  margin-bottom: 15px;
+  letter-spacing: 0.5px;
+}
+.info-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #2d3748;
+}
+.info-content span {
+  font-weight: 600;
+  color: black;
+}
+
+/* ===== TABLES ===== */
+.tables-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.table-container {
+  width: 100%;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 15px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  overflow: hidden;
+}
+th {
+  background: #f0f0f0;
+  color: black;
+  font-size: 14px;
+  padding: 15px 20px;
+  text-align: left;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+td {
+  font-size: 13px;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(139, 0, 0, 0.1);
+  color: #2d3748;
+}
+
+/* ===== TOTALS ===== */
+.total-section {
+  padding: 30px 40px;
+  background: #f0f0f0;
+  color: black;
+}
+
+/* ===== TAX TOGGLE ===== */
+.tax-toggle-section {
+  max-width: 210mm;
+  margin: 20px auto 10px auto;
+  padding: 15px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.tax-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  transition: all 0.3s ease;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: #4a5568;
+}
+
+.tax-toggle-label:hover {
+  color: white;
+  background: #2d3748;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.tax-toggle-checkbox {
+  width: 20px;
+  height: 20px;
+  accent-color: #4a5568;
+  cursor: pointer;
+  border: 2px solid #4a5568;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.tax-toggle-checkbox:checked {
+  background-color: #4a5568;
+  border-color: #2d3748;
+  transform: scale(1.1);
+}
+
+.tax-toggle-text {
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 14px;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.total-row span:last-child {
+  text-align: right;
+}
+
+.total-row:last-child {
+  font-weight: 700;
+  font-size: 18px;
+  margin-bottom: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ===== NOTES ===== */
+.notes-section {
+  background: #ffffff;
+  padding: 25px 40px;
+}
+.notes-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #2d3748;
+}
+
+/* ===== ACTION BUTTONS ===== */
+.button-container {
+  text-align: center;
+  padding: 30px;
+  background: rgba(139, 0, 0, 0.05);
+}
+.print-button,
+.share-button {
+  background: #4a5568;
+  color: white;
+  padding: 15px 30px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  margin: 0 10px;
+}
+.print-button:hover,
+.share-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+  background: #2d3748;
+}
+.share-button {
+  background: #25d366;
+}
+.share-button:hover {
+  background: #20ba5a;
+}
+.share-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ===== RESPONSIVE BREAKPOINTS ===== */
+@media screen and (max-width: 768px) {
+  /* Tablet: Scale down iframe wrapper but keep A4 size inside */
+  body {
+    padding: 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  .invoice-iframe-wrapper {
+    transform-origin: top center;
+    /* Scale will be set dynamically via JavaScript */
+    margin: 70px auto 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+  .invoice-container {
+    width: 210mm;
+    min-height: 297mm;
+  }
+  .back-btn {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+  }
+  .button-container {
+    width: 100%;
+    max-width: 210mm;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 24px 16px;
+    box-sizing: border-box;
+    background: rgba(139, 0, 0, 0.05);
+  }
+  .button-container button {
+    width: 100%;
+  }
+}
+@media screen and (max-width: 480px) {
+  /* Mobile: Scale down iframe wrapper but keep A4 size inside */
+  body {
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+  }
+  .invoice-iframe-wrapper {
+    transform-origin: top center;
+    /* Scale will be set dynamically via JavaScript */
+    margin: 60px 0 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    border: 1px solid #ddd;
+    /* Ensure horizontal centering */
+    position: relative;
+    left: 50%;
+    /* Transform will include both translateX and scale via JavaScript */
+  }
+  .invoice-container {
+    width: 210mm;
+    min-height: 297mm;
+  }
+  .back-btn {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 1000;
+    transform-origin: top left;
+    /* Scale will be set dynamically via JavaScript */
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  .share-button {
+    width: 100%;
+  }
+  .print-button {
+    display: none !important;
+  }
+  .button-container {
+    width: calc(100% - 24px);
+    max-width: calc(210mm * 0.55); /* Match scaled invoice width */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 20px 12px 40px;
+    margin: 0 12px;
+    box-sizing: border-box;
+    background: rgba(139, 0, 0, 0.05);
+  }
+  .button-container button {
+    width: 100%;
+  }
+}
+
+/* ===== PRINT RULES ===== */
+
+/* ===== BASE STYLES ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Segoe UI", Arial, sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  background: #f8f9fa;
+  min-height: 100vh;
+  color: #2d3748;
+  overflow-x: hidden; /* prevent tiny gap */
+}
+
+/* ===== BACK BUTTON ===== */
+.back-btn {
+  background: #4a5568;
+  color: white;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+}
+
+.back-btn::before {
+  content: "←";
+  font-size: 16px;
+  font-weight: bold;
+}
+.back-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  background: #2d3748;
+}
+@media print {
+  .back-btn,
+  .tax-toggle-section,
+  .button-container,
+  .convert-button {
+    display: none !important;
+  }
+}
+
+/* ===== A4 IFRAME WRAPPER ===== */
+.invoice-iframe-wrapper {
+  width: 210mm;
+  height: 297mm;
+  margin: 80px auto 20px;
+  background: #ffffff;
+  border: 1px solid #ddd;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* ===== INVOICE CONTAINER ===== */
+.invoice-container {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* ===== HEADER ===== */
+.header {
+  background: #fff;
+  color: #2d3748;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  position: relative;
+  overflow: hidden;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 150px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.05);
+  transform: skewX(-15deg);
+}
+
+.logo {
+  width: 100px;
+  height: auto;
+}
+.invoice-info {
+  text-align: right;
+  flex: 1;
+  min-width: 150px;
+  position: relative;
+  z-index: 1;
+}
+.invoice-title {
+  font-size: 20px;
+  font-weight: 300;
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: black;
+}
+.invoice-id,
+.invoice-date {
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 3px;
+  letter-spacing: 0.3px;
+  color: black;
+}
+.invoice-id {
+  color: black;
+  font-weight: 600;
+}
+
+/* ===== CONTENT ===== */
+.content {
+  padding: 15px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== INFO SECTION ===== */
+.info-section {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 15px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.info-box {
+  width: 48%;
+  flex: 1;
+}
+.info-title {
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: black;
+  text-transform: uppercase;
+  border-bottom: 1px solid black;
+  padding-bottom: 4px;
+}
+.info-content {
+  font-size: 10px;
+  line-height: 1.3;
+  color: #374151;
+}
+.info-content span {
+  font-weight: 600;
+  color: black;
+}
+
+/* ===== TABLES ===== */
+.tables-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.table-container {
+  width: 100%;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+}
+
+th {
+  background: #f0f0f0;
+  color: black;
+  font-size: 11px;
+  padding: 8px 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+td {
+  font-size: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* ===== TOTAL SECTION ===== */
+.total-section {
+  background: #f0f0f0;
+  color: black;
+  padding: 15px 20px;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.total-row {
+  font-size: 12px;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+}
+
+#advance-row {
+  border-bottom: 1px solid black;
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+.total-row:last-child {
+  margin-bottom: 0;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* ===== NOTES SECTION ===== */
+.notes-section {
+  background: #ffffff;
+  padding: 15px 20px;
+}
+
+.notes-content {
+  font-size: 10px;
+  line-height: 1.4;
+  color: #374151;
+}
+
+/* ===== ACTION BUTTONS ===== */
+.button-container {
+  text-align: center;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+}
+
+.print-button,
+.share-button {
+  background: #4a5568;
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0 10px;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.print-button:hover,
+.share-button:hover,
+.convert-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  background: #2d3748;
+}
+.share-button {
+  background: #25d366;
+}
+.share-button:hover {
+  background: #20ba5a;
+}
+
+.convert-button {
+  background: #28a745;
+  color: white;
+  padding: 15px 30px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  margin: 0 10px;
+}
+
+.convert-button:hover {
+  background: #218838;
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+  /* Force color printing (override browser defaults) */
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: white !important;
+  }
+
+  /* Ensure logo is visible and properly sized */
+  .logo {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    max-width: 120px !important;
+    width: auto !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Preserve background colors in headers/tables */
+  .header {
+    background: #fff !important;
+    color: #2d3748 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    position: relative !important;
+    overflow: hidden !important;
+    padding: 12px 20px !important;
+    page-break-inside: avoid !important;
+  }
+
+  .header::before {
+    right: 0 !important;
+    left: auto !important;
+    width: 150px !important;
+  }
+
+  .invoice-info {
+    text-align: right !important;
+  }
+
+  th {
+    background: #8b0000 !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Make everything black and white except logo */
+  .invoice-title {
+    color: black !important;
+  }
+  .invoice-id {
+    color: black !important;
+  }
+  .invoice-date {
+    color: black !important;
+  }
+  .info-title {
+    color: black !important;
+  }
+  .info-content {
+    color: black !important;
+  }
+  .info-content span {
+    color: black !important;
+  }
+  .notes-content {
+    color: black !important;
+  }
+
+  /* Allow notes section to flow naturally - only break if content overflows */
+  .notes-section {
+    page-break-before: auto !important;
+    page-break-after: auto !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Allow total section to flow naturally */
+  .total-section {
+    background: #f0f0f0 !important;
+    color: black !important;
+    page-break-before: auto !important;
+    page-break-after: auto !important;
+    page-break-inside: avoid !important;
+  }
+  .total-row {
+    color: black !important;
+  }
+  th {
+    background: #f0f0f0 !important;
+    color: black !important;
+  }
+  td {
+    color: black !important;
+  }
+}
+
+/* Force A4 dimensions in PDF mode */
+.pdf-capture-mode .invoice-container {
+  width: 210mm !important;
+  min-height: 297mm !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  background: white !important;
+  box-shadow: none !important;
+}
+
+/* Print-specific overrides - Print A4 iframe wrapper with margins */
+@media print {
+  @page {
+    size: A4;
+    margin: 5mm;
+  }
+
+  body {
+    width: 210mm !important;
+    height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  /* Hide iframe wrapper styling, show only content with margins */
+  .invoice-iframe-wrapper {
+    width: 200mm !important; /* 210mm - 10mm (5mm margin on each side) */
+    height: auto !important; /* Allow natural height for content flow */
+    min-height: 287mm !important; /* 297mm - 10mm (5mm margin top/bottom) */
+    max-height: none !important; /* Remove height restriction */
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    position: relative !important;
+    page-break-inside: avoid !important; /* Keep wrapper together if possible */
+  }
+
+  .invoice-container {
+    width: 200mm !important; /* 210mm - 10mm (5mm margin on each side) */
+    min-height: auto !important; /* Allow natural height */
+    height: auto !important; /* Allow content to flow naturally */
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+    transform: none !important;
+    page-break-inside: auto !important; /* Allow natural page breaks */
+  }
+
+  /* Allow natural page breaks within content sections */
+  .content {
+    page-break-inside: auto !important;
+  }
+
+  .tables-section {
+    page-break-inside: auto !important;
+  }
+
+  /* Notes section should NOT break before unless content overflows */
+  .notes-section {
+    page-break-before: avoid !important; /* Prevent breaking before notes */
+    page-break-after: auto !important;
+    page-break-inside: avoid !important; /* Keep notes together */
+  }
+
+  /* Total section should stay with notes - prevent break between them */
+  .total-section {
+    page-break-before: auto !important;
+    page-break-after: avoid !important; /* Prevent break after total (before notes) */
+    page-break-inside: avoid !important; /* Keep total section together */
+  }
+
+  /* Keep total and notes together */
+  .total-section + .footer + .notes-section,
+  .total-section + .notes-section {
+    page-break-before: avoid !important; /* Prevent break between total and notes */
+  }
+
+  /* Footer should not cause breaks */
+  .footer {
+    page-break-before: auto !important;
+    page-break-after: auto !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Ensure header matches PDF layout exactly */
+  .header {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    position: relative !important;
+    overflow: hidden !important;
+    padding: 12px 20px !important;
+  }
+
+  .header::before {
+    right: 0 !important;
+    left: auto !important;
+    width: 150px !important;
+  }
+
+  .invoice-info {
+    text-align: right !important;
+  }
+
+  /* Ensure images load before print */
+  img.logo {
+    max-width: 120px !important;
+    height: auto !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+}
+
+/* Mobile print - same as desktop print (A4 iframe wrapper with margins) */
+@media print and (max-width: 480px) {
+  @page {
+    size: A4;
+    margin: 5mm;
+  }
+
+  /* Same styles as desktop print - iframe wrapper with margins */
+  .invoice-iframe-wrapper {
+    width: 200mm !important; /* 210mm - 10mm (5mm margin on each side) */
+    height: auto !important; /* Allow natural height for content flow */
+    min-height: 287mm !important; /* 297mm - 10mm (5mm margin top/bottom) */
+    max-height: none !important; /* Remove height restriction */
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    transform: none !important;
+  }
+
+  .invoice-container {
+    width: 200mm !important; /* 210mm - 10mm (5mm margin on each side) */
+    min-height: auto !important; /* Allow natural height */
+    height: auto !important; /* Allow content to flow naturally */
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+    transform: none !important;
+    page-break-inside: auto !important; /* Allow natural page breaks */
+  }
+
+  /* Allow natural page breaks within content sections */
+  .content {
+    page-break-inside: auto !important;
+  }
+
+  .tables-section {
+    page-break-inside: auto !important;
+  }
+
+  /* Notes section should NOT break before unless content overflows */
+  .notes-section {
+    page-break-before: avoid !important; /* Prevent breaking before notes */
+    page-break-after: auto !important;
+    page-break-inside: avoid !important; /* Keep notes together */
+  }
+
+  /* Total section should stay with notes - prevent break between them */
+  .total-section {
+    page-break-before: auto !important;
+    page-break-after: avoid !important; /* Prevent break after total (before notes) */
+    page-break-inside: avoid !important; /* Keep total section together */
+  }
+
+  /* Keep total and notes together */
+  .total-section + .footer + .notes-section,
+  .total-section + .notes-section {
+    page-break-before: avoid !important; /* Prevent break between total and notes */
+  }
+
+  /* Footer should not cause breaks */
+  .footer {
+    page-break-before: auto !important;
+    page-break-after: auto !important;
+    page-break-inside: avoid !important;
+  }
+
+  .header {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    position: relative !important;
+    overflow: hidden !important;
+    padding: 12px 20px !important;
+  }
+
+  .header::before {
+    right: 0 !important;
+    left: auto !important;
+    width: 150px !important;
+  }
+
+  .invoice-info {
+    text-align: right !important;
+  }
+
+  .logo {
+    max-width: 120px !important;
+    flex-shrink: 0 !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* Keep all content styles same as desktop print/PDF */
+}
+
+/* Force a page break before the terms page when printing or generating PDF */
+
+/* Styles for the terms page */
+.terms-container {
+  max-width: 210mm;
+  min-height: 180mm;
+  margin: 0 auto;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding: 20px;
+}
+.terms-container h2 {
+  font-size: 20px;
+  margin-bottom: 15px;
+  border-bottom: 2px solid #2d3748;
+  padding-bottom: 6px;
+  text-transform: uppercase;
+}
+.terms-list {
+  list-style: none;
+  counter-reset: termscount;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #2d3748;
+  margin-left: 0;
+  padding-left: 0;
+}
+.terms-list li {
+  counter-increment: termscount;
+  margin-bottom: 8px;
+  position: relative;
+  padding-left: 2.2em;
+  text-indent: 0;
+}
+.terms-list li::before {
+  content: counter(termscount) ". ";
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-weight: bold;
+  width: 2em;
+  text-align: right;
+  color: #2d3748;
+  font-size: 11px;
+}
+
+@media print {
+  /* kill off the grey underlay */
+  body,
+  html {
+    background: #ffffff !important;
+  }
+
+  /* explicitly white‑out your two main wrappers */
+  .invoice-container,
+  .terms-container {
+    background: #ffffff !important;
+  }
+}
+
+@media print {
+  html,
+  body {
+    font-size: 12px !important;
+  }
+  h1,
+  .invoice-title {
+    font-size: 1.6rem !important;
+  }
+  h2 {
+    font-size: 1.2rem !important;
+  }
+  h3 {
+    font-size: 1rem !important;
+  }
+}
+
+body.pdf-capture-mode,
+body.pdf-capture-mode html {
+  font-size: 12px !important;
+}
+body.pdf-capture-mode h1,
+body.pdf-capture-mode .invoice-title {
+  font-size: 1.6rem !important;
+}
+body.pdf-capture-mode h2 {
+  font-size: 1.2rem !important;
+}
+body.pdf-capture-mode h3 {
+  font-size: 1rem !important;
+}
