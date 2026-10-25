@@ -6,7 +6,7 @@ import pytest
 
 from app.foundation.branch import DEFAULT_BRANCH_ID, new_branch_id
 from app.foundation.money import format_pkr, from_paisa, to_paisa, validate_paisa
-from app.foundation.roles import VALID_ROLES, expand_allowed_roles
+from app.foundation.roles import GRANULAR_PERMISSIONS, VALID_ROLES, expand_allowed_roles
 
 
 def test_to_paisa_rounds_half_up():
@@ -54,3 +54,15 @@ def test_valid_roles_include_workshop_map():
         "store_keeper",
     ):
         assert role in VALID_ROLES
+
+
+def test_granular_permissions_defined():
+    expected = {
+        "approve_discount",
+        "override_payment_gate",
+        "qc_signoff",
+        "adjust_stock",
+        "reopen_period",
+        "approve_evidence_exception",
+    }
+    assert expected == set(GRANULAR_PERMISSIONS)

@@ -372,6 +372,178 @@ def get_car_history(
         return _json({'error': 'Failed to load car history'}, 500)
 
 
+@router.get('/inspection-templates/default')
+def get_default_inspection_template(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.visits import get_active_template
+
+    tpl = get_active_template(db)
+    return _json({"template": tpl.to_dict()}, 200)
+
+
+@router.put('/inspection-templates/default')
+def update_default_inspection_template(
+    body: dict | None = Body(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'owner', 'manager'])),
+):
+    """Replace checklist points on the default template (configurable)."""
+    from app.visits import ensure_default_inspection_template
+
+    data = body or {}
+    points = data.get("points")
+    if not isinstance(points, list) or not points:
+        return _json({"error": "points must be a non-empty list"}, 400)
+    cleaned = []
+    for idx, p in enumerate(points):
+        if not isinstance(p, dict) or not p.get("key") or not p.get("label"):
+            return _json({"error": f"Point {idx} needs key and label"}, 400)
+        cleaned.append(
+            {
+                "key": str(p["key"]).strip(),
+                "label": str(p["label"]).strip(),
+                "category": str(p.get("category") or "general").strip(),
+                "requires_photo": bool(p.get("requires_photo")),
+                "sort_order": int(p.get("sort_order") or (idx + 1) * 10),
+            }
+        )
+    tpl = ensure_default_inspection_template(db)
+    tpl.points_json = json.dumps(cleaned)
+    if data.get("name"):
+        tpl.name = str(data["name"]).strip()
+    tpl.updated_at = datetime.utcnow()
+    db.commit()
+    return _json({"message": "Template updated", "template": tpl.to_dict()}, 200)
+
+
+@router.get('/cars/{car_id:int}/visits')
+def list_car_visits(
+    car_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    car = db.get(Car, car_id)
+    if not car or getattr(car, "deleted_at", None) is not None:
+        return _json({"error": "Car not found"}, 404)
+    rows = (
+        db.query(Visit)
+        .options(joinedload(Visit.items), joinedload(Visit.signature), joinedload(Visit.customer))
+        .filter(Visit.car_id == car_id)
+        .order_by(Visit.check_in_at.desc(), Visit.id.desc())
+        .all()
+    )
+    return _json({"visits": [v.to_dict() for v in rows], "count": len(rows)}, 200)
+
+
+@router.post('/cars/{car_id:int}/visits')
+def create_car_visit(
+    car_id: int,
+    body: dict | None = Body(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant', 'manager', 'service_advisor'])),
+):
+    """Digital check-in: odometer, fuel, complaints, multi-point inspection, signature required."""
+    from app.visits import create_visit
+
+    car = db.get(Car, car_id)
+    if not car or getattr(car, "deleted_at", None) is not None:
+        return _json({"error": "Car not found"}, 404)
+    try:
+        visit = create_visit(db, car=car, data=body or {}, user=current_user)
+        db.commit()
+        db.refresh(visit)
+        return _json(
+            {
+                "message": "Check-in completed",
+                "visit": visit.to_dict(),
+            },
+            201,
+        )
+    except HTTPException as exc:
+        db.rollback()
+        detail = exc.detail
+        if isinstance(detail, dict):
+            return _json(detail, exc.status_code)
+        return _json({"error": detail}, exc.status_code)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating visit for car {car_id}: {e}")
+        return _json({"error": "Failed to create check-in"}, 500)
+
+
+@router.get('/visits/{visit_id:int}')
+def get_visit_detail(
+    visit_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.visits import get_visit
+
+    try:
+        visit = get_visit(db, visit_id)
+        car = visit.car
+        return _json(
+            {
+                "visit": visit.to_dict(),
+                "car": {
+                    "id": car.id if car else None,
+                    "make": car.make if car else None,
+                    "model": car.model if car else None,
+                    "plate_no": car.plate_no if car else None,
+                    "vin": car.vin if car else None,
+                },
+            },
+            200,
+        )
+    except HTTPException as exc:
+        detail = exc.detail
+        if isinstance(detail, dict):
+            return _json(detail, exc.status_code)
+        return _json({"error": detail}, exc.status_code)
+
+
+@router.get('/visits/{visit_id:int}/check-in-sheet')
+def get_check_in_sheet(
+    visit_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Printable check-in sheet payload (frontend renders / prints)."""
+    from app.visits import get_visit
+
+    try:
+        visit = get_visit(db, visit_id)
+        car = visit.car
+        return _json(
+            {
+                "title": "Vehicle check-in sheet",
+                "printed_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                "visit": visit.to_dict(),
+                "car": {
+                    "id": car.id if car else None,
+                    "make": car.make if car else None,
+                    "model": car.model if car else None,
+                    "plate_no": car.plate_no if car else None,
+                    "vin": car.vin if car else None,
+                    "color": car.color if car else None,
+                },
+                "customer": {
+                    "id": visit.customer_id,
+                    "name": visit.customer.name if visit.customer else None,
+                    "phone": visit.customer.phone if visit.customer else None,
+                },
+            },
+            200,
+        )
+    except HTTPException as exc:
+        detail = exc.detail
+        if isinstance(detail, dict):
+            return _json(detail, exc.status_code)
+        return _json({"error": detail}, exc.status_code)
+
+
 @router.post('/cars/{car_id:int}/transfer')
 async def transfer_car(
     car_id: int,

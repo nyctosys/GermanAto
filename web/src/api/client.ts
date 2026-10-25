@@ -190,6 +190,17 @@ export const api = {
       method: 'PUT',
       body,
       reason: opts?.reason || 'Record updated',
+      // Payments / create-like PUTs should pass or accept auto key
+      idempotencyKey: opts?.idempotencyKey,
+    }),
+  /** PUT that always sends Idempotency-Key (invoice payments, etc.). */
+  putIdempotent: <T>(url: string, body?: unknown, opts?: RequestOptions) =>
+    request<T>(url, {
+      ...opts,
+      method: 'PUT',
+      body,
+      reason: opts?.reason || 'Record updated',
+      idempotencyKey: opts?.idempotencyKey ?? newIdempotencyKey(),
     }),
   patch: <T>(url: string, body?: unknown, opts?: RequestOptions) =>
     request<T>(url, {

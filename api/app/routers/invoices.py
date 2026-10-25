@@ -838,8 +838,12 @@ def get_invoice_log(invoice_id, request: Request, db: Session = Depends(get_db),
 
 
 @router.put('/invoice/{invoice_id:int}/update-balance')
+@idempotent_create
 async def update_invoice_balance(invoice_id, request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'accountant']))):
-    """Add to the paid amount and update status of an invoice (with optional proof upload)"""
+    """Add to the paid amount and update status of an invoice (with optional proof upload).
+
+    Honors Idempotency-Key so repeated payment submits do not double-apply.
+    """
     try:
         paid_amount_str = None
         proof_file = None

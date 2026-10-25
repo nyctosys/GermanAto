@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import {
   ErrorBox,
@@ -13,6 +13,22 @@ import {
 type Worker = { id: number; first_name: string; last_name: string }
 type PartLine = { description: string; quantity: number; part_number: string }
 type LabourLine = { description: string }
+type Visit = {
+  id: number
+  odometer?: string
+  reported_complaints?: string
+  repair_order_id?: number | null
+  check_in_at?: string
+}
+type CarRow = {
+  id: number
+  make?: string
+  model?: string
+  plate_no?: string
+  customer_name?: string
+  customer_phone?: string
+  mileage?: string
+}
 
 const empty = {
   customer_name: '',
@@ -26,11 +42,18 @@ const empty = {
   customer_chasis: '',
   problem_description: '',
   worker_ids: [] as number[],
+  car_id: '' as string | number,
+  visit_id: '' as string | number,
 }
 
 export function RepairOrderCreatePage() {
   const navigate = useNavigate()
-  const [form, setForm] = useState(empty)
+  const [params] = useSearchParams()
+  const [form, setForm] = useState({
+    ...empty,
+    car_id: params.get('car_id') || '',
+    visit_id: params.get('visit_id') || '',
+  })
   const [parts, setParts] = useState<PartLine[]>([
     { description: '', quantity: 1, part_number: '' },
   ])
@@ -47,10 +70,50 @@ export function RepairOrderCreatePage() {
     ? workers.data
     : workers.data?.workers || []
 
+  const carIdNum = Number(form.car_id)
+  const visits = useQuery({
+    queryKey: ['car-visits', form.car_id],
+    enabled: Number.isFinite(carIdNum) && carIdNum > 0,
+    queryFn: () =>
+      api.get<{ visits: Visit[] }>(`/api/cars/${carIdNum}/visits`),
+  })
+
+  useEffect(() => {
+    const carId = params.get('car_id')
+    const visitId = params.get('visit_id')
+    if (!carId) return
+    api.get<CarRow>(`/api/cars/${carId}`).then((car) => {
+      setForm((prev) => ({
+        ...prev,
+        car_id: carId,
+        visit_id: visitId || prev.visit_id,
+        customer_name: car.customer_name || prev.customer_name,
+        customer_phone: car.customer_phone || prev.customer_phone,
+        customer_reg_no: car.plate_no || prev.customer_reg_no,
+        customer_made: `${car.make || ''} ${car.model || ''}`.trim(),
+        customer_mileage: car.mileage || prev.customer_mileage,
+      }))
+    }).catch(() => undefined)
+  }, [params])
+
+  useEffect(() => {
+    const visitId = Number(form.visit_id)
+    const list = visits.data?.visits || []
+    const visit = list.find((v) => v.id === visitId)
+    if (!visit) return
+    setForm((prev) => ({
+      ...prev,
+      customer_mileage: visit.odometer || prev.customer_mileage,
+      problem_description: visit.reported_complaints || prev.problem_description,
+    }))
+  }, [form.visit_id, visits.data])
+
   const create = useMutation({
     mutationFn: () =>
       api.post<{ repair_order_id: number }>('/api/repair-orders', {
         ...form,
+        car_id: form.car_id ? Number(form.car_id) : null,
+        visit_id: form.visit_id ? Number(form.visit_id) : null,
         parts: parts.filter((p) => p.description),
         labour: labour.filter((l) => l.description),
       }),
@@ -67,6 +130,42 @@ export function RepairOrderCreatePage() {
       <PageHeader title="New repair order" />
       {create.error ? <ErrorBox error={create.error} /> : null}
       <form onSubmit={onSubmit} className="stack">
+        <Panel title="Check-in link">
+          <p className="muted">
+            If this job is for a registered car, a completed check-in (signature +
+            inspection) is required. Walk-ins without a car record can leave car/visit blank.
+          </p>
+          <FormGrid>
+            <Field label="Car id">
+              <input
+                value={String(form.car_id || '')}
+                onChange={(e) => setForm({ ...form, car_id: e.target.value, visit_id: '' })}
+                placeholder="Optional unless registered car"
+              />
+            </Field>
+            <Field label="Check-in visit">
+              <select
+                value={String(form.visit_id || '')}
+                onChange={(e) => setForm({ ...form, visit_id: e.target.value })}
+                disabled={!form.car_id}
+              >
+                <option value="">Select completed check-in</option>
+                {(visits.data?.visits || [])
+                  .filter((v) => !v.repair_order_id)
+                  .map((v) => (
+                    <option key={v.id} value={v.id}>
+                      #{v.id} · {v.check_in_at || '—'} · odo {v.odometer || '—'}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            {form.car_id ? (
+              <Link className="btn btn-secondary btn-sm" to={`/cars/${form.car_id}?tab=checkin`}>
+                Open check-in on car
+              </Link>
+            ) : null}
+          </FormGrid>
+        </Panel>
         <Panel title="Customer & vehicle">
           <FormGrid>
             <Field label="Customer name">

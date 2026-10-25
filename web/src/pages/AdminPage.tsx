@@ -92,6 +92,12 @@ export function AdminPage() {
     'hr',
     'repair-order',
     'settings',
+    'approve_discount',
+    'override_payment_gate',
+    'qc_signoff',
+    'adjust_stock',
+    'reopen_period',
+    'approve_evidence_exception',
   ]
 
   function loadRolePerms(role: string) {

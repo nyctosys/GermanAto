@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user, require_roles
+from app.foundation.overrides import require_override, user_has_permission
 from app.log_utils import log_action
 from app.models import FinancialPeriod
 from app.period_lock import is_period_open
@@ -49,16 +50,19 @@ def list_periods(
         if m == 0:
             m, y = 12, y - 1
 
-    return _json({"periods": months, "can_change": current_user.role == "admin"})
+    can_change = current_user.role in ("admin", "owner") or user_has_permission(
+        db, current_user, "reopen_period"
+    )
+    return _json({"periods": months, "can_change": can_change})
 
 
 @router.post("/financial-periods")
 def set_period(
     body: dict | None = Body(None),
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(["admin"])),
+    current_user=Depends(require_roles(["admin", "owner", "manager"])),
 ):
-    """Close a month early, or reopen a closed one. Admin only."""
+    """Close a month early, or reopen a closed one (reopen needs permission + reason)."""
     data = body or {}
     try:
         year, month = int(data["year"]), int(data["month"])
@@ -71,8 +75,9 @@ def set_period(
 
     is_open = bool(data["is_open"])
     reason = (data.get("reason") or "").strip()
-    if is_open and not reason:
-        return _json({"error": "Give a reason for reopening a closed month."}, 400)
+    if is_open:
+        # Granular: reopen_period + mandatory reason (foundation override)
+        reason = require_override(db, current_user, "period_reopen", reason=reason)
 
     period = db.query(FinancialPeriod).filter_by(year=year, month=month).first()
     if not period:

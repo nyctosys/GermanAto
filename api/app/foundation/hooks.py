@@ -88,7 +88,11 @@ def _require_reason(action: str, changed: set[str] | None = None) -> None:
         raise HTTPException(
             status_code=400,
             detail={
-                "error": "reason is required for price edits, stock adjustments, and deletes",
+                "error": (
+                    "reason is required for price edits, discounts above threshold, "
+                    "stock adjustments, deletes, payment-gate overrides, "
+                    "evidence exceptions, and period reopen"
+                ),
                 "require_reason": True,
             },
         )
@@ -111,11 +115,15 @@ def _before_flush(session: Session, flush_context, instances) -> None:
     user = get_user()
     reason = get_reason()
 
+    from app.models import FoundationMixin
+
     for obj in list(session.new):
-        if hasattr(obj, "branch_id") and not getattr(obj, "branch_id", None):
-            obj.branch_id = bid
-        if hasattr(obj, "version") and getattr(obj, "version", None) is None:
-            obj.version = 1
+        # Only FoundationMixin rows get auto branch/version (not AppSetting / AppLog).
+        if isinstance(obj, FoundationMixin):
+            if not getattr(obj, "branch_id", None):
+                obj.branch_id = bid
+            if getattr(obj, "version", None) is None:
+                obj.version = 1
         if skip_audit.get() or _module_name(obj) in _SKIP_AUDIT_TABLES:
             continue
         if type(obj).__name__ == "AppLog":

@@ -1,4 +1,5 @@
 export * from './branch'
 export * from './money'
 export * from './roles'
+export * from './settings'
 export * from './validation'

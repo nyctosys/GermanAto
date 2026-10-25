@@ -6,6 +6,16 @@ Owner ≡ admin; Store Keeper ≡ inventory_manager.
 
 from __future__ import annotations
 
+# Granular override permissions (foundation gap #8).
+GRANULAR_PERMISSIONS = [
+    "approve_discount",
+    "override_payment_gate",
+    "qc_signoff",
+    "adjust_stock",
+    "reopen_period",
+    "approve_evidence_exception",
+]
+
 ADMIN_PERMISSIONS = [
     "home",
     "invoice",
@@ -24,6 +34,7 @@ ADMIN_PERMISSIONS = [
     "repair-orders-management",
     "settings",
     "logs",
+    *GRANULAR_PERMISSIONS,
 ]
 
 VALID_ROLES = (
@@ -66,6 +77,12 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "repair-order",
         "repair-orders-management",
         "settings",
+        "approve_discount",
+        "override_payment_gate",
+        "qc_signoff",
+        "adjust_stock",
+        "reopen_period",
+        "approve_evidence_exception",
     ],
     "accountant": [
         "home",
@@ -82,6 +99,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "repair-orders-management",
         "reports",
         "settings",
+        "approve_discount",
     ],
     "service_advisor": [
         "home",
@@ -90,12 +108,14 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "car",
         "repair-order",
         "repair-orders-management",
+        "qc_signoff",
     ],
     "technician": [
         "home",
         "repair-order",
         "repair-orders-management",
         "car",
+        "qc_signoff",
     ],
     "store_keeper": [
         "home",
@@ -104,6 +124,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "repair-orders-management",
         "vendors",
         "settings",
+        "adjust_stock",
     ],
     "inventory_manager": [
         "home",
@@ -111,6 +132,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "repair-order",
         "repair-orders-management",
         "settings",
+        "adjust_stock",
     ],
 }
 

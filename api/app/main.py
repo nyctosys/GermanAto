@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.db import Base, engine
@@ -27,6 +29,9 @@ from app.routers import (
 
 import app.models  # noqa: F401  (register tables on Base)
 
+_UPLOAD_DIR = Path(__file__).resolve().parent / "static" / "uploads"
+_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -38,6 +43,11 @@ async def lifespan(_app: FastAPI):
     db = SessionLocal()
     try:
         ensure_default_branch(db)
+        from app.foundation.settings import ensure_default_settings
+        from app.visits import ensure_default_inspection_template
+
+        ensure_default_settings(db)
+        ensure_default_inspection_template(db)
         db.commit()
     except Exception:
         db.rollback()
@@ -91,6 +101,7 @@ app.include_router(vendors.router, prefix="")  # routes already /api/...
 app.include_router(hr.router, prefix="")  # /api/... and /iclock/...
 app.include_router(settings_router.router, prefix="/api")
 app.include_router(periods.router, prefix="/api")
+app.mount("/uploads", StaticFiles(directory=str(_UPLOAD_DIR)), name="uploads")
 
 
 @app.exception_handler(HTTPException)

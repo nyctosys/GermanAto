@@ -20,6 +20,7 @@ from app.models import (
     Customer,
     Invoice,
     RepairOrder,
+    Visit,
 )
 
 
@@ -161,6 +162,35 @@ def build_car_history(
 
     events: list[dict[str, Any]] = []
     want = kinds
+
+    # Check-in visits / inspections / comebacks
+    if want is None or "visit" in want or "comeback" in want or "odometer" in want:
+        visits = (
+            db.query(Visit)
+            .filter(Visit.car_id == car_id)
+            .order_by(Visit.check_in_at.desc(), Visit.id.desc())
+            .all()
+        )
+        for v in visits:
+            kind = "comeback" if v.is_comeback else "visit"
+            if want is not None and kind not in want and "visit" not in want and "odometer" not in want:
+                continue
+            if want is not None and "comeback" in want and not v.is_comeback and "visit" not in want:
+                continue
+            events.append(
+                _event(
+                    kind=kind if (want is None or kind in want or "visit" in (want or set())) else "visit",
+                    when=v.check_in_at or v.created_at,
+                    title=("Comeback check-in" if v.is_comeback else "Check-in / inspection")
+                    + f" #{v.id}",
+                    summary=(
+                        f"odometer {v.odometer or '—'} · fuel {v.fuel_level or '—'} · "
+                        f"{(v.reported_complaints or '')[:80]}"
+                    ),
+                    href=f"/cars/{car_id}?tab=checkin&visit={v.id}",
+                    meta=v.to_dict(include_items=False),
+                )
+            )
 
     # Ownership transfers
     if want is None or "ownership" in want:

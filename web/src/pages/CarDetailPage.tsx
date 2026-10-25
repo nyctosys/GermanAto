@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { SignaturePad } from '../components/SignaturePad'
 import {
   Empty,
   ErrorBox,
@@ -41,7 +42,42 @@ type HistoryPayload = {
   count: number
 }
 
+type TemplatePoint = {
+  key: string
+  label: string
+  category: string
+  requires_photo?: boolean
+}
+
+type InspectItemState = {
+  result: 'ok' | 'issue' | 'na'
+  notes: string
+  photo_data_url: string | null
+}
+
+type Visit = {
+  id: number
+  odometer?: string
+  fuel_level?: string
+  reported_complaints?: string
+  existing_damage?: string
+  signature_path?: string
+  is_comeback?: boolean
+  repair_order_id?: number | null
+  check_in_at?: string
+  items?: Array<{
+    point_key: string
+    label: string
+    category: string
+    result: string
+    notes?: string
+    photo_path?: string
+  }>
+}
+
 const KIND_OPTIONS = [
+  { id: 'visit', label: 'Visits' },
+  { id: 'comeback', label: 'Comebacks' },
   { id: 'ownership', label: 'Ownership' },
   { id: 'quote', label: 'Quotes' },
   { id: 'invoice', label: 'Invoices' },
@@ -50,11 +86,22 @@ const KIND_OPTIONS = [
   { id: 'parts', label: 'Parts' },
 ]
 
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
 export function CarDetailPage() {
   const { id } = useParams()
+  const [params, setParams] = useSearchParams()
   const carId = Number(id)
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'history' | 'transfer'>('history')
+  const initialTab = (params.get('tab') as 'history' | 'transfer' | 'checkin') || 'history'
+  const [tab, setTab] = useState<'history' | 'transfer' | 'checkin'>(initialTab)
   const [kinds, setKinds] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [toCustomerId, setToCustomerId] = useState('')
@@ -63,6 +110,16 @@ export function CarDetailPage() {
     () => new Date().toISOString().slice(0, 10),
   )
   const [evidence, setEvidence] = useState<File | null>(null)
+
+  const [odometer, setOdometer] = useState('')
+  const [fuel, setFuel] = useState('half')
+  const [complaints, setComplaints] = useState('')
+  const [damage, setDamage] = useState('')
+  const [signature, setSignature] = useState<string | null>(null)
+  const [inspect, setInspect] = useState<Record<string, InspectItemState>>({})
+  const [printVisitId, setPrintVisitId] = useState<number | null>(
+    params.get('visit') ? Number(params.get('visit')) : null,
+  )
 
   const customers = useQuery({
     queryKey: ['customers'],
@@ -76,6 +133,36 @@ export function CarDetailPage() {
     queryFn: () =>
       api.get<HistoryPayload>(`/api/cars/${carId}/history?${kindsParam}`),
   })
+
+  const template = useQuery({
+    queryKey: ['inspection-template'],
+    queryFn: () =>
+      api.get<{ template: { points: TemplatePoint[] } }>(
+        '/api/inspection-templates/default',
+      ),
+  })
+
+  const visits = useQuery({
+    queryKey: ['car-visits', carId],
+    enabled: Number.isFinite(carId) && carId > 0,
+    queryFn: () =>
+      api.get<{ visits: Visit[] }>(`/api/cars/${carId}/visits`),
+  })
+
+  const sheet = useQuery({
+    queryKey: ['check-in-sheet', printVisitId],
+    enabled: !!printVisitId,
+    queryFn: () =>
+      api.get<{
+        title: string
+        printed_at: string
+        visit: Visit
+        car: Car
+        customer: { name?: string; phone?: string }
+      }>(`/api/visits/${printVisitId}/check-in-sheet`),
+  })
+
+  const points = template.data?.template.points || []
 
   const transfer = useMutation({
     mutationFn: async () => {
@@ -96,6 +183,33 @@ export function CarDetailPage() {
     },
   })
 
+  const checkIn = useMutation({
+    mutationFn: () =>
+      api.post<{ visit: Visit }>(`/api/cars/${carId}/visits`, {
+        odometer,
+        fuel_level: fuel,
+        reported_complaints: complaints,
+        existing_damage: damage,
+        signature_data_url: signature,
+        items: points.map((p) => ({
+          key: p.key,
+          result: inspect[p.key]?.result || 'ok',
+          notes: inspect[p.key]?.notes || '',
+          photo_data_url: inspect[p.key]?.photo_data_url || null,
+        })),
+      }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['car-history', carId] })
+      qc.invalidateQueries({ queryKey: ['car-visits', carId] })
+      setSignature(null)
+      setComplaints('')
+      setDamage('')
+      setInspect({})
+      setPrintVisitId(data.visit.id)
+      setTab('checkin')
+    },
+  })
+
   const filteredEvents = useMemo(() => {
     const events = history.data?.events || []
     const q = search.trim().toLowerCase()
@@ -110,6 +224,13 @@ export function CarDetailPage() {
 
   const car = history.data?.car
 
+  function switchTab(next: 'history' | 'transfer' | 'checkin') {
+    setTab(next)
+    const nextParams = new URLSearchParams(params)
+    nextParams.set('tab', next)
+    setParams(nextParams, { replace: true })
+  }
+
   function toggleKind(id: string) {
     setKinds((prev) =>
       prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id],
@@ -119,6 +240,23 @@ export function CarDetailPage() {
   function onTransfer(e: FormEvent) {
     e.preventDefault()
     transfer.mutate()
+  }
+
+  function onCheckIn(e: FormEvent) {
+    e.preventDefault()
+    checkIn.mutate()
+  }
+
+  function setItem(key: string, patch: Partial<InspectItemState>) {
+    setInspect((prev) => ({
+      ...prev,
+      [key]: {
+        result: prev[key]?.result || 'ok',
+        notes: prev[key]?.notes || '',
+        photo_data_url: prev[key]?.photo_data_url || null,
+        ...patch,
+      },
+    }))
   }
 
   if (!Number.isFinite(carId) || carId <= 0) {
@@ -175,20 +313,20 @@ export function CarDetailPage() {
       ) : null}
 
       <div className="tabs">
-        <button
-          type="button"
-          className={`tab${tab === 'history' ? ' is-active' : ''}`}
-          onClick={() => setTab('history')}
-        >
-          History
-        </button>
-        <button
-          type="button"
-          className={`tab${tab === 'transfer' ? ' is-active' : ''}`}
-          onClick={() => setTab('transfer')}
-        >
-          Transfer ownership
-        </button>
+        {(['history', 'checkin', 'transfer'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            className={`tab${tab === t ? ' is-active' : ''}`}
+            onClick={() => switchTab(t)}
+          >
+            {t === 'history'
+              ? 'History'
+              : t === 'checkin'
+                ? 'Check-in'
+                : 'Transfer ownership'}
+          </button>
+        ))}
       </div>
 
       {tab === 'history' ? (
@@ -247,7 +385,9 @@ export function CarDetailPage() {
             ))}
           </ul>
         </Panel>
-      ) : (
+      ) : null}
+
+      {tab === 'transfer' ? (
         <Panel title="Transfer ownership">
           <p className="muted">
             History stays on this car. Old invoices and quotes remain linked to the
@@ -304,7 +444,226 @@ export function CarDetailPage() {
             </button>
           </FormGrid>
         </Panel>
-      )}
+      ) : null}
+
+      {tab === 'checkin' ? (
+        <>
+          <Panel title="New check-in / digital inspection">
+            <p className="muted">
+              Capture odometer, fuel, complaints, multi-point inspection (with phone
+              camera photos), and customer signature before opening a job card.
+            </p>
+            {checkIn.error ? <ErrorBox error={checkIn.error} /> : null}
+            <form onSubmit={onCheckIn} className="stack">
+              <FormGrid>
+                <Field label="Odometer">
+                  <input
+                    required
+                    value={odometer || car?.mileage || ''}
+                    onChange={(e) => setOdometer(e.target.value)}
+                  />
+                </Field>
+                <Field label="Fuel level">
+                  <select value={fuel} onChange={(e) => setFuel(e.target.value)}>
+                    <option value="empty">Empty</option>
+                    <option value="quarter">1/4</option>
+                    <option value="half">1/2</option>
+                    <option value="three_quarter">3/4</option>
+                    <option value="full">Full</option>
+                  </select>
+                </Field>
+                <Field label="Reported complaints">
+                  <textarea
+                    rows={2}
+                    value={complaints}
+                    onChange={(e) => setComplaints(e.target.value)}
+                  />
+                </Field>
+                <Field label="Existing damage notes">
+                  <textarea
+                    rows={2}
+                    value={damage}
+                    onChange={(e) => setDamage(e.target.value)}
+                  />
+                </Field>
+              </FormGrid>
+
+              <h3 style={{ marginTop: 16 }}>Inspection checklist</h3>
+              {template.isLoading ? <Loading /> : null}
+              {points.map((p) => (
+                <div
+                  key={p.key}
+                  className="panel"
+                  style={{ padding: 12, marginBottom: 8 }}
+                >
+                  <div style={{ fontWeight: 600 }}>
+                    {p.label}{' '}
+                    <span className="muted" style={{ fontWeight: 400 }}>
+                      ({p.category})
+                    </span>
+                  </div>
+                  <div className="row-actions" style={{ marginTop: 8, gap: 8 }}>
+                    {(['ok', 'issue', 'na'] as const).map((r) => (
+                      <label key={r} style={{ display: 'flex', gap: 4 }}>
+                        <input
+                          type="radio"
+                          name={`result-${p.key}`}
+                          checked={(inspect[p.key]?.result || 'ok') === r}
+                          onChange={() => setItem(p.key, { result: r })}
+                        />
+                        {r}
+                      </label>
+                    ))}
+                  </div>
+                  <Field label="Notes">
+                    <input
+                      value={inspect[p.key]?.notes || ''}
+                      onChange={(e) => setItem(p.key, { notes: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Photo (camera or gallery)">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const url = await fileToDataUrl(file)
+                        setItem(p.key, { photo_data_url: url })
+                      }}
+                    />
+                    {inspect[p.key]?.photo_data_url ? (
+                      <img
+                        src={inspect[p.key]!.photo_data_url!}
+                        alt={p.label}
+                        style={{ maxWidth: 160, marginTop: 8, borderRadius: 4 }}
+                      />
+                    ) : null}
+                  </Field>
+                </div>
+              ))}
+
+              <h3>Customer signature (required)</h3>
+              <SignaturePad value={signature} onChange={setSignature} />
+
+              <button
+                className="btn"
+                type="submit"
+                disabled={checkIn.isPending || !signature || !points.length}
+                style={{ marginTop: 12 }}
+              >
+                {checkIn.isPending ? 'Saving…' : 'Complete check-in'}
+              </button>
+            </form>
+          </Panel>
+
+          <Panel title="Past check-ins">
+            {(visits.data?.visits || []).length === 0 ? <Empty /> : null}
+            <ul className="timeline">
+              {(visits.data?.visits || []).map((v) => (
+                <li key={v.id} className="timeline-item">
+                  <div className="timeline-kind">
+                    {v.is_comeback ? 'comeback' : 'visit'}
+                  </div>
+                  <div className="timeline-body">
+                    <div className="timeline-title">
+                      Check-in #{v.id} · {v.check_in_at || '—'}
+                    </div>
+                    <div className="muted">
+                      odometer {v.odometer || '—'} · fuel {v.fuel_level || '—'}
+                      {v.repair_order_id ? ` · RO #${v.repair_order_id}` : ''}
+                    </div>
+                    <div className="row-actions" style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setPrintVisitId(v.id)}
+                      >
+                        Printable sheet
+                      </button>
+                      {!v.repair_order_id ? (
+                        <Link
+                          className="btn btn-sm"
+                          to={`/repair-orders/new?car_id=${carId}&visit_id=${v.id}`}
+                        >
+                          Create job card
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+
+          {printVisitId && sheet.data ? (
+            <Panel
+              title="Check-in sheet"
+              actions={
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => window.print()}
+                >
+                  Print
+                </button>
+              }
+            >
+              <div className="checkin-sheet">
+                <h2>{sheet.data.title}</h2>
+                <p className="muted">Printed {sheet.data.printed_at}</p>
+                <p>
+                  <strong>
+                    {sheet.data.car.make} {sheet.data.car.model}
+                  </strong>{' '}
+                  · {sheet.data.car.plate_no || '—'} · VIN {sheet.data.car.vin || '—'}
+                </p>
+                <p>
+                  Customer: {sheet.data.customer.name || '—'} (
+                  {sheet.data.customer.phone || '—'})
+                </p>
+                <p>
+                  Odometer: {sheet.data.visit.odometer || '—'} · Fuel:{' '}
+                  {sheet.data.visit.fuel_level || '—'}
+                </p>
+                <p>Complaints: {sheet.data.visit.reported_complaints || '—'}</p>
+                <p>Existing damage: {sheet.data.visit.existing_damage || '—'}</p>
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Point</th>
+                      <th>Category</th>
+                      <th>Result</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(sheet.data.visit.items || []).map((i) => (
+                      <tr key={i.point_key}>
+                        <td>{i.label}</td>
+                        <td>{i.category}</td>
+                        <td>{i.result}</td>
+                        <td>{i.notes || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {sheet.data.visit.signature_path ? (
+                  <div style={{ marginTop: 16 }}>
+                    <div className="muted">Customer signature</div>
+                    <img
+                      src={`/${(sheet.data.visit.signature_path || '').replace(/^\/?uploads\//, 'uploads/')}`}
+                      alt="Signature"
+                      style={{ maxWidth: 280, border: '1px solid #ddd' }}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </Panel>
+          ) : null}
+        </>
+      ) : null}
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 Status key: **Done** / **Partial** / **Missing**
 
-Last updated: car transfer + unified car history API/UI.
+Last updated: visit/check-in inspection + job-card gate; car transfer/history already Done.
 
 ---
 
@@ -10,12 +10,13 @@ Last updated: car transfer + unified car history API/UI.
 
 | # | Feature | Status | Files involved | What's needed |
 |---|---------|--------|----------------|---------------|
-| 1 | Car entry-to-exit printable docs | **Partial** | `web/src/pages/CarsPage.tsx`, `RepairOrdersPage.tsx`, `Invoice*`, `api/app/routers/cars.py`, `repair_orders.py`, `invoices.py` | CRUD + RO status timeline exist; no dedicated entry/exit printable packet or unified print templates across stages |
-| 2 | Car history | **Done** | `car_ownership.build_car_history`, `GET /cars/{id}/history`, `CarDetailPage.tsx`, search via plate/VIN/customer | Unified timeline (quotes, ROs, invoices, payments, parts, odometer/tech, ownership); filters + document links |
+| 1 | Car entry-to-exit printable docs | **Partial** | check-in sheet on `CarDetailPage`, RO/invoice prints still separate | Check-in printable sheet Done; full entry→exit packet across stages still open |
+| 2 | Car history | **Done** | `car_ownership.build_car_history`, `GET /cars/{id}/history`, `CarDetailPage.tsx`, search via plate/VIN/customer | Timeline includes visits/comebacks, quotes, ROs, invoices, payments, parts, ownership; filters + document links |
 | 3 | Inventory via PO | **Partial** | `models.PurchaseOrder`, `routers/vendors.py`, `VendorsPage` / `VendorDetailPage` | Vendor PO/consignment records exist; not a full PO → receive → stock-update workflow tied to `Inventory` qty |
 | 4 | Job card → quotation (advance) → RO → invoice | **Partial** | `QuoteCreatePage`, `PendingQuotesPage`, `RepairOrder*`, `Invoice*`, `invoices.py`, `repair_orders.py` | Quotes (`type_of=quote`), advance on invoice, ROs, invoices exist as parallel docs; no enforced job-card entity or strict pipeline state machine |
 | 5 | Barcode inventory | **Partial** | `models.Inventory.barcode`, `routers/inventory.py` (lookup/receive by barcode), `InventoryPage.tsx` | Barcode field + scan/receive endpoints exist; no dedicated barcode label print / gun UX polish |
 | 6 | Car transfer | **Done** | `models.CarOwnership`, `car_ownership.transfer_car_ownership`, `POST /cars/{id}/transfer`, `CarDetailPage` transfer tab | Evidence required; audit logged; invoices stay with original customer; rejects same/deleted owners |
+| 6b | Visit / check-in inspection | **Done** | `models.Visit` / `VisitInspectionItem` / `InspectionTemplate`, `visits.py`, `POST /cars/{id}/visits`, `CarDetailPage` check-in tab, printable sheet | Configurable multi-point checklist, photos, canvas signature, camera capture; signature+inspection required before job card when `car_id` set |
 | 7 | Error prevention | **Partial** → improved | `period_lock.py`, `foundation/*`, validation, idempotency, soft-delete, version | Month lock + uniqueness + foundation guards; remaining: wider Zod form wiring on every page |
 | 8 | Branch hex id | **Done** | `foundation/branch.py`, `foundation/scope.py`, `foundation/hooks.py`, `main.py` middleware, `migrate_foundation.py` | 8-char hex branch, default seed `a1b2c3d4`, auto-assign on create, ORM list scoping via session hooks + `X-Branch-Id` |
 | 9 | Offline / cloud sync | **Missing** | — | No sync queue, conflict resolution, or offline client store (ZKTeco `last_sync` is device attendance only) |
@@ -32,16 +33,17 @@ Last updated: car transfer + unified car history API/UI.
 
 | Foundation item | Status | Files | Notes |
 |-----------------|--------|-------|-------|
-| `branch_id` (8-char hex) + default seed | **Done** | `models.Branch`, `foundation/branch.py`, `foundation/scope.py`, `foundation/hooks.py`, `deps.get_branch_id`, middleware | Auto-assign on insert; list queries scoped via `do_orm_execute` + `scoped_query` helper |
+| `branch_id` (8-char hex) + default seed | **Done** | `models.Branch`, `foundation/branch.py`, `foundation/scope.py`, `foundation/hooks.py`, `deps.get_branch_id`, middleware | Shared hooks auto-assign on insert + filter lists (`do_orm_execute` / `scoped_query`); no per-router copy-paste |
 | Base columns: id, created_at/by, updated_at/by, version, deleted_at | **Done** (additive) | `FoundationMixin`, migration | Integer ids kept; `version` + `deleted_at` on business tables |
-| Audit log (who/what/old/new/reason) | **Done** | `foundation/audit.py`, `foundation/hooks.py` (`before_flush`) | Automatic on create/update/delete; `X-Audit-Reason` required for price/stock/deletes |
+| Audit log (who/what/old/new/reason) | **Done** | `foundation/audit.py`, `foundation/hooks.py`, `foundation/overrides.py` | Auto audit on flush; reason required for price/discount-above-threshold/stock/deletes/payment-gate/evidence/period-reopen |
 | Money as integer paisa | **Partial** | `foundation/money.py`, `shared/src/money.ts` | Helpers ready; legacy Float/Numeric columns unchanged (data-safe) |
 | Shared validation + DB constraints | **Done** | `foundation/validation.py`, `schemas_foundation.py`, `shared/src/validation.ts`, CHECK migration | PK phone E.164, reg no, CNIC, non-negative qty/price; DB CHECKs on key tables |
 | Reusable attachment / evidence service | **Partial** | `foundation/attachments.py`, `models.Attachment`, car transfer evidence | Wired for car ownership transfers; expenses/cash/invoices still next |
-| Role / permission map | **Done** | `foundation/roles.py`, `routers/auth.py`, `AdminPage.tsx` | Owner/Manager/Accountant/Service Advisor/Technician/Store Keeper (+ legacy names) |
+| Role / permission map | **Done** | `foundation/roles.py`, `deps.require_permissions`, `AdminPage.tsx` | Includes granular: `approve_discount`, `override_payment_gate`, `qc_signoff`, `adjust_stock`, `reopen_period`, `approve_evidence_exception` |
 | Soft delete everywhere | **Done** | `foundation/hooks.py` (`Session.delete`), `soft_delete.py` | Hard `db.delete` → soft when `deleted_at` exists; lists exclude deleted |
 | Optimistic locking (`version`) | **Done** | `foundation/versioning.py`, update routes (cars/expenses/invoices/inventory), `web/src/api/client.ts` 409 | 409 + `VersionConflictError` on client |
-| Idempotency-Key on creates | **Done** | `foundation/idempotent.py`, invoices/expenses/cash-received/POs | Header honored; client auto-sends UUID on `api.post` |
+| Idempotency-Key on creates | **Done** | `foundation/idempotent.py` (sync+async), invoices/expenses/cash-received/POs + invoice payment PUT | Header honored; client auto-sends on `api.post` / `api.putIdempotent` |
+| Workshop settings thresholds | **Done** | `models.AppSetting`, `foundation/settings.py`, `GET/PUT /api/settings/workshop`, `SettingsPage` | Defaults: discount approval 10%, receipt Rs 500, comeback 14d, payment gate on, expense heads list |
 
 ---
 
@@ -49,6 +51,6 @@ Last updated: car transfer + unified car history API/UI.
 
 | Item | Status |
 |------|--------|
-| Automated test suite | **Partial** → expanded — `api/tests/` covers money, validation, scope/soft-delete/version, idempotency/audit, car transfer rules + history ordering |
+| Automated test suite | **Partial** → expanded — foundation + car transfer/history + **visit signature/inspection + job-card gate** (`test_visits.py`) |
 | Lint | `web`: `oxlint` (warnings only on pre-existing purity patterns) |
 | Build | `web`: `tsc -b && vite build` |

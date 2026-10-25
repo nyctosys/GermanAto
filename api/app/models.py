@@ -969,6 +969,150 @@ class Attachment(FoundationMixin, Base):
         }
 
 
+class InspectionTemplate(FoundationMixin, Base):
+    """Configurable multi-point check-in inspection template."""
+
+    __tablename__ = "inspection_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), default="Default check-in")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # JSON list of {key, label, category, requires_photo, sort_order}
+    points_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def points(self) -> list[dict]:
+        import json
+
+        try:
+            data = json.loads(self.points_json or "[]")
+            return data if isinstance(data, list) else []
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "is_default": self.is_default,
+            "is_active": self.is_active,
+            "points": self.points(),
+            "branch_id": self.branch_id,
+        }
+
+
+class Visit(FoundationMixin, Base):
+    """Vehicle check-in / visit with digital inspection + customer signature."""
+
+    __tablename__ = "visits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    car_id: Mapped[int] = mapped_column(ForeignKey("car.id"), index=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    odometer: Mapped[str | None] = mapped_column(String(50))
+    fuel_level: Mapped[str | None] = mapped_column(String(40))
+    reported_complaints: Mapped[str | None] = mapped_column(Text)
+    existing_damage: Mapped[str | None] = mapped_column(Text)
+    signature_attachment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("attachments.id"), nullable=True
+    )
+    template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inspection_templates.id"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="completed")
+    is_comeback: Mapped[bool] = mapped_column(Boolean, default=False)
+    repair_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("repair_order.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    checked_in_by: Mapped[str | None] = mapped_column(String(80))
+    check_in_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    car: Mapped[Car] = relationship("Car", backref="visits")
+    customer: Mapped[Customer | None] = relationship("Customer")
+    signature: Mapped[Attachment | None] = relationship(
+        "Attachment", foreign_keys=[signature_attachment_id]
+    )
+    items: Mapped[list["VisitInspectionItem"]] = relationship(
+        "VisitInspectionItem",
+        back_populates="visit",
+        cascade="all, delete-orphan",
+        order_by="VisitInspectionItem.sort_order",
+    )
+
+    def to_dict(self, *, include_items: bool = True) -> dict:
+        data = {
+            "id": self.id,
+            "car_id": self.car_id,
+            "customer_id": self.customer_id,
+            "customer_name": self.customer.name if self.customer else None,
+            "odometer": self.odometer,
+            "fuel_level": self.fuel_level,
+            "reported_complaints": self.reported_complaints,
+            "existing_damage": self.existing_damage,
+            "signature_attachment_id": self.signature_attachment_id,
+            "signature_path": self.signature.file_path if self.signature else None,
+            "template_id": self.template_id,
+            "status": self.status,
+            "is_comeback": self.is_comeback,
+            "repair_order_id": self.repair_order_id,
+            "checked_in_by": self.checked_in_by,
+            "check_in_at": _clock(self.check_in_at, "%Y-%m-%d %H:%M:%S"),
+            "branch_id": self.branch_id,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+        if include_items:
+            data["items"] = [i.to_dict() for i in (self.items or [])]
+        return data
+
+
+class VisitInspectionItem(FoundationMixin, Base):
+    """One checklist point on a visit, optionally with a photo."""
+
+    __tablename__ = "visit_inspection_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    visit_id: Mapped[int] = mapped_column(ForeignKey("visits.id"), index=True)
+    point_key: Mapped[str] = mapped_column(String(80))
+    label: Mapped[str] = mapped_column(String(160))
+    category: Mapped[str] = mapped_column(String(40), default="general")
+    result: Mapped[str] = mapped_column(String(20), default="ok")  # ok | issue | na
+    notes: Mapped[str | None] = mapped_column(Text)
+    photo_attachment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("attachments.id"), nullable=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    visit: Mapped[Visit] = relationship("Visit", back_populates="items")
+    photo: Mapped[Attachment | None] = relationship(
+        "Attachment", foreign_keys=[photo_attachment_id]
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "visit_id": self.visit_id,
+            "point_key": self.point_key,
+            "label": self.label,
+            "category": self.category,
+            "result": self.result,
+            "notes": self.notes,
+            "photo_attachment_id": self.photo_attachment_id,
+            "photo_path": self.photo.file_path if self.photo else None,
+            "sort_order": self.sort_order,
+        }
+
+
 class CarOwnership(FoundationMixin, Base):
     """Ownership transfer. History stays on the car; invoices keep the original customer."""
 
@@ -1028,6 +1172,44 @@ class IdempotencyKey(Base):
     response_body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     created_by: Mapped[str | None] = mapped_column(String(80))
+
+
+class AppSetting(Base):
+    """Key/value workshop settings (thresholds, expense heads, feature flags).
+
+    Global rows use branch_id='' (empty) so UNIQUE(key, branch_id) works on Postgres.
+    """
+
+    __tablename__ = "app_settings"
+    __table_args__ = (
+        UniqueConstraint("key", "branch_id", name="uq_app_settings_key_branch"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), index=True)
+    value: Mapped[str] = mapped_column(Text, default="null")
+    branch_id: Mapped[str] = mapped_column(String(8), default="", index=True)
+    updated_by: Mapped[str | None] = mapped_column(String(80))
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        import json
+
+        try:
+            parsed = json.loads(self.value) if self.value is not None else None
+        except (TypeError, ValueError, json.JSONDecodeError):
+            parsed = self.value
+        return {
+            "id": self.id,
+            "key": self.key,
+            "value": parsed,
+            "branch_id": self.branch_id or None,
+            "updated_by": self.updated_by,
+            "updated_at": _clock(self.updated_at, "%Y-%m-%d %H:%M:%S"),
+        }
 
 
 def _needs_part_number(obj: object) -> bool:

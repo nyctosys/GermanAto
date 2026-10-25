@@ -1,0 +1,31 @@
+---
+description: GermanATO stack, reuse, migrations, and delivery checklist
+alwaysApply: true
+---
+
+# GermanATO working rules
+
+## Stack (do not replace)
+
+- Backend: FastAPI + SQLAlchemy in `api/`
+- Frontend: React + Vite + TypeScript in `web/`
+- Shared Zod schemas in `shared/`
+- Keep **integer** primary keys (no ULID migration of existing tables)
+
+## Before changing code
+
+1. Read `docs/ARCHITECTURE.md` and `docs/GAP_REPORT.md`
+2. Reuse existing models, routers, pages, and foundation helpers:
+   - `audit_write`, attachments, roles, money, soft_delete, branch
+3. **Extend, don't rewrite.** Prefer additive changes over greenfield replacements.
+
+## Data & migrations
+
+- Additive migrations only (`migrate_foundation.py` style / additive DDL)
+- Existing data must keep working (no breaking column type swaps)
+
+## After finishing a feature
+
+1. Update statuses in `docs/GAP_REPORT.md` when work is done
+2. Run build, lint, and tests
+3. Summarize results for the user

@@ -288,3 +288,95 @@ def delete_category(category_id: int, request: Request, db: Session = Depends(ge
         db.rollback()
         logger.error(f"Error deleting category: {e}")
         return _json({'error': 'Internal server error'}, 500)
+
+
+# ===== WORKSHOP THRESHOLDS / FLAGS =====
+
+from app.foundation.settings import (
+    DEFAULTS,
+    KNOWN_KEYS,
+    SETTING_COMEBACK_WINDOW_DAYS,
+    SETTING_DISCOUNT_APPROVAL_PCT,
+    SETTING_EXPENSE_HEADS,
+    SETTING_MANDATORY_RECEIPT_AMOUNT,
+    SETTING_PAYMENT_GATE_ENABLED,
+    ensure_default_settings,
+    get_workshop_settings,
+    set_setting,
+)
+
+
+@router.get("/settings/workshop")
+def get_workshop_settings_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Configurable thresholds used by discount / receipt / payment-gate / comeback flows."""
+    try:
+        ensure_default_settings(db)
+        db.commit()
+        settings = get_workshop_settings(db)
+        return _json({"settings": settings, "defaults": DEFAULTS, "keys": list(KNOWN_KEYS)}, 200)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error loading workshop settings: {e}")
+        return _json({"error": "Internal server error"}, 500)
+
+
+@router.put("/settings/workshop")
+def update_workshop_settings_route(
+    body: dict | None = Body(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(["admin", "owner", "manager"])),
+):
+    """Update one or more workshop setting keys. Additive — unknown keys rejected."""
+    data = body or {}
+    payload = data.get("settings") if isinstance(data.get("settings"), dict) else data
+    if not isinstance(payload, dict) or not payload:
+        return _json({"error": "Provide settings fields to update"}, 400)
+
+    try:
+        ensure_default_settings(db)
+        updated: dict = {}
+        for key, value in payload.items():
+            if key not in KNOWN_KEYS:
+                return _json({"error": f"Unknown setting key: {key}"}, 400)
+            if key == SETTING_DISCOUNT_APPROVAL_PCT:
+                value = float(value)
+                if value < 0 or value > 100:
+                    return _json({"error": "discount_approval_pct must be 0–100"}, 400)
+            elif key == SETTING_MANDATORY_RECEIPT_AMOUNT:
+                value = float(value)
+                if value < 0:
+                    return _json({"error": "mandatory_receipt_amount must be ≥ 0"}, 400)
+            elif key == SETTING_COMEBACK_WINDOW_DAYS:
+                value = int(value)
+                if value < 0:
+                    return _json({"error": "comeback_window_days must be ≥ 0"}, 400)
+            elif key == SETTING_PAYMENT_GATE_ENABLED:
+                value = bool(value)
+            elif key == SETTING_EXPENSE_HEADS:
+                if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
+                    return _json({"error": "expense_heads must be a list of strings"}, 400)
+                value = [x.strip() for x in value if str(x).strip()]
+            set_setting(
+                db,
+                key,
+                value,
+                updated_by=current_user.username if current_user else None,
+            )
+            updated[key] = value
+        db.commit()
+        return _json(
+            {
+                "message": "Workshop settings updated",
+                "updated": updated,
+                "settings": get_workshop_settings(db),
+            },
+            200,
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating workshop settings: {e}")
+        return _json({"error": "Internal server error"}, 500)

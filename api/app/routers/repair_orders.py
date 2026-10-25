@@ -173,11 +173,14 @@ def get_repair_orders(request: Request, db: Session = Depends(get_db), current_u
 @router.post('/repair-orders')
 def create_repair_order(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
     try:
-        data = body
+        data = body or {}
         
         # Validate required fields
         if not data.get('customer_name'):
             return _json({'error': 'Customer name is required'}, 400)
+
+        visit_id_raw = data.get('visit_id')
+        visit_id = int(visit_id_raw) if visit_id_raw not in (None, '') else None
         
         # Create repair order
         worker_ids = data.get('worker_ids', [])
@@ -238,8 +241,22 @@ def create_repair_order(request: Request, db: Session = Depends(get_db), body: d
         # the car for that customer if it had no owner yet.
         apply_links(db, repair_order, data)
 
+        # Job card gate after linking: any resolved car needs completed check-in
+        from app.visits import require_visit_for_job_card
+
+        linked_visit = require_visit_for_job_card(
+            db, car_id=repair_order.car_id, visit_id=visit_id
+        )
+
         db.add(repair_order)
         db.flush()  # Get the ID
+
+        if linked_visit is not None:
+            linked_visit.repair_order_id = repair_order.id
+            if linked_visit.odometer and not repair_order.customer_mileage:
+                repair_order.customer_mileage = linked_visit.odometer
+            if linked_visit.reported_complaints and not repair_order.problem_description:
+                repair_order.problem_description = linked_visit.reported_complaints
         
         # Process parts
         if data.get('parts'):
@@ -275,9 +292,16 @@ def create_repair_order(request: Request, db: Session = Depends(get_db), body: d
         
         return _json({
             'message': 'Repair order created successfully',
-            'repair_order_id': repair_order.id
+            'repair_order_id': repair_order.id,
+            'visit_id': linked_visit.id if linked_visit else None,
         }, 201)
         
+    except HTTPException as exc:
+        db.rollback()
+        detail = exc.detail
+        if isinstance(detail, dict):
+            return _json(detail, exc.status_code)
+        return _json({'error': detail}, exc.status_code)
     except Exception as e:
         db.rollback()
         return _json({'error': str(e)}, 500)

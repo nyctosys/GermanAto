@@ -20,50 +20,12 @@ from app.config import settings
 _ALGORITHM = "HS256"
 _PBKDF2_DEFAULT_ITERATIONS = 600000
 
-ADMIN_PERMISSIONS = [
-    "home",
-    "invoice",
-    "search",
-    "inventory",
-    "car",
-    "reports",
-    "admin",
-    "daily-expenses",
-    "major-expenses",
-    "vendors",
-    "vendor-detail",
-    "hr",
-    "worker-detail",
-    "repair-order",
-    "repair-orders-management",
-    "settings",
-    "logs",
-]
-
-DEFAULT_ROLE_PERMISSIONS = {
-    "admin": ADMIN_PERMISSIONS,
-    "accountant": [
-        "home",
-        "invoice",
-        "search",
-        "car",
-        "daily-expenses",
-        "vendors",
-        "vendor-detail",
-        "hr",
-        "worker-detail",
-        "repair-order",
-        "repair-orders-management",
-        "settings",
-    ],
-    "inventory_manager": [
-        "home",
-        "inventory",
-        "repair-order",
-        "repair-orders-management",
-        "settings",
-    ],
-}
+# Re-export canonical maps (includes granular override permissions).
+from app.foundation.roles import (  # noqa: E402
+    ADMIN_PERMISSIONS,
+    DEFAULT_ROLE_PERMISSIONS,
+    GRANULAR_PERMISSIONS,
+)
 
 
 def hash_password(password: str) -> str:

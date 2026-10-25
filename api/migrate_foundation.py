@@ -136,6 +136,20 @@ def main() -> int:
     print("Adding CHECK constraints (non-negative money/qty)...")
     _add_check_constraints()
 
+    print("Seeding workshop settings defaults...")
+    db = SessionLocal()
+    try:
+        from app.foundation.settings import ensure_default_settings
+
+        ensure_default_settings(db)
+        db.commit()
+        print("  app_settings defaults ready")
+    except Exception as exc:
+        db.rollback()
+        print(f"  (skip settings seed: {exc})")
+    finally:
+        db.close()
+
     print("Foundation migration complete.")
     return 0
 

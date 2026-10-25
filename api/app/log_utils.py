@@ -49,6 +49,42 @@ def save_uploaded_file(file) -> Optional[str]:
         return None
 
 
+def save_data_url(data_url: str | None, *, prefix: str = "capture") -> Optional[str]:
+    """Persist a canvas/camera data URL (data:image/png;base64,...) to uploads/."""
+    import base64
+    import re
+
+    if not data_url or not isinstance(data_url, str):
+        return None
+    raw = data_url.strip()
+    match = re.match(
+        r"^data:(image/(?:png|jpeg|jpg|webp));base64,(.+)$",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+    mime = match.group(1).lower()
+    ext = "jpg" if mime in ("image/jpeg", "image/jpg") else mime.split("/")[-1]
+    try:
+        payload = base64.b64decode(match.group(2), validate=False)
+    except Exception as e:
+        logger.error(f"Error decoding data URL: {e}")
+        return None
+    if not payload:
+        return None
+    try:
+        unique_name = f"{int(time.time())}_{secure_filename(prefix)}.{ext}"
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        file_path = os.path.join(UPLOAD_FOLDER, unique_name)
+        with open(file_path, "wb") as out:
+            out.write(payload)
+        return f"uploads/{unique_name}"
+    except Exception as e:
+        logger.error(f"Error saving data URL: {e}")
+        return None
+
+
 def log_action(db: Session, user, action, module, reference_id, details, request: Request | None = None):
     """Log an application action to the database."""
     try:

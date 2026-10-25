@@ -88,3 +88,26 @@ def require_roles(*roles):
         return user
 
     return checker
+
+
+def require_permissions(*permissions: str):
+    """Require any one of the listed granular permissions (admin/owner always pass)."""
+    from app.foundation.overrides import user_has_permission
+
+    needed = tuple(permissions)
+
+    def checker(
+        user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> User:
+        if any(user_has_permission(db, user, p) for p in needed):
+            return user
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "Insufficient permissions",
+                "required_any": list(needed),
+            },
+        )
+
+    return checker
