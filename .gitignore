@@ -1,75 +1,72 @@
-# Python bytecode and cache
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.cache/
+__pypackages__/
 
 # Virtual environments
-env/
 .venv/
 venv/
-backend/env/
-backend/.venv/
+env/
+api/.venv/
+api/venv/
 
-# OS files
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+node_modules/
+web/node_modules/
+web/dist/
+dist/
+build/
+
+# OS / IDE
 .DS_Store
 Thumbs.db
-
-# IDE/editor
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Logs
+# Logs / temp
 *.log
 logs/
-backend/logs/
+*.tmp
+*.temp
+*.backup
+~$*
+api/uvicorn*.log
+web/vite*.log
 
-# Environment files
-.env
-.env.*
-*.env
+# Accidental nested clone / local leftovers
+germanato/
+_DELETE_ME_germanato/
 
-# Build/distribution
-build/
-dist/
-*.egg-info/
-.eggs/
-*.spec
-pip-wheel-metadata/
-__pypackages__/
-
-# Testing/coverage
-.coverage
-coverage.xml
-htmlcov/
-.pytest_cache/
-.cache/
-
-# Node (if ever used)
-node_modules/
-
-# Databases (local dev)
+# Local databases
 *.sqlite
 *.sqlite3
 *.db
 
-# Backups and temp
-*.backup
-*.tmp
-*.temp
-~$*
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Local binaries/tools
-.bin/ 
-# Axon cache/index files
-.axon/
-backend/.axon/
-
-# Customer uploads: payment proofs and ledger attachments are financial
-# documents and must not go into version control.
-backend/static/uploads/
+# Uploads (payment proofs, ledger attachments)
+api/app/static/uploads/
 static/uploads/
+
+# Local tool caches
+.bin/
+.axon/
+.ipynb_checkpoints/
+pip-wheel-metadata/
+*.spec
