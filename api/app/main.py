@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db import Base, engine
+from app.foundation.branch import DEFAULT_BRANCH_ID
+from app.foundation.hooks import install_foundation_hooks
 from app.routers import auth as auth_router
 from app.routers import (
     cars,
@@ -28,7 +30,19 @@ import app.models  # noqa: F401  (register tables on Base)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    install_foundation_hooks()
     Base.metadata.create_all(bind=engine)
+    from app.db import SessionLocal
+    from app.foundation.branch import ensure_default_branch
+
+    db = SessionLocal()
+    try:
+        ensure_default_branch(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
     yield
 
 
@@ -41,6 +55,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def foundation_request_context(request: Request, call_next):
+    """Bind branch + audit reason for the duration of each request."""
+    import re
+
+    from app.foundation.context import current_branch_id, current_reason, current_user_obj
+
+    raw = (request.headers.get("X-Branch-Id") or "").strip().lower()
+    bid = raw if re.fullmatch(r"[0-9a-f]{8}", raw) else DEFAULT_BRANCH_ID
+    reason = (request.headers.get("X-Audit-Reason") or "").strip() or None
+    t_branch = current_branch_id.set(bid)
+    t_reason = current_reason.set(reason)
+    t_user = current_user_obj.set(None)
+    try:
+        return await call_next(request)
+    finally:
+        current_branch_id.reset(t_branch)
+        current_reason.reset(t_reason)
+        current_user_obj.reset(t_user)
 
 # Match backend/app.py blueprint prefixes
 app.include_router(auth_router.router)  # prefix=/api/auth on router
@@ -63,6 +98,8 @@ async def http_exception_handler(_request: Request, exc: HTTPException):
     detail = exc.detail
     if isinstance(detail, dict) and "error" in detail:
         body = detail
+    elif isinstance(detail, dict):
+        body = {"error": detail.get("msg") or detail.get("message") or "Request failed", **detail}
     else:
         body = {"error": detail if isinstance(detail, str) else "Request failed"}
     return JSONResponse(body, status_code=exc.status_code)

@@ -15,6 +15,8 @@ from app.deps import require_roles
 from app.models import *  # noqa: F403,F401
 from app.log_utils import log_action, save_uploaded_file
 from app.search_suggestions import suggestions_for
+from app.foundation.idempotent import idempotent_create
+from app.foundation.validation import require_non_negative, require_positive_int
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -325,6 +327,7 @@ def get_vendor_purchase_orders(vendor_id: int, request: Request, db: Session = D
 
 @router.post('/api/purchase-orders/add')
 @router.post('/api/consignments/add')
+@idempotent_create
 def add_purchase_order(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant']))):
     """Add a new purchase order / consignment record"""
     try:
@@ -342,8 +345,11 @@ def add_purchase_order(request: Request, db: Session = Depends(get_db), body: di
             po_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
         except ValueError:
             return _json({'error': 'Invalid date format. Use YYYY-MM-DD'}, 400)
-        quantity = int(data['quantity'])
-        rate = float(data['rate'])
+        try:
+            quantity = require_positive_int('quantity', data['quantity'])
+            rate = require_non_negative('rate', data['rate'])
+        except ValueError as exc:
+            return _json({'error': str(exc)}, 400)
         amount = quantity * rate
         po = PurchaseOrder(
             vendor_id=data['vendor_id'],

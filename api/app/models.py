@@ -29,19 +29,55 @@ from sqlalchemy.orm import (
 
 from app.db import Base
 
+# Keep in sync with app.foundation.branch.DEFAULT_BRANCH_ID (avoid circular import).
+DEFAULT_BRANCH_ID = "a1b2c3d4"
+
 
 def _clock(value: datetime | date | None, fmt: str) -> str | None:
     return value.strftime(fmt) if value else None
 
 
-class User(Base):
+class FoundationMixin:
+    """Additive columns for branch scoping, optimistic lock, and soft delete.
+
+    Actor columns (`created_by` / `updated_by` / `*_user`) stay on tables that
+    already define them — do not redeclare here (avoids mapper conflicts).
+    """
+
+    branch_id: Mapped[str | None] = mapped_column(String(8), index=True, default=DEFAULT_BRANCH_ID)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Branch(Base):
+    __tablename__ = "branch"
+
+    id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "is_default": self.is_default,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class User(FoundationMixin, Base):
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(80), unique=True)
     email: Mapped[str] = mapped_column(String(120), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(20), default="user")
+    role: Mapped[str] = mapped_column(String(40), default="user")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[datetime | None] = mapped_column(DateTime)
@@ -94,6 +130,10 @@ class AppLog(Base):
     details: Mapped[str] = mapped_column(Text)
     ip_address: Mapped[str | None] = mapped_column(String(45))
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    old_value: Mapped[str | None] = mapped_column(Text)
+    new_value: Mapped[str | None] = mapped_column(Text)
+    reason: Mapped[str | None] = mapped_column(String(255))
+    branch_id: Mapped[str | None] = mapped_column(String(8), index=True, default=DEFAULT_BRANCH_ID)
 
     def to_dict(self) -> dict:
         return {
@@ -105,11 +145,15 @@ class AppLog(Base):
             "reference_id": self.reference_id,
             "details": self.details,
             "ip_address": self.ip_address,
+            "old_value": self.old_value,
+            "new_value": self.new_value,
+            "reason": self.reason,
+            "branch_id": self.branch_id,
             "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
         }
 
 
-class Invoice(Base):
+class Invoice(FoundationMixin, Base):
     __tablename__ = "invoice"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -155,7 +199,7 @@ class Invoice(Base):
     )
 
 
-class InvoiceItem(Base):
+class InvoiceItem(FoundationMixin, Base):
     __tablename__ = "invoice_item"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -166,7 +210,7 @@ class InvoiceItem(Base):
     price: Mapped[float] = mapped_column(Float)
 
 
-class InvoiceLabour(Base):
+class InvoiceLabour(FoundationMixin, Base):
     __tablename__ = "invoice_labour"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -175,7 +219,7 @@ class InvoiceLabour(Base):
     price: Mapped[float] = mapped_column(Float)
 
 
-class Inventory(Base):
+class Inventory(FoundationMixin, Base):
     __tablename__ = "inventory"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -229,7 +273,7 @@ class Inventory(Base):
         return f"PN{next_num:03d}"
 
 
-class Customer(Base):
+class Customer(FoundationMixin, Base):
     __tablename__ = "customer"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -250,7 +294,7 @@ class Customer(Base):
         return f"CN{self.id:03d}" if self.id else ""
 
 
-class Car(Base):
+class Car(FoundationMixin, Base):
     __tablename__ = "car"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -267,8 +311,15 @@ class Car(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+    ownership_transfers: Mapped[list["CarOwnership"]] = relationship(
+        "CarOwnership",
+        back_populates="car",
+        cascade="all, delete-orphan",
+        order_by="CarOwnership.transfer_date.desc(), CarOwnership.id.desc()",
+    )
 
-class RepairOrder(Base):
+
+class RepairOrder(FoundationMixin, Base):
     __tablename__ = "repair_order"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -311,7 +362,7 @@ class RepairOrder(Base):
     )
 
 
-class RepairOrderPart(Base):
+class RepairOrderPart(FoundationMixin, Base):
     __tablename__ = "repair_order_part"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -323,7 +374,7 @@ class RepairOrderPart(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")
 
 
-class RepairOrderLabour(Base):
+class RepairOrderLabour(FoundationMixin, Base):
     __tablename__ = "repair_order_labour"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -332,7 +383,7 @@ class RepairOrderLabour(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")
 
 
-class Expense(Base):
+class Expense(FoundationMixin, Base):
     __tablename__ = "expense"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -347,7 +398,7 @@ class Expense(Base):
     )
 
 
-class CashReceived(Base):
+class CashReceived(FoundationMixin, Base):
     __tablename__ = "cash_received"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -378,7 +429,7 @@ class CashReceived(Base):
         }
 
 
-class FinancialPeriod(Base):
+class FinancialPeriod(FoundationMixin, Base):
     __tablename__ = "financial_periods"
     __table_args__ = (UniqueConstraint("year", "month", name="uq_financial_period"),)
 
@@ -401,7 +452,7 @@ class FinancialPeriod(Base):
         }
 
 
-class WhatsAppNotification(Base):
+class WhatsAppNotification(FoundationMixin, Base):
     __tablename__ = "whats_app_notification"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -453,7 +504,7 @@ class WhatsAppNotification(Base):
         }
 
 
-class Vendor(Base):
+class Vendor(FoundationMixin, Base):
     __tablename__ = "vendors"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -494,7 +545,7 @@ class Vendor(Base):
         }
 
 
-class VendorLedger(Base):
+class VendorLedger(FoundationMixin, Base):
     __tablename__ = "vendor_ledger"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -530,7 +581,7 @@ class VendorLedger(Base):
         }
 
 
-class PurchaseOrder(Base):
+class PurchaseOrder(FoundationMixin, Base):
     __tablename__ = "purchase_orders"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -570,7 +621,7 @@ class PurchaseOrder(Base):
         }
 
 
-class Worker(Base):
+class Worker(FoundationMixin, Base):
     __tablename__ = "workers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -622,7 +673,7 @@ class Worker(Base):
         }
 
 
-class SalaryAdvance(Base):
+class SalaryAdvance(FoundationMixin, Base):
     __tablename__ = "salary_advances"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -659,7 +710,7 @@ class SalaryAdvance(Base):
         }
 
 
-class PayrollRun(Base):
+class PayrollRun(FoundationMixin, Base):
     __tablename__ = "payroll_runs"
     __table_args__ = (
         UniqueConstraint("worker_id", "year", "month", name="uq_payroll_worker_month"),
@@ -699,7 +750,7 @@ class PayrollRun(Base):
         }
 
 
-class AttendanceRecord(Base):
+class AttendanceRecord(FoundationMixin, Base):
     __tablename__ = "attendance_records"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -742,7 +793,7 @@ class AttendanceRecord(Base):
         }
 
 
-class ZKTecoDevice(Base):
+class ZKTecoDevice(FoundationMixin, Base):
     __tablename__ = "zkteco_devices"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -781,7 +832,7 @@ class ZKTecoDevice(Base):
         }
 
 
-class Department(Base):
+class Department(FoundationMixin, Base):
     __tablename__ = "departments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -807,7 +858,7 @@ class Department(Base):
         }
 
 
-class Category(Base):
+class Category(FoundationMixin, Base):
     __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -833,7 +884,7 @@ class Category(Base):
         }
 
 
-class InventoryTransaction(Base):
+class InventoryTransaction(FoundationMixin, Base):
     __tablename__ = "inventory_transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -886,6 +937,97 @@ class RolePermission(Base):
 
     def to_dict(self) -> dict:
         return {"id": self.id, "role": self.role, "permission": self.permission}
+
+
+class Attachment(FoundationMixin, Base):
+    """Reusable evidence file linked to any entity_type + entity_id."""
+
+    __tablename__ = "attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    entity_type: Mapped[str] = mapped_column(String(50), index=True)
+    entity_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    file_path: Mapped[str] = mapped_column(String(255))
+    original_name: Mapped[str | None] = mapped_column(String(255))
+    content_type: Mapped[str | None] = mapped_column(String(120))
+    uploaded_by: Mapped[str | None] = mapped_column(String(80))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "branch_id": self.branch_id,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "file_path": self.file_path,
+            "original_name": self.original_name,
+            "content_type": self.content_type,
+            "uploaded_by": self.uploaded_by,
+            "notes": self.notes,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class CarOwnership(FoundationMixin, Base):
+    """Ownership transfer. History stays on the car; invoices keep the original customer."""
+
+    __tablename__ = "car_ownership"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    car_id: Mapped[int] = mapped_column(ForeignKey("car.id"), index=True)
+    from_customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    to_customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), index=True)
+    transfer_date: Mapped[date] = mapped_column(Date, index=True)
+    reason: Mapped[str] = mapped_column(String(255))
+    evidence_attachment_id: Mapped[int] = mapped_column(ForeignKey("attachments.id"))
+    transferred_by: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    car: Mapped[Car] = relationship("Car", back_populates="ownership_transfers")
+    from_customer: Mapped[Customer | None] = relationship(
+        "Customer", foreign_keys=[from_customer_id]
+    )
+    to_customer: Mapped[Customer] = relationship("Customer", foreign_keys=[to_customer_id])
+    evidence: Mapped[Attachment] = relationship(
+        "Attachment", foreign_keys=[evidence_attachment_id]
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "car_id": self.car_id,
+            "from_customer_id": self.from_customer_id,
+            "from_customer_name": self.from_customer.name if self.from_customer else None,
+            "to_customer_id": self.to_customer_id,
+            "to_customer_name": self.to_customer.name if self.to_customer else None,
+            "transfer_date": self.transfer_date.isoformat() if self.transfer_date else None,
+            "reason": self.reason,
+            "evidence_attachment_id": self.evidence_attachment_id,
+            "evidence_path": self.evidence.file_path if self.evidence else None,
+            "transferred_by": self.transferred_by,
+            "branch_id": self.branch_id,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class IdempotencyKey(Base):
+    """Create-endpoint idempotency: same key returns the original response."""
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (UniqueConstraint("branch_id", "key", name="uq_idempotency_branch_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    branch_id: Mapped[str] = mapped_column(String(8), default=DEFAULT_BRANCH_ID)
+    key: Mapped[str] = mapped_column(String(128))
+    method: Mapped[str] = mapped_column(String(10))
+    path: Mapped[str] = mapped_column(String(255))
+    response_status: Mapped[int] = mapped_column(Integer)
+    response_body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by: Mapped[str | None] = mapped_column(String(80))
 
 
 def _needs_part_number(obj: object) -> bool:

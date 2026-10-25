@@ -37,6 +37,8 @@ from app.repair_order_inventory_utils import (
 )
 from app.payroll import preview as payroll_preview, run_payroll, compute_salary
 from app.whatsapp_notifications import whatsapp_notifier
+from app.foundation.idempotent import idempotent_create
+from app.foundation.versioning import bump_version, check_version, extract_version
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -136,8 +138,16 @@ def get_expenses(request: Request, db: Session = Depends(get_db), current_user=D
 
 @router.post('/expenses')
 @guard_period(body_date('date'))
-def create_expense(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None)):
+@idempotent_create
+def create_expense(
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(get_current_user),
+):
     """Create a new expense"""
+    from app.foundation.validation import require_non_negative
+
     try:
         data = body
         
@@ -155,11 +165,9 @@ def create_expense(request: Request, db: Session = Depends(get_db), body: dict |
         
         # Validate amount
         try:
-            amount = float(data['amount'])
-            if amount < 0:
-                return _json({'error': 'Amount must be positive'}, 400)
-        except (ValueError, TypeError):
-            return _json({'error': 'Invalid amount'}, 400)
+            amount = require_non_negative('amount', data['amount'])
+        except ValueError as exc:
+            return _json({'error': str(exc)}, 400)
         
         # Create new expense
         new_expense = Expense(
@@ -448,10 +456,13 @@ def get_expense(expense_id, request: Request, db: Session = Depends(get_db), cur
 @guard_both(Expense, 'expense_id')
 def update_expense(expense_id, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(get_current_user)):
     """Update an existing expense"""
+    from app.foundation.validation import require_non_negative
+
     try:
         assert_can_edit_expense(db, current_user, expense_id)
         expense = _get_or_404(db, Expense, expense_id)
         data = body
+        check_version(expense, extract_version(data))
         
         # Validate required fields
         required_fields = ['date', 'category', 'description', 'amount']
@@ -467,11 +478,9 @@ def update_expense(expense_id, request: Request, db: Session = Depends(get_db), 
         
         # Validate amount
         try:
-            amount = float(data['amount'])
-            if amount < 0:
-                return _json({'error': 'Amount must be positive'}, 400)
-        except (ValueError, TypeError):
-            return _json({'error': 'Invalid amount'}, 400)
+            amount = require_non_negative('amount', data['amount'])
+        except ValueError as exc:
+            return _json({'error': str(exc)}, 400)
         
         # Update expense
         expense.date = expense_date
@@ -480,6 +489,7 @@ def update_expense(expense_id, request: Request, db: Session = Depends(get_db), 
         expense.amount = amount
         expense.notes = data.get('notes', '')
         expense.updated_at = datetime.utcnow()
+        bump_version(expense)
 
         log_action(db, current_user, 'UPDATE', 'expenses', expense.id, f"Updated expense ID {expense.id}: {expense.description} ({expense.amount} PKR)")
         db.commit()
@@ -492,6 +502,7 @@ def update_expense(expense_id, request: Request, db: Session = Depends(get_db), 
             'description': expense.description,
             'amount': expense.amount,
             'notes': expense.notes,
+            'version': expense.version,
             'created_at': expense.created_at.isoformat() if expense.created_at else None,
             'updated_at': expense.updated_at.isoformat() if expense.updated_at else None
         }

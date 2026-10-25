@@ -4,6 +4,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute'
 import { AppShell } from './layout/AppShell'
 import { AdminPage } from './pages/AdminPage'
 import { AttendancePage } from './pages/AttendancePage'
+import { CarDetailPage } from './pages/CarDetailPage'
 import { CarsPage } from './pages/CarsPage'
 import { CashReceivedPage } from './pages/CashReceivedPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -40,6 +41,7 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route index element={<DashboardPage />} />
               <Route path="cars" element={<CarsPage />} />
+              <Route path="cars/:id" element={<CarDetailPage />} />
               <Route path="inventory" element={<InventoryPage />} />
               <Route path="inventory/history" element={<InventoryHistoryPage />} />
               <Route path="invoices" element={<InvoiceManagementPage />} />

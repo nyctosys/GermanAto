@@ -77,6 +77,36 @@ async function refreshAccessToken(): Promise<boolean> {
 export type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown
   silent?: boolean
+  reason?: string
+  idempotencyKey?: string
+  branchId?: string
+}
+
+const BRANCH_KEY = 'branchId'
+const DEFAULT_BRANCH = 'a1b2c3d4'
+
+function activeBranchId(override?: string): string {
+  if (override && /^[0-9a-f]{8}$/.test(override)) return override
+  const stored = localStorage.getItem(BRANCH_KEY)
+  if (stored && /^[0-9a-f]{8}$/.test(stored)) return stored
+  return DEFAULT_BRANCH
+}
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return `idemp-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+export class VersionConflictError extends ApiError {
+  currentVersion?: number
+
+  constructor(message: string, currentVersion?: number) {
+    super(message, 409)
+    this.name = 'VersionConflictError'
+    this.currentVersion = currentVersion
+  }
 }
 
 async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
@@ -87,16 +117,24 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   }
   const token = getAccessToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
+  headers.set('X-Branch-Id', activeBranchId(options.branchId))
+  if (options.reason) headers.set('X-Audit-Reason', options.reason)
+  if (options.idempotencyKey) {
+    headers.set('Idempotency-Key', options.idempotencyKey)
+  }
+
+  const { reason: _r, idempotencyKey: _i, branchId: _b, silent: _s, body, ...rest } =
+    options
 
   const init: RequestInit = {
-    ...options,
+    ...rest,
     headers,
     body:
-      options.body === undefined
+      body === undefined
         ? undefined
         : isForm
-          ? (options.body as FormData)
-          : JSON.stringify(options.body),
+          ? (body as FormData)
+          : JSON.stringify(body),
   }
 
   let res = await fetch(url, init)
@@ -115,6 +153,21 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     }
   }
 
+  if (res.status === 409) {
+    const errBody = (await res.json().catch(() => ({}))) as {
+      error?: string
+      detail?: { error?: string; current_version?: number }
+      current_version?: number
+    }
+    const message =
+      errBody.error ||
+      errBody.detail?.error ||
+      'Version conflict — reload and try again'
+    const current =
+      errBody.current_version ?? errBody.detail?.current_version
+    throw new VersionConflictError(message, current)
+  }
+
   if (!res.ok) throw await parseError(res)
 
   if (res.status === 204) return undefined as T
@@ -122,12 +175,33 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
 }
 
 export const api = {
-  get: <T>(url: string) => request<T>(url, { method: 'GET' }),
-  post: <T>(url: string, body?: unknown) =>
-    request<T>(url, { method: 'POST', body }),
-  put: <T>(url: string, body?: unknown) =>
-    request<T>(url, { method: 'PUT', body }),
-  patch: <T>(url: string, body?: unknown) =>
-    request<T>(url, { method: 'PATCH', body }),
-  delete: <T>(url: string) => request<T>(url, { method: 'DELETE' }),
+  get: <T>(url: string, opts?: RequestOptions) =>
+    request<T>(url, { ...opts, method: 'GET' }),
+  post: <T>(url: string, body?: unknown, opts?: RequestOptions) =>
+    request<T>(url, {
+      ...opts,
+      method: 'POST',
+      body,
+      idempotencyKey: opts?.idempotencyKey ?? newIdempotencyKey(),
+    }),
+  put: <T>(url: string, body?: unknown, opts?: RequestOptions) =>
+    request<T>(url, {
+      ...opts,
+      method: 'PUT',
+      body,
+      reason: opts?.reason || 'Record updated',
+    }),
+  patch: <T>(url: string, body?: unknown, opts?: RequestOptions) =>
+    request<T>(url, {
+      ...opts,
+      method: 'PATCH',
+      body,
+      reason: opts?.reason || 'Record updated',
+    }),
+  delete: <T>(url: string, opts?: RequestOptions) =>
+    request<T>(url, {
+      ...opts,
+      method: 'DELETE',
+      reason: opts?.reason || 'User deleted record',
+    }),
 }

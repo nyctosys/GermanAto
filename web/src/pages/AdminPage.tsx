@@ -19,7 +19,16 @@ type UserRow = {
   is_active: boolean
 }
 
-const ROLES = ['admin', 'accountant', 'inventory_manager']
+const ROLES = [
+  'admin',
+  'owner',
+  'manager',
+  'accountant',
+  'service_advisor',
+  'technician',
+  'store_keeper',
+  'inventory_manager',
+]
 
 export function AdminPage() {
   const qc = useQueryClient()

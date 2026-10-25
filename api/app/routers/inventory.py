@@ -188,7 +188,7 @@ def to_business_date(created_at):
     return created_at.astimezone(BUSINESS_TZ).date()
 
 
-def get_inventory_movement_totals(items, business_day=None):
+def get_inventory_movement_totals(db: Session, items, business_day=None):
     """Return day-scoped opening/inbound/outbound/closing for inventory cards.
 
     Cards are always for one business day (default: today in Asia/Karachi).
@@ -247,7 +247,7 @@ def get_inventory_movement_totals(items, business_day=None):
     return movement_totals
 
 
-def build_item_daily_ledger(item):
+def build_item_daily_ledger(db: Session, item):
     """Build date-wise opening/in/out/closing rows for one inventory item.
 
     Walks every logged transaction chronologically so each day's closing becomes
@@ -393,13 +393,13 @@ def inventory_item_to_dict(item, movement_totals=None):
 
     return item_data
 
-def inventory_item_detail_to_dict(item, business_day=None):
+def inventory_item_detail_to_dict(db: Session, item, business_day=None):
     return inventory_item_to_dict(
         item,
-        get_inventory_movement_totals([item], business_day=business_day)
+        get_inventory_movement_totals(db, [item], business_day=business_day)
     )
 
-def find_inventory_item_by_code(code):
+def find_inventory_item_by_code(db: Session, code):
     code = clean_optional_text(code)
     if not code:
         return None
@@ -410,7 +410,7 @@ def find_inventory_item_by_code(code):
         or db.query(Inventory).filter(Inventory.part_number == code).first()
     )
 
-def ensure_unique_inventory_codes(barcode=None, manufacturer_part_number=None, item_id: int=None):
+def ensure_unique_inventory_codes(db: Session, barcode=None, manufacturer_part_number=None, item_id: int=None):
     if barcode:
         existing = db.query(Inventory).filter(Inventory.barcode == barcode)
         if item_id:
@@ -513,7 +513,7 @@ def get_inventory(request: Request, db: Session = Depends(get_db), current_user=
         pagination.has_prev = int(page) > 1
         
         inventory_items = pagination.items
-        movement_totals = get_inventory_movement_totals(inventory_items)
+        movement_totals = get_inventory_movement_totals(db, inventory_items)
         items_data = [
             inventory_item_to_dict(item, movement_totals)
             for item in inventory_items
@@ -565,6 +565,7 @@ async def create_inventory_item(request: Request, db: Session = Depends(get_db),
         reorder_level = int(data.get('reorder_level', 5))
 
         code_error = ensure_unique_inventory_codes(
+            db,
             barcode=barcode,
             manufacturer_part_number=manufacturer_part_number
         )
@@ -579,7 +580,7 @@ async def create_inventory_item(request: Request, db: Session = Depends(get_db),
                 barcode=barcode,
                 manufacturer_part_number=manufacturer_part_number,
                 quantity=quantity,
-                price=0.0,
+                price=float(data.get('price') or 0),
                 description=description,
                 location=location,
                 reorder_level=reorder_level,
@@ -592,7 +593,7 @@ async def create_inventory_item(request: Request, db: Session = Depends(get_db),
             
             return _json({
                 'message': 'Inventory item created successfully',
-                'item': inventory_item_detail_to_dict(inventory_item)
+                'item': inventory_item_detail_to_dict(db, inventory_item)
             }, 201)
             
         except SQLAlchemyError as e:
@@ -658,7 +659,7 @@ def get_inventory_by_category(request: Request, db: Session = Depends(get_db), c
         pagination.has_prev = int(page) > 1
         
         inventory_items = pagination.items
-        movement_totals = get_inventory_movement_totals(inventory_items)
+        movement_totals = get_inventory_movement_totals(db, inventory_items)
         items_data = [
             inventory_item_to_dict(item, movement_totals)
             for item in inventory_items
@@ -872,11 +873,11 @@ def lookup_inventory_by_code(request: Request, db: Session = Depends(get_db), cu
         if not code:
             return _json({'error': 'Code is required'}, 400)
 
-        item = find_inventory_item_by_code(code)
+        item = find_inventory_item_by_code(db, code)
         if not item:
             return _json({'error': 'Inventory item not found'}, 404)
 
-        return _json({'item': inventory_item_detail_to_dict(item)}, 200)
+        return _json({'item': inventory_item_detail_to_dict(db, item)}, 200)
 
     except Exception as e:
         logger.error(f"Error looking up inventory item by code: {e}")
@@ -888,7 +889,7 @@ def get_low_stock_items(request: Request, db: Session = Depends(get_db), current
     try:
         # Get items where quantity is less than or equal to reorder_level
         low_stock_items = db.query(Inventory).filter(Inventory.quantity <= Inventory.reorder_level).all()
-        movement_totals = get_inventory_movement_totals(low_stock_items)
+        movement_totals = get_inventory_movement_totals(db, low_stock_items)
         
         urgent_items = []  # Negative values (urgent)
         low_stock_items_data = []  # Regular low stock items
@@ -934,7 +935,7 @@ def receive_inventory_by_code(request: Request, db: Session = Depends(get_db), b
         if quantity_to_add <= 0:
             return _json({'error': 'Quantity must be greater than 0'}, 400)
 
-        inventory_item = find_inventory_item_by_code(code)
+        inventory_item = find_inventory_item_by_code(db, code)
         if not inventory_item:
             return _json({'error': 'Inventory item not found for scanned code'}, 404)
 
@@ -962,7 +963,7 @@ def receive_inventory_by_code(request: Request, db: Session = Depends(get_db), b
             'quantity_added': quantity_to_add,
             'old_quantity': old_quantity,
             'new_quantity': inventory_item.quantity,
-            'item': inventory_item_detail_to_dict(inventory_item)
+            'item': inventory_item_detail_to_dict(db, inventory_item)
         }, 200)
 
     except ValueError as e:
@@ -1038,7 +1039,7 @@ def restock_inventory(request: Request, db: Session = Depends(get_db), body: dic
             'old_quantity': old_quantity,
             'new_quantity': inventory_item.quantity,
             'notes': notes,
-            'item': inventory_item_detail_to_dict(inventory_item)
+            'item': inventory_item_detail_to_dict(db, inventory_item)
         }, 200)
         
     except ValueError as e:
@@ -1085,7 +1086,7 @@ def search_inventory(request: Request, db: Session = Depends(get_db), current_us
         total_count = search_query.count()
         search_results = search_query.order_by(Inventory.name).limit(limit).all()
 
-        movement_totals = get_inventory_movement_totals(search_results)
+        movement_totals = get_inventory_movement_totals(db, search_results)
         items_data = [
             inventory_item_to_dict(item, movement_totals)
             for item in search_results
@@ -1131,7 +1132,7 @@ def search_inventory_grouped(request: Request, db: Session = Depends(get_db), cu
         total_count = search_query.count()
         search_results = search_query.order_by(Inventory.name).limit(limit).all()
 
-        movement_totals = get_inventory_movement_totals(search_results)
+        movement_totals = get_inventory_movement_totals(db, search_results)
 
         # Group results by category
         grouped_results = {}
@@ -1282,6 +1283,8 @@ def get_inventory_transaction_detail(transaction_id: int, request: Request, db: 
 @router.put('/inventory/{item_id:int}')
 async def update_inventory_item(item_id: int, request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'inventory_manager']))):
     """Update an existing inventory item"""
+    from app.foundation.versioning import bump_version, check_version, extract_version
+
     try:
         if not item_id or item_id <= 0:
             return _json({'error': 'Invalid item ID'}, 400)
@@ -1294,6 +1297,7 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
         data, image_file = await _inventory_form_or_json(request)
         if not data:
             return _json({'error': 'No data provided'}, 400)
+        check_version(item, extract_version(data))
 
         image_path = item.image_path
         if str(data.get('remove_image', '')).lower() == 'true':
@@ -1328,6 +1332,7 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
         reorder_level = int(data.get('reorder_level', 5))
 
         code_error = ensure_unique_inventory_codes(
+            db,
             barcode=barcode,
             manufacturer_part_number=manufacturer_part_number,
             item_id=item.id
@@ -1349,6 +1354,7 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
             item.location = location
             item.reorder_level = reorder_level
             item.image_path = image_path
+            bump_version(item)
             
             # Log adjustment if quantity changed
             if old_quantity != new_quantity:
@@ -1370,7 +1376,7 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
             
             return _json({
                 'message': 'Inventory item updated successfully',
-                'item': inventory_item_detail_to_dict(item)
+                'item': inventory_item_detail_to_dict(db, item)
             }, 200)
             
         except SQLAlchemyError as e:
@@ -1435,7 +1441,7 @@ def get_inventory_item(item_id: int, request: Request, db: Session = Depends(get
         if not item:
             return _json({'error': 'Inventory item not found'}, 404)
 
-        return _json(inventory_item_detail_to_dict(item), 200)
+        return _json(inventory_item_detail_to_dict(db, item), 200)
 
     except Exception as e:
         logger.error(f"Error fetching inventory item {item_id}: {e}")
@@ -1453,9 +1459,9 @@ def get_item_ledger(item_id: int, request: Request, db: Session = Depends(get_db
         if not item:
             return _json({'error': 'Inventory item not found'}, 404)
 
-        ledger = build_item_daily_ledger(item)
+        ledger = build_item_daily_ledger(db, item)
         return _json({
-            'item': inventory_item_detail_to_dict(item),
+            'item': inventory_item_detail_to_dict(db, item),
             'daily_rows': ledger['daily_rows'],
             'transactions': ledger['transactions'],
             'movement_date': ledger['movement_date'],

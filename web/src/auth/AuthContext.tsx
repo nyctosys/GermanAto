@@ -171,7 +171,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canAccess = useCallback(
     (permission: string) => {
       if (!user) return false
-      if (user.role === 'admin' || permission === 'home') return true
+      if (user.role === 'admin' || user.role === 'owner' || permission === 'home')
+        return true
       if (!permissions) return true
       const key = SUB_PAGE_PERMISSIONS[permission] || permission
       return permissions.includes(key)
@@ -180,7 +181,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const hasRole = useCallback(
-    (role: string) => !!user && (user.role === 'admin' || user.role === role),
+    (role: string) =>
+      !!user &&
+      (user.role === 'admin' ||
+        user.role === 'owner' ||
+        user.role === role ||
+        (role === 'admin' && user.role === 'owner')),
     [user],
   )
 

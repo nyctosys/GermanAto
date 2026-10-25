@@ -37,6 +37,8 @@ from app.repair_order_inventory_utils import (
 )
 from app.payroll import preview as payroll_preview, run_payroll, compute_salary
 from app.whatsapp_notifications import whatsapp_notifier
+from app.foundation.idempotent import idempotent_create
+from app.foundation.versioning import bump_version, check_version, extract_version
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -194,8 +196,16 @@ def get_cash_received(request: Request, db: Session = Depends(get_db), current_u
 
 @router.post('/cash-received')
 @guard_period(body_date('date'))
-def create_cash_received(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None)):
+@idempotent_create
+def create_cash_received(
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(get_current_user),
+):
     """Create a new cash received record"""
+    from app.foundation.validation import require_non_negative
+
     try:
         data = body
         
@@ -213,11 +223,9 @@ def create_cash_received(request: Request, db: Session = Depends(get_db), body: 
         
         # Validate amount
         try:
-            amount = float(data['amount'])
-            if amount < 0:
-                return _json({'error': 'Amount must be positive'}, 400)
-        except (ValueError, TypeError):
-            return _json({'error': 'Invalid amount'}, 400)
+            amount = require_non_negative('amount', data['amount'])
+        except ValueError as exc:
+            return _json({'error': str(exc)}, 400)
         
         invoice, err = resolve_invoice(data)
         if err:

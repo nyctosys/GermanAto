@@ -9,6 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user, get_refresh_user, require_roles
+from app.foundation.roles import (
+    ADMIN_PERMISSIONS,
+    DEFAULT_ROLE_PERMISSIONS,
+    PERMISSION_ROLES,
+    VALID_ROLES,
+)
 from app.models import RolePermission, User
 from app.schemas import (
     LoginRequest,
@@ -28,54 +34,6 @@ from app.security import create_access_token, create_refresh_token
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-VALID_ROLES = ("admin", "accountant", "inventory_manager")
-PERMISSION_ROLES = ("accountant", "inventory_manager")
-
-ADMIN_PERMISSIONS = [
-    "home",
-    "invoice",
-    "search",
-    "inventory",
-    "car",
-    "reports",
-    "admin",
-    "daily-expenses",
-    "major-expenses",
-    "vendors",
-    "vendor-detail",
-    "hr",
-    "worker-detail",
-    "repair-order",
-    "repair-orders-management",
-    "settings",
-    "logs",
-]
-
-DEFAULT_ROLE_PERMISSIONS = {
-    "admin": ADMIN_PERMISSIONS,
-    "accountant": [
-        "home",
-        "invoice",
-        "search",
-        "car",
-        "daily-expenses",
-        "vendors",
-        "vendor-detail",
-        "hr",
-        "worker-detail",
-        "repair-order",
-        "repair-orders-management",
-        "settings",
-    ],
-    "inventory_manager": [
-        "home",
-        "inventory",
-        "repair-order",
-        "repair-orders-management",
-        "settings",
-    ],
-}
 
 
 def _error(message: str, status: int) -> JSONResponse:
@@ -175,11 +133,16 @@ def get_users(
     db: Session = Depends(get_db),
     _: User = Depends(require_roles("admin")),
 ):
+    from app.foundation.context import skip_branch_scope
+
+    token = skip_branch_scope.set(True)
     try:
         users = db.scalars(select(User)).all()
     except Exception:
         logger.exception("list users failed")
         return _error("Failed to fetch users", 500)
+    finally:
+        skip_branch_scope.reset(token)
 
     return [
         {
@@ -271,14 +234,13 @@ def get_roles_permissions(
         rows = db.scalars(select(RolePermission)).all()
     except SQLAlchemyError:
         db.rollback()
-        return {
-            "accountant": DEFAULT_ROLE_PERMISSIONS["accountant"],
-            "inventory_manager": DEFAULT_ROLE_PERMISSIONS["inventory_manager"],
-        }
+        return {role: list(DEFAULT_ROLE_PERMISSIONS.get(role, [])) for role in PERMISSION_ROLES}
     except Exception as exc:
         logger.exception("read role permissions failed")
         return _error(str(exc), 500)
 
+    if not rows:
+        return {role: list(DEFAULT_ROLE_PERMISSIONS.get(role, [])) for role in PERMISSION_ROLES}
     return {role: [row.permission for row in rows if row.role == role] for role in PERMISSION_ROLES}
 
 
@@ -308,7 +270,7 @@ def get_my_permissions(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if user.role == "admin":
+    if user.role in ("admin", "owner"):
         return {"role": user.role, "permissions": ADMIN_PERMISSIONS}
     try:
         rows = db.scalars(select(RolePermission).where(RolePermission.role == user.role)).all()

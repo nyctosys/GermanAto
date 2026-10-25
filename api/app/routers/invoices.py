@@ -37,6 +37,8 @@ from app.repair_order_inventory_utils import (
 )
 from app.payroll import preview as payroll_preview, run_payroll, compute_salary
 from app.whatsapp_notifications import whatsapp_notifier
+from app.foundation.idempotent import idempotent_create
+from app.foundation.versioning import bump_version, check_version, extract_version
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -82,16 +84,21 @@ def update_inventory_quantities(items):
     return True
 
 def validate_phone_number(phone):
-    """Validate phone number format"""
+    """Validate / normalize PK mobile to E.164. Mutates nothing; returns bool."""
+    from app.foundation.validation import normalize_pk_phone
+
     if not phone:
         return False
-    # More flexible phone number validation - allow various formats
-    # Accepts: +92 xxx xxxxxxx, 0xxxxxxxxx (10 digits), 0xxx xxxxxx, 0xxx xxxxxxx (11 digits), or xxxx xxxxxxx
-    pattern = r'^(\+92\s?\d{3}\s?\d{7}|0\d{9}|0\d{3}\s?\d{6}|0\d{3}\s?\d{7}|\d{11}|\d{4}\s?\d{7})$'
-    return bool(re.match(pattern, phone))
+    try:
+        normalize_pk_phone(phone)
+        return True
+    except ValueError:
+        return False
 
 def validate_invoice_data(data):
     """Validate invoice data"""
+    from app.foundation.validation import normalize_pk_phone, normalize_reg_no, validate_money_fields
+
     errors = []
     
     # Customer and car fields are now optional - only validate if provided and not "N/A"
@@ -106,16 +113,21 @@ def validate_invoice_data(data):
     
     # Validate phone number only if provided and not "N/A"
     phone = data.get('customer_phone')
-    if phone and phone != "N/A" and not validate_phone_number(phone):
-        errors.append("Phone number must be in format: +92 xxx xxxxxxx, 0xxx xxxxxx (10 digits), or 0xxx xxxxxxx (11 digits)")
+    if phone and phone != "N/A":
+        try:
+            data['customer_phone'] = normalize_pk_phone(phone)
+        except ValueError as exc:
+            errors.append(str(exc))
+
+    reg = data.get('customer_reg_no')
+    if reg and reg != "N/A":
+        try:
+            data['customer_reg_no'] = normalize_reg_no(reg)
+        except ValueError as exc:
+            errors.append(str(exc))
     
     # Validate numeric fields
-    try:
-        advance = float(data.get('advance', 0))
-        if advance < 0:
-            errors.append("Advance amount cannot be negative")
-    except (ValueError, TypeError):
-        errors.append("Advance amount must be a valid number")
+    errors.extend(validate_money_fields(data, ("advance", "discount", "tax_amount")))
     
     # Validate items and labours
     items = data.get('items', [])
@@ -128,26 +140,22 @@ def validate_invoice_data(data):
     for i, item in enumerate(items):
         if not item.get('product_name') or not str(item.get('product_name')).strip():
             errors.append(f"Item {i+1}: Product name is required")
+        item_errs = validate_money_fields(item, ("price",))
+        for err in item_errs:
+            errors.append(f"Item {i+1}: {err}")
         try:
             quantity = int(item.get('quantity', 0))
-            price = float(item.get('price', 0))
             if quantity <= 0:
                 errors.append(f"Item {i+1}: Quantity must be greater than 0")
-            if price < 0:
-                errors.append(f"Item {i+1}: Price cannot be negative")
         except (ValueError, TypeError):
-            errors.append(f"Item {i+1}: Quantity and price must be valid numbers")
+            errors.append(f"Item {i+1}: Quantity must be a valid number")
     
     # Validate labours
     for i, labour in enumerate(labours):
         if not labour.get('description') or not str(labour.get('description')).strip():
             errors.append(f"Labour {i+1}: Description is required")
-        try:
-            price = float(labour.get('price', 0))
-            if price < 0:
-                errors.append(f"Labour {i+1}: Price cannot be negative")
-        except (ValueError, TypeError):
-            errors.append(f"Labour {i+1}: Price must be a valid number")
+        for err in validate_money_fields(labour, ("price",)):
+            errors.append(f"Labour {i+1}: {err}")
     
     return errors
 
@@ -163,6 +171,7 @@ def assert_can_edit_invoice(db: Session, current_user, invoice_id: int) -> None:
             raise HTTPException(status_code=403, detail="Cannot edit invoices older than 1 day")
 
 @router.post('/add')
+@idempotent_create
 def create_invoice(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant']))):
     """Create a new invoice"""
     try:
@@ -476,6 +485,7 @@ def update_invoice(invoice_id, request: Request, db: Session = Depends(get_db), 
         invoice = db.get(Invoice, invoice_id)
         if not invoice:
             return _json({'error': 'Invoice not found'}, 404)
+        check_version(invoice, extract_version(data))
         
         # Validate input data
         validation_errors = validate_invoice_data(data)
@@ -560,6 +570,7 @@ def update_invoice(invoice_id, request: Request, db: Session = Depends(get_db), 
             invoice.updated_by_user = current_user.username if current_user else None
             invoice.updated_at = datetime.utcnow()
             invoice.status = calculate_invoice_status(invoice)
+            bump_version(invoice)
             
             log_action(db, current_user, 'UPDATE', 'invoices' if invoice.type_of == 'invoice' else 'quotes', invoice.id, f"Updated {invoice.type_of} details (Net Total: {invoice.net_total} PKR, Balance: {invoice.balance} PKR)")
             db.commit()

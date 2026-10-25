@@ -61,6 +61,8 @@ logger = logging.getLogger(__name__)
 
 def validate_car_data(data):
     """Validate car data"""
+    from app.foundation.validation import normalize_reg_no
+
     errors = []
     
     # All fields are now optional, but if provided, they must be valid
@@ -76,8 +78,10 @@ def validate_car_data(data):
     
     # Plate number field
     if 'plate_no' in data and data['plate_no'] is not None and data['plate_no'] != "N/A":
-        if not str(data.get('plate_no')).strip():
-            errors.append("Plate number must be a valid string if provided")
+        try:
+            data['plate_no'] = normalize_reg_no(data['plate_no'])
+        except ValueError as exc:
+            errors.append(str(exc))
     
     # Mileage field
     if 'mileage' in data and data['mileage'] is not None and data['mileage'] != "N/A":
@@ -101,6 +105,8 @@ def validate_car_data(data):
 
 def validate_customer_data(data):
     """Validate customer data"""
+    from app.foundation.validation import normalize_pk_phone
+
     errors = []
     
     # All fields are now optional, but if provided, they must be valid
@@ -109,10 +115,12 @@ def validate_customer_data(data):
         if not str(data.get('name')).strip():
             errors.append("Customer name must be a valid string if provided")
     
-    # Phone field
+    # Phone field — normalize to E.164 (+92…)
     if 'phone' in data and data['phone'] is not None and data['phone'] != "N/A":
-        if not str(data.get('phone')).strip():
-            errors.append("Phone number must be a valid string if provided")
+        try:
+            data['phone'] = normalize_pk_phone(data['phone'])
+        except ValueError as exc:
+            errors.append(str(exc))
     
     # Address field
     if 'address' in data and data['address'] is not None and data['address'] != "N/A":
@@ -297,22 +305,16 @@ def get_cars_by_customer(customer_id, request: Request, db: Session = Depends(ge
 
 @router.get('/cars/search')
 def search_cars(request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Search cars"""
+    """Search cars by plate, VIN, make/model, or customer name/phone."""
     try:
+        from app.car_ownership import find_cars_for_history_search
+
         query = request.query_params.get('q', '').strip()
         
         if not query:
             return _json({'error': 'Search query is required'}, 400)
         
-        # Search in make, model, plate_no, and customer name
-        search_results = db.query(Car).join(Customer).filter(
-            or_(
-                Car.make.ilike(f'%{query}%'),
-                Car.model.ilike(f'%{query}%'),
-                Car.plate_no.ilike(f'%{query}%'),
-                Customer.name.ilike(f'%{query}%')
-            )
-        ).all()
+        search_results = find_cars_for_history_search(db, query)
         
         cars_data = []
         for car in search_results:
@@ -322,12 +324,13 @@ def search_cars(request: Request, db: Session = Depends(get_db), current_user=De
                 'model': car.model,
                 'plate_no': car.plate_no,
                 'mileage': car.mileage,
+                'vin': car.vin,
                 'customer_id': car.customer_id,
-                'customer_name': car.customer.name,
-                'customer_code': car.customer.code,
-                'customer_phone': car.customer.phone,
-                'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+                'customer_name': car.customer.name if car.customer else None,
+                'customer_code': car.customer.code if car.customer else None,
+                'customer_phone': car.customer.phone if car.customer else None,
+                'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S") if car.created_at else None,
+                'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S") if car.updated_at else None,
             })
         
         payload = {
@@ -337,7 +340,8 @@ def search_cars(request: Request, db: Session = Depends(get_db), current_user=De
         }
 
         if query and not cars_data:
-            corpus = [row[0] for row in db.query(Car.plate_no).distinct().all()]
+            corpus = [row[0] for row in db.query(Car.plate_no).distinct().all() if row[0]]
+            corpus += [row[0] for row in db.query(Car.vin).distinct().all() if row[0]]
             payload.update(suggestions_for(query, corpus))
 
         return _json(payload, 200)
@@ -346,6 +350,104 @@ def search_cars(request: Request, db: Session = Depends(get_db), current_user=De
         logger.error(f"Error searching cars: {e}")
         return _json({'error': 'Internal server error'}, 500)
 
+
+@router.get('/cars/{car_id:int}/history')
+def get_car_history(
+    car_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Unified timeline: visits/quotes, ROs, invoices, payments, parts, ownership."""
+    from app.car_ownership import build_car_history
+
+    kinds_raw = (request.query_params.get('kinds') or '').strip()
+    kinds = {k.strip() for k in kinds_raw.split(',') if k.strip()} or None
+    try:
+        return _json(build_car_history(db, car_id, kinds=kinds), 200)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error building car history {car_id}: {e}")
+        return _json({'error': 'Failed to load car history'}, 500)
+
+
+@router.post('/cars/{car_id:int}/transfer')
+async def transfer_car(
+    car_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant', 'manager', 'service_advisor'])),
+):
+    """Transfer car ownership. Evidence file is required. Invoices stay with original customer."""
+    from app.car_ownership import transfer_car_ownership
+    from app.foundation.context import set_reason
+
+    try:
+        form = await request.form()
+        to_raw = form.get('to_customer_id')
+        reason = (form.get('reason') or '').strip()
+        date_raw = (form.get('transfer_date') or '').strip()
+        evidence = form.get('evidence')
+        if evidence is not None and not getattr(evidence, 'filename', None):
+            evidence = None
+
+        if not to_raw:
+            return _json({'error': 'to_customer_id is required'}, 400)
+        if not reason:
+            return _json({'error': 'reason is required'}, 400)
+        if not evidence:
+            return _json({'error': 'evidence attachment is required'}, 400)
+
+        try:
+            to_customer_id = int(to_raw)
+        except (TypeError, ValueError):
+            return _json({'error': 'to_customer_id must be an integer'}, 400)
+
+        if date_raw:
+            try:
+                transfer_date = datetime.strptime(date_raw, '%Y-%m-%d').date()
+            except ValueError:
+                return _json({'error': 'transfer_date must be YYYY-MM-DD'}, 400)
+        else:
+            transfer_date = date.today()
+
+        car = db.get(Car, car_id)
+        if not car or getattr(car, 'deleted_at', None) is not None:
+            return _json({'error': 'Car not found'}, 404)
+
+        set_reason(reason)
+        ownership = transfer_car_ownership(
+            db,
+            car=car,
+            to_customer_id=to_customer_id,
+            transfer_date=transfer_date,
+            reason=reason,
+            evidence_file=evidence,
+            user=current_user,
+        )
+        db.commit()
+        db.refresh(ownership)
+        return _json(
+            {
+                'message': 'Car transferred successfully',
+                'ownership': ownership.to_dict(),
+                'car_id': car.id,
+                'customer_id': car.customer_id,
+            },
+            201,
+        )
+    except HTTPException as exc:
+        db.rollback()
+        detail = exc.detail
+        if isinstance(detail, dict):
+            return _json(detail, exc.status_code)
+        return _json({'error': detail}, exc.status_code)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error transferring car {car_id}: {e}")
+        return _json({'error': 'Failed to transfer car'}, 500)
+
 @router.get('/cars/{car_id:int}')
 def get_car(car_id, request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Get specific car by ID"""
@@ -353,7 +455,7 @@ def get_car(car_id, request: Request, db: Session = Depends(get_db), current_use
         if not car_id or car_id <= 0:
             return _json({'error': 'Invalid car ID'}, 400)
         
-        car = db.query(Car).join(Customer).filter(Car.id == car_id).first()
+        car = db.query(Car).outerjoin(Customer).filter(Car.id == car_id).first()
         if not car:
             return _json({'error': 'Car not found'}, 404)
         
@@ -367,11 +469,11 @@ def get_car(car_id, request: Request, db: Session = Depends(get_db), current_use
             'color': car.color,
             'chasis_no': car.chasis_no,
             'customer_id': car.customer_id,
-            'customer_name': car.customer.name,
-            'customer_code': car.customer.code,
-            'customer_phone': car.customer.phone,
-            'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+            'customer_name': car.customer.name if car.customer else None,
+            'customer_code': car.customer.code if car.customer else None,
+            'customer_phone': car.customer.phone if car.customer else None,
+            'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S") if car.created_at else None,
+            'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S") if car.updated_at else None,
         }
         
         return _json(car_data, 200)
@@ -383,6 +485,8 @@ def get_car(car_id, request: Request, db: Session = Depends(get_db), current_use
 @router.put('/cars/{car_id:int}')
 def update_car(car_id, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
     """Update an existing car"""
+    from app.foundation.versioning import bump_version, check_version, extract_version
+
     try:
         if not car_id or car_id <= 0:
             return _json({'error': 'Invalid car ID'}, 400)
@@ -401,6 +505,7 @@ def update_car(car_id, request: Request, db: Session = Depends(get_db), body: di
         car = db.get(Car, car_id)
         if not car:
             return _json({'error': 'Car not found'}, 404)
+        check_version(car, extract_version(data))
         
         # Check if customer exists (if customer_id is provided)
         customer_id = data.get('customer_id')
@@ -435,6 +540,7 @@ def update_car(car_id, request: Request, db: Session = Depends(get_db), body: di
             car.color = color
             car.chasis_no = chasis_no
             car.customer_id = customer_id
+            bump_version(car)
             
             db.commit()
             
@@ -458,6 +564,7 @@ def update_car(car_id, request: Request, db: Session = Depends(get_db), body: di
                     'customer_id': car.customer_id,
                     'customer_name': customer_name,
                     'customer_phone': customer_phone,
+                    'version': car.version,
                     'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                     'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
                 }

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import {
   Empty,
@@ -315,7 +316,7 @@ export function CarsPage() {
             actions={
               <input
                 className="input"
-                placeholder="Search cars"
+                placeholder="Search plate / VIN / customer"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 style={{ width: 200 }}
@@ -347,6 +348,9 @@ export function CarsPage() {
                         <td>{c.customer_name || c.customer_id || '—'}</td>
                         <td>{c.vin || '—'}</td>
                         <td className="row-actions">
+                          <Link className="btn btn-secondary btn-sm" to={`/cars/${c.id}`}>
+                            History
+                          </Link>
                           <button
                             type="button"
                             className="btn btn-secondary btn-sm"
