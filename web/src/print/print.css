@@ -1,0 +1,106 @@
+/* Shared A4 printable workshop documents */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-root,
+  .print-root * {
+    visibility: visible;
+  }
+  .print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm;
+    padding: 12mm;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11pt;
+    color: #111;
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-page-break {
+    break-before: page;
+  }
+}
+
+.print-root {
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 1.5rem;
+  background: #fff;
+  color: #1a1a1a;
+}
+
+.print-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 2px solid #1a1a1a;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.print-brand {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.04em;
+}
+
+.print-doc-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.print-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 1.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.print-table th,
+.print-table td {
+  border: 1px solid #ccc;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+
+.print-table th {
+  background: #f3f3f3;
+}
+
+.print-footer {
+  margin-top: 2rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+.print-sign {
+  border-top: 1px solid #333;
+  padding-top: 0.35rem;
+  margin-top: 2.5rem;
+}
+
+.print-qr {
+  width: 64px;
+  height: 64px;
+  border: 1px solid #999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  text-align: center;
+}

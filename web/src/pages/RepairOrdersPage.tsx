@@ -96,6 +96,9 @@ export function RepairOrdersPage() {
                     <td>{ro.worker_name || '—'}</td>
                     <td>{ro.created_at || '—'}</td>
                     <td className="row-actions">
+                      <Link className="btn btn-secondary btn-sm" to={`/repair-orders/${ro.id}/pipeline`}>
+                        Pipeline
+                      </Link>
                       <select
                         className="select"
                         value={ro.current_status || ''}

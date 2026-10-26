@@ -87,6 +87,19 @@ export function VendorDetailPage() {
     },
   })
 
+  const receivePo = useMutation({
+    mutationFn: (row: Record<string, unknown>) => {
+      const ordered = Number(row.quantity || 0)
+      const got = Number(row.qty_received || 0)
+      const remaining = Math.max(1, ordered - got)
+      return api.post(`/api/purchase-orders/${row.id}/receive`, {
+        quantity: remaining,
+        inventory_id: row.inventory_id || undefined,
+      })
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['vendor-pos', id] }),
+  })
+
   if (vendor.isLoading) return <Loading />
   if (vendor.error) return <ErrorBox error={vendor.error} />
 
@@ -218,6 +231,7 @@ export function VendorDetailPage() {
       </Panel>
 
       <Panel title="Purchase orders">
+        {receivePo.error ? <ErrorBox error={receivePo.error} /> : null}
         {!pos.isLoading && !(pos.data || []).length ? <Empty /> : null}
         {(pos.data || []).length > 0 ? (
           <div className="table-wrap">
@@ -225,20 +239,37 @@ export function VendorDetailPage() {
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>Description</th>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Received</th>
                   <th>Amount</th>
                   <th>Status</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {(pos.data || []).map((row, idx) => (
                   <tr key={Number(row.id) || idx}>
                     <td>{String(row.id || '')}</td>
-                    <td>{String(row.description || '')}</td>
+                    <td>{String(row.item_name || row.description || '')}</td>
+                    <td>{String(row.quantity ?? '')}</td>
+                    <td>{String(row.qty_received ?? 0)}</td>
                     <td>
                       <Money value={Number(row.amount || 0)} />
                     </td>
                     <td>{String(row.status || '')}</td>
+                    <td>
+                      {String(row.status) !== 'received' ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={receivePo.isPending}
+                          onClick={() => receivePo.mutate(row)}
+                        >
+                          Receive remaining
+                        </button>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -90,7 +90,14 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     if not data.username or not data.password:
         return _error("Username and password are required", 400)
 
-    user = db.scalar(select(User).where(User.username == data.username))
+    from app.foundation.context import skip_branch_scope
+
+    # Users are global — do not filter login by X-Branch-Id.
+    token = skip_branch_scope.set(True)
+    try:
+        user = db.scalar(select(User).where(User.username == data.username))
+    finally:
+        skip_branch_scope.reset(token)
     if not user or not user.check_password(data.password) or not user.is_active:
         return _error("Invalid username or password", 401)
 

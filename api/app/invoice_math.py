@@ -4,6 +4,18 @@ Pure arithmetic over an Invoice - no request, no session, no HTTP.
 """
 
 
+def calculate_totals(items, labours):
+    """Sum part lines (price × qty) + labour lines (price)."""
+    try:
+        items_total = sum(
+            float(item.get("price", 0)) * int(item.get("quantity", 0)) for item in (items or [])
+        )
+        labours_total = sum(float(labour.get("price", 0)) for labour in (labours or []))
+        return round(items_total + labours_total, 2)
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def invoice_amount_due(invoice):
     """What the customer owes in total: net total plus tax, less any discount."""
     total = invoice.net_total

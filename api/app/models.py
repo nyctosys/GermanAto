@@ -190,6 +190,21 @@ class Invoice(FoundationMixin, Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
     payments_history: Mapped[str | None] = mapped_column(Text)
+    # Pipeline linkage (additive)
+    visit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("visits.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    job_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("job_cards.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    repair_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("repair_order.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    parent_quote_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoice.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    is_variation: Mapped[bool] = mapped_column(Boolean, default=False)
 
     items: Mapped[list[InvoiceItem]] = relationship(
         "InvoiceItem", backref="invoice", cascade="all, delete-orphan"
@@ -208,6 +223,13 @@ class InvoiceItem(FoundationMixin, Base):
     part_number: Mapped[str | None] = mapped_column(String(100))
     quantity: Mapped[int] = mapped_column(Integer)
     price: Mapped[float] = mapped_column(Float)
+    proposed_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    inventory_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inventory.id", ondelete="SET NULL"), nullable=True
+    )
+    job_card_line_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    approval_status: Mapped[str] = mapped_column(String(20), default="pending")
+    # pending | approved | rejected
 
 
 class InvoiceLabour(FoundationMixin, Base):
@@ -217,6 +239,13 @@ class InvoiceLabour(FoundationMixin, Base):
     invoice_id: Mapped[int] = mapped_column(ForeignKey("invoice.id"))
     description: Mapped[str] = mapped_column(String(255))
     price: Mapped[float] = mapped_column(Float)
+    proposed_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    labour_code_id: Mapped[int | None] = mapped_column(
+        ForeignKey("labour_codes.id", ondelete="SET NULL"), nullable=True
+    )
+    std_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    job_card_line_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    approval_status: Mapped[str] = mapped_column(String(20), default="pending")
 
 
 class Inventory(FoundationMixin, Base):
@@ -229,6 +258,7 @@ class Inventory(FoundationMixin, Base):
     name: Mapped[str] = mapped_column(String(255))
     category: Mapped[str] = mapped_column(String(100))
     quantity: Mapped[int] = mapped_column(Integer, default=0)
+    qty_reserved: Mapped[int] = mapped_column(Integer, default=0)
     price: Mapped[float] = mapped_column(Float, default=0.0)
     description: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(String(255))
@@ -239,6 +269,10 @@ class Inventory(FoundationMixin, Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+    @property
+    def qty_available(self) -> int:
+        return int(self.quantity or 0) - int(self.qty_reserved or 0)
 
     def generate_part_number(self) -> str:
         """Next unused PN### code.
@@ -353,6 +387,17 @@ class RepairOrder(FoundationMixin, Base):
     created_by_user: Mapped[str | None] = mapped_column(String(80))
     updated_by_user: Mapped[str | None] = mapped_column(String(80))
     workers_json: Mapped[str | None] = mapped_column(Text)
+    visit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("visits.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    job_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("job_cards.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    quote_invoice_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoice.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    qc_signoff_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    payment_gate_bypassed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     parts: Mapped[list[RepairOrderPart]] = relationship(
         "RepairOrderPart", backref="repair_order", cascade="all, delete-orphan"
@@ -372,6 +417,10 @@ class RepairOrderPart(FoundationMixin, Base):
     part_number: Mapped[str | None] = mapped_column(String(100))
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    qty_reserved: Mapped[int] = mapped_column(Integer, default=0)
+    qty_issued: Mapped[int] = mapped_column(Integer, default=0)
+    qty_returned: Mapped[int] = mapped_column(Integer, default=0)
+    from_variation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class RepairOrderLabour(FoundationMixin, Base):
@@ -381,6 +430,10 @@ class RepairOrderLabour(FoundationMixin, Base):
     repair_order_id: Mapped[int] = mapped_column(ForeignKey("repair_order.id"))
     description: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    labour_code_id: Mapped[int | None] = mapped_column(
+        ForeignKey("labour_codes.id", ondelete="SET NULL"), nullable=True
+    )
+    from_variation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Expense(FoundationMixin, Base):
@@ -594,6 +647,12 @@ class PurchaseOrder(FoundationMixin, Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     remarks: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(50), default="ordered")
+    inventory_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inventory.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    qty_received: Mapped[int] = mapped_column(Integer, default=0)
+    job_card_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    quote_invoice_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_by_user: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(
@@ -611,10 +670,14 @@ class PurchaseOrder(FoundationMixin, Base):
             "invoice_no": self.invoice_no,
             "item_name": self.item_name,
             "quantity": self.quantity,
+            "qty_received": self.qty_received or 0,
+            "inventory_id": self.inventory_id,
             "rate": float(self.rate),
             "amount": float(self.amount),
             "remarks": self.remarks,
             "status": self.status,
+            "job_card_id": self.job_card_id,
+            "quote_invoice_id": self.quote_invoice_id,
             "created_by_user": self.created_by_user,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "updated_at": _clock(self.updated_at, "%Y-%m-%d %H:%M:%S"),
@@ -1154,6 +1217,410 @@ class CarOwnership(FoundationMixin, Base):
             "transferred_by": self.transferred_by,
             "branch_id": self.branch_id,
             "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class LabourCode(FoundationMixin, Base):
+    """Labour catalogue: code, description, standard hours, rate, category."""
+
+    __tablename__ = "labour_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    description: Mapped[str] = mapped_column(String(255))
+    standard_hours: Mapped[float] = mapped_column(Float, default=1.0)
+    rate: Mapped[float] = mapped_column(Float, default=0.0)
+    category: Mapped[str] = mapped_column(String(80), default="general")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "code": self.code,
+            "description": self.description,
+            "standard_hours": self.standard_hours,
+            "rate": self.rate,
+            "category": self.category,
+            "is_active": self.is_active,
+            "branch_id": self.branch_id,
+            "version": self.version,
+        }
+
+
+class JobCard(FoundationMixin, Base):
+    """Job card builds the quotation; not the repair order itself."""
+
+    __tablename__ = "job_cards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    visit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("visits.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    car_id: Mapped[int | None] = mapped_column(
+        ForeignKey("car.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    customer_name: Mapped[str] = mapped_column(String(255), default="")
+    customer_phone: Mapped[str] = mapped_column(String(20), default="")
+    customer_reg_no: Mapped[str] = mapped_column(String(50), default="")
+    customer_made: Mapped[str] = mapped_column(String(100), default="")
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    # open | quoted | closed | cancelled
+    notes: Mapped[str | None] = mapped_column(Text)
+    quote_invoice_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    lines: Mapped[list["JobCardLine"]] = relationship(
+        "JobCardLine",
+        back_populates="job_card",
+        cascade="all, delete-orphan",
+        order_by="JobCardLine.id",
+    )
+
+    def to_dict(self, *, include_lines: bool = True) -> dict:
+        data = {
+            "id": self.id,
+            "visit_id": self.visit_id,
+            "car_id": self.car_id,
+            "customer_id": self.customer_id,
+            "customer_name": self.customer_name,
+            "customer_phone": self.customer_phone,
+            "customer_reg_no": self.customer_reg_no,
+            "customer_made": self.customer_made,
+            "status": self.status,
+            "notes": self.notes,
+            "quote_invoice_id": self.quote_invoice_id,
+            "created_by_user": self.created_by_user,
+            "branch_id": self.branch_id,
+            "version": self.version,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+        if include_lines:
+            data["lines"] = [ln.to_dict() for ln in (self.lines or [])]
+        return data
+
+
+class JobCardLine(FoundationMixin, Base):
+    __tablename__ = "job_card_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_card_id: Mapped[int] = mapped_column(ForeignKey("job_cards.id"), index=True)
+    line_type: Mapped[str] = mapped_column(String(20), default="labour")
+    # labour | part
+    labour_code_id: Mapped[int | None] = mapped_column(
+        ForeignKey("labour_codes.id", ondelete="SET NULL"), nullable=True
+    )
+    inventory_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inventory.id", ondelete="SET NULL"), nullable=True
+    )
+    description: Mapped[str] = mapped_column(String(255), default="")
+    part_number: Mapped[str | None] = mapped_column(String(100))
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    std_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0)
+    pay_type: Mapped[str] = mapped_column(String(20), default="customer")
+    # customer | warranty | internal
+    assigned_technician: Mapped[str | None] = mapped_column(String(120))
+    line_status: Mapped[str] = mapped_column(String(20), default="Pending")
+    # Pending, Approved, Rejected, In progress, Done, QC passed
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    job_card: Mapped[JobCard] = relationship("JobCard", back_populates="lines")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "job_card_id": self.job_card_id,
+            "line_type": self.line_type,
+            "labour_code_id": self.labour_code_id,
+            "inventory_id": self.inventory_id,
+            "description": self.description,
+            "part_number": self.part_number,
+            "quantity": self.quantity,
+            "std_hours": self.std_hours,
+            "unit_price": self.unit_price,
+            "pay_type": self.pay_type,
+            "assigned_technician": self.assigned_technician,
+            "line_status": self.line_status,
+        }
+
+
+class ApprovalToken(FoundationMixin, Base):
+    """Public token for WhatsApp line-wise quote / variation approval."""
+
+    __tablename__ = "approval_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoice.id"), index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by: Mapped[str | None] = mapped_column(String(80))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "token": self.token,
+            "invoice_id": self.invoice_id,
+            "expires_at": _clock(self.expires_at, "%Y-%m-%d %H:%M:%S"),
+            "revoked_at": _clock(self.revoked_at, "%Y-%m-%d %H:%M:%S"),
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class QuoteLineApproval(FoundationMixin, Base):
+    """Per-line customer approval evidence on a quote/variation."""
+
+    __tablename__ = "quote_line_approvals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoice.id"), index=True)
+    line_kind: Mapped[str] = mapped_column(String(20))  # item | labour
+    line_id: Mapped[int] = mapped_column(Integer)
+    decision: Mapped[str] = mapped_column(String(20))  # approved | rejected
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    client_ip: Mapped[str | None] = mapped_column(String(64))
+    token: Mapped[str | None] = mapped_column(String(64))
+    media_attachment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("attachments.id"), nullable=True
+    )
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "invoice_id": self.invoice_id,
+            "line_kind": self.line_kind,
+            "line_id": self.line_id,
+            "decision": self.decision,
+            "decided_at": _clock(self.decided_at, "%Y-%m-%d %H:%M:%S"),
+            "client_ip": self.client_ip,
+            "token": self.token,
+            "media_attachment_id": self.media_attachment_id,
+            "notes": self.notes,
+        }
+
+
+class CustomerDeposit(FoundationMixin, Base):
+    """Customer advance as liability; converts to revenue only when applied to invoice."""
+
+    __tablename__ = "customer_deposits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    visit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("visits.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    quote_invoice_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoice.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    applied_invoice_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoice.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    # open | applied | refunded | adjusted
+    evidence_attachment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("attachments.id"), nullable=True
+    )
+    reason: Mapped[str | None] = mapped_column(String(255))
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "visit_id": self.visit_id,
+            "customer_id": self.customer_id,
+            "quote_invoice_id": self.quote_invoice_id,
+            "applied_invoice_id": self.applied_invoice_id,
+            "amount": self.amount,
+            "status": self.status,
+            "evidence_attachment_id": self.evidence_attachment_id,
+            "reason": self.reason,
+            "created_by_user": self.created_by_user,
+            "branch_id": self.branch_id,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class Variation(FoundationMixin, Base):
+    """Technician-flagged extra work → supplementary quote for line approval."""
+
+    __tablename__ = "variations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repair_order_id: Mapped[int] = mapped_column(ForeignKey("repair_order.id"), index=True)
+    quote_invoice_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoice.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    # draft | sent | partially_approved | approved | rejected | cancelled
+    flagged_by: Mapped[str | None] = mapped_column(String(80))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    lines: Mapped[list["VariationLine"]] = relationship(
+        "VariationLine",
+        back_populates="variation",
+        cascade="all, delete-orphan",
+    )
+
+    def to_dict(self, *, include_lines: bool = True) -> dict:
+        data = {
+            "id": self.id,
+            "repair_order_id": self.repair_order_id,
+            "quote_invoice_id": self.quote_invoice_id,
+            "status": self.status,
+            "flagged_by": self.flagged_by,
+            "notes": self.notes,
+            "branch_id": self.branch_id,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+        if include_lines:
+            data["lines"] = [ln.to_dict() for ln in (self.lines or [])]
+        return data
+
+
+class VariationLine(FoundationMixin, Base):
+    __tablename__ = "variation_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    variation_id: Mapped[int] = mapped_column(ForeignKey("variations.id"), index=True)
+    line_type: Mapped[str] = mapped_column(String(20), default="labour")
+    description: Mapped[str] = mapped_column(String(255), default="")
+    labour_code_id: Mapped[int | None] = mapped_column(
+        ForeignKey("labour_codes.id", ondelete="SET NULL"), nullable=True
+    )
+    inventory_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inventory.id", ondelete="SET NULL"), nullable=True
+    )
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0)
+    approval_status: Mapped[str] = mapped_column(String(20), default="pending")
+
+    variation: Mapped[Variation] = relationship("Variation", back_populates="lines")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "variation_id": self.variation_id,
+            "line_type": self.line_type,
+            "description": self.description,
+            "labour_code_id": self.labour_code_id,
+            "inventory_id": self.inventory_id,
+            "quantity": self.quantity,
+            "unit_price": self.unit_price,
+            "approval_status": self.approval_status,
+        }
+
+
+class QcSignoff(FoundationMixin, Base):
+    """Foreman QC gate before invoice can be issued."""
+
+    __tablename__ = "qc_signoffs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repair_order_id: Mapped[int] = mapped_column(ForeignKey("repair_order.id"), index=True)
+    checklist_json: Mapped[str] = mapped_column(Text, default="[]")
+    road_test_note: Mapped[str | None] = mapped_column(Text)
+    photos_json: Mapped[str] = mapped_column(Text, default="[]")
+    signed_by: Mapped[str | None] = mapped_column(String(80))
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        import json
+
+        try:
+            checklist = json.loads(self.checklist_json or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            checklist = []
+        try:
+            photos = json.loads(self.photos_json or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            photos = []
+        return {
+            "id": self.id,
+            "repair_order_id": self.repair_order_id,
+            "checklist": checklist if isinstance(checklist, list) else [],
+            "road_test_note": self.road_test_note,
+            "photos": photos if isinstance(photos, list) else [],
+            "signed_by": self.signed_by,
+            "signed_at": _clock(self.signed_at, "%Y-%m-%d %H:%M:%S"),
+            "branch_id": self.branch_id,
+        }
+
+
+class GatePass(FoundationMixin, Base):
+    """Handover / exit: old parts, odometer, signature; starts comeback window."""
+
+    __tablename__ = "gate_passes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repair_order_id: Mapped[int] = mapped_column(ForeignKey("repair_order.id"), index=True)
+    invoice_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoice.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    visit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("visits.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    old_parts_checklist_json: Mapped[str] = mapped_column(Text, default="[]")
+    exit_odometer: Mapped[str | None] = mapped_column(String(50))
+    photos_json: Mapped[str] = mapped_column(Text, default="[]")
+    signature_attachment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("attachments.id"), nullable=True
+    )
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    payment_gate_override: Mapped[bool] = mapped_column(Boolean, default=False)
+    override_reason: Mapped[str | None] = mapped_column(String(255))
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        import json
+
+        try:
+            checklist = json.loads(self.old_parts_checklist_json or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            checklist = []
+        try:
+            photos = json.loads(self.photos_json or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            photos = []
+        return {
+            "id": self.id,
+            "repair_order_id": self.repair_order_id,
+            "invoice_id": self.invoice_id,
+            "visit_id": self.visit_id,
+            "old_parts_checklist": checklist if isinstance(checklist, list) else [],
+            "exit_odometer": self.exit_odometer,
+            "photos": photos if isinstance(photos, list) else [],
+            "signature_attachment_id": self.signature_attachment_id,
+            "delivered_at": _clock(self.delivered_at, "%Y-%m-%d %H:%M:%S"),
+            "payment_gate_override": self.payment_gate_override,
+            "override_reason": self.override_reason,
+            "created_by_user": self.created_by_user,
+            "branch_id": self.branch_id,
         }
 
 

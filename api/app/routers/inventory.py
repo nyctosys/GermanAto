@@ -1358,6 +1358,14 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
             
             # Log adjustment if quantity changed
             if old_quantity != new_quantity:
+                from app.foundation.overrides import require_override
+
+                require_override(
+                    db,
+                    current_user,
+                    "stock_adjustment",
+                    reason=data.get("reason") or request.headers.get("X-Audit-Reason"),
+                )
                 quantity_change = new_quantity - old_quantity
                 user_id = current_user.id if current_user else None
                 log_adjustment(db, 

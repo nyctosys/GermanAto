@@ -37,6 +37,11 @@ from app.repair_order_inventory_utils import (
 )
 from app.payroll import preview as payroll_preview, run_payroll, compute_salary
 from app.whatsapp_notifications import whatsapp_notifier
+from app.foundation.idempotent import idempotent_create
+from app.foundation.overrides import require_audit_reason
+from app.foundation.versioning import bump_version, check_version, extract_version
+from app.parts_flow import issue_on_ro_open
+from app.pipeline import assert_can_open_ro_from_quote
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -169,8 +174,72 @@ def get_repair_orders(request: Request, db: Session = Depends(get_db), current_u
     except Exception as e:
         return _json({'error': str(e)}, 500)
 
+@router.post('/repair-orders/from-quote/{quote_id:int}')
+@idempotent_create
+def create_ro_from_quote(
+    quote_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager', 'manager', 'service_advisor'])),
+):
+    """Open RO from approved quote: issue reserved parts."""
+    quote = db.get(Invoice, quote_id)
+    if not quote:
+        return _json({'error': 'Quote not found'}, 404)
+    assert_can_open_ro_from_quote(db, quote)
+    data = body or {}
+    ro = RepairOrder(
+        customer_name=quote.customer_name,
+        customer_phone=quote.customer_phone or '',
+        customer_address=quote.customer_address or '',
+        customer_reg_no=quote.customer_reg_no or '',
+        customer_made=quote.customer_made or '',
+        customer_mileage=quote.customer_mileage or '',
+        customer_vin=quote.customer_vin,
+        customer_color=quote.customer_color,
+        customer_chasis=quote.customer_chasis,
+        problem_description=data.get('problem_description', ''),
+        current_status='in_progress',
+        created_by_user=current_user.username if current_user else None,
+        customer_id=quote.customer_id,
+        car_id=quote.car_id,
+        visit_id=quote.visit_id,
+        job_card_id=quote.job_card_id,
+        quote_invoice_id=quote.id,
+    )
+    db.add(ro)
+    db.flush()
+    quote.repair_order_id = ro.id
+    issue_on_ro_open(db, ro, quote, created_by=getattr(current_user, 'id', None))
+    lab_statuses = [(l.approval_status or 'pending').lower() for l in (quote.labours or [])]
+    lab_legacy = bool(lab_statuses) and all(s == 'pending' for s in lab_statuses)
+    for lab in quote.labours or []:
+        st = (lab.approval_status or 'pending').lower()
+        if st == 'rejected':
+            continue
+        if st != 'approved' and not lab_legacy:
+            continue
+        db.add(
+            RepairOrderLabour(
+                repair_order_id=ro.id,
+                description=lab.description,
+                status='Approved',
+                labour_code_id=lab.labour_code_id,
+            )
+        )
+    if quote.visit_id:
+        visit = db.get(Visit, quote.visit_id)
+        if visit and not visit.repair_order_id:
+            visit.repair_order_id = ro.id
+    log_action(db, current_user, 'CREATE', 'repair_orders', ro.id, f"RO from quote #{quote.id}")
+    db.commit()
+    return _json({'id': ro.id, 'message': 'Repair order opened from quote'}, 201)
+
+
 # Get a specific repair order by ID
 @router.post('/repair-orders')
+@idempotent_create
 def create_repair_order(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
     try:
         data = body or {}
@@ -181,6 +250,10 @@ def create_repair_order(request: Request, db: Session = Depends(get_db), body: d
 
         visit_id_raw = data.get('visit_id')
         visit_id = int(visit_id_raw) if visit_id_raw not in (None, '') else None
+        quote_id = data.get('quote_invoice_id')
+        quote = db.get(Invoice, int(quote_id)) if quote_id else None
+        if quote:
+            assert_can_open_ro_from_quote(db, quote)
         
         # Create repair order
         worker_ids = data.get('worker_ids', [])
@@ -234,7 +307,10 @@ def create_repair_order(request: Request, db: Session = Depends(get_db), body: d
             worker_name=worker_name_val,
             current_status='received',
             created_by_user=current_user.username if current_user else None,
-            workers_json=json.dumps(workers_list) if workers_list else None
+            workers_json=json.dumps(workers_list) if workers_list else None,
+            visit_id=visit_id,
+            job_card_id=data.get('job_card_id'),
+            quote_invoice_id=int(quote_id) if quote_id else None,
         )
         
         # Link to the customer and car this order was written for, and claim
@@ -253,13 +329,18 @@ def create_repair_order(request: Request, db: Session = Depends(get_db), body: d
 
         if linked_visit is not None:
             linked_visit.repair_order_id = repair_order.id
+            repair_order.visit_id = linked_visit.id
             if linked_visit.odometer and not repair_order.customer_mileage:
                 repair_order.customer_mileage = linked_visit.odometer
             if linked_visit.reported_complaints and not repair_order.problem_description:
                 repair_order.problem_description = linked_visit.reported_complaints
+
+        if quote:
+            quote.repair_order_id = repair_order.id
+            issue_on_ro_open(db, repair_order, quote, created_by=getattr(current_user, 'id', None))
         
-        # Process parts
-        if data.get('parts'):
+        # Process parts (legacy path when not from quote reserves)
+        if data.get('parts') and not quote:
             success, processed_parts, inventory_errors = process_repair_order_parts(db, data['parts'], repair_order.id)
             
             if not success:
@@ -414,12 +495,12 @@ def update_repair_order(repair_order_id, request: Request, db: Session = Depends
         
         if not repair_order:
             return _json({'error': 'Repair order not found'}, 404)
+        data = body or {}
+        check_version(repair_order, extract_version(data))
             
         # Check if completed and user is not admin
         if repair_order.current_status == 'complete' and current_user.role != 'admin':
             return _json({'error': 'Completed repair orders can only be edited by administrators'}, 403)
-        
-        data = body
         
         # Update basic information (only if provided and not None)
         if 'customer_name' in data and data['customer_name'] is not None:
@@ -554,6 +635,7 @@ def update_repair_order(repair_order_id, request: Request, db: Session = Depends
                 )
                 db.add(labour)
         
+        bump_version(repair_order)
         log_action(db, current_user, 'UPDATE', 'repair_orders', repair_order.id, f"Updated repair order details for customer {repair_order.customer_name}")
         db.commit()
         
@@ -575,6 +657,7 @@ def delete_repair_order(repair_order_id, request: Request, db: Session = Depends
         
         if not repair_order:
             return _json({'error': 'Repair order not found'}, 404)
+        require_audit_reason(kind="delete")
             
         # Check if completed and user is not admin
         if repair_order.current_status == 'complete' and current_user.role != 'admin':
@@ -591,11 +674,7 @@ def delete_repair_order(repair_order_id, request: Request, db: Session = Depends
                 for error in errors:
                     print(f"Warning during inventory restore: {error}")
         
-        # Delete related parts and labour
-        db.query(RepairOrderPart).filter_by(repair_order_id=repair_order_id).delete()
-        db.query(RepairOrderLabour).filter_by(repair_order_id=repair_order_id).delete()
-        
-        # Delete the repair order
+        # Soft-delete RO (hooks); children remain linked
         log_action(db, current_user, 'DELETE', 'repair_orders', repair_order_id, f"Deleted repair order ID {repair_order_id} for customer {repair_order.customer_name}")
         db.delete(repair_order)
         db.commit()

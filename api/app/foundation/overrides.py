@@ -18,6 +18,7 @@ OVERRIDE_KINDS = frozenset(
         "payment_gate",
         "evidence_exception",
         "period_reopen",
+        "qc_signoff",
     }
 )
 

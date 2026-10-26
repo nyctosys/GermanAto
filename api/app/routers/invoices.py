@@ -38,7 +38,9 @@ from app.repair_order_inventory_utils import (
 from app.payroll import preview as payroll_preview, run_payroll, compute_salary
 from app.whatsapp_notifications import whatsapp_notifier
 from app.foundation.idempotent import idempotent_create
+from app.foundation.overrides import assert_discount_override, require_audit_reason
 from app.foundation.versioning import bump_version, check_version, extract_version
+from app.pipeline import assert_invoice_unlocked, assert_qc_before_invoice, discount_pct, lock_invoice
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -215,6 +217,14 @@ def create_invoice(request: Request, db: Session = Depends(get_db), body: dict |
         else:
             net_total = total
             balance = round(total - discount - advance, 2)
+
+        assert_discount_override(
+            db, current_user, discount_pct(discount, net_total), reason=data.get("reason")
+        )
+
+        repair_order_id = data.get("repair_order_id")
+        if type_of == "invoice" and repair_order_id:
+            assert_qc_before_invoice(db, int(repair_order_id))
         
         # Create invoice with transaction
         try:
@@ -239,9 +249,14 @@ def create_invoice(request: Request, db: Session = Depends(get_db), body: dict |
                 include_tax=include_tax,
                 tax_amount=tax_amount,
                 status=default_status,
-                created_by_user=current_user.username if current_user else None
+                created_by_user=current_user.username if current_user else None,
+                visit_id=data.get("visit_id"),
+                job_card_id=data.get("job_card_id"),
+                repair_order_id=int(repair_order_id) if repair_order_id else None,
             )
             invoice.status = calculate_invoice_status(invoice)
+            if type_of == "invoice":
+                lock_invoice(invoice)
 
             # Link the document to the customer and car it was written for, and
             # claim the car for that customer if it had no owner yet.
@@ -252,21 +267,34 @@ def create_invoice(request: Request, db: Session = Depends(get_db), body: dict |
             
             # Add items
             for item in items_data:
+                price = float(item['price'])
+                proposed = float(item.get('proposed_price', price))
                 invoice_item = InvoiceItem(
                     invoice_id=invoice.id,
                     product_name=str(item['product_name']).strip(),
                     part_number=str(item.get('part_number', '')).strip() if item.get('part_number') else None,
                     quantity=int(item['quantity']),
-                    price=float(item['price'])
+                    price=price,
+                    proposed_price=proposed,
+                    inventory_id=item.get('inventory_id'),
+                    job_card_line_id=item.get('job_card_line_id'),
+                    approval_status=item.get('approval_status') or 'pending',
                 )
                 db.add(invoice_item)
             
             # Add labours
             for labour in labours_data:
+                price = float(labour['price'])
+                proposed = float(labour.get('proposed_price', price))
                 invoice_labour = InvoiceLabour(
                     invoice_id=invoice.id,
                     description=str(labour['description']).strip(),
-                    price=float(labour['price'])
+                    price=price,
+                    proposed_price=proposed,
+                    labour_code_id=labour.get('labour_code_id'),
+                    std_hours=labour.get('std_hours'),
+                    job_card_line_id=labour.get('job_card_line_id'),
+                    approval_status=labour.get('approval_status') or 'pending',
                 )
                 db.add(invoice_labour)
             
@@ -445,13 +473,11 @@ def delete_invoice(invoice_id, request: Request, db: Session = Depends(get_db), 
         invoice = db.get(Invoice, invoice_id)
         if not invoice:
             return _json({'error': 'Invoice not found'}, 404)
+        assert_invoice_unlocked(invoice)
+        require_audit_reason(kind="delete")
         
         try:
-            # Delete related items and labours first
-            db.query(InvoiceItem).filter_by(invoice_id=invoice_id).delete()
-            db.query(InvoiceLabour).filter_by(invoice_id=invoice_id).delete()
-            
-            # Delete the invoice
+            # Soft-delete via session hooks (hard cascade on children avoided)
             log_action(db, current_user, 'DELETE', 'invoices' if invoice.type_of == 'invoice' else 'quotes', invoice_id, f"Deleted {invoice.type_of} ID {invoice_id} for customer {invoice.customer_name}")
             db.delete(invoice)
             db.commit()
@@ -485,12 +511,21 @@ def update_invoice(invoice_id, request: Request, db: Session = Depends(get_db), 
         invoice = db.get(Invoice, invoice_id)
         if not invoice:
             return _json({'error': 'Invoice not found'}, 404)
+        assert_invoice_unlocked(invoice)
         check_version(invoice, extract_version(data))
         
         # Validate input data
         validation_errors = validate_invoice_data(data)
         if validation_errors:
             return _json({'error': 'Validation failed', 'details': validation_errors}, 400)
+
+        new_discount = float(data['discount']) if 'discount' in data else float(invoice.discount or 0)
+        items_preview = data.get('items', [{'price': i.price, 'quantity': i.quantity} for i in (invoice.items or [])])
+        labours_preview = data.get('labours', [{'price': l.price} for l in (invoice.labours or [])])
+        preview_total = calculate_totals(items_preview, labours_preview)
+        assert_discount_override(
+            db, current_user, discount_pct(new_discount, preview_total), reason=data.get("reason")
+        )
         
         try:
             # Update invoice basic fields
@@ -745,36 +780,47 @@ def health_check(request: Request, db: Session = Depends(get_db)):
 
 @router.post('/invoice/{invoice_id:int}/convert')
 def convert_quote_to_invoice(invoice_id, request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'accountant']))):
-    """Convert a quote to an invoice (in-place, same ID)"""
+    """Convert a quote to an invoice (in-place, same ID). Requires QC when linked to an RO."""
     try:
         invoice = db.get(Invoice, invoice_id)
         if not invoice:
             return _json({'error': 'Invoice/Quote not found'}, 404)
         if invoice.type_of == 'invoice':
             return _json({'error': 'Already an invoice'}, 400)
+        if invoice.is_variation:
+            return _json({'error': 'Variation quotes cannot convert directly; fold approved lines into the RO invoice'}, 400)
 
-        # Update type and status
+        if invoice.repair_order_id:
+            assert_qc_before_invoice(db, invoice.repair_order_id)
+
+        # Only approved lines (or legacy pending-all) may bill
+        for item in invoice.items or []:
+            st = (item.approval_status or "pending").lower()
+            if st == "rejected":
+                continue
+            if st not in ("approved", "pending"):
+                return _json({'error': f'Line {item.id} not approved'}, 400)
+        # Drop rejected lines from billing by zeroing qty (keep audit trail)
+        for item in invoice.items or []:
+            if (item.approval_status or "").lower() == "rejected":
+                item.quantity = 0
+        for labour in invoice.labours or []:
+            if (labour.approval_status or "").lower() == "rejected":
+                labour.price = 0.0
+
         invoice.type_of = 'invoice'
-        invoice.status = 'unpaid'  # Set status to unpaid when converting to invoice
-
-        # Deduct inventory for all items
-        # DISABLED: Inventory is no longer deducted when converting quotes to invoices
-        # items = db.query(InvoiceItem).filter_by(invoice_id=invoice_id).all()
-        # items_data = [{'product_name': item.product_name, 'quantity': item.quantity} for item in items]
-        # try:
-        #     update_inventory_quantities(items_data)
-        # except ValueError as e:
-        #     db.rollback()
-        #     return _json({'error': str(e)}, 400)
-        # except Exception as e:
-        #     db.rollback()
-        #     return _json({'error': 'Failed to update inventory'}, 500)
+        invoice.status = 'unpaid'
+        lock_invoice(invoice)
 
         db.commit()
         return _json({'message': 'Quote converted to invoice successfully', 'invoice_id': invoice.id}, 200)
 
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
+        logger.error(f"convert quote error: {e}")
         return _json({'error': 'Internal server error'}, 500)
 
 @router.put('/invoice/{invoice_id:int}/status')

@@ -40,6 +40,18 @@ export function PendingQuotesPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['quotes'] }),
   })
 
+  const sendApproval = useMutation({
+    mutationFn: (id: number) =>
+      api.post<{ approval_url: string }>(`/api/quotes/${id}/send-approval`, {
+        public_base_url: window.location.origin,
+      }),
+  })
+
+  const openRo = useMutation({
+    mutationFn: (id: number) => api.post(`/api/repair-orders/from-quote/${id}`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['quotes'] }),
+  })
+
   const remove = useMutation({
     mutationFn: (id: number) => api.delete(`/api/invoice/${id}/delete`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['quotes'] }),
@@ -67,6 +79,14 @@ export function PendingQuotesPage() {
         {q.isLoading ? <Loading /> : null}
         {q.error ? <ErrorBox error={q.error} /> : null}
         {convert.error ? <ErrorBox error={convert.error} /> : null}
+        {sendApproval.error ? <ErrorBox error={sendApproval.error} /> : null}
+        {openRo.error ? <ErrorBox error={openRo.error} /> : null}
+        {sendApproval.data ? (
+          <p className="muted">
+            Approval link:{' '}
+            <a href={sendApproval.data.approval_url}>{sendApproval.data.approval_url}</a>
+          </p>
+        ) : null}
         {!q.isLoading && !(q.data || []).length ? <Empty /> : null}
         {(q.data || []).length > 0 ? (
           <div className="table-wrap">
@@ -97,6 +117,20 @@ export function PendingQuotesPage() {
                       <Link className="btn btn-secondary btn-sm" to={`/invoices/${row.id}/edit`}>
                         Edit
                       </Link>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => sendApproval.mutate(row.id)}
+                      >
+                        Send approval
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => openRo.mutate(row.id)}
+                      >
+                        Open RO
+                      </button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"

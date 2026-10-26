@@ -42,6 +42,20 @@ FOUNDATION_TABLES = [
     "departments",
     "categories",
     "inventory_transactions",
+    "visits",
+    "visit_inspection_items",
+    "inspection_templates",
+    "car_ownership",
+    "labour_codes",
+    "job_cards",
+    "job_card_lines",
+    "approval_tokens",
+    "quote_line_approvals",
+    "customer_deposits",
+    "variations",
+    "variation_lines",
+    "qc_signoffs",
+    "gate_passes",
 ]
 
 FOUNDATION_COLUMNS = {
@@ -150,6 +164,14 @@ def main() -> int:
     finally:
         db.close()
 
+    print("Running pipeline migration...")
+    try:
+        from migrate_pipeline import run as run_pipeline
+
+        run_pipeline()
+    except Exception as exc:
+        print(f"  (skip pipeline migrate: {exc})")
+
     print("Foundation migration complete.")
     return 0
 
@@ -162,9 +184,13 @@ CHECK_CONSTRAINTS = [
     ("invoice_labour", "ck_invoice_labour_price_nonneg", "price >= 0"),
     ("inventory", "ck_inventory_qty_nonneg", "quantity >= 0"),
     ("inventory", "ck_inventory_price_nonneg", "price >= 0"),
+    ("inventory", "ck_inventory_qty_reserved_nonneg", "qty_reserved >= 0"),
     ("purchase_orders", "ck_po_qty_nonneg", "quantity >= 0"),
     ("purchase_orders", "ck_po_rate_nonneg", "rate >= 0"),
     ("purchase_orders", "ck_po_amount_nonneg", "amount >= 0"),
+    ("customer_deposits", "ck_deposit_amount_nonneg", "amount >= 0"),
+    ("labour_codes", "ck_labour_rate_nonneg", "rate >= 0"),
+    ("labour_codes", "ck_labour_hours_nonneg", "standard_hours >= 0"),
 ]
 
 

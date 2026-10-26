@@ -30,6 +30,15 @@ import { VendorDetailPage } from './pages/VendorDetailPage'
 import { VendorsPage } from './pages/VendorsPage'
 import { WhatsAppPage } from './pages/WhatsAppPage'
 import { WorkerDetailPage } from './pages/WorkerDetailPage'
+import { JobCardsPage } from './pages/JobCardsPage'
+import { JobCardCreatePage } from './pages/JobCardCreatePage'
+import { JobCardDetailPage } from './pages/JobCardDetailPage'
+import { LabourCodesPage } from './pages/LabourCodesPage'
+import { PublicApprovePage } from './pages/PublicApprovePage'
+import { RepairOrderPipelinePage } from './pages/RepairOrderPipelinePage'
+import { EntryExitPacketPage } from './pages/EntryExitPacketPage'
+import { MoneyInPage } from './pages/MoneyInPage'
+import { MoneyOutPage } from './pages/MoneyOutPage'
 
 export default function App() {
   return (
@@ -37,6 +46,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/approve/:token" element={<PublicApprovePage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route index element={<DashboardPage />} />
@@ -49,8 +59,16 @@ export default function App() {
               <Route path="invoices/:id/edit" element={<InvoiceEditPage />} />
               <Route path="quotes/new" element={<QuoteCreatePage />} />
               <Route path="quotes/pending" element={<PendingQuotesPage />} />
+              <Route path="job-cards" element={<JobCardsPage />} />
+              <Route path="job-cards/new" element={<JobCardCreatePage />} />
+              <Route path="job-cards/:id" element={<JobCardDetailPage />} />
+              <Route path="labour-codes" element={<LabourCodesPage />} />
               <Route path="repair-orders" element={<RepairOrdersPage />} />
               <Route path="repair-orders/new" element={<RepairOrderCreatePage />} />
+              <Route path="repair-orders/:id/pipeline" element={<RepairOrderPipelinePage />} />
+              <Route path="cars/:id/packet" element={<EntryExitPacketPage />} />
+              <Route path="money-in" element={<MoneyInPage />} />
+              <Route path="money-out" element={<MoneyOutPage />} />
               <Route path="finance" element={<FinanceHubPage />} />
               <Route
                 path="finance/daily-expenses"

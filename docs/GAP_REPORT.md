@@ -1,56 +1,52 @@
-# GermanATO — Gap report (16 target features + foundation)
+# GermanATO — Gap report
 
 Status key: **Done** / **Partial** / **Missing**
 
-Last updated: visit/check-in inspection + job-card gate; car transfer/history already Done.
+Last updated: design system + KPI dashboard + PO receive + Money In/Out + next-action UX.
 
 ---
 
 ## Target product features
 
-| # | Feature | Status | Files involved | What's needed |
-|---|---------|--------|----------------|---------------|
-| 1 | Car entry-to-exit printable docs | **Partial** | check-in sheet on `CarDetailPage`, RO/invoice prints still separate | Check-in printable sheet Done; full entry→exit packet across stages still open |
-| 2 | Car history | **Done** | `car_ownership.build_car_history`, `GET /cars/{id}/history`, `CarDetailPage.tsx`, search via plate/VIN/customer | Timeline includes visits/comebacks, quotes, ROs, invoices, payments, parts, ownership; filters + document links |
-| 3 | Inventory via PO | **Partial** | `models.PurchaseOrder`, `routers/vendors.py`, `VendorsPage` / `VendorDetailPage` | Vendor PO/consignment records exist; not a full PO → receive → stock-update workflow tied to `Inventory` qty |
-| 4 | Job card → quotation (advance) → RO → invoice | **Partial** | `QuoteCreatePage`, `PendingQuotesPage`, `RepairOrder*`, `Invoice*`, `invoices.py`, `repair_orders.py` | Quotes (`type_of=quote`), advance on invoice, ROs, invoices exist as parallel docs; no enforced job-card entity or strict pipeline state machine |
-| 5 | Barcode inventory | **Partial** | `models.Inventory.barcode`, `routers/inventory.py` (lookup/receive by barcode), `InventoryPage.tsx` | Barcode field + scan/receive endpoints exist; no dedicated barcode label print / gun UX polish |
-| 6 | Car transfer | **Done** | `models.CarOwnership`, `car_ownership.transfer_car_ownership`, `POST /cars/{id}/transfer`, `CarDetailPage` transfer tab | Evidence required; audit logged; invoices stay with original customer; rejects same/deleted owners |
-| 6b | Visit / check-in inspection | **Done** | `models.Visit` / `VisitInspectionItem` / `InspectionTemplate`, `visits.py`, `POST /cars/{id}/visits`, `CarDetailPage` check-in tab, printable sheet | Configurable multi-point checklist, photos, canvas signature, camera capture; signature+inspection required before job card when `car_id` set |
-| 7 | Error prevention | **Partial** → improved | `period_lock.py`, `foundation/*`, validation, idempotency, soft-delete, version | Month lock + uniqueness + foundation guards; remaining: wider Zod form wiring on every page |
-| 8 | Branch hex id | **Done** | `foundation/branch.py`, `foundation/scope.py`, `foundation/hooks.py`, `main.py` middleware, `migrate_foundation.py` | 8-char hex branch, default seed `a1b2c3d4`, auto-assign on create, ORM list scoping via session hooks + `X-Branch-Id` |
-| 9 | Offline / cloud sync | **Missing** | — | No sync queue, conflict resolution, or offline client store (ZKTeco `last_sync` is device attendance only) |
-| 10 | Finance transparency with evidence | **Partial** | `VendorLedger.attachment_path`, `foundation/attachments.py` | Vendor ledger attachments + Attachment service; expenses/cash/invoices not fully wired to evidence yet |
-| 11 | Money In page | **Partial** | `CashReceivedPage.tsx`, `routers/cash_received.py`, `FinanceHubPage.tsx` | Cash received page exists; not branded/unified as “Money In” covering all inflow types |
-| 12 | Money Out page | **Partial** | `ExpensesPage.tsx` (daily/major), salaries via HR | Expenses exist; no single “Money Out” facade covering expenses + payroll + vendor payments |
-| 13 | WhatsApp | **Done** | `whatsapp_notifications.py`, `routers/whatsapp.py`, `WhatsAppPage.tsx` | Notifications, history, resend, test connection; Twilio optional (logs if unset) |
-| 14 | Monthly / yearly closing | **Partial** | `FinancialPeriod`, `period_lock.py`, `routers/periods.py`, `MonthlyLedgerPage.tsx` | Monthly open/close exists; no formal yearly close / retained-earnings workflow |
-| 15 | Full reports | **Partial** | `routers/reports.py`, `ReportsPage.tsx` | Aggregations exist; branch-aware ORM lists apply via hooks, but raw SQL report paths may still need explicit `branch_id` filters |
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | Entry-to-exit printables | **Partial** | Shared A4 CSS + packet; more stage polish open |
+| 2 | Car history | **Done** | |
+| 3 | Inventory via PO | **Done** | `POST /purchase-orders/{id}/receive`, shortages → draft POs |
+| 4 | Job card → quote → RO → invoice chain | **Done** | + next-action banner |
+| 5 | Barcode inventory | **Partial** | Field + scan; label UX open |
+| 6 | Car transfer | **Done** | |
+| 6b | Visit / check-in | **Done** | |
+| 7 | Error prevention | **Done** | Foundation + wired overrides |
+| 8 | Branch hex id | **Done** | |
+| 9 | Offline sync | **Missing** | Deferred |
+| 10 | Finance evidence | **Partial** | Deposits/transfers; expenses optional next |
+| 11 | Money In | **Done** | `/money-in` facade |
+| 12 | Money Out | **Done** | `/money-out` facade (payroll separate) |
+| 13 | WhatsApp | **Done** | |
+| 14 | Monthly / yearly close | **Partial** | Monthly exists; yearly open |
+| 15 | Full reports | **Partial** | KPIs + invoices CSV export; more exports open |
+| Design system | Shell + tokens | **Done** | Orange/black/off-white, Montserrat / Source Code Pro |
 
 ---
 
-## Foundation checklist (blocking later modules)
+## Foundation
 
-| Foundation item | Status | Files | Notes |
-|-----------------|--------|-------|-------|
-| `branch_id` (8-char hex) + default seed | **Done** | `models.Branch`, `foundation/branch.py`, `foundation/scope.py`, `foundation/hooks.py`, `deps.get_branch_id`, middleware | Shared hooks auto-assign on insert + filter lists (`do_orm_execute` / `scoped_query`); no per-router copy-paste |
-| Base columns: id, created_at/by, updated_at/by, version, deleted_at | **Done** (additive) | `FoundationMixin`, migration | Integer ids kept; `version` + `deleted_at` on business tables |
-| Audit log (who/what/old/new/reason) | **Done** | `foundation/audit.py`, `foundation/hooks.py`, `foundation/overrides.py` | Auto audit on flush; reason required for price/discount-above-threshold/stock/deletes/payment-gate/evidence/period-reopen |
-| Money as integer paisa | **Partial** | `foundation/money.py`, `shared/src/money.ts` | Helpers ready; legacy Float/Numeric columns unchanged (data-safe) |
-| Shared validation + DB constraints | **Done** | `foundation/validation.py`, `schemas_foundation.py`, `shared/src/validation.ts`, CHECK migration | PK phone E.164, reg no, CNIC, non-negative qty/price; DB CHECKs on key tables |
-| Reusable attachment / evidence service | **Partial** | `foundation/attachments.py`, `models.Attachment`, car transfer evidence | Wired for car ownership transfers; expenses/cash/invoices still next |
-| Role / permission map | **Done** | `foundation/roles.py`, `deps.require_permissions`, `AdminPage.tsx` | Includes granular: `approve_discount`, `override_payment_gate`, `qc_signoff`, `adjust_stock`, `reopen_period`, `approve_evidence_exception` |
-| Soft delete everywhere | **Done** | `foundation/hooks.py` (`Session.delete`), `soft_delete.py` | Hard `db.delete` → soft when `deleted_at` exists; lists exclude deleted |
-| Optimistic locking (`version`) | **Done** | `foundation/versioning.py`, update routes (cars/expenses/invoices/inventory), `web/src/api/client.ts` 409 | 409 + `VersionConflictError` on client |
-| Idempotency-Key on creates | **Done** | `foundation/idempotent.py` (sync+async), invoices/expenses/cash-received/POs + invoice payment PUT | Header honored; client auto-sends on `api.post` / `api.putIdempotent` |
-| Workshop settings thresholds | **Done** | `models.AppSetting`, `foundation/settings.py`, `GET/PUT /api/settings/workshop`, `SettingsPage` | Defaults: discount approval 10%, receipt Rs 500, comeback 14d, payment gate on, expense heads list |
+All foundation checklist items remain **Done** (branch, audit, soft delete, version, idempotency, settings, granular perms, validation CHECKs). Money-as-paisa still **Partial** (helpers only).
 
----
+## Pipeline
+
+Labour codes, job cards, WhatsApp line approval, deposits, reserve/issue/return, variations, QC, invoice lock, payment gate, gate pass, legacy visit backfill — **Done**. Next-action API — **Done**.
+
+## Docs
+
+- Root `design.md`, `architecture.md`
+- This gap report
 
 ## Tests / CI
 
 | Item | Status |
 |------|--------|
-| Automated test suite | **Partial** → expanded — foundation + car transfer/history + **visit signature/inspection + job-card gate** (`test_visits.py`) |
-| Lint | `web`: `oxlint` (warnings only on pre-existing purity patterns) |
-| Build | `web`: `tsc -b && vite build` |
+| pytest | foundation + pipeline + dashboard/PO/money/next_action |
+| Lint | `oxlint` |
+| Build | `tsc -b && vite build` |

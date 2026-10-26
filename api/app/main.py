@@ -15,14 +15,23 @@ from app.routers import auth as auth_router
 from app.routers import (
     cars,
     cash_received,
+    deposits,
     expenses,
+    gate_passes,
     hr,
     inventory,
     invoices,
+    job_cards,
+    labour_codes,
+    money_facade,
     periods,
+    pipeline_status,
+    public_quotes,
+    qc,
     repair_orders,
     reports,
     settings as settings_router,
+    variations,
     vendors,
     whatsapp,
 )
@@ -101,6 +110,15 @@ app.include_router(vendors.router, prefix="")  # routes already /api/...
 app.include_router(hr.router, prefix="")  # /api/... and /iclock/...
 app.include_router(settings_router.router, prefix="/api")
 app.include_router(periods.router, prefix="/api")
+app.include_router(labour_codes.router, prefix="/api")
+app.include_router(job_cards.router, prefix="/api")
+app.include_router(public_quotes.router, prefix="/api")
+app.include_router(deposits.router, prefix="/api")
+app.include_router(variations.router, prefix="/api")
+app.include_router(qc.router, prefix="/api")
+app.include_router(gate_passes.router, prefix="/api")
+app.include_router(pipeline_status.router, prefix="/api")
+app.include_router(money_facade.router, prefix="/api")
 app.mount("/uploads", StaticFiles(directory=str(_UPLOAD_DIR)), name="uploads")
 
 

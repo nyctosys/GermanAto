@@ -274,16 +274,41 @@ def visit_is_complete(visit: Visit) -> bool:
     return all((i.result or "").lower() in _VALID_RESULTS for i in visit.items)
 
 
+def _load_visit_for_car(db: Session, *, car_id: int, visit_id: int) -> Visit:
+    visit = (
+        db.query(Visit)
+        .options(joinedload(Visit.items), joinedload(Visit.signature))
+        .filter(Visit.id == int(visit_id), Visit.car_id == int(car_id))
+        .first()
+    )
+    if visit is None or getattr(visit, "deleted_at", None) is not None:
+        raise HTTPException(status_code=400, detail="Visit not found for this car")
+    if not visit_is_complete(visit):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Visit must include customer signature and a full inspection checklist",
+                "require_signature": not bool(visit.signature_attachment_id),
+                "require_inspection": True,
+            },
+        )
+    return visit
+
+
 def require_visit_for_job_card(
     db: Session,
     *,
     car_id: int | None,
     visit_id: int | None,
+    for_repair_order: bool = True,
 ) -> Visit | None:
     """When a car is linked, a completed signed inspection visit is required.
 
-    Returns the visit (and caller should set repair_order_id). Returns None only
+    Returns the visit (and RO caller should set repair_order_id). Returns None only
     when car_id is absent (legacy walk-in without car record).
+
+    for_repair_order=True also rejects visits already linked to an RO.
+    Job cards use for_repair_order=False (visit may later open an RO).
     """
     if not car_id:
         return None
@@ -295,27 +320,11 @@ def require_visit_for_job_card(
                 "require_visit": True,
             },
         )
-    visit = (
-        db.query(Visit)
-        .options(joinedload(Visit.items), joinedload(Visit.signature))
-        .filter(Visit.id == int(visit_id), Visit.car_id == int(car_id))
-        .first()
-    )
-    if visit is None or getattr(visit, "deleted_at", None) is not None:
-        raise HTTPException(status_code=400, detail="Visit not found for this car")
-    if visit.repair_order_id:
+    visit = _load_visit_for_car(db, car_id=int(car_id), visit_id=int(visit_id))
+    if for_repair_order and visit.repair_order_id:
         raise HTTPException(
             status_code=400,
             detail="This check-in visit is already linked to a repair order",
-        )
-    if not visit_is_complete(visit):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "Visit must include customer signature and a full inspection checklist",
-                "require_signature": not bool(visit.signature_attachment_id),
-                "require_inspection": True,
-            },
         )
     return visit
 

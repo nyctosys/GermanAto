@@ -419,7 +419,7 @@ def update_purchase_order_status(po_id: int, request: Request, db: Session = Dep
             return _json({'error': 'Purchase order not found'}, 404)
         data = body or {}
         new_status = data.get('status')
-        if new_status not in ['ordered', 'in transit', 'received']:
+        if new_status not in ['ordered', 'in transit', 'received', 'partial']:
             return _json({'error': 'Invalid status'}, 400)
         old_status = po.status
         po.status = new_status
@@ -434,3 +434,88 @@ def update_purchase_order_status(po_id: int, request: Request, db: Session = Dep
         db.rollback()
         logger.error(f"Error updating purchase order status: {e}")
         return _json({'error': 'Failed to update status'}, 500)
+
+
+@router.post('/api/purchase-orders/{po_id:int}/receive')
+@idempotent_create
+def receive_purchase_order(
+    po_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager'])),
+):
+    """Partial or full goods receive → stock + vendor ledger debit."""
+    from app.po_receive import receive_po
+
+    po = db.get(PurchaseOrder, po_id)
+    if not po or getattr(po, 'deleted_at', None):
+        return _json({'error': 'Purchase order not found'}, 404)
+    data = body or {}
+    qty = int(data.get('quantity') or data.get('qty') or 0)
+    inv_id = data.get('inventory_id')
+    receive_po(
+        db,
+        po,
+        qty=qty,
+        inventory_id=int(inv_id) if inv_id else None,
+        user=current_user,
+    )
+    db.commit()
+    return _json({'message': 'Goods received', 'purchase_order': po.to_dict()}, 200)
+
+
+@router.get('/api/quotes/{quote_id:int}/shortages')
+def quote_shortages(
+    quote_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager', 'manager', 'service_advisor'])),
+):
+    from app.po_receive import shortage_lines
+
+    return _json({'quote_id': quote_id, 'shortages': shortage_lines(db, quote_id)})
+
+
+@router.post('/api/quotes/{quote_id:int}/create-pos-from-shortages')
+@idempotent_create
+def create_pos_from_shortages(
+    quote_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager', 'manager'])),
+):
+    """Draft POs for shortage lines (requires vendor_id)."""
+    from datetime import date
+    from decimal import Decimal
+    from app.po_receive import shortage_lines
+
+    data = body or {}
+    vendor_id = data.get('vendor_id')
+    if not vendor_id:
+        return _json({'error': 'vendor_id is required'}, 400)
+    created = []
+    for line in shortage_lines(db, quote_id):
+        qty = int(line['shortage'])
+        rate = Decimal(str(line['rate'] or 0))
+        po = PurchaseOrder(
+            vendor_id=int(vendor_id),
+            date=date.today(),
+            invoice_no=f"PO-Q{quote_id}-{line['inventory_id']}",
+            item_name=line['item_name'],
+            quantity=qty,
+            rate=rate,
+            amount=(rate * qty).quantize(Decimal('0.01')),
+            remarks=f"Shortage from quote #{quote_id}",
+            status='ordered',
+            inventory_id=line['inventory_id'],
+            qty_received=0,
+            quote_invoice_id=quote_id,
+            created_by_user=getattr(current_user, 'username', None),
+        )
+        db.add(po)
+        db.flush()
+        created.append(po.to_dict())
+    db.commit()
+    return _json({'created': created}, 201)

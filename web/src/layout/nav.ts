@@ -18,6 +18,7 @@ export const NAV: NavGroup[] = [
   {
     group: 'Create',
     items: [
+      { label: 'New job card', to: '/job-cards/new', permission: 'repair-order' },
       { label: 'New invoice', to: '/invoices/new', permission: 'invoice' },
       { label: 'New quote', to: '/quotes/new', permission: 'invoice' },
       { label: 'New repair order', to: '/repair-orders/new', permission: 'repair-order' },
@@ -26,9 +27,11 @@ export const NAV: NavGroup[] = [
   {
     group: 'Sales',
     items: [
+      { label: 'Job cards', to: '/job-cards', permission: 'repair-order' },
       { label: 'Invoices', to: '/invoices', permission: 'invoice' },
       { label: 'Quotes', to: '/quotes/pending', permission: 'invoice' },
       { label: 'Repair orders', to: '/repair-orders', permission: 'repair-order' },
+      { label: 'Labour codes', to: '/labour-codes', permission: 'repair-order' },
     ],
   },
   {
@@ -43,6 +46,8 @@ export const NAV: NavGroup[] = [
   {
     group: 'Finance',
     items: [
+      { label: 'Money In', to: '/money-in', permission: 'daily-expenses' },
+      { label: 'Money Out', to: '/money-out', permission: 'daily-expenses' },
       { label: 'Daily expenses', to: '/finance/daily-expenses', permission: 'daily-expenses' },
       { label: 'Major expenses', to: '/finance/major-expenses', permission: 'major-expenses' },
       { label: 'Cash received', to: '/finance/cash-received', permission: 'daily-expenses' },

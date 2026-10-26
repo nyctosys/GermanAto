@@ -691,11 +691,7 @@ def _user_permissions(db, user):
 
 @router.get('/dashboard')
 def get_dashboard(request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Role-scoped dashboard: the pending work this user can act on.
-
-    One request instead of one per widget, and each section is omitted entirely
-    when the user lacks the permission that guards it.
-    """
+    """Role-scoped dashboard: KPIs + pending work this user can act on."""
     permissions = _user_permissions(db, current_user)
 
     data, failed = {}, []
@@ -710,9 +706,66 @@ def get_dashboard(request: Request, db: Session = Depends(get_db), current_user=
             logger.error(f"Dashboard section '{section}' failed: {e}")
             failed.append(section)
 
+    kpis = {}
+    try:
+        from app.dashboard_kpis import workshop_kpis
+
+        kpis = workshop_kpis(db)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Dashboard KPIs failed: {e}")
+        failed.append('kpis')
+
     return _json({
+        'kpis': kpis,
         'sections': data,
         'unavailable': failed,
         'role': current_user.role,
         'generated_at': datetime.utcnow().isoformat(),
     }, 200)
+
+
+@router.get('/reports/export/invoices.csv')
+def export_invoices_csv(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant', 'manager'])),
+):
+    """CSV export of invoices (branch-scoped via ORM hooks)."""
+    import csv
+    import io
+
+    from app.foundation.context import get_branch
+    from app.invoice_math import invoice_amount_remaining
+
+    rows = (
+        db.query(Invoice)
+        .filter(Invoice.deleted_at.is_(None), Invoice.type_of == 'invoice')
+        .order_by(Invoice.id.desc())
+        .limit(5000)
+        .all()
+    )
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        ['id', 'customer_name', 'reg_no', 'net_total', 'paid_amount', 'balance', 'status', 'branch_id', 'created_at']
+    )
+    for inv in rows:
+        writer.writerow(
+            [
+                inv.id,
+                inv.customer_name,
+                inv.customer_reg_no,
+                inv.net_total,
+                inv.paid_amount or 0,
+                invoice_amount_remaining(inv),
+                inv.status,
+                inv.branch_id or get_branch(),
+                inv.created_at.isoformat() if inv.created_at else '',
+            ]
+        )
+    return Response(
+        content=buf.getvalue(),
+        media_type='text/csv',
+        headers={'Content-Disposition': 'attachment; filename="invoices.csv"'},
+    )
