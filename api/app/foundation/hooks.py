@@ -115,7 +115,10 @@ def _before_flush(session: Session, flush_context, instances) -> None:
     user = get_user()
     reason = get_reason()
 
+    from app.document_numbers import stamp_actors
     from app.models import FoundationMixin
+
+    stamp_actors(session)
 
     for obj in list(session.new):
         # Only FoundationMixin rows get auto branch/version (not AppSetting / AppLog).
@@ -220,12 +223,21 @@ def _do_orm_execute(execute_state) -> None:
         )
 
 
+def _before_commit(session: Session) -> None:
+    """Assign permanent document codes after PKs exist, then flush once before commit."""
+    from app.document_numbers import assign_document_numbers
+
+    if assign_document_numbers(session):
+        session.flush()
+
+
 def install_foundation_hooks() -> None:
     global _HOOKS_INSTALLED
     if _HOOKS_INSTALLED:
         return
     Session.delete = _soft_aware_delete  # type: ignore[method-assign]
     event.listen(Session, "before_flush", _before_flush)
+    event.listen(Session, "before_commit", _before_commit)
     event.listen(Session, "do_orm_execute", _do_orm_execute)
     _HOOKS_INSTALLED = True
     logger.info("Foundation session hooks installed")

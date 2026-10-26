@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
 import { useMemo, type FormEvent } from 'react'
-import { api } from '../api/client'
+import { getCustomerBundle, type EntityHit } from '../api/entities'
+import { EntitySelect } from '../components/EntitySelect'
 import { Field, Money, Panel } from '../components/ui'
 import {
   calcNet,
@@ -8,25 +8,6 @@ import {
   type LabourLine,
   type LineItem,
 } from './invoiceTypes'
-
-type Customer = { id: number; name: string; phone: string; address: string }
-type Car = {
-  id: number
-  make: string
-  model: string
-  plate_no?: string
-  mileage?: string
-  vin?: string
-  color?: string
-  chasis_no?: string
-  customer_id?: number | null
-}
-type InvItem = {
-  id: number
-  name: string
-  manufacturer_part_number?: string
-  price?: number
-}
 
 export function InvoiceDocumentForm({
   title,
@@ -45,24 +26,6 @@ export function InvoiceDocumentForm({
   showAdvance?: boolean
   submitLabel?: string
 }) {
-  const customers = useQuery({
-    queryKey: ['customers'],
-    queryFn: () => api.get<Customer[]>('/api/customers'),
-  })
-  const cars = useQuery({
-    queryKey: ['cars'],
-    queryFn: () => api.get<Car[]>('/api/cars'),
-  })
-  const inventory = useQuery({
-    queryKey: ['inventory-all'],
-    queryFn: async () => {
-      const data = await api.get<{ items?: InvItem[] } | InvItem[]>(
-        '/api/inventory?per_page=500',
-      )
-      return Array.isArray(data) ? data : data.items || []
-    },
-  })
-
   const net = useMemo(() => calcNet(form), [form])
   const tax = form.include_tax ? net * 0.17 : 0
   const balance = net + tax - Number(form.discount) - Number(form.advance)
@@ -77,37 +40,55 @@ export function InvoiceDocumentForm({
     setForm({ ...form, labours })
   }
 
-  function pickCustomer(id: string) {
-    const c = (customers.data || []).find((x) => x.id === Number(id))
-    if (!c) {
+  async function pickCustomer(hit: EntityHit | null) {
+    if (!hit) {
       setForm({ ...form, customer_id: null })
       return
     }
+    const bundle = await getCustomerBundle(hit.id)
+    const c = bundle.customer
     setForm({
       ...form,
       customer_id: c.id,
-      customer_name: c.name,
-      customer_phone: c.phone,
-      customer_address: c.address,
+      customer_name: c.name || '',
+      customer_phone: c.phone || '',
+      customer_address: c.address || '',
+      car_id: null,
+      customer_reg_no: '',
+      customer_made: '',
+      customer_vin: '',
+      customer_color: '',
+      customer_chasis: '',
     })
   }
 
-  function pickCar(id: string) {
-    const c = (cars.data || []).find((x) => x.id === Number(id))
-    if (!c) {
+  function pickCar(hit: EntityHit | null) {
+    if (!hit) {
       setForm({ ...form, car_id: null })
       return
     }
     setForm({
       ...form,
-      car_id: c.id,
-      customer_reg_no: c.plate_no || '',
-      customer_made: `${c.make} ${c.model}`.trim(),
-      customer_mileage: c.mileage || '',
-      customer_vin: c.vin || '',
-      customer_color: c.color || '',
-      customer_chasis: c.chasis_no || '',
-      customer_id: c.customer_id || form.customer_id,
+      car_id: hit.id,
+      customer_reg_no: hit.plate_no || '',
+      customer_made: `${hit.make || ''} ${hit.model || ''}`.trim(),
+      customer_mileage: hit.mileage || '',
+      customer_vin: hit.vin || '',
+      customer_color: hit.color || '',
+      customer_chasis: hit.chasis_no || '',
+      customer_id: hit.customer_id || form.customer_id,
+      customer_name: hit.customer_name || form.customer_name,
+      customer_phone: hit.customer_phone || form.customer_phone,
+      customer_address: hit.customer_address || form.customer_address,
+    })
+  }
+
+  function pickInventory(idx: number, hit: EntityHit | null) {
+    if (!hit) return
+    updateItem(idx, {
+      product_name: hit.name || '',
+      part_number: hit.part_number || hit.code || '',
+      price: Number(hit.price || 0),
     })
   }
 
@@ -115,29 +96,31 @@ export function InvoiceDocumentForm({
     <form onSubmit={onSubmit} className="stack">
       <Panel title={title}>
         <div className="form-grid">
-          <Field label="Customer">
-            <select
-              value={form.customer_id || ''}
-              onChange={(e) => pickCustomer(e.target.value)}
-            >
-              <option value="">Select / type below</option>
-              {(customers.data || []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Car">
-            <select value={form.car_id || ''} onChange={(e) => pickCar(e.target.value)}>
-              <option value="">Select / type below</option>
-              {(cars.data || []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.make} {c.model} {c.plate_no || ''}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <EntitySelect
+            label="Customer"
+            type="customer"
+            valueId={form.customer_id}
+            displayValue={
+              form.customer_name
+                ? `${form.customer_name} · ${form.customer_phone || ''}`.trim()
+                : ''
+            }
+            onSelect={(hit) => {
+              void pickCustomer(hit)
+            }}
+          />
+          <EntitySelect
+            label="Vehicle"
+            type="car"
+            valueId={form.car_id}
+            customerId={form.customer_id}
+            displayValue={
+              form.customer_reg_no || form.customer_made
+                ? `${form.customer_reg_no} · ${form.customer_made}`.trim()
+                : ''
+            }
+            onSelect={pickCar}
+          />
           <Field label="Customer name">
             <input
               required
@@ -223,22 +206,17 @@ export function InvoiceDocumentForm({
       >
         <div className="line-items">
           {form.items.map((item, idx) => (
-            <div className="line-item" key={idx}>
-              <Field label="Product">
-                <input
-                  list="inv-names"
-                  value={item.product_name}
-                  onChange={(e) => {
-                    const name = e.target.value
-                    const match = (inventory.data || []).find((i) => i.name === name)
-                    updateItem(idx, {
-                      product_name: name,
-                      part_number: match?.manufacturer_part_number || item.part_number,
-                      price: match?.price ?? item.price,
-                    })
-                  }}
-                />
-              </Field>
+            <div className="line-item" key={idx} style={{ gridTemplateColumns: '2fr 1fr 80px 100px auto' }}>
+              <EntitySelect
+                label="Product"
+                type="inventory"
+                displayValue={item.product_name}
+                placeholder="Search inventory…"
+                onSelect={(hit) => {
+                  if (hit) pickInventory(idx, hit)
+                  else updateItem(idx, { product_name: '' })
+                }}
+              />
               <Field label="Part #">
                 <input
                   value={item.part_number}
@@ -273,11 +251,6 @@ export function InvoiceDocumentForm({
             </div>
           ))}
         </div>
-        <datalist id="inv-names">
-          {(inventory.data || []).map((i) => (
-            <option key={i.id} value={i.name} />
-          ))}
-        </datalist>
       </Panel>
 
       <Panel

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { Empty, ErrorBox, Loading, PageHeader, Panel } from '../components/ui'
 
@@ -16,7 +16,9 @@ type RepairOrder = {
 
 export function RepairOrdersPage() {
   const qc = useQueryClient()
-  const [status, setStatus] = useState('')
+  const [sp] = useSearchParams()
+  const overdueOnly = sp.get('overdue') === '1'
+  const [status, setStatus] = useState(sp.get('status') || '')
   const q = useQuery({
     queryKey: ['repair-orders', status],
     queryFn: async () => {
@@ -28,6 +30,18 @@ export function RepairOrdersPage() {
       return Array.isArray(data) ? data : data.repair_orders || []
     },
   })
+
+  const rows = useMemo(() => {
+    const list = q.data || []
+    if (!overdueOnly) return list
+    const cutoff = Date.now() - 7 * 86400000
+    return list.filter((ro) => {
+      if (!ro.created_at) return false
+      const done = (ro.current_status || '').toLowerCase()
+      if (done === 'complete' || done === 'completed') return false
+      return new Date(ro.created_at).getTime() < cutoff
+    })
+  }, [q.data, overdueOnly])
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status: next }: { id: number; status: string }) =>
@@ -43,7 +57,7 @@ export function RepairOrdersPage() {
   return (
     <div>
       <PageHeader
-        title="Repair orders"
+        title={overdueOnly ? 'Overdue repair orders' : 'Repair orders'}
         actions={
           <Link className="btn" to="/repair-orders/new">
             New repair order
@@ -51,7 +65,7 @@ export function RepairOrdersPage() {
         }
       />
       <Panel
-        title="Orders"
+        title={overdueOnly ? 'Open longer than 7 days' : 'Orders'}
         actions={
           <select
             className="select"
@@ -69,8 +83,8 @@ export function RepairOrdersPage() {
       >
         {q.isLoading ? <Loading /> : null}
         {q.error ? <ErrorBox error={q.error} /> : null}
-        {!q.isLoading && !(q.data || []).length ? <Empty /> : null}
-        {(q.data || []).length > 0 ? (
+        {!q.isLoading && !rows.length ? <Empty /> : null}
+        {rows.length > 0 ? (
           <div className="table-wrap">
             <table className="data">
               <thead>
@@ -85,7 +99,7 @@ export function RepairOrdersPage() {
                 </tr>
               </thead>
               <tbody>
-                {(q.data || []).map((ro) => (
+                {rows.map((ro) => (
                   <tr key={ro.id}>
                     <td>{ro.id}</td>
                     <td>{ro.customer_name}</td>

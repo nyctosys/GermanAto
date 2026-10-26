@@ -15,7 +15,7 @@ This document describes **what exists in the repo today**, plus conventions for 
 | Database | PostgreSQL (Docker `germanato-db` or local) | `DATABASE_URL` in `api/.env` |
 | Shared client schemas | Zod package `@germanato/shared` | `shared/` |
 | Schema creation | `Base.metadata.create_all` on API startup | `api/app/main.py` lifespan |
-| Additive migrations | `python migrate_foundation.py` | `api/migrate_foundation.py` |
+| Additive migrations | `migrate_foundation.py`, `migrate_inventory.py`, `migrate_shared_foundation.py` | `api/migrate_*.py` |
 
 There is **no Alembic**. There is **no Express/Node API**. There is **no monorepo workspace tooling** beyond `file:` dependency from `web` → `shared`.
 
@@ -83,7 +83,8 @@ Customer / Car ── linked from Invoice, RepairOrder (nullable FKs, SET NULL)
 Invoice ──< InvoiceItem, InvoiceLabour
 RepairOrder ──< RepairOrderPart, RepairOrderLabour
 RepairOrderPart >── Inventory (optional)
-Inventory ──< InventoryTransaction
+Inventory ──< InventoryTransaction (stock movements: po_receive/reserve/release/issue_to_ro/return_from_ro/adjustment)
+PurchaseOrder ── GRN → Inventory qty + avg_cost; VendorLedger payable
 
 Vendor ──< VendorLedger, PurchaseOrder
 Worker ──< AttendanceRecord, SalaryAdvance, PayrollRun

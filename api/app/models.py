@@ -157,6 +157,7 @@ class Invoice(FoundationMixin, Base):
     __tablename__ = "invoice"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     customer_name: Mapped[str] = mapped_column(String(255))
     customer_address: Mapped[str] = mapped_column(String(255))
@@ -228,17 +229,47 @@ class Inventory(FoundationMixin, Base):
     manufacturer_part_number: Mapped[str | None] = mapped_column(String(100), unique=True)
     name: Mapped[str] = mapped_column(String(255))
     category: Mapped[str] = mapped_column(String(100))
-    quantity: Mapped[int] = mapped_column(Integer, default=0)
-    price: Mapped[float] = mapped_column(Float, default=0.0)
+    quantity: Mapped[int] = mapped_column(Integer, default=0)  # on_hand
+    reserved: Mapped[int] = mapped_column(Integer, default=0)
+    price: Mapped[float] = mapped_column(Float, default=0.0)  # sell price (legacy)
+    avg_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
     description: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(String(255))
-    reorder_level: Mapped[int] = mapped_column(Integer, default=5)
+    reorder_level: Mapped[int] = mapped_column(Integer, default=5)  # min_level alias
     reorder_quantity: Mapped[int] = mapped_column(Integer, default=10)
+    min_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    superseded_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inventory.id"), nullable=True
+    )
+    alternate_codes: Mapped[str | None] = mapped_column(Text)  # comma-separated cross-refs
+    pending_purchase: Mapped[bool] = mapped_column(Boolean, default=False)
     image_path: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+    superseded_by: Mapped["Inventory | None"] = relationship(
+        "Inventory",
+        remote_side="Inventory.id",
+        foreign_keys=[superseded_by_id],
+        uselist=False,
+    )
+
+    @property
+    def on_hand(self) -> int:
+        return int(self.quantity or 0)
+
+    @property
+    def available(self) -> int:
+        return int(self.quantity or 0) - int(self.reserved or 0)
+
+    @property
+    def effective_min_level(self) -> int:
+        if self.min_level is not None:
+            return int(self.min_level)
+        return int(self.reorder_level or 0)
 
     def generate_part_number(self) -> str:
         """Next unused PN### code.
@@ -277,39 +308,52 @@ class Customer(FoundationMixin, Base):
     __tablename__ = "customer"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
     name: Mapped[str | None] = mapped_column(String(255))
-    phone: Mapped[str | None] = mapped_column(String(20))
+    phone: Mapped[str | None] = mapped_column(String(20), index=True)
+    alternate_phone: Mapped[str | None] = mapped_column(String(20), index=True)
     address: Mapped[str | None] = mapped_column(String(255))
+    customer_type: Mapped[str | None] = mapped_column(String(40), default="retail")
+    notes: Mapped[str | None] = mapped_column(Text)
+    # Communication preferences / consent (WhatsApp, SMS, call)
+    consent_whatsapp: Mapped[bool] = mapped_column(Boolean, default=False)
+    consent_sms: Mapped[bool] = mapped_column(Boolean, default=False)
+    consent_call: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    updated_by_user: Mapped[str | None] = mapped_column(String(80))
 
-    cars: Mapped[list[Car]] = relationship(
-        "Car", backref="customer", cascade="all, delete-orphan"
-    )
-
-    @property
-    def code(self) -> str:
-        return f"CN{self.id:03d}" if self.id else ""
+    # No delete-orphan: vehicles keep history/ownership when detached from a customer.
+    cars: Mapped[list[Car]] = relationship("Car", backref="customer")
 
 
 class Car(FoundationMixin, Base):
     __tablename__ = "car"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
     make: Mapped[str | None] = mapped_column(String(100))
     model: Mapped[str | None] = mapped_column(String(100))
-    plate_no: Mapped[str | None] = mapped_column(String(20))
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    plate_no: Mapped[str | None] = mapped_column(String(20), index=True)
     mileage: Mapped[str | None] = mapped_column(String(50))
-    vin: Mapped[str | None] = mapped_column(String(17))
+    vin: Mapped[str | None] = mapped_column(String(17), index=True)
     color: Mapped[str | None] = mapped_column(String(50))
     chasis_no: Mapped[str | None] = mapped_column(String(50))
-    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customer.id"))
+    engine_no: Mapped[str | None] = mapped_column(String(50))
+    notes: Mapped[str | None] = mapped_column(Text)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer.id", ondelete="SET NULL"), index=True
+    )
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    updated_by_user: Mapped[str | None] = mapped_column(String(80))
 
     ownership_transfers: Mapped[list["CarOwnership"]] = relationship(
         "CarOwnership",
@@ -323,6 +367,7 @@ class RepairOrder(FoundationMixin, Base):
     __tablename__ = "repair_order"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
     customer_name: Mapped[str] = mapped_column(String(255))
     customer_phone: Mapped[str] = mapped_column(String(20))
     customer_address: Mapped[str] = mapped_column(String(255))
@@ -372,6 +417,9 @@ class RepairOrderPart(FoundationMixin, Base):
     part_number: Mapped[str | None] = mapped_column(String(100))
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    # shop_stock | customer_supplied — customer-supplied: labour only, no stock/margin
+    ownership_type: Mapped[str] = mapped_column(String(30), default="shop_stock")
+    old_parts_returned: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class RepairOrderLabour(FoundationMixin, Base):
@@ -387,6 +435,7 @@ class Expense(FoundationMixin, Base):
     __tablename__ = "expense"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
     date: Mapped[date] = mapped_column(Date)
     category: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(255))
@@ -396,12 +445,15 @@ class Expense(FoundationMixin, Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    updated_by_user: Mapped[str | None] = mapped_column(String(80))
 
 
 class CashReceived(FoundationMixin, Base):
     __tablename__ = "cash_received"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
     date: Mapped[date] = mapped_column(Date)
     description: Mapped[str] = mapped_column(String(255))
     amount: Mapped[float] = mapped_column(Float)
@@ -412,12 +464,15 @@ class CashReceived(FoundationMixin, Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    updated_by_user: Mapped[str | None] = mapped_column(String(80))
 
     invoice: Mapped[Invoice | None] = relationship("Invoice", backref="cash_receipts")
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "document_no": self.document_no,
             "date": self.date.isoformat() if self.date else None,
             "description": self.description,
             "amount": self.amount,
@@ -508,10 +563,11 @@ class Vendor(FoundationMixin, Base):
     __tablename__ = "vendors"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     company_name: Mapped[str] = mapped_column(String(255))
     contact_person: Mapped[str] = mapped_column(String(255))
-    phone: Mapped[str] = mapped_column(String(20))
+    phone: Mapped[str] = mapped_column(String(20), index=True)
     email: Mapped[str | None] = mapped_column(String(255))
     address: Mapped[str] = mapped_column(Text)
     cnic: Mapped[str | None] = mapped_column(String(20))
@@ -519,6 +575,8 @@ class Vendor(FoundationMixin, Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    updated_by_user: Mapped[str | None] = mapped_column(String(80))
 
     ledger_entries: Mapped[list[VendorLedger]] = relationship(
         "VendorLedger", backref="vendor", cascade="all, delete-orphan"
@@ -533,6 +591,7 @@ class Vendor(FoundationMixin, Base):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "code": self.code,
             "name": self.name,
             "company_name": self.company_name,
             "contact_person": self.contact_person,
@@ -582,23 +641,36 @@ class VendorLedger(FoundationMixin, Base):
 
 
 class PurchaseOrder(FoundationMixin, Base):
+    """PO workflow: draft → ordered → partial/received → closed.
+
+    `quantity` = ordered qty; `qty_received` accumulates GRNs.
+    Cost/avg cost updates only on receive (see app.stock.po_receive).
+    """
+
     __tablename__ = "purchase_orders"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
     vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id"))
+    inventory_id: Mapped[int | None] = mapped_column(ForeignKey("inventory.id"), nullable=True)
     date: Mapped[date] = mapped_column(Date)
     invoice_no: Mapped[str] = mapped_column(String(100))
     item_name: Mapped[str] = mapped_column(String(255))
     quantity: Mapped[int] = mapped_column(Integer)
+    qty_received: Mapped[int] = mapped_column(Integer, default=0)
     rate: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     remarks: Mapped[str | None] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(50), default="ordered")
+    status: Mapped[str] = mapped_column(String(50), default="draft")
+    receipt_attachment_path: Mapped[str | None] = mapped_column(String(255))
     created_by_user: Mapped[str | None] = mapped_column(String(80))
+    updated_by_user: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+    inventory: Mapped[Inventory | None] = relationship("Inventory")
 
     def __repr__(self) -> str:
         return f"<PurchaseOrder {self.vendor_id} - {self.item_name}>"
@@ -606,15 +678,20 @@ class PurchaseOrder(FoundationMixin, Base):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "document_no": self.document_no,
             "vendor_id": self.vendor_id,
+            "inventory_id": self.inventory_id,
             "date": self.date.strftime("%Y-%m-%d"),
             "invoice_no": self.invoice_no,
             "item_name": self.item_name,
             "quantity": self.quantity,
+            "qty_received": int(self.qty_received or 0),
+            "qty_remaining": max(0, int(self.quantity or 0) - int(self.qty_received or 0)),
             "rate": float(self.rate),
             "amount": float(self.amount),
             "remarks": self.remarks,
             "status": self.status,
+            "receipt_attachment_path": self.receipt_attachment_path,
             "created_by_user": self.created_by_user,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "updated_at": _clock(self.updated_at, "%Y-%m-%d %H:%M:%S"),
@@ -885,24 +962,39 @@ class Category(FoundationMixin, Base):
 
 
 class InventoryTransaction(FoundationMixin, Base):
+    """StockMovement ledger (legacy table name kept for existing data).
+
+    Types: po_receive, reserve, release, issue_to_ro, return_from_ro, adjustment
+    (+ legacy issue_out / received).
+    """
+
     __tablename__ = "inventory_transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     inventory_id: Mapped[int] = mapped_column(ForeignKey("inventory.id"))
-    transaction_type: Mapped[str] = mapped_column(String(20))
+    transaction_type: Mapped[str] = mapped_column(String(30))
     quantity: Mapped[int] = mapped_column(Integer)
     previous_quantity: Mapped[int] = mapped_column(Integer)
     new_quantity: Mapped[int] = mapped_column(Integer)
+    reserved_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reserved_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     repair_order_id: Mapped[int | None] = mapped_column(ForeignKey("repair_order.id"))
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_orders.id"), nullable=True
+    )
     reference_description: Mapped[str | None] = mapped_column(String(500))
     created_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"))
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     notes: Mapped[str | None] = mapped_column(Text)
+    reason: Mapped[str | None] = mapped_column(String(255))
+    evidence_path: Mapped[str | None] = mapped_column(String(255))
 
     inventory: Mapped[Inventory] = relationship("Inventory", backref="transactions")
     repair_order: Mapped[RepairOrder | None] = relationship(
         "RepairOrder", backref="inventory_transactions"
     )
+    purchase_order: Mapped[PurchaseOrder | None] = relationship("PurchaseOrder")
     user: Mapped[User | None] = relationship("User", backref="inventory_transactions")
 
     def __repr__(self) -> str:
@@ -915,15 +1007,24 @@ class InventoryTransaction(FoundationMixin, Base):
             "inventory_name": self.inventory.name if self.inventory else None,
             "inventory_part_number": self.inventory.part_number if self.inventory else None,
             "transaction_type": self.transaction_type,
+            "movement_type": self.transaction_type,
             "quantity": self.quantity,
             "previous_quantity": self.previous_quantity,
             "new_quantity": self.new_quantity,
+            "on_hand_before": self.previous_quantity,
+            "on_hand_after": self.new_quantity,
+            "reserved_before": self.reserved_before,
+            "reserved_after": self.reserved_after,
+            "unit_cost": float(self.unit_cost) if self.unit_cost is not None else None,
             "repair_order_id": self.repair_order_id,
+            "purchase_order_id": self.purchase_order_id,
             "reference_description": self.reference_description,
             "created_by": self.created_by,
             "created_by_username": self.user.username if self.user else None,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "notes": self.notes,
+            "reason": self.reason,
+            "evidence_path": self.evidence_path,
         }
 
 
@@ -1212,6 +1313,57 @@ class AppSetting(Base):
         }
 
 
+class GatePass(FoundationMixin, Base):
+    """Vehicle gate entry/exit pass linked to customer, car, optional visit/RO."""
+
+    __tablename__ = "gate_pass"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
+    direction: Mapped[str] = mapped_column(String(10), default="in")  # in | out
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer.id", ondelete="SET NULL"), index=True
+    )
+    car_id: Mapped[int | None] = mapped_column(
+        ForeignKey("car.id", ondelete="SET NULL"), index=True
+    )
+    visit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("visits.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    repair_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("repair_order.id", ondelete="SET NULL"), index=True
+    )
+    plate_no: Mapped[str | None] = mapped_column(String(20))
+    customer_name: Mapped[str | None] = mapped_column(String(255))
+    purpose: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+    passed_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    updated_by_user: Mapped[str | None] = mapped_column(String(80))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "document_no": self.document_no,
+            "direction": self.direction,
+            "customer_id": self.customer_id,
+            "car_id": self.car_id,
+            "visit_id": self.visit_id,
+            "repair_order_id": self.repair_order_id,
+            "plate_no": self.plate_no,
+            "customer_name": self.customer_name,
+            "purpose": self.purpose,
+            "notes": self.notes,
+            "passed_at": _clock(self.passed_at, "%Y-%m-%d %H:%M:%S"),
+            "created_by_user": self.created_by_user,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
 def _needs_part_number(obj: object) -> bool:
     if not isinstance(obj, Inventory) or obj.part_number:
         return False
@@ -1247,7 +1399,10 @@ def _demo() -> None:
         customer = Customer(name="Noman")
         db.add(customer)
         db.flush()
-        assert customer.code == "CN001"
+        from app.document_numbers import assign_document_numbers, customer_code
+
+        assign_document_numbers(db)
+        assert customer.code == customer_code(customer.id) == "CN001"
     print("models ok")
 
 

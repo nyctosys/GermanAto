@@ -37,6 +37,7 @@ from app.repair_order_inventory_utils import (
 )
 from app.payroll import preview as payroll_preview, run_payroll, compute_salary
 from app.whatsapp_notifications import whatsapp_notifier
+from app.foundation.idempotent import idempotent_create
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -366,6 +367,8 @@ def code_matches(column, term):
 
 
 def inventory_item_to_dict(item, movement_totals=None):
+    reserved = int(getattr(item, 'reserved', 0) or 0)
+    on_hand = int(item.quantity or 0)
     item_data = {
         'id': item.id,
         'part_number': item.part_number,
@@ -373,13 +376,25 @@ def inventory_item_to_dict(item, movement_totals=None):
         'manufacturer_part_number': item.manufacturer_part_number,
         'name': item.name,
         'category': item.category,
-        'quantity': item.quantity,
+        'quantity': on_hand,
+        'on_hand': on_hand,
+        'reserved': reserved,
+        'available': on_hand - reserved,
+        'price': float(item.price or 0),
+        'avg_cost': float(getattr(item, 'avg_cost', 0) or 0),
         'description': item.description,
         'location': item.location,
         'reorder_level': item.reorder_level,
+        'reorder_quantity': getattr(item, 'reorder_quantity', 10),
+        'min_level': getattr(item, 'min_level', None),
+        'max_level': getattr(item, 'max_level', None),
+        'superseded_by_id': getattr(item, 'superseded_by_id', None),
+        'alternate_codes': getattr(item, 'alternate_codes', None),
+        'pending_purchase': bool(getattr(item, 'pending_purchase', False)),
         'image_path': item.image_path,
-        'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-        'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+        'version': getattr(item, 'version', 1),
+        'created_at': item.created_at.strftime("%Y-%m-%d %H:%M:%S") if item.created_at else None,
+        'updated_at': item.updated_at.strftime("%Y-%m-%d %H:%M:%S") if item.updated_at else None,
     }
 
     if movement_totals and item.id in movement_totals:
@@ -404,11 +419,28 @@ def find_inventory_item_by_code(db: Session, code):
     if not code:
         return None
 
-    return (
+    item = (
         db.query(Inventory).filter(Inventory.barcode == code).first()
         or db.query(Inventory).filter(Inventory.manufacturer_part_number == code).first()
         or db.query(Inventory).filter(Inventory.part_number == code).first()
     )
+    if item:
+        # Follow supersession chain to the active part when present.
+        seen = set()
+        while getattr(item, 'superseded_by_id', None) and item.id not in seen:
+            seen.add(item.id)
+            nxt = db.get(Inventory, item.superseded_by_id)
+            if not nxt:
+                break
+            item = nxt
+        return item
+
+    # Cross-reference / alternate codes (comma-separated)
+    for row in db.query(Inventory).filter(Inventory.alternate_codes.isnot(None)).all():
+        codes = [c.strip() for c in (row.alternate_codes or '').replace(';', ',').split(',') if c.strip()]
+        if code in codes or code.upper() in {c.upper() for c in codes}:
+            return row
+    return None
 
 def ensure_unique_inventory_codes(db: Session, barcode=None, manufacturer_part_number=None, item_id: int=None):
     if barcode:
@@ -579,14 +611,22 @@ async def create_inventory_item(request: Request, db: Session = Depends(get_db),
                 category=category,
                 barcode=barcode,
                 manufacturer_part_number=manufacturer_part_number,
-                quantity=quantity,
+                quantity=max(0, quantity),
+                reserved=0,
                 price=float(data.get('price') or 0),
                 description=description,
                 location=location,
                 reorder_level=reorder_level,
-                image_path=image_path
+                min_level=int(data['min_level']) if data.get('min_level') not in (None, '') else None,
+                max_level=int(data['max_level']) if data.get('max_level') not in (None, '') else None,
+                alternate_codes=data.get('alternate_codes'),
+                pending_purchase=bool(data.get('pending_purchase', False)),
+                image_path=image_path,
             )
             db.add(inventory_item)
+            db.flush()
+            if not inventory_item.part_number:
+                inventory_item.part_number = inventory_item.generate_part_number()
             db.commit()
             
             logger.info(f"Inventory item created successfully: ID {inventory_item.id}")
@@ -865,6 +905,219 @@ def deduct_inventory_items(request: Request, db: Session = Depends(get_db), body
         logger.error(f"Error deducting inventory items: {e}")
         return _json({'error': 'Internal server error'}, 500) 
 
+@router.get('/inventory/reorder-suggestions')
+def reorder_suggestions(request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'inventory_manager', 'accountant']))):
+    """Parts at/below min (reorder) level that can auto-draft POs."""
+    items = db.query(Inventory).order_by(Inventory.name).all()
+    suggestions = []
+    for item in items:
+        min_lvl = item.effective_min_level if hasattr(item, 'effective_min_level') else int(item.reorder_level or 0)
+        available = int(item.quantity or 0) - int(getattr(item, 'reserved', 0) or 0)
+        if available > min_lvl:
+            continue
+        reorder_qty = int(getattr(item, 'reorder_quantity', 10) or 10)
+        max_lvl = getattr(item, 'max_level', None)
+        if max_lvl is not None:
+            reorder_qty = max(reorder_qty, int(max_lvl) - available)
+        suggestions.append({
+            **inventory_item_to_dict(item),
+            'suggested_order_qty': max(1, reorder_qty),
+            'below_min_by': max(0, min_lvl - available),
+        })
+    return _json({'suggestions': suggestions, 'count': len(suggestions)}, 200)
+
+
+@router.post('/inventory/reorder-suggestions/draft-pos')
+@idempotent_create
+def draft_pos_from_reorder(
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'inventory_manager', 'accountant'])),
+):
+    """Auto-draft POs for selected reorder suggestions (requires vendor_id)."""
+    from datetime import date as date_cls
+    from decimal import Decimal
+
+    data = body or {}
+    vendor_id = data.get('vendor_id')
+    if not vendor_id:
+        return _json({'error': 'vendor_id is required'}, 400)
+    vendor = db.get(Vendor, int(vendor_id))
+    if not vendor:
+        return _json({'error': 'Vendor not found'}, 404)
+
+    item_ids = data.get('inventory_ids')
+    if item_ids:
+        items = db.query(Inventory).filter(Inventory.id.in_([int(i) for i in item_ids])).all()
+    else:
+        # All below min
+        all_items = db.query(Inventory).all()
+        items = [
+            i for i in all_items
+            if (int(i.quantity or 0) - int(getattr(i, 'reserved', 0) or 0))
+            <= (i.effective_min_level if hasattr(i, 'effective_min_level') else int(i.reorder_level or 0))
+        ]
+
+    created = []
+    for item in items:
+        available = int(item.quantity or 0) - int(getattr(item, 'reserved', 0) or 0)
+        qty = int(getattr(item, 'reorder_quantity', 10) or 10)
+        max_lvl = getattr(item, 'max_level', None)
+        if max_lvl is not None:
+            qty = max(qty, int(max_lvl) - available)
+        qty = max(1, qty)
+        rate = Decimal(str(getattr(item, 'avg_cost', 0) or item.price or 0))
+        po = PurchaseOrder(
+            vendor_id=vendor.id,
+            inventory_id=item.id,
+            date=date_cls.today(),
+            invoice_no=f"DRAFT-{item.part_number}-{datetime.utcnow().strftime('%H%M%S')}",
+            item_name=item.name,
+            quantity=qty,
+            qty_received=0,
+            rate=rate,
+            amount=rate * qty,
+            remarks=f"Auto-draft reorder (available {available})",
+            status='draft',
+            created_by_user=current_user.username if current_user else None,
+        )
+        db.add(po)
+        db.flush()
+        created.append(po.to_dict())
+    db.commit()
+    return _json({'message': f'Drafted {len(created)} POs', 'purchase_orders': created}, 201)
+
+
+@router.post('/inventory/adjust')
+def adjust_inventory_stock(
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'inventory_manager'])),
+):
+    """Stock adjustment — requires adjust_stock permission, reason, and evidence."""
+    from app.foundation.overrides import require_override
+    from app.stock import StockError, adjust as stock_adjust
+
+    data = body or {}
+    item_id = data.get('inventory_id') or data.get('item_id')
+    if not item_id:
+        return _json({'error': 'inventory_id is required'}, 400)
+    item = db.get(Inventory, int(item_id))
+    if not item:
+        return _json({'error': 'Inventory item not found'}, 404)
+    try:
+        delta = int(data.get('delta') if data.get('delta') is not None else data.get('quantity_change', 0))
+    except (TypeError, ValueError):
+        return _json({'error': 'delta must be an integer'}, 400)
+
+    reason = data.get('reason')
+    evidence = data.get('evidence_path') or data.get('attachment_path')
+    try:
+        require_override(db, current_user, 'stock_adjustment', reason=reason)
+    except Exception as exc:
+        from fastapi import HTTPException
+        if isinstance(exc, HTTPException):
+            detail = exc.detail if isinstance(exc.detail, dict) else {'error': str(exc.detail)}
+            return _json(detail, exc.status_code)
+        raise
+
+    try:
+        txn = stock_adjust(
+            db,
+            item=item,
+            delta=delta,
+            reason=reason,
+            evidence_path=evidence,
+            created_by=current_user.id if current_user else None,
+            notes=data.get('notes'),
+        )
+        db.commit()
+        return _json({'message': 'Stock adjusted', 'item': inventory_item_to_dict(item), 'movement': txn.to_dict()}, 200)
+    except StockError as exc:
+        db.rollback()
+        return _json({'error': str(exc)}, 400)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"adjust stock failed: {e}")
+        return _json({'error': 'Failed to adjust stock'}, 500)
+
+
+@router.post('/inventory/pending-item')
+@idempotent_create
+def create_pending_purchase_item(
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'inventory_manager', 'accountant'])),
+):
+    """Inline add-new-item for job card: zero stock, flagged pending purchase."""
+    data = body or {}
+    name = (data.get('name') or data.get('description') or '').strip()
+    if not name:
+        return _json({'error': 'name is required'}, 400)
+    category = (data.get('category') or 'Pending Purchase').strip()
+    barcode = clean_optional_text(data.get('barcode'))
+    mfr = clean_optional_text(data.get('manufacturer_part_number') or data.get('part_number'))
+    code_error = ensure_unique_inventory_codes(db, barcode=barcode, manufacturer_part_number=mfr)
+    if code_error:
+        return _json({'error': code_error}, 400)
+
+    item = Inventory(
+        name=name,
+        category=category,
+        barcode=barcode,
+        manufacturer_part_number=mfr,
+        quantity=0,
+        reserved=0,
+        price=float(data.get('price') or 0),
+        description=data.get('description'),
+        location=data.get('location'),
+        reorder_level=int(data.get('reorder_level') or data.get('min_level') or 0),
+        min_level=data.get('min_level'),
+        max_level=data.get('max_level'),
+        pending_purchase=True,
+        alternate_codes=data.get('alternate_codes'),
+    )
+    item.part_number = item.generate_part_number()
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return _json(
+        {
+            'message': 'Pending purchase item created',
+            'item': inventory_item_to_dict(item),
+            'pending_purchase': True,
+        },
+        201,
+    )
+
+
+@router.get('/inventory/label/{item_id:int}')
+def inventory_label_data(item_id: int, request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Payload for barcode label printing (name, part #, barcode)."""
+    item = db.get(Inventory, item_id)
+    if not item:
+        return _json({'error': 'Inventory item not found'}, 404)
+    return _json(
+        {
+            'id': item.id,
+            'name': item.name,
+            'part_number': item.part_number,
+            'barcode': item.barcode or item.part_number,
+            'manufacturer_part_number': item.manufacturer_part_number,
+            'location': item.location,
+            'print': {
+                'title': item.name,
+                'subtitle': item.part_number,
+                'barcode_value': item.barcode or item.part_number,
+            },
+        },
+        200,
+    )
+
+
 @router.get('/inventory/lookup')
 def lookup_inventory_by_code(request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Find one inventory item by barcode, manufacturer part number, or internal part number."""
@@ -875,9 +1128,22 @@ def lookup_inventory_by_code(request: Request, db: Session = Depends(get_db), cu
 
         item = find_inventory_item_by_code(db, code)
         if not item:
-            return _json({'error': 'Inventory item not found'}, 404)
+            # Unknown barcode → prefill create-item form for scanner UX (200 so clients can branch)
+            return _json(
+                {
+                    'found': False,
+                    'create_prefill': {
+                        'barcode': code,
+                        'manufacturer_part_number': code,
+                        'name': '',
+                        'category': '',
+                        'quantity': 0,
+                    },
+                },
+                200,
+            )
 
-        return _json({'item': inventory_item_detail_to_dict(db, item)}, 200)
+        return _json({'found': True, 'item': inventory_item_detail_to_dict(db, item)}, 200)
 
     except Exception as e:
         logger.error(f"Error looking up inventory item by code: {e}")
@@ -1326,10 +1592,21 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
         category = str(data.get('category')).strip()
         barcode = clean_optional_text(data.get('barcode'))
         manufacturer_part_number = clean_optional_text(data.get('manufacturer_part_number'))
-        new_quantity = int(data.get('quantity', 0))
         description = str(data.get('description', '')).strip() if data.get('description') else None
         location = str(data.get('location', '')).strip() if data.get('location') else None
         reorder_level = int(data.get('reorder_level', 5))
+
+        # No direct stock/cost edits — use /inventory/adjust or PO receive.
+        if 'quantity' in data and int(data.get('quantity', item.quantity)) != int(item.quantity or 0):
+            return _json(
+                {
+                    'error': 'Direct quantity edits are not allowed. Use POST /api/inventory/adjust '
+                    '(reason + evidence + adjust_stock) or PO receive.',
+                },
+                400,
+            )
+        if 'avg_cost' in data:
+            return _json({'error': 'avg_cost updates only on PO GRN'}, 400)
 
         code_error = ensure_unique_inventory_codes(
             db,
@@ -1339,41 +1616,41 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
         )
         if code_error:
             return _json({'error': code_error}, 400)
-        
-        # Store old quantity for transaction logging
-        old_quantity = item.quantity
-        
-        # Update inventory item
+
+        # Update inventory item (metadata only)
         try:
             item.name = name
             item.category = category
             item.barcode = barcode
             item.manufacturer_part_number = manufacturer_part_number
-            item.quantity = new_quantity
             item.description = description
             item.location = location
             item.reorder_level = reorder_level
+            if data.get('min_level') is not None:
+                item.min_level = int(data['min_level'])
+            if data.get('max_level') is not None:
+                item.max_level = int(data['max_level'])
+            if data.get('reorder_quantity') is not None:
+                item.reorder_quantity = int(data['reorder_quantity'])
+            if data.get('superseded_by_id') is not None:
+                item.superseded_by_id = int(data['superseded_by_id']) or None
+            if 'alternate_codes' in data:
+                item.alternate_codes = data.get('alternate_codes')
+            if data.get('price') is not None:
+                from app.foundation.context import get_reason
+                if not (get_reason() or data.get('reason')):
+                    return _json(
+                        {'error': 'reason is required for price edits', 'require_reason': True},
+                        400,
+                    )
+                item.price = float(data['price'])
             item.image_path = image_path
             bump_version(item)
-            
-            # Log adjustment if quantity changed
-            if old_quantity != new_quantity:
-                quantity_change = new_quantity - old_quantity
-                user_id = current_user.id if current_user else None
-                log_adjustment(db, 
-                    inventory_id=item.id,
-                    quantity_change=quantity_change,
-                    previous_quantity=old_quantity,
-                    new_quantity=new_quantity,
-                    reference_description=f"Manual quantity adjustment - {item.name}",
-                    created_by=user_id,
-                    notes=f"Quantity changed from {old_quantity} to {new_quantity}"
-                )
-            
+
             db.commit()
-            
+
             logger.info(f"Inventory item updated successfully: ID {item.id}")
-            
+
             return _json({
                 'message': 'Inventory item updated successfully',
                 'item': inventory_item_detail_to_dict(db, item)

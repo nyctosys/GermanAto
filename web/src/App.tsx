@@ -6,6 +6,7 @@ import { AdminPage } from './pages/AdminPage'
 import { AttendancePage } from './pages/AttendancePage'
 import { CarDetailPage } from './pages/CarDetailPage'
 import { CarsPage } from './pages/CarsPage'
+import { CustomerDetailPage } from './pages/CustomerDetailPage'
 import { CashReceivedPage } from './pages/CashReceivedPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DevicesPage } from './pages/DevicesPage'
@@ -42,6 +43,7 @@ export default function App() {
               <Route index element={<DashboardPage />} />
               <Route path="cars" element={<CarsPage />} />
               <Route path="cars/:id" element={<CarDetailPage />} />
+              <Route path="customers/:id" element={<CustomerDetailPage />} />
               <Route path="inventory" element={<InventoryPage />} />
               <Route path="inventory/history" element={<InventoryHistoryPage />} />
               <Route path="invoices" element={<InvoiceManagementPage />} />

@@ -17,9 +17,25 @@ from app.log_utils import log_action, save_uploaded_file
 from app.search_suggestions import suggestions_for
 from app.foundation.idempotent import idempotent_create
 from app.foundation.validation import require_non_negative, require_positive_int
+from app.stock import (
+    PO_STATUSES,
+    StockError,
+    create_vendor_payable_for_grn,
+    po_receive,
+    refresh_po_status,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_PO_STATUS_TRANSITIONS = {
+    "draft": {"ordered", "closed"},
+    "ordered": {"partial", "received", "closed", "in transit"},
+    "in transit": {"partial", "received", "closed"},
+    "partial": {"partial", "received", "closed"},
+    "received": {"closed"},
+    "closed": set(),
+}
 
 
 def _json(data: Any = None, status: int = 200):
@@ -328,19 +344,39 @@ def get_vendor_purchase_orders(vendor_id: int, request: Request, db: Session = D
 @router.post('/api/purchase-orders/add')
 @router.post('/api/consignments/add')
 @idempotent_create
-def add_purchase_order(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant']))):
-    """Add a new purchase order / consignment record"""
+def add_purchase_order(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
+    """Add a new purchase order (default status: draft)."""
     try:
         data = body
         if not data:
             return _json({'error': 'No data provided'}, 400)
+        # Accept legacy UI fields (description/amount) as aliases.
+        if not data.get('item_name') and data.get('description'):
+            data['item_name'] = data['description']
+        if data.get('rate') is None and data.get('amount') is not None and data.get('quantity'):
+            try:
+                qty = int(data['quantity'])
+                data['rate'] = float(data['amount']) / qty if qty else 0
+            except (TypeError, ValueError, ZeroDivisionError):
+                pass
+        if not data.get('invoice_no'):
+            data['invoice_no'] = f"PO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        if not data.get('date'):
+            data['date'] = datetime.utcnow().strftime('%Y-%m-%d')
+        if not data.get('quantity'):
+            data['quantity'] = 1
         required_fields = ['vendor_id', 'date', 'invoice_no', 'item_name', 'quantity', 'rate']
         for field in required_fields:
-            if not data.get(field):
+            if data.get(field) in (None, ''):
                 return _json({'error': f'{field} is required'}, 400)
         vendor = db.get(Vendor, data['vendor_id'])
         if not vendor:
             return _json({'error': 'Vendor not found'}, 404)
+        inventory_id = data.get('inventory_id')
+        if inventory_id:
+            inv = db.get(Inventory, inventory_id)
+            if not inv:
+                return _json({'error': 'Inventory item not found'}, 404)
         try:
             po_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
         except ValueError:
@@ -351,16 +387,21 @@ def add_purchase_order(request: Request, db: Session = Depends(get_db), body: di
         except ValueError as exc:
             return _json({'error': str(exc)}, 400)
         amount = quantity * rate
+        status = (data.get('status') or 'draft').strip().lower()
+        if status not in PO_STATUSES and status != 'in transit':
+            status = 'draft'
         po = PurchaseOrder(
             vendor_id=data['vendor_id'],
+            inventory_id=inventory_id,
             date=po_date,
             invoice_no=data['invoice_no'],
             item_name=data['item_name'],
             quantity=quantity,
+            qty_received=0,
             rate=rate,
             amount=amount,
             remarks=data.get('remarks'),
-            status=data.get('status', 'ordered'),
+            status=status,
             created_by_user=current_user.username if current_user else None,
         )
         db.add(po)
@@ -374,6 +415,7 @@ def add_purchase_order(request: Request, db: Session = Depends(get_db), body: di
         return _json({
             'message': 'Purchase order record added successfully',
             'consignment': po.to_dict(),
+            'purchase_order': po.to_dict(),
         }, 201)
     except Exception as e:
         db.rollback()
@@ -411,17 +453,35 @@ def delete_purchase_order(
 
 
 @router.put('/api/purchase-orders/{po_id:int}/status')
-def update_purchase_order_status(po_id: int, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant']))):
-    """Update purchase order status"""
+def update_purchase_order_status(po_id: int, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
+    """Update purchase order status (draft → ordered → … → closed). Receiving uses /receive."""
     try:
         po = db.get(PurchaseOrder, po_id)
         if not po:
             return _json({'error': 'Purchase order not found'}, 404)
         data = body or {}
-        new_status = data.get('status')
-        if new_status not in ['ordered', 'in transit', 'received']:
-            return _json({'error': 'Invalid status'}, 400)
-        old_status = po.status
+        new_status = (data.get('status') or '').strip().lower()
+        allowed = set(PO_STATUSES) | {'in transit'}
+        if new_status not in allowed:
+            return _json({'error': f'Invalid status. Allowed: {sorted(allowed)}'}, 400)
+        if new_status in ('partial', 'received'):
+            return _json(
+                {
+                    'error': 'Use POST /api/purchase-orders/{id}/receive for GRN; '
+                    'status partial/received is set from qty received',
+                },
+                400,
+            )
+        old_status = (po.status or 'draft').strip().lower()
+        allowed_next = _PO_STATUS_TRANSITIONS.get(old_status, set())
+        if new_status != old_status and new_status not in allowed_next:
+            return _json(
+                {
+                    'error': f'Cannot transition from {old_status} to {new_status}',
+                    'allowed': sorted(allowed_next),
+                },
+                400,
+            )
         po.status = new_status
         po.updated_at = datetime.utcnow()
         log_action(
@@ -429,8 +489,129 @@ def update_purchase_order_status(po_id: int, request: Request, db: Session = Dep
             f"Updated Purchase Order {po.invoice_no} status from '{old_status}' to '{new_status}'",
         )
         db.commit()
-        return _json({'message': 'Status updated successfully', 'status': po.status}, 200)
+        return _json({'message': 'Status updated successfully', 'status': po.status, 'purchase_order': po.to_dict()}, 200)
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating purchase order status: {e}")
         return _json({'error': 'Failed to update status'}, 500)
+
+
+@router.post('/api/purchase-orders/{po_id:int}/receive')
+@idempotent_create
+async def receive_purchase_order(
+    po_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager'])),
+):
+    """Partial or full GRN. Updates stock + avg_cost, creates vendor payable. Receipt required."""
+    try:
+        po = db.get(PurchaseOrder, po_id)
+        if not po:
+            return _json({'error': 'Purchase order not found'}, 404)
+        if (po.status or '').lower() in ('draft', 'closed'):
+            return _json({'error': f'Cannot receive PO in status {po.status}'}, 400)
+
+        content_type = (request.headers.get('content-type') or '').lower()
+        receipt_path = po.receipt_attachment_path
+        data: dict = {}
+        if 'multipart/form-data' in content_type:
+            form = await request.form()
+            data = {k: form.get(k) for k in form.keys() if k != 'receipt'}
+            upload = form.get('receipt') or form.get('attachment') or form.get('file')
+            if upload is not None and hasattr(upload, 'filename') and upload.filename:
+                receipt_path = save_uploaded_file(upload)
+        else:
+            data = await request.json()
+            if data.get('receipt_attachment_path'):
+                receipt_path = data['receipt_attachment_path']
+
+        if not receipt_path:
+            return _json(
+                {'error': 'Supplier receipt attachment is required for GRN'},
+                400,
+            )
+
+        remaining = int(po.quantity or 0) - int(po.qty_received or 0)
+        if remaining <= 0:
+            return _json({'error': 'PO already fully received'}, 400)
+
+        try:
+            qty = require_positive_int('quantity', data.get('quantity', remaining))
+        except ValueError as exc:
+            return _json({'error': str(exc)}, 400)
+        if qty > remaining:
+            return _json({'error': f'quantity {qty} exceeds remaining {remaining}'}, 400)
+
+        unit_cost = data.get('unit_cost', data.get('rate', po.rate))
+        try:
+            unit_cost = require_non_negative('unit_cost', unit_cost)
+        except ValueError as exc:
+            return _json({'error': str(exc)}, 400)
+
+        inventory_id = data.get('inventory_id') or po.inventory_id
+        if not inventory_id:
+            return _json({'error': 'inventory_id is required to receive into stock'}, 400)
+        item = db.get(Inventory, int(inventory_id))
+        if not item:
+            return _json({'error': 'Inventory item not found'}, 404)
+
+        try:
+            txn = po_receive(
+                db,
+                item=item,
+                qty=qty,
+                unit_cost=unit_cost,
+                purchase_order=po,
+                created_by=current_user.id if current_user else None,
+                evidence_path=receipt_path,
+            )
+        except StockError as exc:
+            return _json({'error': str(exc)}, 400)
+
+        po.inventory_id = item.id
+        po.qty_received = int(po.qty_received or 0) + qty
+        po.receipt_attachment_path = receipt_path
+        refresh_po_status(po)
+        po.updated_at = datetime.utcnow()
+
+        payable = create_vendor_payable_for_grn(
+            db,
+            purchase_order=po,
+            qty=qty,
+            unit_cost=unit_cost,
+            username=current_user.username if current_user else None,
+            attachment_path=receipt_path,
+        )
+
+        log_action(
+            db,
+            current_user,
+            'PO_RECEIVE',
+            'vendors',
+            po.vendor_id,
+            f"GRN PO {po.invoice_no}: {item.part_number} x{qty} @ {unit_cost} → status {po.status}",
+        )
+        db.commit()
+        db.refresh(po)
+        db.refresh(item)
+        return _json(
+            {
+                'message': 'Goods received',
+                'purchase_order': po.to_dict(),
+                'inventory': {
+                    'id': item.id,
+                    'quantity': item.quantity,
+                    'reserved': item.reserved,
+                    'available': item.available,
+                    'avg_cost': float(item.avg_cost or 0),
+                },
+                'movement': txn.to_dict(),
+                'vendor_payable': payable.to_dict(),
+            },
+            200,
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error receiving purchase order {po_id}: {e}")
+        return _json({'error': f'Failed to receive purchase order: {e}'}, 500)

@@ -89,11 +89,21 @@ def validate_car_data(data):
             errors.append("Mileage must be a valid string if provided")
     
     # Customer ID field (optional)
-    if 'customer_id' in data and data['customer_id'] is not None:
+    if 'customer_id' in data and data['customer_id'] is not None and data['customer_id'] != '':
         try:
             int(data['customer_id'])
         except (ValueError, TypeError):
             errors.append("Customer ID must be a valid integer if provided")
+
+    if 'year' in data and data['year'] not in (None, '', 'N/A'):
+        try:
+            year = int(data['year'])
+            if year < 1950 or year > 2100:
+                errors.append("Year must be between 1950 and 2100")
+            else:
+                data['year'] = year
+        except (ValueError, TypeError):
+            errors.append("Year must be a valid integer")
     
     # Optional: color and chasis_no can be empty, but if present, must be string
     if 'color' in data and data['color'] is not None and data['color'] != "N/A" and not isinstance(data['color'], str):
@@ -105,6 +115,7 @@ def validate_car_data(data):
 
 def validate_customer_data(data):
     """Validate customer data"""
+    from app.customer_vehicle import CUSTOMER_TYPES
     from app.foundation.validation import normalize_pk_phone
 
     errors = []
@@ -121,64 +132,97 @@ def validate_customer_data(data):
             data['phone'] = normalize_pk_phone(data['phone'])
         except ValueError as exc:
             errors.append(str(exc))
+
+    if 'alternate_phone' in data and data['alternate_phone'] not in (None, '', 'N/A'):
+        try:
+            data['alternate_phone'] = normalize_pk_phone(data['alternate_phone'])
+        except ValueError as exc:
+            errors.append(f"alternate_phone: {exc}")
     
     # Address field
     if 'address' in data and data['address'] is not None and data['address'] != "N/A":
         if not str(data.get('address')).strip():
             errors.append("Address must be a valid string if provided")
+
+    if 'customer_type' in data and data['customer_type'] not in (None, ''):
+        ctype = str(data['customer_type']).strip().lower()
+        if ctype not in CUSTOMER_TYPES:
+            errors.append(f"customer_type must be one of: {', '.join(CUSTOMER_TYPES)}")
+        else:
+            data['customer_type'] = ctype
     
     return errors
+
+
+_WRITE_ROLES = [
+    'admin', 'owner', 'manager', 'accountant', 'service_advisor',
+    'inventory_manager', 'store_keeper',
+]
 
 # Customer routes
 @router.get('/cars')
 def get_cars(request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Get all cars with customer information"""
+    """List cars with optional search + pagination. Returns array (legacy) or page envelope."""
     try:
-        cars = db.query(Car).join(Customer).all()
-        cars_data = []
-        
-        for car in cars:
-            cars_data.append({
-                'id': car.id,
-                'make': car.make,
-                'model': car.model,
-                'plate_no': car.plate_no,
-                'mileage': car.mileage,
-                'vin': car.vin,
-                'color': car.color,
-                'chasis_no': car.chasis_no,
-                'customer_id': car.customer_id,
-                'customer_name': car.customer.name,
-                'customer_code': car.customer.code,
-                'customer_phone': car.customer.phone,
-                'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-            })
-        
+        from app.customer_vehicle import car_dict
+
+        q = (request.query_params.get('q') or '').strip()
+        customer_id = request.query_params.get('customer_id')
+        page = max(1, int(request.query_params.get('page') or 1))
+        per_page = min(100, max(1, int(request.query_params.get('per_page') or 50)))
+        paginate = 'page' in request.query_params or 'per_page' in request.query_params or bool(q)
+
+        query = db.query(Car).outerjoin(Customer)
+        if customer_id:
+            query = query.filter(Car.customer_id == int(customer_id))
+        if q:
+            like = f'%{q}%'
+            query = query.filter(
+                or_(
+                    Car.plate_no.ilike(like),
+                    Car.vin.ilike(like),
+                    Car.make.ilike(like),
+                    Car.model.ilike(like),
+                    Car.code.ilike(like),
+                    Car.chasis_no.ilike(like),
+                    Customer.name.ilike(like),
+                    Customer.phone.ilike(like),
+                )
+            )
+        query = query.order_by(Car.id.desc())
+        total = query.count()
+        rows = query.offset((page - 1) * per_page).limit(per_page).all() if paginate else query.limit(500).all()
+        cars_data = [car_dict(car) for car in rows]
+        if paginate:
+            return _json({
+                'cars': cars_data,
+                'count': len(cars_data),
+                'total': total,
+                'page': page,
+                'per_page': per_page,
+            }, 200)
         return _json(cars_data, 200)
-        
     except Exception as e:
         logger.error(f"Error fetching cars: {e}")
         return _json({'error': 'Internal server error'}, 500)
 
 @router.post('/cars')
-def create_car(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
-    """Create a new car"""
+def create_car(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(_WRITE_ROLES))):
+    """Create a vehicle, or reuse an existing one (same VIN / plate+owner) for intake."""
     try:
-        data = body
-        
+        from app.customer_vehicle import car_dict, find_existing_car
+
+        data = body or {}
         if not data:
             return _json({'error': 'No data provided'}, 400)
-        
-        # Validate input data
+
         validation_errors = validate_car_data(data)
         if validation_errors:
             return _json({'error': 'Validation failed', 'details': validation_errors}, 400)
-        
-        # Check if customer exists (if customer_id is provided)
+
         customer_id = data.get('customer_id')
         customer = None
-        if customer_id and customer_id != "N/A":
+        if customer_id not in (None, '', 'N/A'):
             try:
                 customer_id = int(customer_id)
                 customer = db.get(Customer, customer_id)
@@ -186,73 +230,81 @@ def create_car(request: Request, db: Session = Depends(get_db), body: dict | Non
                     return _json({'error': 'Customer not found'}, 404)
             except (ValueError, TypeError):
                 customer_id = None
-        
-        # Get plate number (duplicate plate numbers are now allowed)
-        plate_no = str(data.get('plate_no')).strip() if data.get('plate_no') else None
-        
-        # Extract and clean data
-        make = str(data.get('make')).strip()
-        model = str(data.get('model')).strip()
-        mileage = str(data.get('mileage')).strip()
-        vin = str(data.get('vin', '')).strip() if data.get('vin') else None
-        color = str(data.get('color', '')).strip() if data.get('color') else None
-        chasis_no = str(data.get('chasis_no', '')).strip() if data.get('chasis_no') else None
-        
-        # Check for duplicate VIN if provided
+
+        plate_no = data.get('plate_no')
+        vin = str(data.get('vin', '')).strip().upper() if data.get('vin') else None
+        if vin == '':
+            vin = None
+
+        # Reuse existing vehicle instead of duplicating (preserves history/ownership refs)
+        reuse = find_existing_car(
+            db, plate_no=plate_no, vin=vin, customer_id=customer_id
+        )
+        force_new = bool(data.get('force_new'))
+        if reuse and not force_new:
+            # Attach orphan / update light fields when same owner intakes again
+            if customer_id and reuse.customer_id is None:
+                reuse.customer_id = customer_id
+            if data.get('mileage'):
+                reuse.mileage = str(data.get('mileage')).strip()
+            if data.get('notes') is not None:
+                reuse.notes = str(data.get('notes') or '').strip() or None
+            reuse.updated_by_user = current_user.username if current_user else None
+            db.commit()
+            db.refresh(reuse)
+            return _json({
+                'message': 'Existing vehicle reused',
+                'reused': True,
+                'car': car_dict(reuse),
+            }, 200)
+
         if vin:
             existing_car = db.query(Car).filter_by(vin=vin).first()
-            if existing_car:
+            if existing_car and (not reuse or existing_car.id != reuse.id):
                 return _json({
                     'error': 'Car with this VIN already exists',
                     'details': f'A car with VIN {vin} already exists.',
-                    'existing_car_id': existing_car.id
+                    'existing_car_id': existing_car.id,
+                    'car': car_dict(existing_car),
                 }, 409)
-        
-        # Create car
-        try:
-            car = Car(
-                make=make,
-                model=model,
-                plate_no=plate_no,
-                mileage=mileage,
-                vin=vin,
-                color=color,
-                chasis_no=chasis_no,
-                customer_id=customer_id
-            )
-            db.add(car)
-            db.commit()
-            
-            logger.info(f"Car created successfully: ID {car.id}")
-            
-            # Get customer info safely
-            customer_name = customer.name if customer else "N/A"
-            customer_phone = customer.phone if customer else "N/A"
-            
-            return _json({
-                'message': 'Car created successfully',
-                'car': {
-                    'id': car.id,
-                    'make': car.make,
-                    'model': car.model,
-                    'plate_no': car.plate_no,
-                    'mileage': car.mileage,
-                    'vin': car.vin,
-                    'color': car.color,
-                    'chasis_no': car.chasis_no,
-                    'customer_id': car.customer_id,
-                    'customer_name': customer_name,
-                    'customer_phone': customer_phone,
-                    'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                }
-            }, 201)
-            
-        except SQLAlchemyError as e:
-            db.rollback()
-            logger.error(f"Database error creating car: {e}")
-            return _json({'error': 'Database error occurred'}, 500)
-            
+
+        make = str(data.get('make') or '').strip() or None
+        model = str(data.get('model') or '').strip() or None
+        mileage = str(data.get('mileage') or '').strip() or None
+        color = str(data.get('color') or '').strip() or None
+        chasis_no = str(data.get('chasis_no') or '').strip() or None
+        engine_no = str(data.get('engine_no') or '').strip() or None
+        notes = str(data.get('notes') or '').strip() or None
+        year = data.get('year')
+        if year in ('', 'N/A'):
+            year = None
+
+        car = Car(
+            make=make,
+            model=model,
+            year=year,
+            plate_no=plate_no,
+            mileage=mileage,
+            vin=vin,
+            color=color,
+            chasis_no=chasis_no,
+            engine_no=engine_no,
+            notes=notes,
+            customer_id=customer_id,
+            created_by_user=current_user.username if current_user else None,
+        )
+        db.add(car)
+        db.commit()
+        db.refresh(car)
+        return _json({
+            'message': 'Car created successfully',
+            'reused': False,
+            'car': car_dict(car),
+        }, 201)
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error creating car: {e}")
+        return _json({'error': 'Database error occurred'}, 500)
     except Exception as e:
         logger.error(f"Unexpected error creating car: {e}")
         return _json({'error': 'Internal server error'}, 500)
@@ -624,38 +676,23 @@ async def transfer_car(
 def get_car(car_id, request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Get specific car by ID"""
     try:
+        from app.customer_vehicle import car_dict
+
         if not car_id or car_id <= 0:
             return _json({'error': 'Invalid car ID'}, 400)
         
         car = db.query(Car).outerjoin(Customer).filter(Car.id == car_id).first()
-        if not car:
+        if not car or getattr(car, 'deleted_at', None) is not None:
             return _json({'error': 'Car not found'}, 404)
         
-        car_data = {
-            'id': car.id,
-            'make': car.make,
-            'model': car.model,
-            'plate_no': car.plate_no,
-            'mileage': car.mileage,
-            'vin': car.vin,
-            'color': car.color,
-            'chasis_no': car.chasis_no,
-            'customer_id': car.customer_id,
-            'customer_name': car.customer.name if car.customer else None,
-            'customer_code': car.customer.code if car.customer else None,
-            'customer_phone': car.customer.phone if car.customer else None,
-            'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S") if car.created_at else None,
-            'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S") if car.updated_at else None,
-        }
-        
-        return _json(car_data, 200)
+        return _json(car_dict(car), 200)
         
     except Exception as e:
         logger.error(f"Error fetching car {car_id}: {e}")
         return _json({'error': 'Internal server error'}, 500)
 
 @router.put('/cars/{car_id:int}')
-def update_car(car_id, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
+def update_car(car_id, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(_WRITE_ROLES))):
     """Update an existing car"""
     from app.foundation.versioning import bump_version, check_version, extract_version
 
@@ -694,52 +731,41 @@ def update_car(car_id, request: Request, db: Session = Depends(get_db), body: di
         # Get plate number (duplicate plate numbers are now allowed)
         plate_no = str(data.get('plate_no')).strip() if data.get('plate_no') else None
         
-        # Extract and clean data
-        make = str(data.get('make')).strip()
-        model = str(data.get('model')).strip()
-        mileage = str(data.get('mileage')).strip()
-        vin = str(data.get('vin', '')).strip() if data.get('vin') else None
-        color = str(data.get('color', '')).strip() if data.get('color') else None
-        chasis_no = str(data.get('chasis_no', '')).strip() if data.get('chasis_no') else None
+        from app.customer_vehicle import car_dict
+
+        make = str(data.get('make') or '').strip() or None
+        model = str(data.get('model') or '').strip() or None
+        mileage = str(data.get('mileage') or '').strip() or None
+        vin = str(data.get('vin') or '').strip().upper() or None
+        color = str(data.get('color') or '').strip() or None
+        chasis_no = str(data.get('chasis_no') or '').strip() or None
+        engine_no = str(data.get('engine_no') or '').strip() or None
+        notes = str(data.get('notes') or '').strip() or None
+        year = data.get('year')
+        if year in ('', 'N/A', None):
+            year = None
         
         # Update car
         try:
             car.make = make
             car.model = model
+            car.year = year
             car.plate_no = plate_no
             car.mileage = mileage
             car.vin = vin
             car.color = color
             car.chasis_no = chasis_no
+            car.engine_no = engine_no
+            car.notes = notes
             car.customer_id = customer_id
+            car.updated_by_user = current_user.username if current_user else None
             bump_version(car)
             
             db.commit()
-            
-            logger.info(f"Car updated successfully: ID {car.id}")
-            
-            # Get customer info safely
-            customer_name = customer.name if customer else "N/A"
-            customer_phone = customer.phone if customer else "N/A"
-            
+            db.refresh(car)
             return _json({
                 'message': 'Car updated successfully',
-                'car': {
-                    'id': car.id,
-                    'make': car.make,
-                    'model': car.model,
-                    'plate_no': car.plate_no,
-                    'mileage': car.mileage,
-                    'vin': car.vin,
-                    'color': car.color,
-                    'chasis_no': car.chasis_no,
-                    'customer_id': car.customer_id,
-                    'customer_name': customer_name,
-                    'customer_phone': customer_phone,
-                    'version': car.version,
-                    'created_at': car.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    'updated_at': car.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                }
+                'car': car_dict(car),
             }, 200)
         
         except SQLAlchemyError as e:
@@ -786,229 +812,265 @@ def delete_car(car_id, request: Request, db: Session = Depends(get_db), current_
 
 @router.get('/customers')
 def get_customers(request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Get all customers"""
+    """List customers with search + pagination. Array when unpaginated (legacy)."""
     try:
-        customers = db.query(Customer).all()
-        customers_data = []
-        
-        for customer in customers:
-            customers_data.append({
-                'id': customer.id,
-                'code': customer.code,
-                'name': customer.name,
-                'phone': customer.phone,
-                'address': customer.address,
-                'created_at': customer.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                'updated_at': customer.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-            })
-        
-        return _json(customers_data, 200)
-        
+        from app.customer_vehicle import customer_dict
+
+        q = (request.query_params.get('q') or '').strip()
+        page = max(1, int(request.query_params.get('page') or 1))
+        per_page = min(100, max(1, int(request.query_params.get('per_page') or 50)))
+        paginate = 'page' in request.query_params or 'per_page' in request.query_params or bool(q)
+
+        query = db.query(Customer)
+        if q:
+            like = f'%{q}%'
+            query = query.filter(
+                or_(
+                    Customer.name.ilike(like),
+                    Customer.phone.ilike(like),
+                    Customer.alternate_phone.ilike(like),
+                    Customer.address.ilike(like),
+                    Customer.code.ilike(like),
+                )
+            )
+        query = query.order_by(Customer.id.desc())
+        total = query.count()
+        rows = query.offset((page - 1) * per_page).limit(per_page).all() if paginate else query.limit(500).all()
+        data = [customer_dict(c) for c in rows]
+        if paginate:
+            return _json({
+                'customers': data,
+                'count': len(data),
+                'total': total,
+                'page': page,
+                'per_page': per_page,
+            }, 200)
+        return _json(data, 200)
     except Exception as e:
         logger.error(f"Error fetching customers: {e}")
         return _json({'error': 'Internal server error'}, 500)
 
+
+@router.get('/customers/by-phone')
+def customers_by_phone(request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Search by phone before creating a customer (exact / alternate / suffix)."""
+    from app.customer_vehicle import customer_dict, find_customers_by_phone
+
+    phone = (request.query_params.get('phone') or '').strip()
+    if not phone:
+        return _json({'error': 'phone is required'}, 400)
+    rows = find_customers_by_phone(db, phone, limit=20)
+    return _json({
+        'phone': phone,
+        'results': [customer_dict(c, include_vehicles=True) for c in rows],
+        'count': len(rows),
+        'duplicate': len(rows) > 0,
+        'message': f'{len(rows)} customer(s) match this phone' if rows else None,
+    }, 200)
+
+
+@router.get('/customers/{customer_id:int}')
+def get_customer_detail(customer_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Customer profile: vehicles, ownership, previous ROs/estimates/invoices/balances."""
+    from app.customer_vehicle import load_customer_bundle
+
+    bundle = load_customer_bundle(db, customer_id)
+    if not bundle:
+        return _json({'error': 'Customer not found'}, 404)
+    return _json(bundle, 200)
+
+
 @router.post('/customers')
-def create_customer(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
-    """Create a new customer"""
+def create_customer(request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(_WRITE_ROLES))):
+    """Create a customer. Phone duplicates return 409 unless force=true."""
     try:
-        data = body
-        
+        from app.customer_vehicle import customer_dict, find_customers_by_phone
+
+        data = body or {}
         if not data:
             return _json({'error': 'No data provided'}, 400)
-        
-        # Validate input data
+
         validation_errors = validate_customer_data(data)
         if validation_errors:
             return _json({'error': 'Validation failed', 'details': validation_errors}, 400)
-        
-        # Extract and clean data
-        name = str(data.get('name')).strip()
-        phone = str(data.get('phone')).strip()
-        address = str(data.get('address')).strip()
-        
-        # Check for duplicate customer (same name + phone + address)
-        existing_customer = db.query(Customer).filter_by(
+
+        name = str(data.get('name') or '').strip() or None
+        phone = data.get('phone')
+        if phone is not None:
+            phone = str(phone).strip() or None
+        address = str(data.get('address') or '').strip() or None
+        alternate_phone = data.get('alternate_phone')
+        if alternate_phone not in (None, '', 'N/A'):
+            alternate_phone = str(alternate_phone).strip()
+        else:
+            alternate_phone = None
+        customer_type = (data.get('customer_type') or 'retail').strip().lower()
+        notes = str(data.get('notes') or '').strip() or None
+        force = bool(data.get('force'))
+
+        phone_matches = find_customers_by_phone(db, phone, limit=5) if phone else []
+        if phone_matches and not force:
+            return _json({
+                'error': 'Possible duplicate customer',
+                'details': 'A customer with this phone already exists. Search by phone or pass force=true to create anyway.',
+                'duplicate': True,
+                'matches': [customer_dict(c, include_vehicles=True) for c in phone_matches],
+                'existing_customer_id': phone_matches[0].id,
+            }, 409)
+
+        customer = Customer(
             name=name,
             phone=phone,
-            address=address
-        ).first()
-        
-        if existing_customer:
-            return _json({
-                'error': 'Customer already exists',
-                'details': f'A customer with the same name ({name}), phone ({phone}), and address ({address}) already exists.',
-                'existing_customer_id': existing_customer.id
-            }, 409)
-        
-        # Create customer
-        try:
-            customer = Customer(
-                name=name,
-                phone=phone,
-                address=address
-            )
-            db.add(customer)
-            db.commit()
-            
-            logger.info(f"Customer created successfully: ID {customer.id}")
-            
-            return _json({
-                'message': 'Customer created successfully',
-                'customer': {
-                    'id': customer.id,
-                    'code': customer.code,
-                    'name': customer.name,
-                    'phone': customer.phone,
-                    'address': customer.address,
-                    'created_at': customer.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    'updated_at': customer.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                }
-            }, 201)
-            
-        except SQLAlchemyError as e:
-            db.rollback()
-            logger.error(f"Database error creating customer: {e}")
-            return _json({'error': 'Database error occurred'}, 500)
-            
+            alternate_phone=alternate_phone,
+            address=address,
+            customer_type=customer_type,
+            notes=notes,
+            consent_whatsapp=bool(data.get('consent_whatsapp', False)),
+            consent_sms=bool(data.get('consent_sms', False)),
+            consent_call=bool(data.get('consent_call', True)),
+            created_by_user=current_user.username if current_user else None,
+        )
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+        return _json({
+            'message': 'Customer created successfully',
+            'customer': customer_dict(customer, include_vehicles=True),
+        }, 201)
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error creating customer: {e}")
+        return _json({'error': 'Database error occurred'}, 500)
     except Exception as e:
         logger.error(f"Unexpected error creating customer: {e}")
         return _json({'error': 'Internal server error'}, 500)
 
+
 @router.get('/customers/search')
 def search_customers(request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Search customers"""
+    """Search customers by name, phone, alternate phone, address, code."""
     try:
+        from app.customer_vehicle import customer_dict
+
         query = request.query_params.get('q', '').strip()
-        
         if not query:
             return _json({'error': 'Search query is required'}, 400)
-        
-        # Search in name, phone, and address
+
+        like = f'%{query}%'
         search_results = db.query(Customer).filter(
             or_(
-                Customer.name.ilike(f'%{query}%'),
-                Customer.phone.ilike(f'%{query}%'),
-                Customer.address.ilike(f'%{query}%')
+                Customer.name.ilike(like),
+                Customer.phone.ilike(like),
+                Customer.alternate_phone.ilike(like),
+                Customer.address.ilike(like),
+                Customer.code.ilike(like),
             )
-        ).all()
-        
-        customers_data = []
-        for customer in search_results:
-            customers_data.append({
-                'id': customer.id,
-                'code': customer.code,
-                'name': customer.name,
-                'phone': customer.phone,
-                'address': customer.address,
-                'created_at': customer.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                'updated_at': customer.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-            })
-        
+        ).order_by(Customer.name).limit(50).all()
+
+        customers_data = [customer_dict(c) for c in search_results]
         payload = {
             'query': query,
             'results': customers_data,
-            'count': len(customers_data)
+            'count': len(customers_data),
         }
-
         if query and not customers_data:
-            corpus = [row[0] for row in db.query(Customer.name).distinct().all()]
+            corpus = [row[0] for row in db.query(Customer.name).distinct().all() if row[0]]
             payload.update(suggestions_for(query, corpus))
-
         return _json(payload, 200)
-        
     except Exception as e:
         logger.error(f"Error searching customers: {e}")
         return _json({'error': 'Internal server error'}, 500)
 
+
 @router.put('/customers/{customer_id:int}')
-def update_customer(customer_id, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
+def update_customer(customer_id, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(_WRITE_ROLES))):
     """Update an existing customer"""
     try:
+        from app.customer_vehicle import customer_dict
+        from app.foundation.versioning import check_version
+
         if not customer_id or customer_id <= 0:
             return _json({'error': 'Invalid customer ID'}, 400)
-        
-        data = body
-        
+
+        data = body or {}
         if not data:
             return _json({'error': 'No data provided'}, 400)
-        
-        # Validate input data
+
         validation_errors = validate_customer_data(data)
         if validation_errors:
             return _json({'error': 'Validation failed', 'details': validation_errors}, 400)
-        
-        # Find the customer
+
         customer = db.get(Customer, customer_id)
-        if not customer:
+        if not customer or getattr(customer, 'deleted_at', None) is not None:
             return _json({'error': 'Customer not found'}, 404)
-        
-        # Extract and clean data
-        name = str(data.get('name')).strip()
-        phone = str(data.get('phone')).strip()
-        address = str(data.get('address')).strip()
-        
-        # Update customer
-        try:
-            customer.name = name
-            customer.phone = phone
-            customer.address = address
-            
-            db.commit()
-            
-            logger.info(f"Customer updated successfully: ID {customer.id}")
-            
-            return _json({
-                'message': 'Customer updated successfully',
-                'customer': {
-                    'id': customer.id,
-                    'code': customer.code,
-                    'name': customer.name,
-                    'phone': customer.phone,
-                    'address': customer.address,
-                    'created_at': customer.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    'updated_at': customer.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                }
-            }, 200)
-            
-        except SQLAlchemyError as e:
-            db.rollback()
-            logger.error(f"Database error updating customer {customer_id}: {e}")
-            return _json({'error': 'Database error occurred'}, 500)
-            
+
+        if 'version' in data:
+            try:
+                check_version(customer, data.get('version'))
+            except HTTPException as exc:
+                return _json(exc.detail if isinstance(exc.detail, dict) else {'error': exc.detail}, exc.status_code)
+
+        if 'name' in data:
+            customer.name = str(data.get('name') or '').strip() or None
+        if 'phone' in data:
+            customer.phone = data.get('phone')
+        if 'alternate_phone' in data:
+            alt = data.get('alternate_phone')
+            customer.alternate_phone = str(alt).strip() if alt not in (None, '', 'N/A') else None
+        if 'address' in data:
+            customer.address = str(data.get('address') or '').strip() or None
+        if 'customer_type' in data and data.get('customer_type'):
+            customer.customer_type = str(data['customer_type']).strip().lower()
+        if 'notes' in data:
+            customer.notes = str(data.get('notes') or '').strip() or None
+        if 'consent_whatsapp' in data:
+            customer.consent_whatsapp = bool(data.get('consent_whatsapp'))
+        if 'consent_sms' in data:
+            customer.consent_sms = bool(data.get('consent_sms'))
+        if 'consent_call' in data:
+            customer.consent_call = bool(data.get('consent_call'))
+        customer.updated_by_user = current_user.username if current_user else None
+        if hasattr(customer, 'version') and customer.version is not None:
+            customer.version = int(customer.version) + 1
+
+        db.commit()
+        db.refresh(customer)
+        return _json({
+            'message': 'Customer updated successfully',
+            'customer': customer_dict(customer, include_vehicles=True),
+        }, 200)
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error updating customer {customer_id}: {e}")
+        return _json({'error': 'Database error occurred'}, 500)
     except Exception as e:
         logger.error(f"Unexpected error updating customer {customer_id}: {e}")
         return _json({'error': 'Internal server error'}, 500)
 
+
 @router.delete('/customers/{customer_id:int}')
-def delete_customer(customer_id, request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'accountant']))):
-    """Delete a customer"""
+def delete_customer(customer_id, request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'accountant', 'owner', 'manager']))):
+    """Soft-delete a customer (foundation Session.delete hook)."""
     try:
         if not customer_id or customer_id <= 0:
             return _json({'error': 'Invalid customer ID'}, 400)
-        
-        # Find the customer
         customer = db.get(Customer, customer_id)
-        if not customer:
+        if not customer or getattr(customer, 'deleted_at', None) is not None:
             return _json({'error': 'Customer not found'}, 404)
-        
-        # Delete customer (this will also delete associated cars due to cascade)
-        try:
-            db.delete(customer)
-            db.commit()
-            
-            logger.info(f"Customer deleted successfully: ID {customer_id}")
-            
-            return _json({
-                'message': 'Customer deleted successfully',
-                'deleted_customer_id': customer_id
-            }, 200)
-            
-        except SQLAlchemyError as e:
-            db.rollback()
-            logger.error(f"Database error deleting customer {customer_id}: {e}")
-            return _json({'error': 'Database error occurred'}, 500)
-            
+        # Detach vehicles so history/ownership refs stay on cars
+        db.query(Car).filter(Car.customer_id == customer_id).update(
+            {Car.customer_id: None}, synchronize_session=False
+        )
+        db.delete(customer)
+        db.commit()
+        return _json({
+            'message': 'Customer deleted successfully',
+            'deleted_customer_id': customer_id,
+        }, 200)
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error deleting customer {customer_id}: {e}")
+        return _json({'error': 'Database error occurred'}, 500)
     except Exception as e:
         logger.error(f"Unexpected error deleting customer {customer_id}: {e}")
         return _json({'error': 'Internal server error'}, 500)

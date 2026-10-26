@@ -2,10 +2,13 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { getCustomerBundle, type CustomerActivity, type EntityHit } from '../api/entities'
+import { EntitySelect } from '../components/EntitySelect'
 import {
   ErrorBox,
   Field,
   FormGrid,
+  Money,
   PageHeader,
   Panel,
 } from '../components/ui'
@@ -27,10 +30,15 @@ type CarRow = {
   plate_no?: string
   customer_name?: string
   customer_phone?: string
+  customer_address?: string
   mileage?: string
+  vin?: string
+  color?: string
+  chasis_no?: string
 }
 
 const empty = {
+  customer_id: null as number | null,
   customer_name: '',
   customer_phone: '',
   customer_address: '',
@@ -53,7 +61,9 @@ export function RepairOrderCreatePage() {
     ...empty,
     car_id: params.get('car_id') || '',
     visit_id: params.get('visit_id') || '',
+    customer_id: params.get('customer_id') ? Number(params.get('customer_id')) : null,
   })
+  const [activity, setActivity] = useState<CustomerActivity | null>(null)
   const [parts, setParts] = useState<PartLine[]>([
     { description: '', quantity: 1, part_number: '' },
   ])
@@ -81,20 +91,98 @@ export function RepairOrderCreatePage() {
   useEffect(() => {
     const carId = params.get('car_id')
     const visitId = params.get('visit_id')
+    const customerId = params.get('customer_id')
+    if (customerId && !carId) {
+      void getCustomerBundle(Number(customerId)).then((bundle) => {
+        const c = bundle.customer
+        setActivity(bundle.activity || null)
+        setForm((prev) => ({
+          ...prev,
+          customer_id: c.id,
+          customer_name: c.name || '',
+          customer_phone: c.phone || '',
+          customer_address: c.address || '',
+        }))
+      }).catch(() => undefined)
+    }
     if (!carId) return
-    api.get<CarRow>(`/api/cars/${carId}`).then((car) => {
+    api.get<CarRow & { customer_id?: number }>(`/api/cars/${carId}`).then((car) => {
       setForm((prev) => ({
         ...prev,
         car_id: carId,
         visit_id: visitId || prev.visit_id,
+        customer_id: car.customer_id || prev.customer_id,
         customer_name: car.customer_name || prev.customer_name,
         customer_phone: car.customer_phone || prev.customer_phone,
+        customer_address: car.customer_address || prev.customer_address,
         customer_reg_no: car.plate_no || prev.customer_reg_no,
         customer_made: `${car.make || ''} ${car.model || ''}`.trim(),
         customer_mileage: car.mileage || prev.customer_mileage,
+        customer_vin: car.vin || prev.customer_vin,
+        customer_color: car.color || prev.customer_color,
+        customer_chasis: car.chasis_no || prev.customer_chasis,
       }))
+      if (car.customer_id) {
+        void getCustomerBundle(car.customer_id).then((b) => setActivity(b.activity || null))
+      }
     }).catch(() => undefined)
   }, [params])
+
+  async function onPickCustomer(hit: EntityHit | null) {
+    if (!hit) {
+      setForm((prev) => ({ ...prev, customer_id: null }))
+      setActivity(null)
+      return
+    }
+    const bundle = await getCustomerBundle(hit.id)
+    const c = bundle.customer
+    setActivity(bundle.activity || null)
+    setForm((prev) => ({
+      ...prev,
+      customer_id: c.id,
+      customer_name: c.name || '',
+      customer_phone: c.phone || '',
+      customer_address: c.address || '',
+      // Clear vehicle unless it still belongs to this customer
+      car_id: '',
+      visit_id: '',
+      customer_reg_no: '',
+      customer_made: '',
+      customer_vin: '',
+      customer_color: '',
+      customer_chasis: '',
+    }))
+  }
+
+  function onPickCar(hit: EntityHit | null) {
+    if (!hit) {
+      setForm((prev) => ({ ...prev, car_id: '', visit_id: '' }))
+      return
+    }
+    setForm((prev) => ({
+      ...prev,
+      car_id: String(hit.id),
+      visit_id: '',
+      customer_id: hit.customer_id || prev.customer_id,
+      customer_name: hit.customer_name || prev.customer_name,
+      customer_phone: hit.customer_phone || prev.customer_phone,
+      customer_address: hit.customer_address || prev.customer_address,
+      customer_reg_no: hit.plate_no || '',
+      customer_made: `${hit.make || ''} ${hit.model || ''}`.trim(),
+      customer_mileage: hit.mileage || prev.customer_mileage,
+      customer_vin: hit.vin || '',
+      customer_color: hit.color || '',
+      customer_chasis: hit.chasis_no || '',
+    }))
+  }
+
+  function onPickWorker(hit: EntityHit | null) {
+    if (!hit) return
+    setForm((prev) => {
+      if (prev.worker_ids.includes(hit.id)) return prev
+      return { ...prev, worker_ids: [...prev.worker_ids, hit.id] }
+    })
+  }
 
   useEffect(() => {
     const visitId = Number(form.visit_id)
@@ -112,6 +200,7 @@ export function RepairOrderCreatePage() {
     mutationFn: () =>
       api.post<{ repair_order_id: number }>('/api/repair-orders', {
         ...form,
+        customer_id: form.customer_id,
         car_id: form.car_id ? Number(form.car_id) : null,
         visit_id: form.visit_id ? Number(form.visit_id) : null,
         parts: parts.filter((p) => p.description),
@@ -130,19 +219,72 @@ export function RepairOrderCreatePage() {
       <PageHeader title="New repair order" />
       {create.error ? <ErrorBox error={create.error} /> : null}
       <form onSubmit={onSubmit} className="stack">
-        <Panel title="Check-in link">
+        <Panel title="Customer & vehicle">
           <p className="muted">
-            If this job is for a registered car, a completed check-in (signature +
-            inspection) is required. Walk-ins without a car record can leave car/visit blank.
+            Search and select saved records. Choosing a customer fills contact details and
+            lets you pick from their vehicles. Existing customer/vehicle IDs are linked — no
+            duplicates are created when this job card opens.
           </p>
+          {activity ? (
+            <div className="stat-grid" style={{ marginBottom: 12 }}>
+              <div className="stat">
+                <div className="label">Balance due</div>
+                <div className="value">
+                  <Money value={activity.receivable_total || 0} />
+                </div>
+              </div>
+              <div className="stat">
+                <div className="label">Prior repairs</div>
+                <div className="value">{activity.counts?.repairs || 0}</div>
+              </div>
+              <div className="stat">
+                <div className="label">Estimates</div>
+                <div className="value">{activity.counts?.estimates || 0}</div>
+              </div>
+              <div className="stat">
+                <div className="label">Invoices</div>
+                <div className="value">{activity.counts?.invoices || 0}</div>
+              </div>
+            </div>
+          ) : null}
+          {form.customer_id ? (
+            <p className="muted" style={{ marginBottom: 12 }}>
+              <Link to={`/customers/${form.customer_id}`}>Open full customer profile</Link>
+              {' · '}
+              <Link to={`/cars?tab=customers`}>Register another vehicle</Link>
+            </p>
+          ) : null}
           <FormGrid>
-            <Field label="Car id">
-              <input
-                value={String(form.car_id || '')}
-                onChange={(e) => setForm({ ...form, car_id: e.target.value, visit_id: '' })}
-                placeholder="Optional unless registered car"
-              />
-            </Field>
+            <EntitySelect
+              label="Customer"
+              type="customer"
+              valueId={form.customer_id}
+              displayValue={
+                form.customer_name
+                  ? `${form.customer_name} · ${form.customer_phone || ''}`.trim()
+                  : ''
+              }
+              onSelect={(hit) => {
+                void onPickCustomer(hit)
+              }}
+            />
+            <EntitySelect
+              label="Vehicle"
+              type="car"
+              valueId={form.car_id ? Number(form.car_id) : null}
+              customerId={form.customer_id}
+              displayValue={
+                form.customer_reg_no || form.customer_made
+                  ? `${form.customer_reg_no} · ${form.customer_made}`.trim()
+                  : ''
+              }
+              placeholder={
+                form.customer_id
+                  ? 'Search this customer’s vehicles…'
+                  : 'Search plate / VIN / make…'
+              }
+              onSelect={onPickCar}
+            />
             <Field label="Check-in visit">
               <select
                 value={String(form.visit_id || '')}
@@ -164,10 +306,6 @@ export function RepairOrderCreatePage() {
                 Open check-in on car
               </Link>
             ) : null}
-          </FormGrid>
-        </Panel>
-        <Panel title="Customer & vehicle">
-          <FormGrid>
             <Field label="Customer name">
               <input
                 required
@@ -214,7 +352,13 @@ export function RepairOrderCreatePage() {
                 }
               />
             </Field>
-            <Field label="Workers">
+            <EntitySelect
+              label="Add worker"
+              type="worker"
+              placeholder="Search employees…"
+              onSelect={onPickWorker}
+            />
+            <Field label="Assigned workers">
               <select
                 multiple
                 value={form.worker_ids.map(String)}

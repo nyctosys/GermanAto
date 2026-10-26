@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '../api/client'
 import {
@@ -24,10 +24,11 @@ type InvoiceRow = {
 
 export function InvoiceManagementPage() {
   const qc = useQueryClient()
-  const [keyword, setKeyword] = useState('')
-  const [status, setStatus] = useState('all')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [sp] = useSearchParams()
+  const [keyword, setKeyword] = useState(sp.get('q') || '')
+  const [status, setStatus] = useState(sp.get('status') || 'all')
+  const [dateFrom, setDateFrom] = useState(sp.get('start_date') || sp.get('date_from') || '')
+  const [dateTo, setDateTo] = useState(sp.get('end_date') || sp.get('date_to') || '')
 
   const q = useQuery({
     queryKey: ['invoices', keyword, status, dateFrom, dateTo],

@@ -143,7 +143,9 @@ def get_repair_orders(request: Request, db: Session = Depends(get_db), current_u
                         'description': part.description,
                         'part_number': part.part_number,
                         'quantity': part.quantity,
-                        'status': part.status
+                        'status': part.status,
+                        'ownership_type': getattr(part, 'ownership_type', 'shop_stock'),
+                        'old_parts_returned': bool(getattr(part, 'old_parts_returned', False)),
                     } for part in parts
                 ],
                 'labour': [
@@ -273,7 +275,9 @@ def create_repair_order(request: Request, db: Session = Depends(get_db), body: d
                     quantity=part_data['quantity'],
                     inventory_id=part_data.get('inventory_id'),
                     part_number=part_data.get('part_number', ''),
-                    status=part_data.get('status', 'pending')
+                    status=part_data.get('status', 'pending'),
+                    ownership_type=part_data.get('ownership_type', 'shop_stock'),
+                    old_parts_returned=bool(part_data.get('old_parts_returned', False)),
                 )
                 db.add(part)
         
@@ -389,7 +393,9 @@ def get_repair_order(repair_order_id, request: Request, db: Session = Depends(ge
                     'description': part.description,
                     'part_number': part.part_number,
                     'quantity': part.quantity,
-                    'status': part.status
+                    'status': part.status,
+                    'ownership_type': getattr(part, 'ownership_type', 'shop_stock'),
+                    'old_parts_returned': bool(getattr(part, 'old_parts_returned', False)),
                 } for part in parts
             ],
             'labour': [
@@ -509,7 +515,9 @@ def update_repair_order(repair_order_id, request: Request, db: Session = Depends
                     'description': part.description,
                     'part_number': part.part_number,
                     'quantity': part.quantity,
-                    'status': part.status
+                    'status': part.status,
+                    'ownership_type': getattr(part, 'ownership_type', 'shop_stock'),
+                    'old_parts_returned': bool(getattr(part, 'old_parts_returned', False)),
                 })
             
             # Handle inventory changes
@@ -530,7 +538,9 @@ def update_repair_order(repair_order_id, request: Request, db: Session = Depends
                     description=part_data.get('description'),
                     part_number=part_data.get('part_number'),
                     quantity=part_data.get('quantity', 1),
-                    status=part_data.get('status', 'pending')
+                    status=part_data.get('status', 'pending'),
+                    ownership_type=part_data.get('ownership_type', 'shop_stock'),
+                    old_parts_returned=bool(part_data.get('old_parts_returned', False)),
                 )
                 db.add(part)
             
