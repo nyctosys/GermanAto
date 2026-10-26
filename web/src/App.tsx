@@ -20,6 +20,7 @@ import { InvoiceEditPage } from './pages/InvoiceEditPage'
 import { InvoiceManagementPage } from './pages/InvoiceManagementPage'
 import { LoginPage } from './pages/LoginPage'
 import { MonthlyLedgerPage } from './pages/MonthlyLedgerPage'
+import { EstimateDetailPage } from './pages/EstimateDetailPage'
 import { PendingQuotesPage } from './pages/PendingQuotesPage'
 import { QuoteCreatePage } from './pages/QuoteCreatePage'
 import { RepairOrderCreatePage } from './pages/RepairOrderCreatePage'
@@ -31,6 +32,7 @@ import { VendorDetailPage } from './pages/VendorDetailPage'
 import { VendorsPage } from './pages/VendorsPage'
 import { WhatsAppPage } from './pages/WhatsAppPage'
 import { WorkerDetailPage } from './pages/WorkerDetailPage'
+import { SchedulingPage } from './pages/SchedulingPage'
 import { JobCardsPage } from './pages/JobCardsPage'
 import { JobCardCreatePage } from './pages/JobCardCreatePage'
 import { JobCardDetailPage } from './pages/JobCardDetailPage'
@@ -61,6 +63,7 @@ export default function App() {
               <Route path="invoices/:id/edit" element={<InvoiceEditPage />} />
               <Route path="quotes/new" element={<QuoteCreatePage />} />
               <Route path="quotes/pending" element={<PendingQuotesPage />} />
+              <Route path="quotes/:id" element={<EstimateDetailPage />} />
               <Route path="job-cards" element={<JobCardsPage />} />
               <Route path="job-cards/new" element={<JobCardCreatePage />} />
               <Route path="job-cards/:id" element={<JobCardDetailPage />} />
@@ -86,6 +89,7 @@ export default function App() {
               <Route path="vendors/:id" element={<VendorDetailPage />} />
               <Route path="hr/employees" element={<EmployeesPage />} />
               <Route path="hr/employees/:id" element={<WorkerDetailPage />} />
+              <Route path="hr/scheduling" element={<SchedulingPage />} />
               <Route path="hr/attendance" element={<AttendancePage />} />
               <Route path="hr/salaries" element={<SalariesPage />} />
               <Route path="hr/devices" element={<DevicesPage />} />

@@ -294,6 +294,11 @@ def create_car(request: Request, db: Session = Depends(get_db), body: dict | Non
             created_by_user=current_user.username if current_user else None,
         )
         db.add(car)
+        db.flush()
+        if not car.code:
+            from app.document_numbers import car_code
+
+            car.code = car_code(car.id)
         db.commit()
         db.refresh(car)
         return _json({
@@ -554,6 +559,32 @@ def get_visit_detail(
         if isinstance(detail, dict):
             return _json(detail, exc.status_code)
         return _json({"error": detail}, exc.status_code)
+
+
+@router.patch('/visits/{visit_id:int}')
+def patch_visit(
+    visit_id: int,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'accountant', 'service_advisor', 'manager', 'inventory_manager'])),
+):
+    """Update inspection notes, odometer, fuel, or checklist items/photos."""
+    from app.visits import update_visit
+
+    try:
+        visit = update_visit(db, visit_id, body or {}, current_user)
+        db.commit()
+        return _json({"visit": visit.to_dict(), "message": "Visit updated"}, 200)
+    except HTTPException as exc:
+        db.rollback()
+        detail = exc.detail
+        if isinstance(detail, dict):
+            return _json(detail, exc.status_code)
+        return _json({"error": detail}, exc.status_code)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update visit {visit_id}: {e}")
+        return _json({"error": "Failed to update visit"}, 500)
 
 
 @router.get('/visits/{visit_id:int}/check-in-sheet')
@@ -931,6 +962,11 @@ def create_customer(request: Request, db: Session = Depends(get_db), body: dict 
             created_by_user=current_user.username if current_user else None,
         )
         db.add(customer)
+        db.flush()
+        if not customer.code:
+            from app.document_numbers import customer_code
+
+            customer.code = customer_code(customer.id)
         db.commit()
         db.refresh(customer)
         return _json({

@@ -1,5 +1,5 @@
 ---
-description: GermanATO stack, reuse, migrations, and delivery checklist
+description: GermanATO stack, reuse, UX, migrations, and delivery checklist
 alwaysApply: true
 ---
 
@@ -14,18 +14,29 @@ alwaysApply: true
 
 ## Before changing code
 
-1. Read `docs/ARCHITECTURE.md` and `docs/GAP_REPORT.md`
-2. Reuse existing models, routers, pages, and foundation helpers:
-   - `audit_write`, attachments, roles, money, soft_delete, branch
-3. **Extend, don't rewrite.** Prefer additive changes over greenfield replacements.
+1. Inspect existing frontend, backend, DB schema, APIs, auth, and related modules
+2. Read `docs/ARCHITECTURE.md` and `docs/GAP_REPORT.md`
+3. Reuse stack, components, services, conventions, models, routers, pages, foundation helpers (`audit_write`, attachments, roles, money, soft_delete, branch)
+4. Identify what exists; implement only missing or needed improvements
+5. **Extend, don't rewrite.** No unrelated changes.
 
 ## Data & migrations
 
-- Additive migrations only (`migrate_foundation.py` style / additive DDL)
+- Additive / safe migrations only; preserve production data
 - Existing data must keep working (no breaking column type swaps)
+- Reuse permanent record IDs and existing rows; do not re-ask staff for known data
+- Automate dependent updates in backend services + DB transactions
+
+## UX for workshop staff
+
+- Searchable dropdowns, autocomplete, sensible defaults, catalogues
+- Barcode scanning where applicable; automatic calculations
+- Loading, success, error, empty, and validation states
+- Never fake data as production stand-in; never claim untested features work
 
 ## After finishing a feature
 
-1. Update statuses in `docs/GAP_REPORT.md` when work is done
-2. Run build, lint, and tests
-3. Summarize results for the user
+1. Build complete path: UI + API + validation + persistence + permissions + tests as appropriate
+2. Update `docs/GAP_REPORT.md` statuses
+3. Run relevant tests (and build/lint when UI/API touched)
+4. Report modified files, DB changes, test results, remaining issues

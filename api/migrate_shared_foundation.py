@@ -113,44 +113,84 @@ def _unique_index(table: str, column: str, index_name: str) -> None:
             print(f"  (skip index {index_name}: {exc} / {exc2})")
 
 
+def _backfill_sql(table: str, id_col: str, code_col: str, formatter) -> int:
+    """Backfill codes with core columns only so missing ORM cols cannot block."""
+    existing = _existing_columns(table)
+    if code_col not in existing or id_col not in existing:
+        return 0
+    n = 0
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(f'SELECT {id_col} FROM "{table}" WHERE {code_col} IS NULL')
+        ).fetchall()
+        for (row_id,) in rows:
+            conn.execute(
+                text(
+                    f'UPDATE "{table}" SET {code_col} = :code '
+                    f'WHERE {id_col} = :id AND {code_col} IS NULL'
+                ),
+                {"code": formatter(row_id), "id": row_id},
+            )
+            n += 1
+    return n
+
+
 def _backfill() -> None:
+    n = 0
+    n += _backfill_sql("customer", "id", "code", customer_code)
+    n += _backfill_sql("car", "id", "code", car_code)
+    n += _backfill_sql("vendors", "id", "code", vendor_code)
+
     db = SessionLocal()
     try:
         from app.models import (
-            Car,
             CashReceived,
-            Customer,
             Expense,
             Invoice,
             PurchaseOrder,
             RepairOrder,
-            Vendor,
         )
 
-        n = 0
-        for c in db.query(Customer).filter(Customer.code.is_(None)).all():
-            c.code = customer_code(c.id)
+        for inv in db.query(Invoice.id, Invoice.type_of).filter(Invoice.document_no.is_(None)).all():
+            inv_id, type_of = inv[0], inv[1]
+            db.execute(
+                text(
+                    "UPDATE invoice SET document_no = :d WHERE id = :id AND document_no IS NULL"
+                ),
+                {"d": invoice_document_no(inv_id, type_of=type_of), "id": inv_id},
+            )
             n += 1
-        for c in db.query(Car).filter(Car.code.is_(None)).all():
-            c.code = car_code(c.id)
+        for (ro_id,) in db.query(RepairOrder.id).filter(RepairOrder.document_no.is_(None)).all():
+            db.execute(
+                text(
+                    "UPDATE repair_order SET document_no = :d WHERE id = :id AND document_no IS NULL"
+                ),
+                {"d": repair_order_document_no(ro_id), "id": ro_id},
+            )
             n += 1
-        for v in db.query(Vendor).filter(Vendor.code.is_(None)).all():
-            v.code = vendor_code(v.id)
+        for (e_id,) in db.query(Expense.id).filter(Expense.document_no.is_(None)).all():
+            db.execute(
+                text(
+                    "UPDATE expense SET document_no = :d WHERE id = :id AND document_no IS NULL"
+                ),
+                {"d": expense_document_no(e_id), "id": e_id},
+            )
             n += 1
-        for inv in db.query(Invoice).filter(Invoice.document_no.is_(None)).all():
-            inv.document_no = invoice_document_no(inv.id, type_of=inv.type_of)
+        for (cr_id,) in db.query(CashReceived.id).filter(CashReceived.document_no.is_(None)).all():
+            db.execute(
+                text(
+                    "UPDATE cash_received SET document_no = :d WHERE id = :id AND document_no IS NULL"
+                ),
+                {"d": cash_document_no(cr_id), "id": cr_id},
+            )
             n += 1
-        for ro in db.query(RepairOrder).filter(RepairOrder.document_no.is_(None)).all():
-            ro.document_no = repair_order_document_no(ro.id)
-            n += 1
-        for e in db.query(Expense).filter(Expense.document_no.is_(None)).all():
-            e.document_no = expense_document_no(e.id)
-            n += 1
-        for cr in db.query(CashReceived).filter(CashReceived.document_no.is_(None)).all():
-            cr.document_no = cash_document_no(cr.id)
-            n += 1
-        for po in db.query(PurchaseOrder).filter(PurchaseOrder.document_no.is_(None)).all():
-            po.document_no = po_document_no(po.id)
+        for (po_id,) in db.query(PurchaseOrder.id).filter(PurchaseOrder.document_no.is_(None)).all():
+            db.execute(
+                text(
+                    "UPDATE purchase_orders SET document_no = :d WHERE id = :id AND document_no IS NULL"
+                ),
+                {"d": po_document_no(po_id), "id": po_id},
+            )
             n += 1
         db.commit()
         print(f"  backfilled {n} codes/document numbers")

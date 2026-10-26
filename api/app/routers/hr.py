@@ -692,6 +692,13 @@ def create_worker(request: Request, db: Session = Depends(get_db), body: dict | 
             emergency_contact_phone=data.get('emergency_contact_phone'),
             notes=data.get('notes')
         )
+        if 'skills' in data:
+            from app.assignments import set_worker_skills
+
+            skills = data.get('skills')
+            if isinstance(skills, str):
+                skills = [s.strip() for s in skills.split(',') if s.strip()]
+            set_worker_skills(db, worker, skills if isinstance(skills, list) else [])
 
         db.add(worker)
         db.commit()
@@ -873,6 +880,13 @@ def update_worker(worker_id, request: Request, db: Session = Depends(get_db), bo
             worker.emergency_contact_phone = data['emergency_contact_phone']
         if 'notes' in data:
             worker.notes = data['notes']
+        if 'skills' in data:
+            from app.assignments import set_worker_skills
+
+            skills = data.get('skills')
+            if isinstance(skills, str):
+                skills = [s.strip() for s in skills.split(',') if s.strip()]
+            set_worker_skills(db, worker, skills if isinstance(skills, list) else [])
 
         worker.updated_at = datetime.utcnow()
         db.commit()

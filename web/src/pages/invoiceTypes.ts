@@ -3,11 +3,15 @@ export type LineItem = {
   part_number: string
   quantity: number
   price: number
+  inventory_id?: number | null
+  available?: number | null
 }
 
 export type LabourLine = {
   description: string
   price: number
+  labour_code_id?: number | null
+  std_hours?: number | null
 }
 
 export type InvoiceFormState = {
@@ -25,6 +29,8 @@ export type InvoiceFormState = {
   advance: number
   discount: number
   include_tax: boolean
+  expected_duration_hours?: number | null
+  expected_completion_at?: string
   items: LineItem[]
   labours: LabourLine[]
 }
@@ -44,7 +50,9 @@ export const emptyInvoiceForm = (): InvoiceFormState => ({
   advance: 0,
   discount: 0,
   include_tax: false,
-  items: [{ product_name: '', part_number: '', quantity: 1, price: 0 }],
+  expected_duration_hours: null,
+  expected_completion_at: '',
+  items: [{ product_name: '', part_number: '', quantity: 1, price: 0, inventory_id: null, available: null }],
   labours: [],
 })
 
@@ -54,17 +62,50 @@ export function calcNet(form: InvoiceFormState) {
   return items + labour
 }
 
+export function calcDurationHours(form: InvoiceFormState) {
+  return form.labours.reduce((s, l) => s + Number(l.std_hours || 0), 0)
+}
+
+export function missingParts(form: InvoiceFormState) {
+  return form.items
+    .filter((i) => i.inventory_id && i.available != null && Number(i.quantity) > Number(i.available))
+    .map((i) => ({
+      ...i,
+      missing: Number(i.quantity) - Number(i.available || 0),
+    }))
+}
+
 export function toPayload(form: InvoiceFormState, typeOf: 'Invoice' | 'Quote') {
   const net = calcNet(form)
   const tax = form.include_tax ? net * 0.17 : 0
   const total = form.include_tax ? net + tax : net
+  const duration = form.expected_duration_hours ?? calcDurationHours(form)
   return {
     ...form,
     type_of: typeOf,
-    items: form.items.filter((i) => i.product_name && i.quantity > 0),
-    labours: form.labours.filter((l) => l.description),
+    items: form.items
+      .filter((i) => i.product_name && i.quantity > 0)
+      .map((i) => ({
+        product_name: i.product_name,
+        part_number: i.part_number,
+        quantity: i.quantity,
+        price: i.price,
+        inventory_id: i.inventory_id || undefined,
+      })),
+    labours: form.labours
+      .filter((l) => l.description)
+      .map((l) => ({
+        description: l.description,
+        price: l.price,
+        labour_code_id: l.labour_code_id || undefined,
+        std_hours: l.std_hours || undefined,
+      })),
     tax_amount: tax,
     net_total: net,
-    balance: Math.round((total - Number(form.discount) - Number(form.advance)) * 100) / 100,
+    expected_duration_hours: duration || null,
+    expected_completion_at: form.expected_completion_at || null,
+    // Quotes: advance stays 0 — deposits are liabilities via CustomerDeposit
+    advance: typeOf === 'Quote' ? 0 : Number(form.advance),
+    balance: Math.round((total - Number(form.discount) - (typeOf === 'Quote' ? 0 : Number(form.advance))) * 100) / 100,
   }
 }

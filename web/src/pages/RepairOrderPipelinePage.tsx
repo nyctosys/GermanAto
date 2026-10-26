@@ -14,6 +14,29 @@ export function RepairOrderPipelinePage() {
   const [reason, setReason] = useState('')
   const [varDesc, setVarDesc] = useState('')
   const [varPrice, setVarPrice] = useState('0')
+  const [displayTitle, setDisplayTitle] = useState('')
+
+  const ro = useQuery({
+    queryKey: ['ro-detail', id],
+    queryFn: () =>
+      api.get<{
+        id: number
+        document_no?: string
+        display_title?: string
+        version?: number
+      }>(`/api/repair-orders/${id}`),
+    enabled: !!id,
+  })
+
+  const rename = useMutation({
+    mutationFn: () =>
+      api.post(`/api/repair-orders/${id}/rename`, {
+        display_title: displayTitle,
+        version: ro.data?.version,
+        reason: reason || 'Repair order rename',
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ro-detail', id] }),
+  })
 
   const next = useQuery({
     queryKey: ['next-action-ro', id],
@@ -87,12 +110,37 @@ export function RepairOrderPipelinePage() {
 
   if (qcQ.isLoading) return <Loading />
 
+  const docLabel =
+    ro.data?.display_title ||
+    ro.data?.document_no ||
+    (id ? `RO-${String(id).padStart(5, '0')}` : 'RO')
+
   return (
     <div>
-      <PageHeader title={`RO #${id} pipeline`} />
+      <PageHeader title={`${docLabel} pipeline`} />
       {next.data ? (
         <NextActionBanner label={next.data.label} href={next.data.href} hrefLabel="Go" />
       ) : null}
+      <Panel title="Rename (keeps original document no)">
+        {rename.error ? <ErrorBox error={rename.error} /> : null}
+        <p className="muted">
+          Permanent reference: {ro.data?.document_no || `RO-${id}`} · History and links stay on this
+          ID.
+        </p>
+        <div className="form-grid">
+          <Field label="Display title">
+            <input
+              className="input"
+              value={displayTitle || ro.data?.display_title || ''}
+              onChange={(e) => setDisplayTitle(e.target.value)}
+              placeholder="e.g. Civic AC job — Ali"
+            />
+          </Field>
+          <button type="button" className="btn btn-secondary" disabled={rename.isPending} onClick={() => rename.mutate()}>
+            Save title
+          </button>
+        </div>
+      </Panel>
       <Panel title="QC sign-off">
         {postQc.error ? <ErrorBox error={postQc.error} /> : null}
         {qcQ.data?.qc ? (

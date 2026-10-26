@@ -14,6 +14,7 @@ GRANULAR_PERMISSIONS = [
     "adjust_stock",
     "reopen_period",
     "approve_evidence_exception",
+    "override_assignment_conflict",
 ]
 
 ADMIN_PERMISSIONS = [
@@ -83,6 +84,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "adjust_stock",
         "reopen_period",
         "approve_evidence_exception",
+        "override_assignment_conflict",
     ],
     "accountant": [
         "home",
@@ -109,6 +111,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "repair-order",
         "repair-orders-management",
         "qc_signoff",
+        "override_assignment_conflict",
     ],
     "technician": [
         "home",

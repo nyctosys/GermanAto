@@ -19,6 +19,7 @@ OVERRIDE_KINDS = frozenset(
         "evidence_exception",
         "period_reopen",
         "qc_signoff",
+        "assignment_conflict",
     }
 )
 
@@ -31,6 +32,7 @@ OVERRIDE_PERMISSIONS: dict[str, str] = {
     "evidence_exception": "approve_evidence_exception",
     # qc_signoff is used by QC flows; price_edit / delete use reason only via hooks
     "qc_signoff": "qc_signoff",
+    "assignment_conflict": "override_assignment_conflict",
 }
 
 

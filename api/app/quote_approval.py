@@ -171,6 +171,10 @@ def apply_line_decisions(
 
     db.flush()
 
+    from app.estimates import rollup_approval_state
+
+    invoice.approval_state = rollup_approval_state(invoice)
+
     # If any approved parts → reserve
     has_approved_parts = any(
         (i.approval_status or "") == "approved" and i.inventory_id for i in (invoice.items or [])

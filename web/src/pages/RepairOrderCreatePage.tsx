@@ -13,7 +13,12 @@ import {
   Panel,
 } from '../components/ui'
 
-type Worker = { id: number; first_name: string; last_name: string }
+type Worker = {
+  id: number
+  first_name?: string
+  last_name?: string
+  name?: string
+}
 type PartLine = { description: string; quantity: number; part_number: string }
 type LabourLine = { description: string }
 type Visit = {
@@ -374,7 +379,7 @@ export function RepairOrderCreatePage() {
               >
                 {workerList.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.first_name} {w.last_name}
+                    {w.name || `${w.first_name || ''} ${w.last_name || ''}`.trim() || `#${w.id}`}
                   </option>
                 ))}
               </select>

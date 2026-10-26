@@ -37,20 +37,41 @@ export function configureApiClient(opts: {
 export class ApiError extends Error {
   status: number
   details?: string[] | string
+  /** Raw FastAPI detail object when present (e.g. assignment conflict). */
+  detail?: unknown
+  body?: ApiErrorBody
 
-  constructor(message: string, status: number, details?: string[] | string) {
+  constructor(
+    message: string,
+    status: number,
+    details?: string[] | string,
+    detail?: unknown,
+    body?: ApiErrorBody,
+  ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.details = details
+    this.detail = detail
+    this.body = body
   }
 }
 
 async function parseError(res: Response): Promise<ApiError> {
-  const body = (await res.json().catch(() => ({}))) as ApiErrorBody
+  const body = (await res.json().catch(() => ({}))) as ApiErrorBody & {
+    detail?: unknown
+  }
+  const detail = body.detail
+  const detailObj =
+    detail && typeof detail === 'object' && !Array.isArray(detail)
+      ? (detail as Record<string, unknown>)
+      : null
   const message =
-    body.error || body.message || `HTTP ${res.status}: ${res.statusText}`
-  return new ApiError(message, res.status, body.details)
+    (detailObj?.error as string | undefined) ||
+    body.error ||
+    body.message ||
+    `HTTP ${res.status}: ${res.statusText}`
+  return new ApiError(message, res.status, body.details, detail ?? body, body)
 }
 
 async function refreshAccessToken(): Promise<boolean> {
@@ -156,8 +177,28 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   if (res.status === 409) {
     const errBody = (await res.json().catch(() => ({}))) as {
       error?: string
-      detail?: { error?: string; current_version?: number }
+      detail?: {
+        error?: string
+        current_version?: number
+        override_kind?: string
+        conflict?: unknown
+        require_reason?: boolean
+      }
       current_version?: number
+      override_kind?: string
+      conflict?: unknown
+      require_reason?: boolean
+    }
+    // FastAPI handler flattens dict details onto the body for GermanATO.
+    const flat = errBody.detail || errBody
+    if (flat?.override_kind === 'assignment_conflict' || flat?.conflict) {
+      throw new ApiError(
+        (flat as { error?: string }).error || errBody.error || 'Assignment conflict',
+        409,
+        undefined,
+        flat,
+        errBody as ApiErrorBody,
+      )
     }
     const message =
       errBody.error ||

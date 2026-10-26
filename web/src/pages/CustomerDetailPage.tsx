@@ -13,21 +13,6 @@ import {
   Panel,
 } from '../components/ui'
 
-type Customer = {
-  id: number
-  code?: string
-  name?: string
-  phone?: string
-  alternate_phone?: string | null
-  address?: string | null
-  customer_type?: string
-  notes?: string | null
-  consent_whatsapp?: boolean
-  consent_sms?: boolean
-  consent_call?: boolean
-  version?: number
-}
-
 type Vehicle = {
   id: number
   code?: string
@@ -43,6 +28,23 @@ type Vehicle = {
   notes?: string | null
 }
 
+type Customer = {
+  id: number
+  code?: string
+  name?: string
+  phone?: string
+  alternate_phone?: string | null
+  address?: string | null
+  customer_type?: string
+  notes?: string | null
+  consent_whatsapp?: boolean
+  consent_sms?: boolean
+  consent_call?: boolean
+  version?: number
+  vehicles?: Vehicle[]
+  vehicle_count?: number
+}
+
 type Activity = {
   receivable_total?: number
   open_invoice_count?: number
@@ -56,7 +58,22 @@ type Activity = {
     current_status?: string
     created_at?: string
   }>
-  counts?: { invoices?: number; estimates?: number; repairs?: number; vehicles?: number }
+  ownership_history?: Array<{
+    id: number
+    car_id?: number
+    plate_no?: string | null
+    from_customer_name?: string | null
+    to_customer_name?: string | null
+    transfer_date?: string | null
+    reason?: string | null
+  }>
+  counts?: {
+    invoices?: number
+    estimates?: number
+    repairs?: number
+    vehicles?: number
+    ownership_transfers?: number
+  }
 }
 
 type Bundle = {
@@ -118,15 +135,16 @@ export function CustomerDetailPage() {
         engine_no: vehicleForm.engine_no || null,
         notes: vehicleForm.notes || null,
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['customer', customerId] })
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['customer', customerId] })
       setVehicleForm(emptyVehicle)
     },
   })
 
   const c = q.data?.customer
   const activity = q.data?.activity
-  const vehicles = q.data?.vehicles || []
+  // API nests vehicles on customer; keep top-level fallback for older payloads.
+  const vehicles = c?.vehicles || q.data?.vehicles || []
 
   function startEdit() {
     if (!c) return
@@ -533,6 +551,34 @@ export function CustomerDetailPage() {
                         </span>
                         <span className="dash-list__amount">
                           <Money value={inv.net_total || 0} />
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+
+            <Panel title="Ownership history">
+              {(activity?.ownership_history || []).length === 0 ? (
+                <Empty>No ownership transfers on linked vehicles</Empty>
+              ) : (
+                <ul className="dash-list">
+                  {(activity?.ownership_history || []).map((own) => (
+                    <li key={own.id}>
+                      <Link
+                        className="dash-list__row"
+                        to={own.car_id ? `/cars/${own.car_id}` : '/cars'}
+                      >
+                        <span className="dash-list__main">
+                          <span className="dash-list__primary">
+                            {own.plate_no || `Car #${own.car_id}`} ·{' '}
+                            {own.from_customer_name || '—'} → {own.to_customer_name || '—'}
+                          </span>
+                          <span className="dash-list__secondary">
+                            {own.transfer_date || ''}
+                            {own.reason ? ` · ${own.reason}` : ''}
+                          </span>
                         </span>
                       </Link>
                     </li>

@@ -1,6 +1,6 @@
 import { api } from './client'
 
-export type EntityType = 'customer' | 'car' | 'worker' | 'vendor' | 'inventory'
+export type EntityType = 'customer' | 'car' | 'worker' | 'vendor' | 'inventory' | 'labour_code'
 
 export type EntityHit = {
   id: number
@@ -27,6 +27,10 @@ export type EntityHit = {
   barcode?: string | null
   available?: number
   price?: number
+  rate?: number
+  std_hours?: number
+  standard_hours?: number
+  description?: string | null
   employee_id?: string | null
   position?: string | null
 }
@@ -54,11 +58,21 @@ export type CustomerActivity = {
   recent_invoices?: Array<Record<string, unknown>>
   recent_estimates?: Array<Record<string, unknown>>
   recent_repairs?: Array<Record<string, unknown>>
+  ownership_history?: Array<{
+    id: number
+    car_id?: number
+    plate_no?: string | null
+    from_customer_name?: string | null
+    to_customer_name?: string | null
+    transfer_date?: string | null
+    reason?: string | null
+  }>
   counts?: {
     invoices?: number
     estimates?: number
     repairs?: number
     vehicles?: number
+    ownership_transfers?: number
   }
 }
 

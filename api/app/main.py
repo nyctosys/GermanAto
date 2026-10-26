@@ -13,10 +13,12 @@ from app.foundation.branch import DEFAULT_BRANCH_ID
 from app.foundation.hooks import install_foundation_hooks
 from app.routers import auth as auth_router
 from app.routers import (
+    assignments,
     cars,
     cash_received,
     deposits,
     entities,
+    estimates,
     expenses,
     gate_passes,
     hr,
@@ -63,6 +65,25 @@ async def lifespan(_app: FastAPI):
         db.rollback()
     finally:
         db.close()
+    # Additive schema migrations (safe to re-run). Order matters: pipeline
+    # columns before shared-foundation backfill (ORM selects visit_id etc.).
+    import logging
+
+    _log = logging.getLogger("germanato.migrate")
+    for label, import_path in (
+        ("pipeline", "migrate_pipeline"),
+        ("shared_foundation", "migrate_shared_foundation"),
+        ("customers_vehicles", "migrate_customers_vehicles"),
+        ("inventory", "migrate_inventory"),
+        ("job_card_intake", "migrate_job_card_intake"),
+        ("estimates", "migrate_estimates"),
+        ("assignments", "migrate_assignments"),
+    ):
+        try:
+            mod = __import__(import_path)
+            mod.main()
+        except Exception as exc:
+            _log.exception("Startup migration %s failed: %s", label, exc)
     yield
 
 
@@ -114,6 +135,8 @@ app.include_router(settings_router.router, prefix="/api")
 app.include_router(periods.router, prefix="/api")
 app.include_router(labour_codes.router, prefix="/api")
 app.include_router(job_cards.router, prefix="/api")
+app.include_router(estimates.router, prefix="/api")
+app.include_router(assignments.router, prefix="/api")
 app.include_router(public_quotes.router, prefix="/api")
 app.include_router(deposits.router, prefix="/api")
 app.include_router(variations.router, prefix="/api")

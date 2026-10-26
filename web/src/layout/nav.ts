@@ -60,6 +60,7 @@ export const NAV: NavGroup[] = [
     group: 'People',
     items: [
       { label: 'Employees', to: '/hr/employees', permission: 'hr' },
+      { label: 'Scheduling', to: '/hr/scheduling', permission: 'hr' },
       { label: 'Attendance', to: '/hr/attendance', permission: 'hr' },
       { label: 'Salaries', to: '/hr/salaries', permission: 'hr' },
       { label: 'Devices', to: '/hr/devices', permission: 'hr' },

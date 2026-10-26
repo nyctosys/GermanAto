@@ -728,6 +728,7 @@ def search_invoices(request: Request, db: Session = Depends(get_db), current_use
         for invoice in results:
             invoice_data = {
                 "id": invoice.id,
+                "document_no": invoice.document_no,
                 "customer_name": invoice.customer_name,
                 "customer_phone": invoice.customer_phone,
                 "customer_reg_no": invoice.customer_reg_no,
@@ -742,6 +743,8 @@ def search_invoices(request: Request, db: Session = Depends(get_db), current_use
                 "tax_amount": float(invoice.tax_amount),
                 "paid_amount": float(invoice.paid_amount or 0),
                 "status": invoice.status,
+                "approval_state": getattr(invoice, "approval_state", None),
+                "required_advance": float(getattr(invoice, "required_advance", None) or 0),
                 "created_by_user": invoice.created_by_user,
                 "updated_by_user": invoice.updated_by_user,
                 "updated_at": invoice.updated_at.strftime("%Y-%m-%d %H:%M:%S") if invoice.updated_at else None,
