@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useConfirm } from '../components/ConfirmProvider'
 import { checkDuplicate } from '../api/entities'
 import {
   Empty,
@@ -85,6 +86,7 @@ const emptyCar = {
 
 export function CarsPage() {
   const qc = useQueryClient()
+  const { confirm } = useConfirm()
   const [sp, setSp] = useSearchParams()
   const showGate = sp.get('gate_pass') === '1'
   const initialTab = sp.get('tab') === 'customers' ? 'customers' : 'cars'
@@ -563,8 +565,8 @@ export function CarsPage() {
                           <button
                             type="button"
                             className="btn btn-danger btn-sm"
-                            onClick={() => {
-                              if (confirm('Delete customer? Vehicles stay for history.'))
+                            onClick={async () => {
+                              if (await confirm({ message: 'Delete customer? Vehicles stay for history.', danger: true, confirmLabel: 'Delete' }))
                                 deleteCustomer.mutate(c.id)
                             }}
                           >
@@ -762,8 +764,8 @@ export function CarsPage() {
                           <button
                             type="button"
                             className="btn btn-danger btn-sm"
-                            onClick={() => {
-                              if (confirm('Delete vehicle?')) deleteCar.mutate(car.id)
+                            onClick={async () => {
+                              if (await confirm({ message: 'Delete this vehicle?', danger: true, confirmLabel: 'Delete' })) deleteCar.mutate(car.id)
                             }}
                           >
                             Delete

@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { ErrorBox, Loading, PageHeader } from '../components/ui'
 import { InvoiceDocumentForm } from './InvoiceDocumentForm'
@@ -8,6 +8,7 @@ import { emptyInvoiceForm, toPayload, type InvoiceFormState } from './invoiceTyp
 
 type InvoiceDetail = {
   id: number
+  document_no?: string | null
   customer_id?: number | null
   car_id?: number | null
   customer_name: string
@@ -22,6 +23,9 @@ type InvoiceDetail = {
   advance?: number
   discount?: number
   include_tax?: boolean
+  locked?: boolean
+  locked_at?: string | null
+  status?: string
   items?: { product_name: string; part_number?: string; quantity: number; price: number }[]
   labours?: { description: string; price: number }[]
 }
@@ -37,9 +41,15 @@ export function InvoiceEditPage() {
     queryFn: () => api.get<InvoiceDetail | { invoice: InvoiceDetail }>(`/api/invoice/${id}`),
   })
 
+  const inv: InvoiceDetail | undefined = detail.data
+    ? 'invoice' in detail.data
+      ? detail.data.invoice
+      : detail.data
+    : undefined
+  const locked = !!(inv?.locked || inv?.locked_at)
+
   useEffect(() => {
-    if (!detail.data) return
-    const inv = 'invoice' in detail.data ? detail.data.invoice : detail.data
+    if (!inv) return
     setForm({
       customer_id: inv.customer_id || null,
       car_id: inv.car_id || null,
@@ -66,7 +76,7 @@ export function InvoiceEditPage() {
         price: l.price,
       })),
     })
-  }, [detail.data])
+  }, [inv])
 
   const save = useMutation({
     mutationFn: () =>
@@ -76,15 +86,33 @@ export function InvoiceEditPage() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
+    if (locked) return
     save.mutate()
   }
 
   if (detail.isLoading) return <Loading />
   if (detail.error) return <ErrorBox error={detail.error} />
 
+  const title = locked
+    ? `View ${inv?.document_no || `invoice #${id}`}`
+    : `Edit ${inv?.document_no || `invoice #${id}`}`
+
   return (
     <div>
-      <PageHeader title={`Edit invoice #${id}`} />
+      <PageHeader
+        title={title}
+        actions={
+          <Link className="btn btn-secondary" to="/invoices">
+            ← Invoices
+          </Link>
+        }
+      />
+      {locked ? (
+        <p className="muted" style={{ marginBottom: 12 }}>
+          This invoice is locked because a payment was recorded (partial or full). Use a credit
+          note for adjustments, or record further payments from the invoices list.
+        </p>
+      ) : null}
       {save.error ? <ErrorBox error={save.error} /> : null}
       <InvoiceDocumentForm
         title="Customer & vehicle"
@@ -93,6 +121,16 @@ export function InvoiceEditPage() {
         onSubmit={onSubmit}
         busy={save.isPending}
         submitLabel="Save changes"
+        cancelTo="/invoices"
+        readOnly={locked}
+        footerNote={
+          locked ? (
+            <span className="muted">
+              Status: {inv?.status || '—'}
+              {inv?.locked_at ? ` · Locked ${inv.locked_at}` : ''}
+            </span>
+          ) : null
+        }
       />
     </div>
   )

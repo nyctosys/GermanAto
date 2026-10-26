@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.foundation.overrides import assert_payment_gate_override
 from app.foundation.settings import payment_gate_enabled
-from app.invoice_math import invoice_amount_remaining
+from app.invoice_math import calculate_invoice_status, invoice_amount_remaining
 from app.models import GatePass, Invoice, JobCard, QcSignoff, RepairOrder, Variation
 
 
@@ -18,7 +18,8 @@ def assert_invoice_unlocked(invoice: Invoice) -> None:
         raise HTTPException(
             status_code=409,
             detail={
-                "error": "Invoice is locked after issue. Use a credit note / reversal.",
+                "error": "Invoice is locked after a payment was recorded. "
+                "Use a credit note / reversal for adjustments.",
                 "locked": True,
             },
         )
@@ -27,6 +28,15 @@ def assert_invoice_unlocked(invoice: Invoice) -> None:
 def lock_invoice(invoice: Invoice) -> None:
     if invoice.locked_at is None:
         invoice.locked_at = datetime.utcnow()
+
+
+def lock_invoice_if_paid(invoice: Invoice) -> None:
+    """Lock only once the invoice is partially or fully paid; unpaid stays editable."""
+    if (invoice.type_of or "").lower() != "invoice":
+        return
+    status = calculate_invoice_status(invoice)
+    if status in ("partially_paid", "paid"):
+        lock_invoice(invoice)
 
 
 def assert_can_create_job_card(db: Session, *, car_id: int | None, visit_id: int | None) -> None:
@@ -194,6 +204,16 @@ def next_action(db: Session, *, job_card_id: int | None = None, repair_order_id:
             .first()
         )
         if not qc:
+            if not getattr(ro, "submitted_for_qc_at", None) and (ro.current_status or "").lower() not in (
+                "awaiting_qc",
+                "completed",
+                "complete",
+            ):
+                return {
+                    "label": "Execute repair work, then submit for inspection",
+                    "code": "execution",
+                    "href": f"/repair-orders/{ro.id}/execution",
+                }
             return {
                 "label": "Complete QC sign-off before invoicing",
                 "code": "qc",

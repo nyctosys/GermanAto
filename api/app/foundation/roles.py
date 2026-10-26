@@ -14,6 +14,8 @@ GRANULAR_PERMISSIONS = [
     "adjust_stock",
     "reopen_period",
     "approve_evidence_exception",
+    "approve_po",
+    "override_po_price",
 ]
 
 ADMIN_PERMISSIONS = [
@@ -83,6 +85,8 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "adjust_stock",
         "reopen_period",
         "approve_evidence_exception",
+        "approve_po",
+        "override_po_price",
     ],
     "accountant": [
         "home",
@@ -100,6 +104,8 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "reports",
         "settings",
         "approve_discount",
+        "approve_po",
+        "override_po_price",
     ],
     "service_advisor": [
         "home",
@@ -123,6 +129,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "repair-order",
         "repair-orders-management",
         "vendors",
+        "vendor-detail",
         "settings",
         "adjust_stock",
     ],
@@ -131,6 +138,8 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "inventory",
         "repair-order",
         "repair-orders-management",
+        "vendors",
+        "vendor-detail",
         "settings",
         "adjust_stock",
     ],

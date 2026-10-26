@@ -27,6 +27,9 @@ export type EntityHit = {
   barcode?: string | null
   available?: number
   price?: number
+  avg_cost?: number
+  unit?: string | null
+  preferred_vendor_id?: number | null
   employee_id?: string | null
   position?: string | null
 }

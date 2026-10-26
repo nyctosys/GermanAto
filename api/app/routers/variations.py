@@ -61,7 +61,9 @@ def send(
     request: Request,
     db: Session = Depends(get_db),
     body: dict | None = Body(None),
-    current_user=Depends(require_roles(["admin", "manager", "service_advisor", "accountant"])),
+    current_user=Depends(
+        require_roles(["admin", "manager", "service_advisor", "accountant", "technician"])
+    ),
 ):
     from app.config import settings
 

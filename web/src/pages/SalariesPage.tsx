@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { api } from '../api/client'
+import { useConfirm } from '../components/ConfirmProvider'
 import {
   Empty,
   ErrorBox,
@@ -16,6 +17,7 @@ type Worker = { id: number; first_name: string; last_name: string; department?: 
 
 export function SalariesPage() {
   const qc = useQueryClient()
+  const { confirm } = useConfirm()
   const now = new Date()
   const [year, setYear] = useState(String(now.getFullYear()))
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
@@ -106,8 +108,8 @@ export function SalariesPage() {
               type="button"
               className="btn"
               disabled={runPayroll.isPending}
-              onClick={() => {
-                if (confirm('Run payroll for this period?')) runPayroll.mutate()
+              onClick={async () => {
+                if (await confirm({ title: 'Run payroll', message: 'Run payroll for this period?', confirmLabel: 'Continue' })) runPayroll.mutate()
               }}
             >
               Run payroll

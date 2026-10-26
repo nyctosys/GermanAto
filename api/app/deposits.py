@@ -104,11 +104,20 @@ def apply_to_invoice(
     deposit.status = "applied"
     deposit.applied_invoice_id = invoice.id
     deposit.updated_at = datetime.utcnow()
-    invoice.advance = float(invoice.advance or 0) + float(deposit.amount or 0)
+    amount = float(deposit.amount or 0)
+    invoice.advance = float(invoice.advance or 0) + amount
     from app.invoice_math import calculate_invoice_status, invoice_amount_remaining
 
     invoice.balance = invoice_amount_remaining(invoice)
     invoice.status = calculate_invoice_status(invoice)
+    from app.customer_ar import post_deposit_application
+
+    post_deposit_application(
+        db,
+        invoice,
+        amount=amount,
+        username=getattr(user, "username", None),
+    )
     audit_write(
         db,
         user=user,

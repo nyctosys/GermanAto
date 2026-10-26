@@ -367,11 +367,17 @@ def code_matches(column, term):
 
 
 def inventory_item_to_dict(item, movement_totals=None):
+    from app.stock import pieces_as_packs
+
     reserved = int(getattr(item, 'reserved', 0) or 0)
     on_hand = int(item.quantity or 0)
+    avg_cost = float(getattr(item, 'avg_cost', 0) or 0)
+    pack_size = max(1, int(getattr(item, 'pack_size', 1) or 1))
+    packs, loose = pieces_as_packs(on_hand, pack_size)
     item_data = {
         'id': item.id,
         'part_number': item.part_number,
+        'sku': item.part_number,  # workshop alias
         'barcode': item.barcode,
         'manufacturer_part_number': item.manufacturer_part_number,
         'name': item.name,
@@ -381,7 +387,14 @@ def inventory_item_to_dict(item, movement_totals=None):
         'reserved': reserved,
         'available': on_hand - reserved,
         'price': float(item.price or 0),
-        'avg_cost': float(getattr(item, 'avg_cost', 0) or 0),
+        'avg_cost': avg_cost,
+        'stock_value': round(on_hand * avg_cost, 2),
+        'unit': getattr(item, 'unit', None) or 'pcs',
+        'pack_size': pack_size,
+        'packs_on_hand': packs,
+        'loose_pieces': loose,
+        'valuation_method': getattr(item, 'valuation_method', None) or 'avg',
+        'preferred_vendor_id': getattr(item, 'preferred_vendor_id', None),
         'description': item.description,
         'location': item.location,
         'reorder_level': item.reorder_level,
@@ -442,7 +455,13 @@ def find_inventory_item_by_code(db: Session, code):
             return row
     return None
 
-def ensure_unique_inventory_codes(db: Session, barcode=None, manufacturer_part_number=None, item_id: int=None):
+def ensure_unique_inventory_codes(
+    db: Session,
+    barcode=None,
+    manufacturer_part_number=None,
+    part_number=None,
+    item_id: int = None,
+):
     if barcode:
         existing = db.query(Inventory).filter(Inventory.barcode == barcode)
         if item_id:
@@ -458,6 +477,14 @@ def ensure_unique_inventory_codes(db: Session, barcode=None, manufacturer_part_n
             existing = existing.filter(Inventory.id != item_id)
         if existing.first():
             return f"Manufacturer part number {manufacturer_part_number} is already assigned to another inventory item"
+
+    if part_number:
+        sku = str(part_number).strip()
+        existing = db.query(Inventory).filter(Inventory.part_number == sku)
+        if item_id:
+            existing = existing.filter(Inventory.id != item_id)
+        if existing.first():
+            return f"SKU {sku} is already assigned to another inventory item"
 
     return None
 
@@ -505,8 +532,12 @@ def get_inventory(request: Request, db: Session = Depends(get_db), current_user=
         # Limit per_page to prevent excessive memory usage
         per_page = min(per_page, 200)
         
-        # Get search parameters
-        search = request.query_params.get('search', '').strip()
+        # Get search parameters (`q` alias used by job-card / EntitySelect)
+        search = (
+            request.query_params.get('search')
+            or request.query_params.get('q')
+            or ''
+        ).strip()
         category = request.query_params.get('category', '').strip()
         
         # Build query
@@ -587,46 +618,92 @@ async def create_inventory_item(request: Request, db: Session = Depends(get_db),
             return _json({'error': 'Validation failed', 'details': validation_errors}, 400)
         
         # Extract and clean data
+        from app.stock import SAVED_UNITS, StockError, opening_stock, to_base_pieces
+
         name = str(data.get('name')).strip()
         category = str(data.get('category')).strip()
         barcode = clean_optional_text(data.get('barcode'))
         manufacturer_part_number = clean_optional_text(data.get('manufacturer_part_number'))
-        quantity = int(data.get('quantity', 0))
+        # SKU = shop code (part_number). Manual if provided; else auto PN### after insert.
+        manual_sku = clean_optional_text(data.get('sku') or data.get('part_number'))
         description = str(data.get('description', '')).strip() if data.get('description') else None
         location = str(data.get('location', '')).strip() if data.get('location') else None
         reorder_level = int(data.get('reorder_level', 5))
+        pack_size = max(1, int(data.get('pack_size') or 1))
+        unit = (str(data.get('unit') or 'pcs').strip().lower() or 'pcs')[:20]
+        if unit not in SAVED_UNITS and unit != 'pcs':
+            # allow custom short units; still prefer catalogue
+            unit = unit[:20]
+        valuation_method = (str(data.get('valuation_method') or 'avg').strip().lower() or 'avg')
+        if valuation_method not in ('avg',):
+            return _json({'error': 'Only avg valuation is supported currently'}, 400)
+
+        opening_qty = 0
+        try:
+            if data.get('packs') not in (None, '') or data.get('pieces') not in (None, ''):
+                opening_qty = to_base_pieces(
+                    pieces=data.get('pieces', data.get('quantity', 0)),
+                    packs=data.get('packs'),
+                    pack_size=pack_size,
+                )
+            else:
+                opening_qty = max(0, int(data.get('quantity', 0) or 0))
+        except (TypeError, ValueError, StockError) as exc:
+            return _json({'error': str(exc)}, 400)
 
         code_error = ensure_unique_inventory_codes(
             db,
             barcode=barcode,
-            manufacturer_part_number=manufacturer_part_number
+            manufacturer_part_number=manufacturer_part_number,
+            part_number=manual_sku,
         )
         if code_error:
             return _json({'error': code_error}, 400)
         
-        # Create inventory item
+        # Create inventory item — qty starts at 0; opening goes through ledger
         try:
             inventory_item = Inventory(
                 name=name,
                 category=category,
                 barcode=barcode,
                 manufacturer_part_number=manufacturer_part_number,
-                quantity=max(0, quantity),
+                quantity=0,
                 reserved=0,
                 price=float(data.get('price') or 0),
+                avg_cost=float(data.get('avg_cost') or data.get('unit_cost') or 0),
                 description=description,
                 location=location,
                 reorder_level=reorder_level,
+                reorder_quantity=int(data.get('reorder_quantity') or 10),
                 min_level=int(data['min_level']) if data.get('min_level') not in (None, '') else None,
                 max_level=int(data['max_level']) if data.get('max_level') not in (None, '') else None,
+                unit=unit,
+                pack_size=pack_size,
+                valuation_method=valuation_method,
+                preferred_vendor_id=(
+                    int(data['preferred_vendor_id'])
+                    if data.get('preferred_vendor_id') not in (None, '')
+                    else None
+                ),
                 alternate_codes=data.get('alternate_codes'),
                 pending_purchase=bool(data.get('pending_purchase', False)),
                 image_path=image_path,
             )
+            if manual_sku:
+                inventory_item.part_number = manual_sku
             db.add(inventory_item)
             db.flush()
-            if not inventory_item.part_number:
+            if not (inventory_item.part_number or '').strip():
                 inventory_item.part_number = inventory_item.generate_part_number()
+            if opening_qty > 0:
+                opening_stock(
+                    db,
+                    item=inventory_item,
+                    qty=opening_qty,
+                    unit_cost=data.get('avg_cost') or data.get('unit_cost') or inventory_item.avg_cost,
+                    created_by=getattr(current_user, 'id', None),
+                    notes=data.get('notes') or 'Opening stock on create',
+                )
             db.commit()
             
             logger.info(f"Inventory item created successfully: ID {inventory_item.id}")
@@ -989,6 +1066,54 @@ def draft_pos_from_reorder(
     return _json({'message': f'Drafted {len(created)} POs', 'purchase_orders': created}, 201)
 
 
+@router.get('/inventory/units')
+def list_saved_units(current_user=Depends(get_current_user)):
+    from app.stock import SAVED_UNITS
+
+    return _json({'units': list(SAVED_UNITS)})
+
+
+@router.get('/inventory/valuation')
+def inventory_valuation(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'inventory_manager', 'accountant'])),
+):
+    """Stock valuation rollup: on_hand × avg_cost (weighted-average method)."""
+    items = db.query(Inventory).filter(Inventory.deleted_at.is_(None)).all()
+    rows = []
+    total_value = 0.0
+    total_qty = 0
+    for item in items:
+        d = inventory_item_to_dict(item)
+        value = float(d.get('stock_value') or 0)
+        total_value += value
+        total_qty += int(d.get('on_hand') or 0)
+        rows.append(
+            {
+                'id': d['id'],
+                'sku': d.get('sku'),
+                'name': d['name'],
+                'on_hand': d['on_hand'],
+                'unit': d.get('unit'),
+                'pack_size': d.get('pack_size'),
+                'avg_cost': d.get('avg_cost'),
+                'stock_value': value,
+                'valuation_method': d.get('valuation_method'),
+            }
+        )
+    rows.sort(key=lambda r: r['stock_value'], reverse=True)
+    return _json(
+        {
+            'valuation_method': 'avg',
+            'total_on_hand': total_qty,
+            'total_value': round(total_value, 2),
+            'currency': 'PKR',
+            'items': rows,
+            'count': len(rows),
+        }
+    )
+
+
 @router.post('/inventory/adjust')
 def adjust_inventory_stock(
     request: Request,
@@ -998,7 +1123,7 @@ def adjust_inventory_stock(
 ):
     """Stock adjustment — requires adjust_stock permission, reason, and evidence."""
     from app.foundation.overrides import require_override
-    from app.stock import StockError, adjust as stock_adjust
+    from app.stock import StockError, adjust as stock_adjust, to_base_pieces
 
     data = body or {}
     item_id = data.get('inventory_id') or data.get('item_id')
@@ -1008,12 +1133,27 @@ def adjust_inventory_stock(
     if not item:
         return _json({'error': 'Inventory item not found'}, 404)
     try:
-        delta = int(data.get('delta') if data.get('delta') is not None else data.get('quantity_change', 0))
-    except (TypeError, ValueError):
-        return _json({'error': 'delta must be an integer'}, 400)
+        if data.get('packs') not in (None, '') or data.get('pieces') not in (None, ''):
+            base = to_base_pieces(
+                pieces=data.get('pieces'),
+                packs=data.get('packs'),
+                pack_size=int(getattr(item, 'pack_size', 1) or 1),
+            )
+            # sign from delta if provided, else positive add
+            sign = -1 if int(data.get('delta') or data.get('quantity_change') or 1) < 0 else 1
+            delta = sign * base
+        else:
+            delta = int(
+                data.get('delta')
+                if data.get('delta') is not None
+                else data.get('quantity_change', 0)
+            )
+    except (TypeError, ValueError, StockError) as exc:
+        return _json({'error': str(exc)}, 400)
 
     reason = data.get('reason')
     evidence = data.get('evidence_path') or data.get('attachment_path')
+    allow_negative = bool(data.get('allow_negative'))
     try:
         require_override(db, current_user, 'stock_adjustment', reason=reason)
     except Exception as exc:
@@ -1032,6 +1172,7 @@ def adjust_inventory_stock(
             evidence_path=evidence,
             created_by=current_user.id if current_user else None,
             notes=data.get('notes'),
+            allow_negative=allow_negative,
         )
         db.commit()
         return _json({'message': 'Stock adjusted', 'item': inventory_item_to_dict(item), 'movement': txn.to_dict()}, 200)
@@ -1042,6 +1183,68 @@ def adjust_inventory_stock(
         db.rollback()
         logger.error(f"adjust stock failed: {e}")
         return _json({'error': 'Failed to adjust stock'}, 500)
+
+
+@router.post('/inventory/wastage')
+@idempotent_create
+def record_inventory_wastage(
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'inventory_manager'])),
+):
+    """Confirmed wastage / scrap write-off (not a generic adjustment)."""
+    from app.foundation.overrides import require_audit_reason
+    from app.stock import StockError, to_base_pieces, wastage as stock_wastage
+
+    data = body or {}
+    item_id = data.get('inventory_id') or data.get('item_id')
+    if not item_id:
+        return _json({'error': 'inventory_id is required'}, 400)
+    item = db.get(Inventory, int(item_id))
+    if not item:
+        return _json({'error': 'Inventory item not found'}, 404)
+    reason = data.get('reason')
+    try:
+        require_audit_reason(kind='stock_adjustment', reason=reason)
+        if data.get('packs') not in (None, '') or data.get('pieces') not in (None, ''):
+            qty = to_base_pieces(
+                pieces=data.get('pieces') or data.get('qty') or data.get('quantity'),
+                packs=data.get('packs'),
+                pack_size=int(getattr(item, 'pack_size', 1) or 1),
+            )
+        else:
+            qty = int(data.get('qty') or data.get('quantity') or 0)
+        txn = stock_wastage(
+            db,
+            item=item,
+            qty=qty,
+            reason=reason,
+            created_by=getattr(current_user, 'id', None),
+            notes=data.get('notes'),
+            evidence_path=data.get('evidence_path') or data.get('attachment_path'),
+        )
+        db.commit()
+        return _json(
+            {
+                'message': 'Wastage recorded',
+                'item': inventory_item_to_dict(item),
+                'movement': txn.to_dict(),
+            },
+            201,
+        )
+    except StockError as exc:
+        db.rollback()
+        return _json({'error': str(exc)}, 400)
+    except Exception as exc:
+        from fastapi import HTTPException
+
+        db.rollback()
+        if isinstance(exc, HTTPException):
+            detail = exc.detail if isinstance(exc.detail, dict) else {'error': str(exc.detail)}
+            return _json(detail, exc.status_code)
+        logger.error(f"wastage failed: {exc}")
+        return _json({'error': 'Failed to record wastage'}, 500)
 
 
 @router.post('/inventory/pending-item')
@@ -1504,21 +1707,49 @@ def get_inventory_transactions_route(request: Request, db: Session = Depends(get
             except ValueError:
                 return _json({'error': 'Invalid date_to format. Use YYYY-MM-DD'}, 400)
         
-        # Validate transaction type
-        valid_types = ['issue_out', 'received', 'adjustment']
+        # Accept ledger types + legacy aliases (+ UI shorthand groups)
+        type_aliases = {
+            'in': ['po_receive', 'received', 'opening', 'return_from_ro'],
+            'out': ['issue_to_ro', 'issue_out', 'wastage'],
+            'adjust': ['adjustment'],
+            'restock': ['po_receive', 'received', 'opening'],
+        }
+        valid_types = [
+            'po_receive',
+            'reserve',
+            'release',
+            'issue_to_ro',
+            'return_from_ro',
+            'adjustment',
+            'wastage',
+            'opening',
+            'issue_out',
+            'received',
+            *type_aliases.keys(),
+        ]
+        # Also accept ?type= from History UI
+        if not transaction_type:
+            transaction_type = request.query_params.get('type')
         if transaction_type and transaction_type not in valid_types:
             return _json({'error': f'Invalid transaction_type. Valid types: {valid_types}'}, 400)
+
+        type_filter = type_aliases.get(transaction_type, transaction_type)
         
         # Get transactions using utility function
         transactions, pagination_info = get_inventory_transactions(db, 
             inventory_id=inventory_id,
-            transaction_type=transaction_type,
+            transaction_type=type_filter,
             repair_order_id=repair_order_id,
             date_from=date_from_obj,
             date_to=date_to_obj,
             page=page,
             per_page=per_page
         )
+        # Normalize display fields for UI
+        for row in transactions:
+            if isinstance(row, dict):
+                row.setdefault('item_name', row.get('inventory_name'))
+                row.setdefault('reference', row.get('reference_description'))
         
         return _json({
             'transactions': transactions,
@@ -1592,6 +1823,9 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
         category = str(data.get('category')).strip()
         barcode = clean_optional_text(data.get('barcode'))
         manufacturer_part_number = clean_optional_text(data.get('manufacturer_part_number'))
+        manual_sku = None
+        if 'sku' in data or 'part_number' in data:
+            manual_sku = clean_optional_text(data.get('sku') or data.get('part_number'))
         description = str(data.get('description', '')).strip() if data.get('description') else None
         location = str(data.get('location', '')).strip() if data.get('location') else None
         reorder_level = int(data.get('reorder_level', 5))
@@ -1612,7 +1846,8 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
             db,
             barcode=barcode,
             manufacturer_part_number=manufacturer_part_number,
-            item_id=item.id
+            part_number=manual_sku,
+            item_id=item.id,
         )
         if code_error:
             return _json({'error': code_error}, 400)
@@ -1623,6 +1858,8 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
             item.category = category
             item.barcode = barcode
             item.manufacturer_part_number = manufacturer_part_number
+            if manual_sku:
+                item.part_number = manual_sku
             item.description = description
             item.location = location
             item.reorder_level = reorder_level
@@ -1632,6 +1869,18 @@ async def update_inventory_item(item_id: int, request: Request, db: Session = De
                 item.max_level = int(data['max_level'])
             if data.get('reorder_quantity') is not None:
                 item.reorder_quantity = int(data['reorder_quantity'])
+            if data.get('unit') is not None:
+                item.unit = (str(data.get('unit') or 'pcs').strip().lower() or 'pcs')[:20]
+            if data.get('pack_size') is not None:
+                item.pack_size = max(1, int(data['pack_size'] or 1))
+            if data.get('valuation_method') is not None:
+                vm = (str(data.get('valuation_method') or 'avg').strip().lower() or 'avg')
+                if vm not in ('avg',):
+                    return _json({'error': 'Only avg valuation is supported currently'}, 400)
+                item.valuation_method = vm
+            if 'preferred_vendor_id' in data:
+                raw = data.get('preferred_vendor_id')
+                item.preferred_vendor_id = int(raw) if raw not in (None, '') else None
             if data.get('superseded_by_id') is not None:
                 item.superseded_by_id = int(data['superseded_by_id']) or None
             if 'alternate_codes' in data:

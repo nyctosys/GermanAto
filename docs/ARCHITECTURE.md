@@ -38,8 +38,9 @@ Germanato/
       document_links.py    # Resolve customer/car for invoices & ROs
       period_lock.py       # Month close guards for finance writes
       invoice_math.py      # Invoice totals helpers
-      inventory_*.py       # Stock / RO parts helpers
-      payroll.py, petty_cash.py
+    inventory_*.py       # Stock / RO parts helpers
+    repair_execution.py  # Technician time / parts / faults / job cost
+    payroll.py, petty_cash.py
       whatsapp_notifications.py
       foundation/          # Branch, money (paisa), audit, attachments, roles, soft delete
       routers/             # HTTP endpoints by domain
@@ -84,9 +85,11 @@ Invoice ──< InvoiceItem, InvoiceLabour
 RepairOrder ──< RepairOrderPart, RepairOrderLabour
 RepairOrderPart >── Inventory (optional)
 Inventory ──< InventoryTransaction (stock movements: po_receive/reserve/release/issue_to_ro/return_from_ro/adjustment)
-PurchaseOrder ── GRN → Inventory qty + avg_cost; VendorLedger payable
+PurchaseOrder ── GoodsReceipt (GRN) → Inventory qty + avg_cost
+SupplierInvoice → VendorLedger debit (payable); SupplierPayment → credit
+SupplierCreditNote → return_to_vendor + ledger credit
 
-Vendor ──< VendorLedger, PurchaseOrder
+Vendor ──< VendorLedger, PurchaseOrder, GoodsReceipt, SupplierInvoice
 Worker ──< AttendanceRecord, SalaryAdvance, PayrollRun
 ZKTecoDevice ──< AttendanceRecord
 Expense, CashReceived, FinancialPeriod

@@ -268,6 +268,13 @@ class Inventory(FoundationMixin, Base):
     reorder_quantity: Mapped[int] = mapped_column(Integer, default=10)
     min_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Store / UOM — stock qty is always stored in base pieces
+    unit: Mapped[str] = mapped_column(String(20), default="pcs")
+    pack_size: Mapped[int] = mapped_column(Integer, default=1)  # pieces per pack (1 = no packs)
+    valuation_method: Mapped[str] = mapped_column(String(20), default="avg")  # avg (FIFO later)
+    preferred_vendor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     superseded_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("inventory.id"), nullable=True
     )
@@ -452,6 +459,11 @@ class RepairOrder(FoundationMixin, Base):
     )
     qc_signoff_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     payment_gate_bypassed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Repair execution (additive)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_for_qc_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    labour_cost_total: Mapped[float] = mapped_column(Float, default=0.0)
+    parts_cost_total: Mapped[float] = mapped_column(Float, default=0.0)
 
     parts: Mapped[list[RepairOrderPart]] = relationship(
         "RepairOrderPart", backref="repair_order", cascade="all, delete-orphan"
@@ -478,6 +490,8 @@ class RepairOrderPart(FoundationMixin, Base):
     # shop_stock | customer_supplied — customer-supplied: labour only, no stock/margin
     ownership_type: Mapped[str] = mapped_column(String(30), default="shop_stock")
     old_parts_returned: Mapped[bool] = mapped_column(Boolean, default=False)
+    approval_status: Mapped[str] = mapped_column(String(20), default="approved")
+    unit_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class RepairOrderLabour(FoundationMixin, Base):
@@ -491,6 +505,20 @@ class RepairOrderLabour(FoundationMixin, Base):
         ForeignKey("labour_codes.id", ondelete="SET NULL"), nullable=True
     )
     from_variation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Repair execution (additive) — actual_hours feed job cost, NOT payroll
+    assigned_worker_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    approval_status: Mapped[str] = mapped_column(String(20), default="approved")
+    std_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_hours: Mapped[float] = mapped_column(Float, default=0.0)
+    labour_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    labour_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    line_notes: Mapped[str | None] = mapped_column(Text)
 
 
 class Expense(FoundationMixin, Base):
@@ -633,6 +661,9 @@ class Vendor(FoundationMixin, Base):
     email: Mapped[str | None] = mapped_column(String(255))
     address: Mapped[str] = mapped_column(Text)
     cnic: Mapped[str | None] = mapped_column(String(20))
+    payment_terms_days: Mapped[int] = mapped_column(Integer, default=30)
+    bank_details: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -661,6 +692,9 @@ class Vendor(FoundationMixin, Base):
             "email": self.email,
             "address": self.address,
             "cnic": self.cnic,
+            "payment_terms_days": int(self.payment_terms_days or 30),
+            "bank_details": self.bank_details,
+            "notes": self.notes,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
         }
@@ -681,30 +715,117 @@ class VendorLedger(FoundationMixin, Base):
     created_by_user: Mapped[str | None] = mapped_column(String(80))
     payment_notes: Mapped[str | None] = mapped_column(Text)
     attachment_path: Mapped[str | None] = mapped_column(String(255))
+    # Soft links to AP docs (no FK — avoids circular create_all cycles)
+    supplier_invoice_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    supplier_payment_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    supplier_credit_note_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    goods_receipt_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     def __repr__(self) -> str:
         return f"<VendorLedger {self.vendor_id} - {self.description}>"
 
     def to_dict(self) -> dict:
+        debit = float(self.debit or 0)
+        credit = float(self.credit or 0)
+        entry_type = "debit" if debit > 0 and credit == 0 else "credit" if credit > 0 else "mixed"
         return {
             "id": self.id,
             "vendor_id": self.vendor_id,
             "date": self.date.strftime("%Y-%m-%d"),
             "description": self.description,
             "folio": self.folio,
-            "debit": float(self.debit),
-            "credit": float(self.credit),
+            "debit": debit,
+            "credit": credit,
+            "entry_type": entry_type,
+            "amount": debit if debit > 0 else credit,
             "balance": float(self.balance),
             "created_by_user": self.created_by_user,
             "payment_notes": self.payment_notes,
             "attachment_path": self.attachment_path,
+            "supplier_invoice_id": self.supplier_invoice_id,
+            "supplier_payment_id": self.supplier_payment_id,
+            "supplier_credit_note_id": self.supplier_credit_note_id,
+            "goods_receipt_id": self.goods_receipt_id,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
 
-class PurchaseOrder(FoundationMixin, Base):
-    """PO workflow: draft → ordered → partial/received → closed.
+class CustomerLedger(FoundationMixin, Base):
+    """Customer AR: debit on invoice finalize (accrual), credit on verified payment / CN."""
 
+    __tablename__ = "customer_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), index=True)
+    date: Mapped[date] = mapped_column(Date)
+    description: Mapped[str] = mapped_column(String(500))
+    folio: Mapped[str | None] = mapped_column(String(100))
+    debit: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    credit: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    balance: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    invoice_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoice.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    credit_note_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    cash_received_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    payment_notes: Mapped[str | None] = mapped_column(Text)
+
+    def to_dict(self) -> dict:
+        debit = float(self.debit or 0)
+        credit = float(self.credit or 0)
+        return {
+            "id": self.id,
+            "customer_id": self.customer_id,
+            "date": self.date.strftime("%Y-%m-%d") if self.date else None,
+            "description": self.description,
+            "folio": self.folio,
+            "debit": debit,
+            "credit": credit,
+            "balance": float(self.balance or 0),
+            "invoice_id": self.invoice_id,
+            "credit_note_id": self.credit_note_id,
+            "cash_received_id": self.cash_received_id,
+            "created_by_user": self.created_by_user,
+            "payment_notes": self.payment_notes,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
+        }
+
+
+class CustomerCreditNote(FoundationMixin, Base):
+    """Authorized reduction of a posted customer invoice (not a new invoice rewrite)."""
+
+    __tablename__ = "customer_credit_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoice.id"), index=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    amount: Mapped[float] = mapped_column(Float)
+    reason: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(20), default="posted")
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "invoice_id": self.invoice_id,
+            "customer_id": self.customer_id,
+            "amount": float(self.amount or 0),
+            "reason": self.reason,
+            "status": self.status,
+            "created_by_user": self.created_by_user,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
+        }
+
+
+class PurchaseOrder(FoundationMixin, Base):
+    """PO workflow: draft → approved → ordered → partial/received → closed.
+
+    Commitment only — does not increase stock or create a payable.
     `quantity` = ordered qty; `qty_received` accumulates GRNs.
     Cost/avg cost updates only on receive (see app.stock.po_receive).
     """
@@ -718,14 +839,18 @@ class PurchaseOrder(FoundationMixin, Base):
         ForeignKey("inventory.id", ondelete="SET NULL"), nullable=True, index=True
     )
     date: Mapped[date] = mapped_column(Date)
+    expected_delivery: Mapped[date | None] = mapped_column(Date, nullable=True)
     invoice_no: Mapped[str] = mapped_column(String(100))
     item_name: Mapped[str] = mapped_column(String(255))
+    unit: Mapped[str | None] = mapped_column(String(20))
     quantity: Mapped[int] = mapped_column(Integer)
     qty_received: Mapped[int] = mapped_column(Integer, default=0)
     rate: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     remarks: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(50), default="draft")
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_by_user: Mapped[str | None] = mapped_column(String(80))
     job_card_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     quote_invoice_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     receipt_attachment_path: Mapped[str | None] = mapped_column(String(255))
@@ -748,22 +873,210 @@ class PurchaseOrder(FoundationMixin, Base):
             "vendor_id": self.vendor_id,
             "inventory_id": self.inventory_id,
             "date": self.date.strftime("%Y-%m-%d"),
+            "expected_delivery": _clock(self.expected_delivery, "%Y-%m-%d"),
             "invoice_no": self.invoice_no,
             "item_name": self.item_name,
+            "unit": self.unit,
             "quantity": self.quantity,
             "qty_received": int(self.qty_received or 0),
             "qty_remaining": max(0, int(self.quantity or 0) - int(self.qty_received or 0)),
-            "inventory_id": self.inventory_id,
             "rate": float(self.rate),
             "amount": float(self.amount),
             "remarks": self.remarks,
             "status": self.status,
+            "approved_at": _clock(self.approved_at, "%Y-%m-%d %H:%M:%S"),
+            "approved_by_user": self.approved_by_user,
             "job_card_id": self.job_card_id,
             "quote_invoice_id": self.quote_invoice_id,
             "receipt_attachment_path": self.receipt_attachment_path,
             "created_by_user": self.created_by_user,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "updated_at": _clock(self.updated_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class GoodsReceipt(FoundationMixin, Base):
+    """GRN — increases stock. Does not create a payable by itself."""
+
+    __tablename__ = "goods_receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
+    purchase_order_id: Mapped[int] = mapped_column(
+        ForeignKey("purchase_orders.id"), index=True
+    )
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id"), index=True)
+    inventory_id: Mapped[int] = mapped_column(ForeignKey("inventory.id"), index=True)
+    inventory_transaction_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    supplier_invoice_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    date: Mapped[date] = mapped_column(Date)
+    quantity: Mapped[int] = mapped_column(Integer)
+    verified_qty: Mapped[int] = mapped_column(Integer)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    receipt_attachment_path: Mapped[str | None] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(30), default="received")  # received|invoiced|returned
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "document_no": self.document_no,
+            "purchase_order_id": self.purchase_order_id,
+            "vendor_id": self.vendor_id,
+            "inventory_id": self.inventory_id,
+            "inventory_transaction_id": self.inventory_transaction_id,
+            "supplier_invoice_id": self.supplier_invoice_id,
+            "date": self.date.strftime("%Y-%m-%d"),
+            "quantity": self.quantity,
+            "verified_qty": self.verified_qty,
+            "unit_cost": float(self.unit_cost),
+            "amount": float(self.amount),
+            "receipt_attachment_path": self.receipt_attachment_path,
+            "status": self.status,
+            "notes": self.notes,
+            "created_by_user": self.created_by_user,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class SupplierInvoice(FoundationMixin, Base):
+    """Supplier invoice — creates the payable (VendorLedger debit)."""
+
+    __tablename__ = "supplier_invoices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id"), index=True)
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    goods_receipt_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    vendor_ledger_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    supplier_invoice_no: Mapped[str] = mapped_column(String(100))
+    date: Mapped[date] = mapped_column(Date)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    amount_paid: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    status: Mapped[str] = mapped_column(String(30), default="open")  # open|partial|paid|void
+    notes: Mapped[str | None] = mapped_column(Text)
+    attachment_path: Mapped[str | None] = mapped_column(String(255))
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        amount = float(self.amount or 0)
+        paid = float(self.amount_paid or 0)
+        return {
+            "id": self.id,
+            "document_no": self.document_no,
+            "vendor_id": self.vendor_id,
+            "purchase_order_id": self.purchase_order_id,
+            "goods_receipt_id": self.goods_receipt_id,
+            "vendor_ledger_id": self.vendor_ledger_id,
+            "supplier_invoice_no": self.supplier_invoice_no,
+            "date": self.date.strftime("%Y-%m-%d"),
+            "due_date": _clock(self.due_date, "%Y-%m-%d"),
+            "amount": amount,
+            "amount_paid": paid,
+            "amount_due": max(0.0, amount - paid),
+            "status": self.status,
+            "notes": self.notes,
+            "attachment_path": self.attachment_path,
+            "created_by_user": self.created_by_user,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class SupplierPayment(FoundationMixin, Base):
+    """Supplier payment — reduces payable (VendorLedger credit). Not a repurchase."""
+
+    __tablename__ = "supplier_payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id"), index=True)
+    supplier_invoice_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    vendor_ledger_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    date: Mapped[date] = mapped_column(Date)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    method: Mapped[str | None] = mapped_column(String(40))  # cash|bank|cheque
+    reference: Mapped[str | None] = mapped_column(String(100))
+    notes: Mapped[str | None] = mapped_column(Text)
+    attachment_path: Mapped[str | None] = mapped_column(String(255))
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "document_no": self.document_no,
+            "vendor_id": self.vendor_id,
+            "supplier_invoice_id": self.supplier_invoice_id,
+            "vendor_ledger_id": self.vendor_ledger_id,
+            "date": self.date.strftime("%Y-%m-%d"),
+            "amount": float(self.amount),
+            "method": self.method,
+            "reference": self.reference,
+            "notes": self.notes,
+            "attachment_path": self.attachment_path,
+            "created_by_user": self.created_by_user,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class SupplierCreditNote(FoundationMixin, Base):
+    """Return / credit note / refund against a GRN or invoice."""
+
+    __tablename__ = "supplier_credit_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id"), index=True)
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    goods_receipt_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    supplier_invoice_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    inventory_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inventory.id", ondelete="SET NULL"), nullable=True
+    )
+    inventory_transaction_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vendor_ledger_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    date: Mapped[date] = mapped_column(Date)
+    quantity: Mapped[int] = mapped_column(Integer, default=0)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    refund_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    reason: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(30), default="posted")  # posted|void
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "document_no": self.document_no,
+            "vendor_id": self.vendor_id,
+            "purchase_order_id": self.purchase_order_id,
+            "goods_receipt_id": self.goods_receipt_id,
+            "supplier_invoice_id": self.supplier_invoice_id,
+            "inventory_id": self.inventory_id,
+            "inventory_transaction_id": self.inventory_transaction_id,
+            "vendor_ledger_id": self.vendor_ledger_id,
+            "date": self.date.strftime("%Y-%m-%d"),
+            "quantity": self.quantity,
+            "unit_cost": float(self.unit_cost or 0),
+            "amount": float(self.amount),
+            "refund_amount": float(self.refund_amount or 0),
+            "reason": self.reason,
+            "status": self.status,
+            "notes": self.notes,
+            "created_by_user": self.created_by_user,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
         }
 
 
@@ -1033,8 +1346,8 @@ class Category(FoundationMixin, Base):
 class InventoryTransaction(FoundationMixin, Base):
     """StockMovement ledger (legacy table name kept for existing data).
 
-    Types: po_receive, reserve, release, issue_to_ro, return_from_ro, adjustment
-    (+ legacy issue_out / received).
+    Types: po_receive, reserve, release, issue_to_ro, return_from_ro,
+    adjustment, wastage, opening (+ legacy issue_out / received).
     """
 
     __tablename__ = "inventory_transactions"
@@ -1845,6 +2158,81 @@ def _needs_part_number(obj: object) -> bool:
         return False
     state = inspect(obj)
     return bool(state.transient or state.pending)
+
+
+class RepairTimeEntry(FoundationMixin, Base):
+    """Clock segments against a repair labour line.
+
+    Repair time is for job cost / labour_cost only — payroll uses AttendanceRecord.
+    At most one open entry per labour line (enforced in repair_execution service).
+    """
+
+    __tablename__ = "repair_time_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repair_order_id: Mapped[int] = mapped_column(ForeignKey("repair_order.id"), index=True)
+    labour_id: Mapped[int] = mapped_column(ForeignKey("repair_order_labour.id"), index=True)
+    worker_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # open | closed — open means clock is running
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    hours: Mapped[float] = mapped_column(Float, default=0.0)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "repair_order_id": self.repair_order_id,
+            "labour_id": self.labour_id,
+            "worker_id": self.worker_id,
+            "started_at": _clock(self.started_at, "%Y-%m-%d %H:%M:%S"),
+            "ended_at": _clock(self.ended_at, "%Y-%m-%d %H:%M:%S"),
+            "status": self.status,
+            "hours": self.hours,
+            "notes": self.notes,
+            "created_by_user": self.created_by_user,
+            "branch_id": self.branch_id,
+        }
+
+
+class RepairFault(FoundationMixin, Base):
+    """Additional fault found during repair — must follow customer approval (variation)."""
+
+    __tablename__ = "repair_faults"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repair_order_id: Mapped[int] = mapped_column(ForeignKey("repair_order.id"), index=True)
+    description: Mapped[str] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(String(20), default="normal")
+    # draft | awaiting_approval | approved | added | rejected | cancelled
+    status: Mapped[str] = mapped_column(String(30), default="draft")
+    variation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("variations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    photo_attachment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("attachments.id", ondelete="SET NULL"), nullable=True
+    )
+    recorded_by: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "repair_order_id": self.repair_order_id,
+            "description": self.description,
+            "severity": self.severity,
+            "status": self.status,
+            "variation_id": self.variation_id,
+            "photo_attachment_id": self.photo_attachment_id,
+            "recorded_by": self.recorded_by,
+            "branch_id": self.branch_id,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
 
 
 @event.listens_for(Session, "before_flush")

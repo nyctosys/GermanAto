@@ -66,13 +66,23 @@ export function PublicApprovePage() {
     ]
   }, [q.data])
 
+  function lineDecision(ln: Line & { kind: string }): string {
+    const key = `${ln.kind}-${ln.id}`
+    const chosen = decisions[key]
+    if (chosen === 'approved' || chosen === 'rejected') return chosen
+    const current = (ln.approval_status || '').toLowerCase()
+    if (current === 'approved' || current === 'rejected') return current
+    // Line still pending — default Approve (never send "pending" to API)
+    return 'approved'
+  }
+
   const submit = useMutation({
     mutationFn: () =>
       publicPost(`/api/public/quotes/${token}/decide`, {
         decisions: lines.map((ln) => ({
           kind: ln.kind,
           id: ln.id,
-          decision: decisions[`${ln.kind}-${ln.id}`] || ln.approval_status || 'approved',
+          decision: lineDecision(ln),
           media_data_url: media[`${ln.kind}-${ln.id}`],
         })),
       }),
@@ -115,6 +125,8 @@ export function PublicApprovePage() {
           <tbody>
             {lines.map((ln) => {
               const key = `${ln.kind}-${ln.id}`
+              const locked =
+                ln.approval_status === 'approved' || ln.approval_status === 'rejected'
               return (
                 <tr key={key}>
                   <td>
@@ -127,16 +139,21 @@ export function PublicApprovePage() {
                   <td>
                     <select
                       className="input"
-                      value={decisions[key] || ln.approval_status || 'approved'}
+                      value={lineDecision(ln)}
                       onChange={(e) => setDecisions({ ...decisions, [key]: e.target.value })}
-                      disabled={ln.approval_status === 'approved' || ln.approval_status === 'rejected'}
+                      disabled={locked}
                     >
                       <option value="approved">Approve</option>
                       <option value="rejected">Reject</option>
                     </select>
                   </td>
                   <td>
-                    <input type="file" accept="image/*,video/*" onChange={(e) => onFile(key, e.target.files?.[0] || null)} />
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      disabled={locked}
+                      onChange={(e) => onFile(key, e.target.files?.[0] || null)}
+                    />
                   </td>
                 </tr>
               )

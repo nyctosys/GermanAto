@@ -11,6 +11,7 @@ const ICONS: Record<string, string> = {
   '/invoices': '≡',
   '/quotes/pending': '◎',
   '/repair-orders': '⚙',
+  '/repair-execution': '🔧',
   '/finance': '₹',
   '/reports': '▤',
   '/vendors': '◇',

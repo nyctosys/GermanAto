@@ -167,6 +167,13 @@ export function ReportsPage() {
     queryFn: () =>
       api.get<ReportsPayload>(`/api/reports?start_date=${from}&end_date=${to}`),
   })
+  const overdue = useQuery({
+    queryKey: ['overdue-payables'],
+    queryFn: () =>
+      api.get<{ overdue?: Array<Record<string, unknown>>; count?: number }>(
+        '/api/reports/overdue-payables',
+      ),
+  })
 
   const data = q.data
 
@@ -256,6 +263,11 @@ export function ReportsPage() {
             title="Vendor balances"
             rows={data.vendor_balances || []}
             empty="No vendor balances"
+          />
+          <ListSection
+            title={`Overdue payables (${overdue.data?.count ?? 0})`}
+            rows={overdue.data?.overdue || []}
+            empty="No overdue supplier invoices"
           />
           <ListSection
             title="Pending quotes"

@@ -445,24 +445,27 @@ def get_open_repair_orders(db):
         return []
 
 def get_vendor_balances(db):
-    """Get vendors with their current balances from ledger"""
+    """Latest ledger balance per vendor (not SUM of running balances)."""
     try:
         vendors = db.execute(text("""
-            SELECT 
-                v.name as vendor_name,
-                COALESCE(SUM(vl.balance), 0) as current_balance
+            SELECT v.name AS vendor_name, COALESCE(latest.balance, 0) AS current_balance
             FROM vendors v
-            LEFT JOIN vendor_ledger vl ON v.id = vl.vendor_id
-            GROUP BY v.id, v.name
-            HAVING COALESCE(SUM(vl.balance), 0) > 0
+            LEFT JOIN LATERAL (
+                SELECT vl.balance
+                FROM vendor_ledger vl
+                WHERE vl.vendor_id = v.id
+                ORDER BY vl.date DESC, vl.id DESC
+                LIMIT 1
+            ) latest ON TRUE
+            WHERE COALESCE(latest.balance, 0) > 0
             ORDER BY current_balance DESC
             LIMIT 10
         """)).fetchall()
-        
+
         return [
             {
                 'vendor_name': row[0],
-                'closing_balance': float(row[1])
+                'closing_balance': float(row[1]),
             }
             for row in vendors
         ]
@@ -472,7 +475,25 @@ def get_vendor_balances(db):
             db.rollback()
         except Exception:
             pass
-        return []
+        # Fallback without LATERAL (older SQLite / engines)
+        try:
+            from app.models import Vendor, VendorLedger
+
+            out = []
+            for v in db.query(Vendor).all():
+                last = (
+                    db.query(VendorLedger)
+                    .filter_by(vendor_id=v.id)
+                    .order_by(VendorLedger.date.desc(), VendorLedger.id.desc())
+                    .first()
+                )
+                bal = float(last.balance) if last else 0.0
+                if bal > 0:
+                    out.append({'vendor_name': v.name, 'closing_balance': bal})
+            out.sort(key=lambda r: r['closing_balance'], reverse=True)
+            return out[:10]
+        except Exception:
+            return []
 
 def get_pending_quotes(db):
     """Get pending quotes (quotes are stored as invoices with type 'quote')"""

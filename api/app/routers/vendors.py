@@ -16,26 +16,48 @@ from app.models import *  # noqa: F403,F401
 from app.log_utils import log_action, save_uploaded_file
 from app.search_suggestions import suggestions_for
 from app.foundation.idempotent import idempotent_create
+from app.foundation.overrides import user_has_permission
 from app.foundation.validation import require_non_negative, require_positive_int
-from app.stock import (
-    PO_STATUSES,
-    StockError,
-    create_vendor_payable_for_grn,
-    po_receive,
-    refresh_po_status,
+from app.procurement import (
+    ProcurementError,
+    create_supplier_invoice,
+    known_rate_for_item,
+    overdue_payables,
+    post_credit_note,
+    receive_goods,
+    record_supplier_payment,
+    vendor_outstanding,
 )
+from app.stock import PO_STATUSES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _PO_STATUS_TRANSITIONS = {
-    "draft": {"ordered", "closed"},
+    "draft": {"approved", "ordered", "closed"},
+    "approved": {"ordered", "closed"},
     "ordered": {"partial", "received", "closed", "in transit"},
     "in transit": {"partial", "received", "closed"},
     "partial": {"partial", "received", "closed"},
     "received": {"closed"},
     "closed": set(),
 }
+
+
+def _can_override_po_price(db, user) -> bool:
+    if not user:
+        return False
+    if getattr(user, "role", None) in ("admin", "owner", "accountant", "manager"):
+        return True
+    return user_has_permission(db, user, "override_po_price")
+
+
+def _can_approve_po(db, user) -> bool:
+    if not user:
+        return False
+    if getattr(user, "role", None) in ("admin", "owner", "accountant", "manager"):
+        return True
+    return user_has_permission(db, user, "approve_po")
 
 
 def _json(data: Any = None, status: int = 200):
@@ -98,6 +120,11 @@ def create_vendor(request: Request, db: Session = Depends(get_db), body: dict | 
                 ),
                 'existing_vendor_id': existing_vendor.id,
             }, 409)
+        terms = data.get('payment_terms_days', 30)
+        try:
+            terms = int(terms)
+        except (TypeError, ValueError):
+            terms = 30
         vendor = Vendor(
             name=data['name'],
             company_name=data['company_name'],
@@ -106,6 +133,9 @@ def create_vendor(request: Request, db: Session = Depends(get_db), body: dict | 
             email=data.get('email'),
             address=data['address'],
             cnic=data.get('cnic'),
+            payment_terms_days=max(0, terms),
+            bank_details=data.get('bank_details'),
+            notes=data.get('notes'),
         )
         db.add(vendor)
         db.flush()
@@ -149,6 +179,15 @@ def update_vendor(vendor_id: int, request: Request, db: Session = Depends(get_db
         vendor.email = data.get('email', vendor.email)
         vendor.address = data.get('address', vendor.address)
         vendor.cnic = data.get('cnic', vendor.cnic)
+        if 'payment_terms_days' in data and data.get('payment_terms_days') is not None:
+            try:
+                vendor.payment_terms_days = max(0, int(data['payment_terms_days']))
+            except (TypeError, ValueError):
+                return _json({'error': 'payment_terms_days must be an integer'}, 400)
+        if 'bank_details' in data:
+            vendor.bank_details = data.get('bank_details')
+        if 'notes' in data:
+            vendor.notes = data.get('notes')
         vendor.updated_at = datetime.utcnow()
         log_action(db, current_user, 'UPDATE', 'vendors', vendor.id, f"Updated vendor details for {vendor.name}")
         db.commit()
@@ -229,6 +268,16 @@ async def add_ledger_entry(request: Request, db: Session = Depends(get_db), curr
                 data = None
         if not data:
             return _json({'error': 'No data provided'}, 400)
+        # Accept entry_type + amount (UI) or explicit debit/credit
+        if data.get('entry_type') in ('debit', 'credit') and data.get('amount') is not None:
+            try:
+                amt = float(data['amount'])
+            except (TypeError, ValueError):
+                return _json({'error': 'Invalid amount'}, 400)
+            if data['entry_type'] == 'debit':
+                data['debit'], data['credit'] = amt, 0.0
+            else:
+                data['debit'], data['credit'] = 0.0, amt
         required_fields = ['vendor_id', 'date', 'description', 'debit', 'credit']
         for field in required_fields:
             if field not in data or data.get(field) is None:
@@ -246,13 +295,7 @@ async def add_ledger_entry(request: Request, db: Session = Depends(get_db), curr
             return _json({'error': 'Invalid date format. Use YYYY-MM-DD'}, 400)
         debit = float(data['debit']) if data['debit'] else 0.0
         credit = float(data['credit']) if data['credit'] else 0.0
-        last_entry = (
-            db.query(VendorLedger)
-            .filter_by(vendor_id=vendor_id)
-            .order_by(VendorLedger.date.desc(), VendorLedger.id.desc())
-            .first()
-        )
-        last_balance = float(last_entry.balance) if last_entry else 0.0
+        last_balance = float(vendor_outstanding(db, vendor_id))
         new_balance = last_balance + debit - credit
         attachment_path = save_uploaded_file(attachment_file) if attachment_file else None
         ledger_entry = VendorLedger(
@@ -373,29 +416,54 @@ def add_purchase_order(request: Request, db: Session = Depends(get_db), body: di
         if not vendor:
             return _json({'error': 'Vendor not found'}, 404)
         inventory_id = data.get('inventory_id')
+        inv = None
         if inventory_id:
             inv = db.get(Inventory, inventory_id)
             if not inv:
                 return _json({'error': 'Inventory item not found'}, 404)
+            if not data.get('item_name'):
+                data['item_name'] = inv.name
         try:
             po_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
         except ValueError:
             return _json({'error': 'Invalid date format. Use YYYY-MM-DD'}, 400)
+        expected_delivery = None
+        if data.get('expected_delivery'):
+            try:
+                expected_delivery = datetime.strptime(data['expected_delivery'], '%Y-%m-%d').date()
+            except ValueError:
+                return _json({'error': 'Invalid expected_delivery format. Use YYYY-MM-DD'}, 400)
         try:
             quantity = require_positive_int('quantity', data['quantity'])
+            if data.get('rate') in (None, '') and inv is not None:
+                data['rate'] = float(known_rate_for_item(db, vendor_id=int(data['vendor_id']), item=inv))
             rate = require_non_negative('rate', data['rate'])
         except ValueError as exc:
             return _json({'error': str(exc)}, 400)
+        known = known_rate_for_item(db, vendor_id=int(data['vendor_id']), item=inv) if inv else None
+        if known is not None and float(known) > 0 and abs(float(rate) - float(known)) > 0.009:
+            if not _can_override_po_price(db, current_user):
+                return _json(
+                    {
+                        'error': 'Price differs from known supplier/avg cost; override_po_price required',
+                        'known_rate': float(known),
+                        'requested_rate': float(rate),
+                    },
+                    403,
+                )
         amount = quantity * rate
         status = (data.get('status') or 'draft').strip().lower()
         if status not in PO_STATUSES and status != 'in transit':
             status = 'draft'
+        unit = data.get('unit') or (getattr(inv, 'unit', None) if inv else None) or 'pcs'
         po = PurchaseOrder(
             vendor_id=data['vendor_id'],
             inventory_id=inventory_id,
             date=po_date,
+            expected_delivery=expected_delivery,
             invoice_no=data['invoice_no'],
             item_name=data['item_name'],
+            unit=unit,
             quantity=quantity,
             qty_received=0,
             rate=rate,
@@ -454,7 +522,7 @@ def delete_purchase_order(
 
 @router.put('/api/purchase-orders/{po_id:int}/status')
 def update_purchase_order_status(po_id: int, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
-    """Update purchase order status (draft → ordered → … → closed). Receiving uses /receive."""
+    """Update purchase order status (draft → approved → ordered → … → closed). Receiving uses /receive."""
     try:
         po = db.get(PurchaseOrder, po_id)
         if not po:
@@ -482,7 +550,17 @@ def update_purchase_order_status(po_id: int, request: Request, db: Session = Dep
                 },
                 400,
             )
+        if new_status == 'approved' and not _can_approve_po(db, current_user):
+            return _json({'error': 'approve_po permission required'}, 403)
+        if new_status == 'ordered' and old_status == 'draft' and not _can_approve_po(db, current_user):
+            return _json(
+                {'error': 'Draft POs require approval (or approve_po) before ordering'},
+                403,
+            )
         po.status = new_status
+        if new_status == 'approved':
+            po.approved_at = datetime.utcnow()
+            po.approved_by_user = current_user.username if current_user else None
         po.updated_at = datetime.utcnow()
         log_action(
             db, current_user, 'UPDATE_PO_STATUS', 'vendors', po.vendor_id,
@@ -496,6 +574,32 @@ def update_purchase_order_status(po_id: int, request: Request, db: Session = Dep
         return _json({'error': 'Failed to update status'}, 500)
 
 
+@router.post('/api/purchase-orders/{po_id:int}/approve')
+def approve_purchase_order(
+    po_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager', 'manager'])),
+):
+    if not _can_approve_po(db, current_user):
+        return _json({'error': 'approve_po permission required'}, 403)
+    po = db.get(PurchaseOrder, po_id)
+    if not po:
+        return _json({'error': 'Purchase order not found'}, 404)
+    if (po.status or '').lower() != 'draft':
+        return _json({'error': f'Only draft POs can be approved (current: {po.status})'}, 400)
+    po.status = 'approved'
+    po.approved_at = datetime.utcnow()
+    po.approved_by_user = current_user.username if current_user else None
+    po.updated_at = datetime.utcnow()
+    log_action(
+        db, current_user, 'APPROVE_PO', 'vendors', po.vendor_id,
+        f"Approved PO {po.document_no or po.id}",
+    )
+    db.commit()
+    return _json({'message': 'PO approved', 'purchase_order': po.to_dict()}, 200)
+
+
 @router.post('/api/purchase-orders/{po_id:int}/receive')
 @idempotent_create
 async def receive_purchase_order(
@@ -504,7 +608,7 @@ async def receive_purchase_order(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager'])),
 ):
-    """Partial or full GRN. Updates stock + avg_cost, creates vendor payable. Receipt required."""
+    """Partial/full GRN. Updates stock + avg_cost via GoodsReceipt. Does NOT create payable."""
     try:
         po = db.get(PurchaseOrder, po_id)
         if not po:
@@ -526,28 +630,29 @@ async def receive_purchase_order(
             if data.get('receipt_attachment_path'):
                 receipt_path = data['receipt_attachment_path']
 
-        if not receipt_path:
-            return _json(
-                {'error': 'Supplier receipt attachment is required for GRN'},
-                400,
-            )
-
         remaining = int(po.quantity or 0) - int(po.qty_received or 0)
-        if remaining <= 0:
-            return _json({'error': 'PO already fully received'}, 400)
-
         try:
             qty = require_positive_int('quantity', data.get('quantity', remaining))
         except ValueError as exc:
             return _json({'error': str(exc)}, 400)
-        if qty > remaining:
-            return _json({'error': f'quantity {qty} exceeds remaining {remaining}'}, 400)
 
         unit_cost = data.get('unit_cost', data.get('rate', po.rate))
         try:
             unit_cost = require_non_negative('unit_cost', unit_cost)
         except ValueError as exc:
             return _json({'error': str(exc)}, 400)
+
+        known = float(po.rate or 0)
+        if known > 0 and abs(float(unit_cost) - known) > 0.009:
+            if not _can_override_po_price(db, current_user):
+                return _json(
+                    {
+                        'error': 'Receive unit_cost differs from PO rate; override_po_price required',
+                        'po_rate': known,
+                        'unit_cost': float(unit_cost),
+                    },
+                    403,
+                )
 
         inventory_id = data.get('inventory_id') or po.inventory_id
         if not inventory_id:
@@ -556,33 +661,22 @@ async def receive_purchase_order(
         if not item:
             return _json({'error': 'Inventory item not found'}, 404)
 
+        verified = data.get('verified_qty', qty)
         try:
-            txn = po_receive(
+            grn, txn = receive_goods(
                 db,
-                item=item,
+                po=po,
                 qty=qty,
                 unit_cost=unit_cost,
-                purchase_order=po,
-                created_by=current_user.id if current_user else None,
-                evidence_path=receipt_path,
+                item=item,
+                verified_qty=int(verified),
+                receipt_path=receipt_path,
+                notes=data.get('notes'),
+                username=current_user.username if current_user else None,
+                user_id=current_user.id if current_user else None,
             )
-        except StockError as exc:
+        except ProcurementError as exc:
             return _json({'error': str(exc)}, 400)
-
-        po.inventory_id = item.id
-        po.qty_received = int(po.qty_received or 0) + qty
-        po.receipt_attachment_path = receipt_path
-        refresh_po_status(po)
-        po.updated_at = datetime.utcnow()
-
-        payable = create_vendor_payable_for_grn(
-            db,
-            purchase_order=po,
-            qty=qty,
-            unit_cost=unit_cost,
-            username=current_user.username if current_user else None,
-            attachment_path=receipt_path,
-        )
 
         log_action(
             db,
@@ -590,15 +684,16 @@ async def receive_purchase_order(
             'PO_RECEIVE',
             'vendors',
             po.vendor_id,
-            f"GRN PO {po.invoice_no}: {item.part_number} x{qty} @ {unit_cost} → status {po.status}",
+            f"GRN {grn.document_no} PO {po.invoice_no}: {item.part_number} x{qty} @ {unit_cost} → {po.status}",
         )
         db.commit()
         db.refresh(po)
         db.refresh(item)
         return _json(
             {
-                'message': 'Goods received',
+                'message': 'Goods received (no payable — record supplier invoice separately)',
                 'purchase_order': po.to_dict(),
+                'goods_receipt': grn.to_dict(),
                 'inventory': {
                     'id': item.id,
                     'quantity': item.quantity,
@@ -607,7 +702,6 @@ async def receive_purchase_order(
                     'avg_cost': float(item.avg_cost or 0),
                 },
                 'movement': txn.to_dict(),
-                'vendor_payable': payable.to_dict(),
             },
             200,
         )
@@ -647,20 +741,37 @@ def create_pos_from_shortages(
     vendor_id = data.get('vendor_id')
     if not vendor_id:
         return _json({'error': 'vendor_id is required'}, 400)
+    vendor = db.get(Vendor, int(vendor_id))
+    if not vendor:
+        return _json({'error': 'Vendor not found'}, 404)
+    expected_delivery = None
+    if data.get('expected_delivery'):
+        try:
+            expected_delivery = datetime.strptime(data['expected_delivery'], '%Y-%m-%d').date()
+        except ValueError:
+            return _json({'error': 'Invalid expected_delivery'}, 400)
+    status = (data.get('status') or 'draft').strip().lower()
+    if status not in ('draft', 'approved', 'ordered'):
+        status = 'draft'
     created = []
     for line in shortage_lines(db, quote_id):
         qty = int(line['shortage'])
-        rate = Decimal(str(line['rate'] or 0))
+        inv = db.get(Inventory, line['inventory_id'])
+        rate = known_rate_for_item(db, vendor_id=int(vendor_id), item=inv)
+        if line.get('rate'):
+            rate = Decimal(str(line['rate']))
         po = PurchaseOrder(
             vendor_id=int(vendor_id),
             date=date.today(),
+            expected_delivery=expected_delivery,
             invoice_no=f"PO-Q{quote_id}-{line['inventory_id']}",
             item_name=line['item_name'],
+            unit=getattr(inv, 'unit', None) if inv else 'pcs',
             quantity=qty,
             rate=rate,
             amount=(rate * qty).quantize(Decimal('0.01')),
             remarks=f"Shortage from quote #{quote_id}",
-            status='ordered',
+            status=status,
             inventory_id=line['inventory_id'],
             qty_received=0,
             quote_invoice_id=quote_id,
@@ -671,3 +782,312 @@ def create_pos_from_shortages(
         created.append(po.to_dict())
     db.commit()
     return _json({'created': created}, 201)
+
+
+# ===== AP documents: GRN list, invoices, payments, credits, statement, overdue =====
+
+@router.get('/api/vendors/{vendor_id:int}/summary')
+def vendor_summary(
+    vendor_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant'])),
+):
+    vendor = db.get(Vendor, vendor_id)
+    if not vendor:
+        return _json({'error': 'Vendor not found'}, 404)
+    outstanding = float(vendor_outstanding(db, vendor_id))
+    po_count = db.query(PurchaseOrder).filter_by(vendor_id=vendor_id).count()
+    open_inv = (
+        db.query(SupplierInvoice)
+        .filter(
+            SupplierInvoice.vendor_id == vendor_id,
+            SupplierInvoice.status.in_(('open', 'partial')),
+        )
+        .count()
+    )
+    return _json(
+        {
+            'vendor': vendor.to_dict(),
+            'outstanding_balance': outstanding,
+            'purchase_order_count': po_count,
+            'open_invoice_count': open_inv,
+        }
+    )
+
+
+@router.get('/api/vendors/{vendor_id:int}/statement')
+def vendor_statement(
+    vendor_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant'])),
+):
+    vendor = db.get(Vendor, vendor_id)
+    if not vendor:
+        return _json({'error': 'Vendor not found'}, 404)
+    start_date = request.query_params.get('start_date')
+    end_date = request.query_params.get('end_date')
+    query = db.query(VendorLedger).filter_by(vendor_id=vendor_id)
+    if start_date:
+        try:
+            query = query.filter(
+                VendorLedger.date >= datetime.strptime(start_date, '%Y-%m-%d').date()
+            )
+        except ValueError:
+            return _json({'error': 'Invalid start_date'}, 400)
+    if end_date:
+        try:
+            query = query.filter(
+                VendorLedger.date <= datetime.strptime(end_date, '%Y-%m-%d').date()
+            )
+        except ValueError:
+            return _json({'error': 'Invalid end_date'}, 400)
+    # Chronological for statement reading
+    entries = query.order_by(VendorLedger.date.asc(), VendorLedger.id.asc()).all()
+    total_debit = sum(float(e.debit or 0) for e in entries)
+    total_credit = sum(float(e.credit or 0) for e in entries)
+    closing = float(entries[-1].balance) if entries else 0.0
+    return _json(
+        {
+            'vendor': vendor.to_dict(),
+            'entries': [e.to_dict() for e in entries],
+            'total_debit': total_debit,
+            'total_credit': total_credit,
+            'closing_balance': closing,
+            'outstanding_balance': float(vendor_outstanding(db, vendor_id)),
+        }
+    )
+
+
+@router.get('/api/vendors/{vendor_id:int}/goods-receipts')
+def list_goods_receipts(
+    vendor_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager'])),
+):
+    if not db.get(Vendor, vendor_id):
+        return _json({'error': 'Vendor not found'}, 404)
+    rows = (
+        db.query(GoodsReceipt)
+        .filter_by(vendor_id=vendor_id)
+        .order_by(GoodsReceipt.id.desc())
+        .all()
+    )
+    return _json({'goods_receipts': [r.to_dict() for r in rows]})
+
+
+@router.get('/api/vendors/{vendor_id:int}/supplier-invoices')
+def list_supplier_invoices(
+    vendor_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant'])),
+):
+    if not db.get(Vendor, vendor_id):
+        return _json({'error': 'Vendor not found'}, 404)
+    rows = (
+        db.query(SupplierInvoice)
+        .filter_by(vendor_id=vendor_id)
+        .order_by(SupplierInvoice.id.desc())
+        .all()
+    )
+    return _json({'supplier_invoices': [r.to_dict() for r in rows]})
+
+
+@router.post('/api/supplier-invoices')
+@idempotent_create
+def post_supplier_invoice(
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'accountant'])),
+):
+    data = body or {}
+    vendor_id = data.get('vendor_id')
+    if not vendor_id:
+        return _json({'error': 'vendor_id is required'}, 400)
+    vendor = db.get(Vendor, int(vendor_id))
+    if not vendor:
+        return _json({'error': 'Vendor not found'}, 404)
+    grn = None
+    if data.get('goods_receipt_id'):
+        grn = db.get(GoodsReceipt, int(data['goods_receipt_id']))
+        if not grn or grn.vendor_id != vendor.id:
+            return _json({'error': 'Goods receipt not found'}, 404)
+    po = None
+    if data.get('purchase_order_id'):
+        po = db.get(PurchaseOrder, int(data['purchase_order_id']))
+    amount = data.get('amount')
+    if amount is None and grn is not None:
+        amount = float(grn.amount)
+    invoice_no = data.get('supplier_invoice_no') or data.get('invoice_no')
+    if not invoice_no:
+        return _json({'error': 'supplier_invoice_no is required'}, 400)
+    inv_date = None
+    if data.get('date'):
+        try:
+            inv_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        except ValueError:
+            return _json({'error': 'Invalid date'}, 400)
+    due = None
+    if data.get('due_date'):
+        try:
+            due = datetime.strptime(data['due_date'], '%Y-%m-%d').date()
+        except ValueError:
+            return _json({'error': 'Invalid due_date'}, 400)
+    try:
+        inv = create_supplier_invoice(
+            db,
+            vendor=vendor,
+            amount=amount,
+            supplier_invoice_no=str(invoice_no),
+            invoice_date=inv_date,
+            due_date=due,
+            purchase_order=po,
+            goods_receipt=grn,
+            notes=data.get('notes'),
+            attachment_path=data.get('attachment_path'),
+            username=current_user.username if current_user else None,
+        )
+    except ProcurementError as exc:
+        return _json({'error': str(exc)}, 400)
+    log_action(
+        db, current_user, 'SUPPLIER_INVOICE', 'vendors', vendor.id,
+        f"Invoice {inv.supplier_invoice_no} amount {inv.amount}",
+    )
+    db.commit()
+    return _json({'message': 'Supplier invoice recorded', 'supplier_invoice': inv.to_dict()}, 201)
+
+
+@router.post('/api/supplier-payments')
+@idempotent_create
+def post_supplier_payment(
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'accountant'])),
+):
+    data = body or {}
+    vendor_id = data.get('vendor_id')
+    if not vendor_id:
+        return _json({'error': 'vendor_id is required'}, 400)
+    vendor = db.get(Vendor, int(vendor_id))
+    if not vendor:
+        return _json({'error': 'Vendor not found'}, 404)
+    inv = None
+    if data.get('supplier_invoice_id'):
+        inv = db.get(SupplierInvoice, int(data['supplier_invoice_id']))
+        if not inv or inv.vendor_id != vendor.id:
+            return _json({'error': 'Supplier invoice not found'}, 404)
+    pay_date = None
+    if data.get('date'):
+        try:
+            pay_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        except ValueError:
+            return _json({'error': 'Invalid date'}, 400)
+    try:
+        pay = record_supplier_payment(
+            db,
+            vendor=vendor,
+            amount=data.get('amount'),
+            payment_date=pay_date,
+            method=data.get('method'),
+            reference=data.get('reference'),
+            supplier_invoice=inv,
+            notes=data.get('notes') or data.get('payment_notes'),
+            attachment_path=data.get('attachment_path'),
+            username=current_user.username if current_user else None,
+        )
+    except ProcurementError as exc:
+        return _json({'error': str(exc)}, 400)
+    log_action(
+        db, current_user, 'SUPPLIER_PAYMENT', 'vendors', vendor.id,
+        f"Payment {pay.document_no} amount {pay.amount}",
+    )
+    db.commit()
+    return _json({'message': 'Supplier payment recorded', 'supplier_payment': pay.to_dict()}, 201)
+
+
+@router.post('/api/supplier-credit-notes')
+@idempotent_create
+def post_supplier_credit_note(
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager'])),
+):
+    data = body or {}
+    vendor_id = data.get('vendor_id')
+    if not vendor_id:
+        return _json({'error': 'vendor_id is required'}, 400)
+    vendor = db.get(Vendor, int(vendor_id))
+    if not vendor:
+        return _json({'error': 'Vendor not found'}, 404)
+    grn = db.get(GoodsReceipt, int(data['goods_receipt_id'])) if data.get('goods_receipt_id') else None
+    po = db.get(PurchaseOrder, int(data['purchase_order_id'])) if data.get('purchase_order_id') else None
+    inv = db.get(SupplierInvoice, int(data['supplier_invoice_id'])) if data.get('supplier_invoice_id') else None
+    item = db.get(Inventory, int(data['inventory_id'])) if data.get('inventory_id') else None
+    amount = data.get('amount')
+    if amount is None and data.get('quantity') is not None and data.get('unit_cost') is not None:
+        amount = float(data['quantity']) * float(data['unit_cost'])
+    try:
+        note = post_credit_note(
+            db,
+            vendor=vendor,
+            amount=amount,
+            reason=data.get('reason') or 'Supplier return',
+            quantity=int(data.get('quantity') or 0),
+            unit_cost=data.get('unit_cost') or 0,
+            refund_amount=data.get('refund_amount') or 0,
+            purchase_order=po,
+            goods_receipt=grn,
+            supplier_invoice=inv,
+            item=item,
+            notes=data.get('notes'),
+            username=current_user.username if current_user else None,
+            user_id=current_user.id if current_user else None,
+        )
+    except ProcurementError as exc:
+        return _json({'error': str(exc)}, 400)
+    log_action(
+        db, current_user, 'SUPPLIER_CREDIT', 'vendors', vendor.id,
+        f"Credit note {note.document_no} amount {note.amount}",
+    )
+    db.commit()
+    return _json({'message': 'Credit note posted', 'supplier_credit_note': note.to_dict()}, 201)
+
+
+@router.get('/api/reports/overdue-payables')
+def report_overdue_payables(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant', 'manager'])),
+):
+    rows = overdue_payables(db)
+    return _json({'overdue': rows, 'count': len(rows)})
+
+
+@router.get('/api/purchase-orders/known-rate')
+def get_known_supplier_rate(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager'])),
+):
+    try:
+        vendor_id = int(request.query_params.get('vendor_id') or 0)
+        inventory_id = int(request.query_params.get('inventory_id') or 0)
+    except (TypeError, ValueError):
+        return _json({'error': 'vendor_id and inventory_id required'}, 400)
+    item = db.get(Inventory, inventory_id) if inventory_id else None
+    rate = known_rate_for_item(db, vendor_id=vendor_id, item=item) if vendor_id else 0
+    return _json(
+        {
+            'vendor_id': vendor_id,
+            'inventory_id': inventory_id,
+            'known_rate': float(rate),
+            'unit': getattr(item, 'unit', None) if item else None,
+            'item_name': item.name if item else None,
+        }
+    )

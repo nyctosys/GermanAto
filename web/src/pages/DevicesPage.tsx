@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { api } from '../api/client'
+import { useConfirm } from '../components/ConfirmProvider'
 import {
   Empty,
   ErrorBox,
@@ -21,6 +22,7 @@ type Device = {
 
 export function DevicesPage() {
   const qc = useQueryClient()
+  const { confirm } = useConfirm()
   const [form, setForm] = useState({
     name: '',
     serial_number: '',
@@ -117,8 +119,8 @@ export function DevicesPage() {
                       <button
                         type="button"
                         className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          if (confirm('Delete device?')) remove.mutate(d.id)
+                        onClick={async () => {
+                          if (await confirm({ message: 'Delete this device?', danger: true, confirmLabel: 'Delete' })) remove.mutate(d.id)
                         }}
                       >
                         Delete

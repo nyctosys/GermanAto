@@ -1,13 +1,15 @@
 """Stock movement ledger: on_hand / reserved / available + avg-cost on GRN.
 
 Movement types:
-  po_receive, reserve, release, issue_to_ro, return_from_ro, adjustment
+  po_receive, reserve, release, issue_to_ro, return_from_ro,
+  return_to_vendor, adjustment, wastage, opening
 
 Rules:
   - available = on_hand - reserved
-  - no negative on_hand or reserved
-  - avg_cost updates ONLY on po_receive
-  - adjustments require reason + evidence + adjust_stock (caller enforces)
+  - no negative on_hand or reserved (unless authorized override on adjust)
+  - qty is always stored in base pieces; packs convert via pack_size
+  - avg_cost updates ONLY on po_receive / opening with unit_cost
+  - adjustments / wastage require reason (+ evidence for adjust)
   - customer_supplied parts never call these helpers
 """
 
@@ -29,14 +31,40 @@ MOVEMENT_TYPES = frozenset(
         "release",
         "issue_to_ro",
         "return_from_ro",
+        "return_to_vendor",
         "adjustment",
+        "wastage",
+        "opening",
         # legacy aliases still written by older helpers
         "issue_out",
         "received",
     }
 )
 
-PO_STATUSES = ("draft", "ordered", "partial", "received", "closed")
+# Common workshop catalogue units (datalist / defaults)
+SAVED_UNITS = (
+    "pcs",
+    "pack",
+    "set",
+    "pair",
+    "kit",
+    "box",
+    "roll",
+    "tube",
+    "bottle",
+    "can",
+    "drum",
+    "litre",
+    "ml",
+    "kg",
+    "g",
+    "metre",
+    "ft",
+    "sheet",
+    "filter",
+)
+
+PO_STATUSES = ("draft", "approved", "ordered", "partial", "received", "closed")
 
 
 class StockError(ValueError):
@@ -51,6 +79,44 @@ def available(item: Inventory) -> int:
     on_hand = int(item.quantity or 0)
     reserved = int(getattr(item, "reserved", 0) or 0)
     return on_hand - reserved
+
+
+def pack_size_of(item: Inventory | None = None, *, pack_size: int | None = None) -> int:
+    if pack_size is not None:
+        return max(1, int(pack_size))
+    if item is not None:
+        return max(1, int(getattr(item, "pack_size", 1) or 1))
+    return 1
+
+
+def to_base_pieces(
+    *,
+    pieces: int | float | str | None = None,
+    packs: int | float | str | None = None,
+    pack_size: int = 1,
+) -> int:
+    """Convert packs + loose pieces into base stock qty.
+
+    Example: packs=3, pack_size=10 → 30 pieces.
+    """
+    ps = max(1, int(pack_size or 1))
+    total = 0
+    if pieces is not None and str(pieces).strip() != "":
+        total += int(pieces)
+    if packs is not None and str(packs).strip() != "":
+        total += int(packs) * ps
+    if total <= 0:
+        raise StockError("quantity must be positive (use pieces and/or packs)")
+    return total
+
+
+def pieces_as_packs(pieces: int, pack_size: int = 1) -> tuple[int, int]:
+    """Return (full_packs, remainder_pieces) for display."""
+    ps = max(1, int(pack_size or 1))
+    qty = max(0, int(pieces or 0))
+    if ps <= 1:
+        return 0, qty
+    return qty // ps, qty % ps
 
 
 def compute_avg_cost(
@@ -340,6 +406,7 @@ def adjust(
     evidence_path: str | None = None,
     created_by: int | None = None,
     notes: str | None = None,
+    allow_negative: bool = False,
 ) -> InventoryTransaction:
     if not (reason or "").strip():
         raise StockError("reason is required for stock adjustment")
@@ -350,9 +417,9 @@ def adjust(
 
     on_hand, reserved = _snapshot(item)
     on_hand_after = on_hand + delta
-    if on_hand_after < 0:
-        raise StockError("adjustment would make on_hand negative")
-    if on_hand_after < reserved:
+    if on_hand_after < 0 and not allow_negative:
+        raise StockError("adjustment would make on_hand negative (override required)")
+    if on_hand_after < reserved and not allow_negative:
         raise StockError("adjustment would leave on_hand below reserved")
 
     item.quantity = on_hand_after
@@ -371,6 +438,131 @@ def adjust(
         notes=notes,
         reason=reason,
         evidence_path=evidence_path,
+    )
+
+
+def wastage(
+    db: Session,
+    *,
+    item: Inventory,
+    qty: int,
+    reason: str,
+    created_by: int | None = None,
+    notes: str | None = None,
+    evidence_path: str | None = None,
+) -> InventoryTransaction:
+    """Write off damaged / expired / scrap stock (confirmed wastage txn)."""
+    if not (reason or "").strip():
+        raise StockError("reason is required for wastage")
+    if qty <= 0:
+        raise StockError("wastage quantity must be positive")
+    on_hand, reserved = _snapshot(item)
+    if qty > available(item):
+        raise StockError(
+            f"cannot waste {qty}: only {available(item)} available "
+            f"(on_hand {on_hand}, reserved {reserved})"
+        )
+    on_hand_after = on_hand - qty
+    item.quantity = on_hand_after
+    _touch(item)
+    return _log_movement(
+        db,
+        item=item,
+        movement_type="wastage",
+        quantity=-qty,
+        on_hand_before=on_hand,
+        on_hand_after=on_hand_after,
+        reserved_before=reserved,
+        reserved_after=reserved,
+        reference_description=f"Wastage: {reason}",
+        created_by=created_by,
+        notes=notes,
+        reason=reason,
+        evidence_path=evidence_path,
+    )
+
+
+def return_to_vendor(
+    db: Session,
+    *,
+    item: Inventory,
+    qty: int,
+    reason: str,
+    purchase_order: PurchaseOrder | None = None,
+    created_by: int | None = None,
+    notes: str | None = None,
+    evidence_path: str | None = None,
+) -> InventoryTransaction:
+    """Decrease on_hand for a supplier return. Avg cost unchanged."""
+    if not (reason or "").strip():
+        raise StockError("reason is required for vendor return")
+    if qty <= 0:
+        raise StockError("return quantity must be positive")
+    on_hand, reserved = _snapshot(item)
+    if qty > available(item):
+        raise StockError(
+            f"cannot return {qty}: only {available(item)} available "
+            f"(on_hand {on_hand}, reserved {reserved})"
+        )
+    on_hand_after = on_hand - qty
+    item.quantity = on_hand_after
+    _touch(item)
+    return _log_movement(
+        db,
+        item=item,
+        movement_type="return_to_vendor",
+        quantity=-qty,
+        on_hand_before=on_hand,
+        on_hand_after=on_hand_after,
+        reserved_before=reserved,
+        reserved_after=reserved,
+        purchase_order_id=purchase_order.id if purchase_order else None,
+        reference_description=(
+            f"Return to vendor PO #{purchase_order.id}: {reason}"
+            if purchase_order
+            else f"Return to vendor: {reason}"
+        ),
+        created_by=created_by,
+        notes=notes,
+        reason=reason,
+        evidence_path=evidence_path,
+    )
+
+
+def opening_stock(
+    db: Session,
+    *,
+    item: Inventory,
+    qty: int,
+    unit_cost: Decimal | float | str | None = None,
+    created_by: int | None = None,
+    notes: str | None = None,
+) -> InventoryTransaction:
+    """Confirmed opening balance — only when on_hand is currently zero."""
+    if qty <= 0:
+        raise StockError("opening quantity must be positive")
+    on_hand, reserved = _snapshot(item)
+    if on_hand != 0 or reserved != 0:
+        raise StockError("opening stock only allowed when on_hand and reserved are 0")
+    cost = _money(unit_cost) if unit_cost is not None else _money(getattr(item, "avg_cost", 0))
+    item.quantity = qty
+    if cost > 0:
+        item.avg_cost = cost
+    _touch(item)
+    return _log_movement(
+        db,
+        item=item,
+        movement_type="opening",
+        quantity=qty,
+        on_hand_before=0,
+        on_hand_after=qty,
+        reserved_before=0,
+        reserved_after=0,
+        unit_cost=cost if cost > 0 else None,
+        reference_description="Opening stock",
+        created_by=created_by,
+        notes=notes,
+        reason="Opening stock",
     )
 
 
@@ -419,7 +611,11 @@ def refresh_po_status(po: PurchaseOrder) -> str:
     if current in ("draft", "closed"):
         return current
     if received <= 0:
-        po.status = "ordered"
+        # Keep approved until ordered/received; otherwise ordered
+        if current == "approved":
+            po.status = "approved"
+        else:
+            po.status = "ordered"
     elif received < ordered:
         po.status = "partial"
     else:

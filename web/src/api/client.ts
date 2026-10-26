@@ -48,9 +48,19 @@ export class ApiError extends Error {
 
 async function parseError(res: Response): Promise<ApiError> {
   const body = (await res.json().catch(() => ({}))) as ApiErrorBody
+  const detail = body.detail
+  const detailMsg =
+    typeof detail === 'string'
+      ? detail
+      : detail && typeof detail === 'object'
+        ? detail.error || detail.message || detail.detail
+        : undefined
   const message =
-    body.error || body.message || `HTTP ${res.status}: ${res.statusText}`
-  return new ApiError(message, res.status, body.details)
+    body.error ||
+    body.message ||
+    detailMsg ||
+    `HTTP ${res.status}: ${res.statusText}`
+  return new ApiError(String(message), res.status, body.details)
 }
 
 async function refreshAccessToken(): Promise<boolean> {

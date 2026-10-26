@@ -1,4 +1,5 @@
-import { useMemo, type FormEvent } from 'react'
+import { useMemo, type FormEvent, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { getCustomerBundle, type EntityHit } from '../api/entities'
 import { EntitySelect } from '../components/EntitySelect'
 import { Field, Money, Panel } from '../components/ui'
@@ -17,6 +18,9 @@ export function InvoiceDocumentForm({
   busy,
   showAdvance = true,
   submitLabel = 'Save',
+  cancelTo = '/invoices',
+  readOnly = false,
+  footerNote,
 }: {
   title: string
   form: InvoiceFormState
@@ -25,6 +29,9 @@ export function InvoiceDocumentForm({
   busy?: boolean
   showAdvance?: boolean
   submitLabel?: string
+  cancelTo?: string
+  readOnly?: boolean
+  footerNote?: ReactNode
 }) {
   const net = useMemo(() => calcNet(form), [form])
   const tax = form.include_tax ? net * 0.17 : 0
@@ -94,6 +101,10 @@ export function InvoiceDocumentForm({
 
   return (
     <form onSubmit={onSubmit} className="stack">
+      <fieldset
+        disabled={readOnly}
+        style={{ border: 0, margin: 0, padding: 0, minInlineSize: 0 }}
+      >
       <Panel title={title}>
         <div className="form-grid">
           <EntitySelect
@@ -347,12 +358,19 @@ export function InvoiceDocumentForm({
             Balance: <Money value={balance} />
           </span>
         </div>
-        <div style={{ marginTop: 12 }}>
+      </Panel>
+      </fieldset>
+      {footerNote ? <div style={{ marginTop: 12 }}>{footerNote}</div> : null}
+      <div className="row-actions" style={{ marginTop: 12, gap: 8 }}>
+        {!readOnly ? (
           <button className="btn" type="submit" disabled={busy}>
             {busy ? 'Saving…' : submitLabel}
           </button>
-        </div>
-      </Panel>
+        ) : null}
+        <Link className="btn btn-secondary" to={cancelTo}>
+          {readOnly ? 'Back to invoices' : 'Cancel'}
+        </Link>
+      </div>
     </form>
   )
 }

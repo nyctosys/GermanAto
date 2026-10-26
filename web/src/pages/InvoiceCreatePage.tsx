@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { ErrorBox, PageHeader } from '../components/ui'
 import { InvoiceDocumentForm } from './InvoiceDocumentForm'
@@ -21,7 +21,14 @@ export function InvoiceCreatePage() {
 
   return (
     <div>
-      <PageHeader title="New invoice" />
+      <PageHeader
+        title="New invoice"
+        actions={
+          <Link className="btn btn-secondary" to="/invoices">
+            ← Invoices
+          </Link>
+        }
+      />
       {create.error ? <ErrorBox error={create.error} /> : null}
       <InvoiceDocumentForm
         title="Customer & vehicle"
@@ -30,6 +37,7 @@ export function InvoiceCreatePage() {
         onSubmit={onSubmit}
         busy={create.isPending}
         submitLabel="Create invoice"
+        cancelTo="/invoices"
       />
     </div>
   )

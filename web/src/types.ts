@@ -16,4 +16,5 @@ export type ApiErrorBody = {
   error?: string
   details?: string[] | string
   message?: string
+  detail?: string | { error?: string; message?: string; detail?: string }
 }

@@ -228,6 +228,8 @@ def create_ro_from_quote(
                 description=lab.description,
                 status='Approved',
                 labour_code_id=lab.labour_code_id,
+                approval_status='approved',
+                std_hours=getattr(lab, 'std_hours', None),
             )
         )
     if quote.visit_id:

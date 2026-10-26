@@ -31,6 +31,7 @@ export const NAV: NavGroup[] = [
       { label: 'Invoices', to: '/invoices', permission: 'invoice' },
       { label: 'Quotes', to: '/quotes/pending', permission: 'invoice' },
       { label: 'Repair orders', to: '/repair-orders', permission: 'repair-order' },
+      { label: 'My jobs (work)', to: '/repair-execution', permission: 'repair-order' },
       { label: 'Labour codes', to: '/labour-codes', permission: 'repair-order' },
     ],
   },
@@ -38,7 +39,6 @@ export const NAV: NavGroup[] = [
     group: 'Operations',
     items: [
       { label: 'Inventory', to: '/inventory', permission: 'inventory' },
-      { label: 'Inventory history', to: '/inventory/history', permission: 'inventory' },
       { label: 'Vendors', to: '/vendors', permission: 'vendors' },
       { label: 'Customers & vehicles', to: '/cars', permission: 'car' },
     ],

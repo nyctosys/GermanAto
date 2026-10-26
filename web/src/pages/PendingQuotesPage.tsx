@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '../api/client'
+import { useConfirm } from '../components/ConfirmProvider'
 import {
   Empty,
   ErrorBox,
@@ -22,6 +23,7 @@ type QuoteRow = {
 
 export function PendingQuotesPage() {
   const qc = useQueryClient()
+  const { confirm } = useConfirm()
   const [keyword, setKeyword] = useState('')
 
   const q = useQuery({
@@ -141,8 +143,8 @@ export function PendingQuotesPage() {
                       <button
                         type="button"
                         className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          if (confirm('Delete quote?')) remove.mutate(row.id)
+                        onClick={async () => {
+                          if (await confirm({ message: 'Delete this quote?', danger: true, confirmLabel: 'Delete' })) remove.mutate(row.id)
                         }}
                       >
                         Delete

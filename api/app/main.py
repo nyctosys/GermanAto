@@ -29,6 +29,7 @@ from app.routers import (
     pipeline_status,
     public_quotes,
     qc,
+    repair_execution,
     repair_orders,
     reports,
     settings as settings_router,
@@ -106,6 +107,7 @@ app.include_router(entities.router)  # prefix=/api/entities on router
 app.include_router(reports.router, prefix="/api")
 app.include_router(whatsapp.router, prefix="/api")
 app.include_router(repair_orders.router, prefix="/api")
+app.include_router(repair_execution.router, prefix="/api")
 app.include_router(expenses.router, prefix="/api")
 app.include_router(cash_received.router, prefix="/api")
 app.include_router(vendors.router, prefix="")  # routes already /api/...

@@ -40,7 +40,12 @@ from app.whatsapp_notifications import whatsapp_notifier
 from app.foundation.idempotent import idempotent_create
 from app.foundation.overrides import assert_discount_override, require_audit_reason
 from app.foundation.versioning import bump_version, check_version, extract_version
-from app.pipeline import assert_invoice_unlocked, assert_qc_before_invoice, discount_pct, lock_invoice
+from app.pipeline import (
+    assert_invoice_unlocked,
+    assert_qc_before_invoice,
+    discount_pct,
+    lock_invoice_if_paid,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -224,7 +229,10 @@ def create_invoice(request: Request, db: Session = Depends(get_db), body: dict |
 
         repair_order_id = data.get("repair_order_id")
         if type_of == "invoice" and repair_order_id:
+            from app.customer_ar import assert_no_duplicate_invoice_for_ro, post_accrual_on_finalize
+
             assert_qc_before_invoice(db, int(repair_order_id))
+            assert_no_duplicate_invoice_for_ro(db, repair_order_id=int(repair_order_id))
         
         # Create invoice with transaction
         try:
@@ -255,8 +263,8 @@ def create_invoice(request: Request, db: Session = Depends(get_db), body: dict |
                 repair_order_id=int(repair_order_id) if repair_order_id else None,
             )
             invoice.status = calculate_invoice_status(invoice)
-            if type_of == "invoice":
-                lock_invoice(invoice)
+            # Lock only when advance/payment already makes it partial or paid
+            lock_invoice_if_paid(invoice)
 
             # Link the document to the customer and car it was written for, and
             # claim the car for that customer if it had no owner yet.
@@ -311,6 +319,13 @@ def create_invoice(request: Request, db: Session = Depends(get_db), body: dict |
             #         logger.error(f"Error updating inventory: {e}")
             #         return _json({'error': 'Failed to update inventory'}, 500)
             
+            if type_of == "invoice":
+                from app.customer_ar import post_accrual_on_finalize
+
+                post_accrual_on_finalize(
+                    db, invoice, username=getattr(current_user, "username", None)
+                )
+
             log_action(db, current_user, 'CREATE', 'invoices' if type_of == 'invoice' else 'quotes', invoice.id, f"Created {type_of} for customer {customer_name} total {invoice.net_total} PKR")
             db.commit()
             
@@ -398,6 +413,7 @@ def get_invoice(invoice_id, request: Request, db: Session = Depends(get_db), cur
             return _json({'error': 'Invoice not found'}, 404)
         invoice_data = {
             "id": invoice.id,
+            "document_no": invoice.document_no,
             "customer_name": invoice.customer_name,
             "customer_address": invoice.customer_address,
             "customer_phone": invoice.customer_phone,
@@ -410,6 +426,9 @@ def get_invoice(invoice_id, request: Request, db: Session = Depends(get_db), cur
             "customer_id": invoice.customer_id,
             "customer_code": f"CN{invoice.customer_id:03d}" if invoice.customer_id else "",
             "car_id": invoice.car_id,
+            "visit_id": invoice.visit_id,
+            "job_card_id": invoice.job_card_id,
+            "repair_order_id": invoice.repair_order_id,
             "created_at": invoice.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "balance": float(invoice.balance),
             "advance": float(invoice.advance),
@@ -431,7 +450,8 @@ def get_invoice(invoice_id, request: Request, db: Session = Depends(get_db), cur
                     "product_name": item.product_name, 
                     "part_number": item.part_number,
                     "quantity": item.quantity, 
-                    "price": float(item.price)
+                    "price": float(item.price),
+                    "approval_status": item.approval_status,
                 }
                 for item in invoice.items
             ],
@@ -439,11 +459,15 @@ def get_invoice(invoice_id, request: Request, db: Session = Depends(get_db), cur
                 {
                     "id": labour.id, 
                     "description": labour.description, 
-                    "price": float(labour.price)
+                    "price": float(labour.price),
+                    "approval_status": labour.approval_status,
                 }
                 for labour in invoice.labours
             ]
         }
+        from app.customer_ar import invoice_money_snapshot
+
+        invoice_data.update(invoice_money_snapshot(invoice))
         
         # If color or chassis is not saved, try to fetch from Car table
         if not invoice_data["customer_color"] or not invoice_data["customer_chasis"]:
@@ -490,7 +514,8 @@ def delete_invoice(invoice_id, request: Request, db: Session = Depends(get_db), 
             db.rollback()
             logger.error(f"Database error deleting invoice {invoice_id}: {e}")
             return _json({'error': 'Database error occurred'}, 500)
-            
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting invoice {invoice_id}: {e}")
         return _json({'error': 'Internal server error'}, 500)
@@ -605,6 +630,7 @@ def update_invoice(invoice_id, request: Request, db: Session = Depends(get_db), 
             invoice.updated_by_user = current_user.username if current_user else None
             invoice.updated_at = datetime.utcnow()
             invoice.status = calculate_invoice_status(invoice)
+            lock_invoice_if_paid(invoice)
             bump_version(invoice)
             
             log_action(db, current_user, 'UPDATE', 'invoices' if invoice.type_of == 'invoice' else 'quotes', invoice.id, f"Updated {invoice.type_of} details (Net Total: {invoice.net_total} PKR, Balance: {invoice.balance} PKR)")
@@ -623,7 +649,8 @@ def update_invoice(invoice_id, request: Request, db: Session = Depends(get_db), 
             db.rollback()
             logger.error(f"Database error updating invoice {invoice_id}: {e}")
             return _json({'error': 'Database error occurred'}, 500)
-            
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating invoice {invoice_id}: {e}")
         return _json({'error': 'Internal server error'}, 500)
@@ -669,22 +696,25 @@ def search_invoices(request: Request, db: Session = Depends(get_db), current_use
                     Invoice.customer_name.ilike(f'%{query}%'),
                     Invoice.customer_phone.ilike(f'%{query}%'),
                     Invoice.customer_reg_no.ilike(f'%{query}%'),
+                    Invoice.document_no.ilike(f'%{query}%'),
                     Invoice.type_of.ilike(f'%{query}%'),
                     cast(Invoice.id, String).ilike(f'%{query}%')
                 )
             )
         
         # Add status filter if provided
-        if status:
-            # Normalize status: handle both "partially paid" and "partially_paid"
-            # Check both formats since database might have either
-            if status.lower() == 'partially paid':
-                # Use OR condition to match both "partially paid" and "partially_paid"
-                normalized_status = status.replace(' ', '_')
-                search_conditions.append(or_(Invoice.status == normalized_status, Invoice.status == status))
+        if status and status.lower() not in ("all", ""):
+            st = status.lower().replace(" ", "_")
+            if st in ("partial", "partially_paid", "partially"):
+                search_conditions.append(
+                    or_(
+                        Invoice.status == "partially_paid",
+                        Invoice.status == "partial",
+                        Invoice.status == "partially paid",
+                    )
+                )
             else:
-                normalized_status = status
-                search_conditions.append(Invoice.status == normalized_status)
+                search_conditions.append(Invoice.status == st)
         
         # Add type_of filter if provided
         if type_of:
@@ -724,10 +754,14 @@ def search_invoices(request: Request, db: Session = Depends(get_db), current_use
         # Execute search (no limit - return all matching results)
         results = db.query(Invoice).filter(final_condition).order_by(Invoice.created_at.desc()).all()
         
+        from app.customer_ar import invoice_money_snapshot
+
         invoice_list = []
         for invoice in results:
+            money = invoice_money_snapshot(invoice)
             invoice_data = {
                 "id": invoice.id,
+                "document_no": invoice.document_no,
                 "customer_name": invoice.customer_name,
                 "customer_phone": invoice.customer_phone,
                 "customer_reg_no": invoice.customer_reg_no,
@@ -736,12 +770,18 @@ def search_invoices(request: Request, db: Session = Depends(get_db), current_use
                 "balance": float(invoice.balance),
                 "advance": float(invoice.advance),
                 "total": float(invoice.net_total),
-                "net_total": float(invoice.net_total),  # Return both for frontend compatibility
+                "net_total": float(invoice.net_total),
+                "amount_due": money["amount_due"],
+                "amount_paid": money["amount_paid"],
+                "amount_unpaid": money["amount_unpaid"],
                 "discount": float(invoice.discount),
                 "include_tax": invoice.include_tax,
                 "tax_amount": float(invoice.tax_amount),
                 "paid_amount": float(invoice.paid_amount or 0),
                 "status": invoice.status,
+                "locked": money["locked"],
+                "repair_order_id": invoice.repair_order_id,
+                "job_card_id": invoice.job_card_id,
                 "created_by_user": invoice.created_by_user,
                 "updated_by_user": invoice.updated_by_user,
                 "updated_at": invoice.updated_at.strftime("%Y-%m-%d %H:%M:%S") if invoice.updated_at else None,
@@ -781,6 +821,13 @@ def health_check(request: Request, db: Session = Depends(get_db)):
 @router.post('/invoice/{invoice_id:int}/convert')
 def convert_quote_to_invoice(invoice_id, request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'accountant']))):
     """Convert a quote to an invoice (in-place, same ID). Requires QC when linked to an RO."""
+    from app.customer_ar import (
+        assert_no_duplicate_invoice_for_ro,
+        invoice_money_snapshot,
+        post_accrual_on_finalize,
+        rebuild_invoice_totals,
+    )
+
     try:
         invoice = db.get(Invoice, invoice_id)
         if not invoice:
@@ -792,6 +839,9 @@ def convert_quote_to_invoice(invoice_id, request: Request, db: Session = Depends
 
         if invoice.repair_order_id:
             assert_qc_before_invoice(db, invoice.repair_order_id)
+            assert_no_duplicate_invoice_for_ro(
+                db, repair_order_id=invoice.repair_order_id, exclude_invoice_id=invoice.id
+            )
 
         # Only approved lines (or legacy pending-all) may bill
         for item in invoice.items or []:
@@ -808,12 +858,30 @@ def convert_quote_to_invoice(invoice_id, request: Request, db: Session = Depends
             if (labour.approval_status or "").lower() == "rejected":
                 labour.price = 0.0
 
+        rebuild_invoice_totals(invoice)
+        if float(invoice.net_total or 0) <= 0 and float(invoice.tax_amount or 0) <= 0:
+            return _json({'error': 'No billable lines remain after approvals'}, 400)
+
         invoice.type_of = 'invoice'
-        invoice.status = 'unpaid'
-        lock_invoice(invoice)
+        invoice.status = calculate_invoice_status(invoice)
+        from app.document_numbers import invoice_document_no
+
+        invoice.document_no = invoice_document_no(invoice.id, type_of="invoice")
+        # Unpaid converted invoices stay editable until a payment is recorded
+        lock_invoice_if_paid(invoice)
+        post_accrual_on_finalize(
+            db, invoice, username=getattr(current_user, "username", None)
+        )
 
         db.commit()
-        return _json({'message': 'Quote converted to invoice successfully', 'invoice_id': invoice.id}, 200)
+        return _json(
+            {
+                'message': 'Quote converted to invoice successfully',
+                'invoice_id': invoice.id,
+                'money': invoice_money_snapshot(invoice),
+            },
+            200,
+        )
 
     except HTTPException:
         db.rollback()
@@ -954,7 +1022,7 @@ async def update_invoice_balance(invoice_id, request: Request, db: Session = Dep
         if proof_file:
             proof_path = save_uploaded_file(proof_file)
             
-        # Add to existing paid amount
+        # Add to existing paid amount (cash only — does not change net_total / accrual)
         current_paid = invoice.paid_amount or 0
         invoice.paid_amount = current_paid + additional_amount
         
@@ -982,6 +1050,17 @@ async def update_invoice_balance(invoice_id, request: Request, db: Session = Dep
         }
         history_list.append(payment_record)
         invoice.payments_history = json.dumps(history_list)
+
+        from app.customer_ar import post_payment_credit
+
+        post_payment_credit(
+            db,
+            invoice,
+            amount=additional_amount,
+            username=getattr(current_user, "username", None),
+            notes="Invoice payment (verified)",
+        )
+        lock_invoice_if_paid(invoice)
         
         # Log action
         log_action(db, current_user, 'UPDATE_BALANCE', 'invoices', invoice.id, f"Added payment of {additional_amount:.2f} PKR. Total paid: {invoice.paid_amount:.2f} PKR. Balance: {invoice.balance:.2f} PKR")
@@ -1000,6 +1079,65 @@ async def update_invoice_balance(invoice_id, request: Request, db: Session = Dep
     except Exception as e:
         logger.error(f"Error updating invoice balance {invoice_id}: {e}")
         return _json({'error': 'Internal server error'}, 500)
+
+
+@router.post('/invoice/{invoice_id:int}/credit-note')
+@idempotent_create
+def post_invoice_credit_note(
+    invoice_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'accountant'])),
+):
+    """Authorized credit note / reversal on a posted invoice (does not unlock for free edit)."""
+    from app.customer_ar import create_credit_note, invoice_money_snapshot
+
+    data = body or {}
+    try:
+        require_audit_reason(kind="delete", reason=data.get("reason"))
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {"error": str(exc.detail)}
+        return _json(detail, exc.status_code)
+
+    invoice = db.get(Invoice, invoice_id)
+    if not invoice:
+        return _json({"error": "Invoice not found"}, 404)
+    try:
+        amount = float(data.get("amount") or 0)
+        note, _entry = create_credit_note(
+            db,
+            invoice,
+            amount=amount,
+            reason=str(data.get("reason") or ""),
+            username=getattr(current_user, "username", None),
+        )
+        log_action(
+            db,
+            current_user,
+            "CREDIT_NOTE",
+            "invoices",
+            invoice.id,
+            f"Credit note {amount:.2f} PKR — {data.get('reason')}",
+        )
+        db.commit()
+        return _json(
+            {
+                "message": "Credit note posted",
+                "credit_note": note.to_dict(),
+                "money": invoice_money_snapshot(invoice),
+            },
+            201,
+        )
+    except HTTPException as exc:
+        db.rollback()
+        detail = exc.detail if isinstance(exc.detail, dict) else {"error": str(exc.detail)}
+        return _json(detail, exc.status_code)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"credit note failed: {e}")
+        return _json({"error": "Failed to post credit note"}, 500)
+
 
 @router.get('/admin/app-logs')
 def get_app_logs(request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin']))):

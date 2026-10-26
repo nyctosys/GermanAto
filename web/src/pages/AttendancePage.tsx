@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { api } from '../api/client'
+import { useConfirm } from '../components/ConfirmProvider'
 import {
   Empty,
   ErrorBox,
@@ -25,6 +26,7 @@ type Attendance = {
 
 export function AttendancePage() {
   const qc = useQueryClient()
+  const { confirm } = useConfirm()
   const today = new Date().toISOString().slice(0, 10)
   const [date, setDate] = useState(today)
   const [form, setForm] = useState({
@@ -169,8 +171,8 @@ export function AttendancePage() {
                       <button
                         type="button"
                         className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          if (confirm('Delete?')) remove.mutate(row.id)
+                        onClick={async () => {
+                          if (await confirm({ message: 'Delete this attendance record?', danger: true, confirmLabel: 'Delete' })) remove.mutate(row.id)
                         }}
                       >
                         Delete

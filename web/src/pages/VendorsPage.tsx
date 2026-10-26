@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../api/client'
+import { useConfirm } from '../components/ConfirmProvider'
 import {
   Empty,
   ErrorBox,
@@ -21,6 +22,9 @@ type Vendor = {
   email?: string
   address?: string
   cnic?: string
+  payment_terms_days?: number
+  bank_details?: string
+  notes?: string
 }
 
 const empty = {
@@ -31,10 +35,14 @@ const empty = {
   email: '',
   address: '',
   cnic: '',
+  payment_terms_days: '30',
+  bank_details: '',
+  notes: '',
 }
 
 export function VendorsPage() {
   const qc = useQueryClient()
+  const { confirm } = useConfirm()
   const [params] = useSearchParams()
   const [form, setForm] = useState(empty)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -52,8 +60,12 @@ export function VendorsPage() {
 
   const save = useMutation({
     mutationFn: async () => {
-      if (editingId) return api.put(`/api/vendors/${editingId}`, form)
-      return api.post('/api/vendors', form)
+      const payload = {
+        ...form,
+        payment_terms_days: Number(form.payment_terms_days || 30),
+      }
+      if (editingId) return api.put(`/api/vendors/${editingId}`, payload)
+      return api.post('/api/vendors', payload)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['vendors'] })
@@ -96,11 +108,17 @@ export function VendorsPage() {
                 ['email', 'Email'],
                 ['address', 'Address'],
                 ['cnic', 'CNIC'],
+                ['payment_terms_days', 'Payment terms (days)'],
+                ['bank_details', 'Bank details'],
+                ['notes', 'Notes'],
               ] as const
             ).map(([key, label]) => (
               <Field key={key} label={label}>
                 <input
-                  required={key === 'name'}
+                  required={['name', 'company_name', 'contact_person', 'phone', 'address'].includes(
+                    key,
+                  )}
+                  type={key === 'payment_terms_days' ? 'number' : 'text'}
                   value={form[key]}
                   onChange={(e) => setForm({ ...form, [key]: e.target.value })}
                 />
@@ -165,6 +183,9 @@ export function VendorsPage() {
                             email: v.email || '',
                             address: v.address || '',
                             cnic: v.cnic || '',
+                            payment_terms_days: String(v.payment_terms_days ?? 30),
+                            bank_details: v.bank_details || '',
+                            notes: v.notes || '',
                           })
                           setShowForm(true)
                         }}
@@ -174,8 +195,16 @@ export function VendorsPage() {
                       <button
                         type="button"
                         className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          if (confirm('Delete vendor?')) remove.mutate(v.id)
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              message: 'Delete this vendor? This cannot be undone.',
+                              danger: true,
+                              confirmLabel: 'Delete',
+                            })
+                          ) {
+                            remove.mutate(v.id)
+                          }
                         }}
                       >
                         Delete

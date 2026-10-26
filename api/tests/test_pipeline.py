@@ -71,6 +71,24 @@ def test_invoice_lock():
     assert ei.value.status_code == 409
 
 
+def test_lock_only_after_partial_or_full_payment():
+    from app.pipeline import lock_invoice_if_paid
+
+    unpaid = _Invoice(type_of="invoice", net_total=100, advance=0, paid_amount=0, balance=100)
+    lock_invoice_if_paid(unpaid)
+    assert unpaid.locked_at is None
+
+    partial = _Invoice(
+        type_of="invoice", net_total=100, advance=0, paid_amount=40, balance=60, discount=0
+    )
+    # _Invoice may not have all money fields used by calculate_invoice_status
+    partial.include_tax = False
+    partial.tax_amount = 0
+    partial.discount = 0
+    lock_invoice_if_paid(partial)
+    assert partial.locked_at is not None
+
+
 def test_open_ro_requires_approval_or_legacy_pending():
     q = _Quote(items=[_Line("rejected")], labours=[])
     with pytest.raises(HTTPException):

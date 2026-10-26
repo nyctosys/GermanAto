@@ -246,7 +246,12 @@ def get_inventory_transactions(
             query = query.filter(InventoryTransaction.inventory_id == inventory_id)
         
         if transaction_type:
-            query = query.filter(InventoryTransaction.transaction_type == transaction_type)
+            if isinstance(transaction_type, (list, tuple, set, frozenset)):
+                query = query.filter(
+                    InventoryTransaction.transaction_type.in_(list(transaction_type))
+                )
+            else:
+                query = query.filter(InventoryTransaction.transaction_type == transaction_type)
         
         if repair_order_id:
             query = query.filter(InventoryTransaction.repair_order_id == repair_order_id)

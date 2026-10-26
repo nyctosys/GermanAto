@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useConfirm } from '../components/ConfirmProvider'
 import {
   Empty,
   ErrorBox,
@@ -24,6 +25,7 @@ type CashRow = {
 
 export function CashReceivedPage() {
   const qc = useQueryClient()
+  const { confirm } = useConfirm()
   const [sp] = useSearchParams()
   const today = new Date().toISOString().slice(0, 10)
   const [from, setFrom] = useState(sp.get('start_date') || today)
@@ -164,7 +166,7 @@ export function CashReceivedPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
-                        onClick={() => {
+                        onClick={async () => {
                           setEditingId(row.id)
                           setForm({
                             date: row.date,
@@ -180,8 +182,8 @@ export function CashReceivedPage() {
                       <button
                         type="button"
                         className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          if (confirm('Delete?')) remove.mutate(row.id)
+                        onClick={async () => {
+                          if (await confirm({ message: 'Delete this cash receipt?', danger: true, confirmLabel: 'Delete' })) remove.mutate(row.id)
                         }}
                       >
                         Delete

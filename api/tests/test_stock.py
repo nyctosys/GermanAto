@@ -13,11 +13,15 @@ from app.stock import (
     available,
     compute_avg_cost,
     issue_to_ro,
+    opening_stock,
+    pieces_as_packs,
     po_receive,
     refresh_po_status,
     release,
     reserve,
     return_from_ro,
+    to_base_pieces,
+    wastage,
 )
 
 
@@ -130,3 +134,31 @@ def test_adjustment_cannot_go_below_reserved():
     item = FakeItem(quantity=5, reserved=4)
     with pytest.raises(StockError, match="reserved"):
         adjust(db, item=item, delta=-2, reason="shrink", evidence_path="e.pdf")
+
+
+def test_three_packs_of_ten_are_thirty_pieces():
+    assert to_base_pieces(packs=3, pack_size=10) == 30
+    assert to_base_pieces(packs=3, pieces=2, pack_size=10) == 32
+    assert pieces_as_packs(32, 10) == (3, 2)
+
+
+def test_opening_stock_logs_confirmed_movement():
+    db = FakeSession()
+    item = FakeItem(quantity=0, avg_cost=0)
+    txn = opening_stock(db, item=item, qty=30, unit_cost=50)
+    assert item.quantity == 30
+    assert item.avg_cost == __import__("decimal").Decimal("50.00")
+    assert txn.transaction_type == "opening"
+    assert txn.quantity == 30
+
+
+def test_wastage_reduces_available_only():
+    db = FakeSession()
+    item = FakeItem(quantity=20, reserved=5)
+    txn = wastage(db, item=item, qty=3, reason="damaged")
+    assert item.quantity == 17
+    assert item.reserved == 5
+    assert txn.transaction_type == "wastage"
+    assert txn.quantity == -3
+    with pytest.raises(StockError, match="available"):
+        wastage(db, item=item, qty=20, reason="too much")

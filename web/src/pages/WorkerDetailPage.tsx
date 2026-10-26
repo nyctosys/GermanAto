@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../api/client'
+import { useConfirm } from '../components/ConfirmProvider'
 import {
   ErrorBox,
   Field,
@@ -33,6 +34,7 @@ export function WorkerDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { confirm } = useConfirm()
   const [form, setForm] = useState<Partial<Worker>>({})
 
   const detail = useQuery({
@@ -120,8 +122,8 @@ export function WorkerDetailPage() {
           <button
             type="button"
             className="btn btn-danger"
-            onClick={() => {
-              if (confirm('Delete worker?')) remove.mutate()
+            onClick={async () => {
+              if (await confirm({ message: 'Delete this worker?', danger: true, confirmLabel: 'Delete' })) remove.mutate()
             }}
           >
             Delete

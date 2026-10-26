@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useConfirm } from '../components/ConfirmProvider'
 import {
   Empty,
   ErrorBox,
@@ -47,6 +48,7 @@ export function ExpensesPage({
   mode: 'daily' | 'major'
 }) {
   const qc = useQueryClient()
+  const { confirm } = useConfirm()
   const title = mode === 'daily' ? 'Daily expenses' : 'Major expenses'
   const categories = mode === 'daily' ? DAILY_CATEGORIES : MAJOR_CATEGORIES
   const [sp] = useSearchParams()
@@ -207,7 +209,7 @@ export function ExpensesPage({
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
-                        onClick={() => {
+                        onClick={async () => {
                           setEditingId(exp.id)
                           setForm({
                             date: exp.date,
@@ -223,8 +225,8 @@ export function ExpensesPage({
                       <button
                         type="button"
                         className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          if (confirm('Delete expense?')) remove.mutate(exp.id)
+                        onClick={async () => {
+                          if (await confirm({ message: 'Delete this expense?', danger: true, confirmLabel: 'Delete' })) remove.mutate(exp.id)
                         }}
                       >
                         Delete

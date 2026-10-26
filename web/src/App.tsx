@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
 import { ProtectedRoute } from './auth/ProtectedRoute'
+import { ConfirmProvider } from './components/ConfirmProvider'
 import { AppShell } from './layout/AppShell'
 import { AdminPage } from './pages/AdminPage'
 import { AttendancePage } from './pages/AttendancePage'
@@ -18,6 +19,7 @@ import { InventoryPage } from './pages/InventoryPage'
 import { InvoiceCreatePage } from './pages/InvoiceCreatePage'
 import { InvoiceEditPage } from './pages/InvoiceEditPage'
 import { InvoiceManagementPage } from './pages/InvoiceManagementPage'
+import { InvoicePrintPage } from './pages/InvoicePrintPage'
 import { LoginPage } from './pages/LoginPage'
 import { MonthlyLedgerPage } from './pages/MonthlyLedgerPage'
 import { PendingQuotesPage } from './pages/PendingQuotesPage'
@@ -37,6 +39,8 @@ import { JobCardDetailPage } from './pages/JobCardDetailPage'
 import { LabourCodesPage } from './pages/LabourCodesPage'
 import { PublicApprovePage } from './pages/PublicApprovePage'
 import { RepairOrderPipelinePage } from './pages/RepairOrderPipelinePage'
+import { RepairExecutionBoardPage } from './pages/RepairExecutionBoardPage'
+import { RepairExecutionPage } from './pages/RepairExecutionPage'
 import { EntryExitPacketPage } from './pages/EntryExitPacketPage'
 import { MoneyInPage } from './pages/MoneyInPage'
 import { MoneyOutPage } from './pages/MoneyOutPage'
@@ -44,6 +48,7 @@ import { MoneyOutPage } from './pages/MoneyOutPage'
 export default function App() {
   return (
     <AuthProvider>
+      <ConfirmProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -59,6 +64,7 @@ export default function App() {
               <Route path="invoices" element={<InvoiceManagementPage />} />
               <Route path="invoices/new" element={<InvoiceCreatePage />} />
               <Route path="invoices/:id/edit" element={<InvoiceEditPage />} />
+              <Route path="invoices/:id/print" element={<InvoicePrintPage />} />
               <Route path="quotes/new" element={<QuoteCreatePage />} />
               <Route path="quotes/pending" element={<PendingQuotesPage />} />
               <Route path="job-cards" element={<JobCardsPage />} />
@@ -68,6 +74,8 @@ export default function App() {
               <Route path="repair-orders" element={<RepairOrdersPage />} />
               <Route path="repair-orders/new" element={<RepairOrderCreatePage />} />
               <Route path="repair-orders/:id/pipeline" element={<RepairOrderPipelinePage />} />
+              <Route path="repair-orders/:id/execution" element={<RepairExecutionPage />} />
+              <Route path="repair-execution" element={<RepairExecutionBoardPage />} />
               <Route path="cars/:id/packet" element={<EntryExitPacketPage />} />
               <Route path="money-in" element={<MoneyInPage />} />
               <Route path="money-out" element={<MoneyOutPage />} />
@@ -98,6 +106,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </ConfirmProvider>
     </AuthProvider>
   )
 }
