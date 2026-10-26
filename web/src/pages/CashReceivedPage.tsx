@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import {
   Empty,
@@ -23,9 +24,10 @@ type CashRow = {
 
 export function CashReceivedPage() {
   const qc = useQueryClient()
+  const [sp] = useSearchParams()
   const today = new Date().toISOString().slice(0, 10)
-  const [from, setFrom] = useState(today)
-  const [to, setTo] = useState(today)
+  const [from, setFrom] = useState(sp.get('start_date') || today)
+  const [to, setTo] = useState(sp.get('end_date') || today)
   const [form, setForm] = useState({
     date: today,
     amount: 0,

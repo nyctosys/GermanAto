@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import {
   Empty,
@@ -48,6 +49,7 @@ export function ExpensesPage({
   const qc = useQueryClient()
   const title = mode === 'daily' ? 'Daily expenses' : 'Major expenses'
   const categories = mode === 'daily' ? DAILY_CATEGORIES : MAJOR_CATEGORIES
+  const [sp] = useSearchParams()
   const today = new Date().toISOString().slice(0, 10)
   const [form, setForm] = useState({
     date: today,
@@ -57,8 +59,8 @@ export function ExpensesPage({
     notes: '',
   })
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [from, setFrom] = useState(today)
-  const [to, setTo] = useState(today)
+  const [from, setFrom] = useState(sp.get('start_date') || today)
+  const [to, setTo] = useState(sp.get('end_date') || today)
 
   const list = useQuery({
     queryKey: ['expenses', mode, from, to],

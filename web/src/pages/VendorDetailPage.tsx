@@ -13,20 +13,43 @@ import {
   Panel,
 } from '../components/ui'
 
+type PoRow = {
+  id?: number
+  item_name?: string
+  description?: string
+  quantity?: number
+  qty_received?: number
+  qty_remaining?: number
+  rate?: number
+  amount?: number
+  status?: string
+  invoice_no?: string
+  inventory_id?: number | null
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export function VendorDetailPage() {
   const { id } = useParams()
   const qc = useQueryClient()
-  const [ledgerForm, setLedgerForm] = useState({
+  const [ledgerForm, setLedgerForm] = useState(() => ({
     amount: 0,
     description: '',
     entry_type: 'debit',
-    date: new Date().toISOString().slice(0, 10),
-  })
-  const [poForm, setPoForm] = useState({
-    description: '',
-    amount: 0,
-    status: 'pending',
-  })
+    date: todayIso(),
+  }))
+  const [poForm, setPoForm] = useState(() => ({
+    item_name: '',
+    invoice_no: '',
+    quantity: 1,
+    rate: 0,
+    inventory_id: '',
+    status: 'draft',
+    date: todayIso(),
+  }))
+  const [receiveQty, setReceiveQty] = useState<Record<number, number>>({})
 
   const vendor = useQuery({
     queryKey: ['vendor', id],
@@ -50,7 +73,7 @@ export function VendorDetailPage() {
     enabled: !!id,
     queryFn: async () => {
       const data = await api.get<
-        { purchase_orders?: Record<string, unknown>[] } | Record<string, unknown>[]
+        { purchase_orders?: PoRow[] } | PoRow[]
       >(`/api/vendors/${id}/purchase-orders`)
       return Array.isArray(data) ? data : data.purchase_orders || []
     },
@@ -69,7 +92,7 @@ export function VendorDetailPage() {
         amount: 0,
         description: '',
         entry_type: 'debit',
-        date: new Date().toISOString().slice(0, 10),
+        date: todayIso(),
       })
     },
   })
@@ -78,25 +101,58 @@ export function VendorDetailPage() {
     mutationFn: () =>
       api.post('/api/purchase-orders/add', {
         vendor_id: Number(id),
-        ...poForm,
-        amount: Number(poForm.amount),
+        item_name: poForm.item_name,
+        invoice_no: poForm.invoice_no || undefined,
+        quantity: Number(poForm.quantity),
+        rate: Number(poForm.rate),
+        date: poForm.date,
+        status: poForm.status,
+        inventory_id: poForm.inventory_id ? Number(poForm.inventory_id) : undefined,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['vendor-pos', id] })
-      setPoForm({ description: '', amount: 0, status: 'pending' })
+      setPoForm({
+        item_name: '',
+        invoice_no: '',
+        quantity: 1,
+        rate: 0,
+        inventory_id: '',
+        status: 'draft',
+        date: todayIso(),
+      })
     },
   })
 
+  const orderPo = useMutation({
+    mutationFn: (poId: number) =>
+      api.put(`/api/purchase-orders/${poId}/status`, { status: 'ordered' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['vendor-pos', id] }),
+  })
+
   const receivePo = useMutation({
-    mutationFn: (row: Record<string, unknown>) => {
-      const ordered = Number(row.quantity || 0)
-      const got = Number(row.qty_received || 0)
-      const remaining = Math.max(1, ordered - got)
-      return api.post(`/api/purchase-orders/${row.id}/receive`, {
-        quantity: remaining,
-        inventory_id: row.inventory_id || undefined,
+    mutationFn: async ({ po, qty }: { po: PoRow; qty: number }) => {
+      const receipt_attachment_path = window.prompt(
+        'Supplier receipt path (required). Upload via attachments or paste stored path:',
+        po.id ? `uploads/po-${po.id}-receipt.pdf` : '',
+      )
+      if (!receipt_attachment_path) throw new Error('Receipt required for GRN')
+      return api.post(`/api/purchase-orders/${po.id}/receive`, {
+        quantity: qty,
+        unit_cost: po.rate,
+        inventory_id: po.inventory_id,
+        receipt_attachment_path,
       })
     },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vendor-pos', id] })
+      qc.invalidateQueries({ queryKey: ['vendor-ledger', id] })
+      qc.invalidateQueries({ queryKey: ['inventory'] })
+    },
+  })
+
+  const closePo = useMutation({
+    mutationFn: (poId: number) =>
+      api.put(`/api/purchase-orders/${poId}/status`, { status: 'closed' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['vendor-pos', id] }),
   })
 
@@ -192,7 +248,7 @@ export function VendorDetailPage() {
                     <td>{String(row.entry_type || row.type || '')}</td>
                     <td>{String(row.description || '')}</td>
                     <td>
-                      <Money value={Number(row.amount || 0)} />
+                      <Money value={Number(row.amount || row.debit || row.credit || 0)} />
                     </td>
                   </tr>
                 ))}
@@ -210,19 +266,59 @@ export function VendorDetailPage() {
             addPo.mutate()
           }}
         >
-          <Field label="Description">
+          <Field label="Item name">
             <input
-              value={poForm.description}
-              onChange={(e) => setPoForm({ ...poForm, description: e.target.value })}
+              required
+              value={poForm.item_name}
+              onChange={(e) => setPoForm({ ...poForm, item_name: e.target.value })}
             />
           </Field>
-          <Field label="Amount">
+          <Field label="Invoice / PO #">
+            <input
+              value={poForm.invoice_no}
+              onChange={(e) => setPoForm({ ...poForm, invoice_no: e.target.value })}
+              placeholder="auto if blank"
+            />
+          </Field>
+          <Field label="Inventory ID">
+            <input
+              value={poForm.inventory_id}
+              onChange={(e) => setPoForm({ ...poForm, inventory_id: e.target.value })}
+              placeholder="required for GRN"
+            />
+          </Field>
+          <Field label="Qty">
+            <input
+              type="number"
+              min={1}
+              value={poForm.quantity}
+              onChange={(e) => setPoForm({ ...poForm, quantity: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Rate">
             <input
               type="number"
               step="0.01"
-              value={poForm.amount}
-              onChange={(e) => setPoForm({ ...poForm, amount: Number(e.target.value) })}
+              min={0}
+              value={poForm.rate}
+              onChange={(e) => setPoForm({ ...poForm, rate: Number(e.target.value) })}
             />
+          </Field>
+          <Field label="Date">
+            <input
+              type="date"
+              value={poForm.date}
+              onChange={(e) => setPoForm({ ...poForm, date: e.target.value })}
+            />
+          </Field>
+          <Field label="Status">
+            <select
+              value={poForm.status}
+              onChange={(e) => setPoForm({ ...poForm, status: e.target.value })}
+            >
+              <option value="draft">Draft</option>
+              <option value="ordered">Ordered</option>
+            </select>
           </Field>
           <button className="btn" type="submit">
             Add PO
@@ -240,38 +336,84 @@ export function VendorDetailPage() {
                 <tr>
                   <th>ID</th>
                   <th>Item</th>
-                  <th>Qty</th>
+                  <th>Ordered</th>
                   <th>Received</th>
-                  <th>Amount</th>
+                  <th>Rate</th>
                   <th>Status</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {(pos.data || []).map((row, idx) => (
-                  <tr key={Number(row.id) || idx}>
-                    <td>{String(row.id || '')}</td>
-                    <td>{String(row.item_name || row.description || '')}</td>
-                    <td>{String(row.quantity ?? '')}</td>
-                    <td>{String(row.qty_received ?? 0)}</td>
-                    <td>
-                      <Money value={Number(row.amount || 0)} />
-                    </td>
-                    <td>{String(row.status || '')}</td>
-                    <td>
-                      {String(row.status) !== 'received' ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          disabled={receivePo.isPending}
-                          onClick={() => receivePo.mutate(row)}
-                        >
-                          Receive remaining
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
+                {(pos.data || []).map((row, idx) => {
+                  const poId = Number(row.id) || 0
+                  const remaining = Number(
+                    row.qty_remaining ??
+                      Number(row.quantity || 0) - Number(row.qty_received || 0),
+                  )
+                  return (
+                    <tr key={poId || idx}>
+                      <td>{String(row.id || '')}</td>
+                      <td>{String(row.item_name || row.description || '')}</td>
+                      <td>{String(row.quantity || '')}</td>
+                      <td>{String(row.qty_received || 0)}</td>
+                      <td>
+                        <Money value={Number(row.rate || row.amount || 0)} />
+                      </td>
+                      <td>{String(row.status || '')}</td>
+                      <td className="row-actions">
+                        {row.status === 'draft' ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => orderPo.mutate(poId)}
+                          >
+                            Order
+                          </button>
+                        ) : null}
+                        {remaining > 0 &&
+                        row.status !== 'draft' &&
+                        row.status !== 'closed' ? (
+                          <>
+                            <input
+                              type="number"
+                              min={1}
+                              max={remaining}
+                              style={{ width: 64 }}
+                              value={receiveQty[poId] ?? remaining}
+                              onChange={(e) =>
+                                setReceiveQty({
+                                  ...receiveQty,
+                                  [poId]: Number(e.target.value),
+                                })
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={() =>
+                                receivePo.mutate({
+                                  po: row,
+                                  qty: receiveQty[poId] ?? remaining,
+                                })
+                              }
+                            >
+                              Receive
+                            </button>
+                          </>
+                        ) : null}
+                        {row.status === 'received' || row.status === 'partial' ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => closePo.mutate(poId)}
+                          >
+                            Close
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

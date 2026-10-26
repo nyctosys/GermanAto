@@ -32,9 +32,6 @@ PIPELINE_COLUMNS: dict[str, dict[str, str]] = {
         "job_card_line_id": "INTEGER NULL",
         "approval_status": "VARCHAR(20) DEFAULT 'pending'",
     },
-    "inventory": {
-        "qty_reserved": "INTEGER DEFAULT 0",
-    },
     "repair_order": {
         "visit_id": "INTEGER NULL",
         "job_card_id": "INTEGER NULL",

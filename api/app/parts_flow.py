@@ -28,7 +28,7 @@ def reserve_for_quote(db: Session, quote: Invoice, *, created_by: int | None = N
         qty = int(item.quantity or 0)
         if qty <= 0:
             continue
-        available = int(inv.quantity or 0) - int(inv.qty_reserved or 0)
+        available = int(inv.quantity or 0) - int(inv.reserved or 0)
         if qty > available:
             warnings.append(
                 f"{inv.name}: reserve {qty} but only {available} available"
@@ -38,8 +38,8 @@ def reserve_for_quote(db: Session, quote: Invoice, *, created_by: int | None = N
                 status_code=400,
                 detail=f"Insufficient stock to reserve {inv.name}: need {qty}, available {available}",
             )
-        prev = inv.qty_reserved or 0
-        inv.qty_reserved = prev + qty
+        prev = inv.reserved or 0
+        inv.reserved = prev + qty
         log_inventory_transaction(
             db,
             inventory_id=inv.id,
@@ -49,7 +49,7 @@ def reserve_for_quote(db: Session, quote: Invoice, *, created_by: int | None = N
             new_quantity=inv.quantity,
             reference_description=f"Reserved for quote #{quote.id}",
             created_by=created_by,
-            notes=f"qty_reserved {prev} → {inv.qty_reserved}",
+            notes=f"reserved {prev} → {inv.reserved}",
         )
     return warnings
 
@@ -64,8 +64,8 @@ def release_quote_reserves(db: Session, quote: Invoice, *, created_by: int | Non
         qty = int(item.quantity or 0)
         if qty <= 0:
             continue
-        prev = inv.qty_reserved or 0
-        inv.qty_reserved = max(0, prev - qty)
+        prev = inv.reserved or 0
+        inv.reserved = max(0, prev - qty)
         log_inventory_transaction(
             db,
             inventory_id=inv.id,
@@ -108,8 +108,8 @@ def issue_on_ro_open(
         if qty <= 0:
             continue
         # Release reserve then issue out of on-hand
-        prev_res = inv.qty_reserved or 0
-        inv.qty_reserved = max(0, prev_res - qty)
+        prev_res = inv.reserved or 0
+        inv.reserved = max(0, prev_res - qty)
         prev_qty = inv.quantity or 0
         inv.quantity = prev_qty - qty
         log_inventory_transaction(
@@ -122,7 +122,7 @@ def issue_on_ro_open(
             repair_order_id=ro.id,
             reference_description=f"Issued for RO #{ro.id} from quote #{quote.id}",
             created_by=created_by,
-            notes=f"reserve {prev_res} → {inv.qty_reserved}",
+            notes=f"reserve {prev_res} → {inv.reserved}",
         )
         part = RepairOrderPart(
             repair_order_id=ro.id,

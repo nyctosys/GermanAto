@@ -16,6 +16,7 @@ from app.routers import (
     cars,
     cash_received,
     deposits,
+    entities,
     expenses,
     gate_passes,
     hr,
@@ -101,6 +102,7 @@ app.include_router(auth_router.router)  # prefix=/api/auth on router
 app.include_router(invoices.router, prefix="/api")
 app.include_router(inventory.router, prefix="/api")
 app.include_router(cars.router, prefix="/api")
+app.include_router(entities.router)  # prefix=/api/entities on router
 app.include_router(reports.router, prefix="/api")
 app.include_router(whatsapp.router, prefix="/api")
 app.include_router(repair_orders.router, prefix="/api")

@@ -1,62 +1,74 @@
 #!/usr/bin/env python3
 """
-Utility functions for handling inventory deduction in repair orders
+Utility functions for handling inventory deduction in repair orders.
+
+Shop-stock lines use the stock ledger (reserve/issue/return).
+Customer-supplied lines never touch stock.
 """
 
 import logging
-from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from app.models import Inventory
-from app.inventory_transaction_utils import log_issue_out, log_received, log_adjustment
+from app.stock import (
+    StockError,
+    issue_to_ro,
+    reserve,
+    return_from_ro,
+)
 
 logger = logging.getLogger(__name__)
 
 
+def _is_customer_supplied(part) -> bool:
+    ownership = ""
+    if hasattr(part, "ownership_type"):
+        ownership = (part.ownership_type or "").strip().lower()
+    elif isinstance(part, dict):
+        ownership = (part.get("ownership_type") or "").strip().lower()
+    return ownership in ("customer_supplied", "customer", "customer-supplied")
+
+
 def deduct_inventory_quantity(db: Session, inventory_id, quantity_to_deduct, repair_order_id=None):
     """
-    Deduct quantity from inventory item
-    Returns True if successful, False otherwise
+    Reserve then issue shop-stock for an RO line. No negative stock.
+    Returns True if successful, False otherwise.
     """
     try:
         inventory_item = db.get(Inventory, inventory_id)
-        
         if not inventory_item:
             logger.error(f"Inventory item with ID {inventory_id} not found")
             return False
-        
-        # Store previous quantity for transaction logging
-        previous_quantity = inventory_item.quantity
-        
-        # Allow negative values for repair orders
-        inventory_item.quantity -= quantity_to_deduct
-        
-        # Update the updated_at timestamp
-        inventory_item.updated_at = datetime.utcnow()
-        
-        # Log the transaction
-        log_issue_out(
+
+        reserve(
             db,
-            inventory_id=inventory_id,
-            quantity=quantity_to_deduct,
-            previous_quantity=previous_quantity,
-            new_quantity=inventory_item.quantity,
+            item=inventory_item,
+            qty=quantity_to_deduct,
             repair_order_id=repair_order_id,
-            reference_description=f"Issued for Repair Order #{repair_order_id}" if repair_order_id else "Repair order part deduction",
-            notes=f"Part: {inventory_item.name}"
+            notes=f"Part: {inventory_item.name}",
         )
-        
-        db.commit()
-        
-        logger.info(f"Successfully deducted {quantity_to_deduct} units from {inventory_item.name}. New quantity: {inventory_item.quantity}")
+        issue_to_ro(
+            db,
+            item=inventory_item,
+            qty=quantity_to_deduct,
+            repair_order_id=repair_order_id,
+            notes=f"Part: {inventory_item.name}",
+            from_reserve=True,
+        )
+        # Caller owns the commit (process_repair_order_parts / edit handlers).
+        logger.info(
+            f"Issued {quantity_to_deduct} units from {inventory_item.name}. "
+            f"New quantity: {inventory_item.quantity}"
+        )
         return True
-        
+
+    except StockError as e:
+        logger.error(f"Stock error deducting inventory: {e}")
+        return False
     except SQLAlchemyError as e:
-        db.rollback()
         logger.error(f"Database error deducting inventory: {e}")
         return False
     except Exception as e:
-        db.rollback()
         logger.error(f"Unexpected error deducting inventory: {e}")
         return False
 
@@ -86,48 +98,48 @@ def find_inventory_item_by_name(db: Session, name):
 
 
 def process_repair_order_parts(db: Session, parts_data, repair_order_id=None):
-    """Process parts for repair order creation, deducting from inventory"""
+    """Process parts for repair order creation; shop-stock hits the ledger."""
     errors = []
     try:
         for part_data in parts_data:
+            if _is_customer_supplied(part_data):
+                # Labour-only / customer-supplied: record on RO, no stock impact.
+                continue
             description = part_data.get('description', '').strip()
             quantity = int(part_data.get('quantity', 0))
             inventory_id = part_data.get('inventory_id')
             part_number = part_data.get('part_number', '').strip()
-            
+
             if description and quantity > 0:
                 if inventory_id:
-                    # Direct inventory ID provided
                     success = deduct_inventory_quantity(db, inventory_id, quantity, repair_order_id)
                     if not success:
                         errors.append(f"Failed to deduct inventory for part: {description}")
                 elif part_number:
-                    # Try to find by part number
                     inventory_item = find_inventory_item_by_part_number(db, part_number)
                     if inventory_item:
-                        success = deduct_inventory_quantity(db, inventory_item.id, quantity, repair_order_id)
+                        success = deduct_inventory_quantity(
+                            db, inventory_item.id, quantity, repair_order_id
+                        )
                         if not success:
                             errors.append(f"Failed to deduct inventory for {part_number}")
                     else:
                         errors.append(f"Inventory item not found for part number: {part_number}")
                 else:
-                    # Try to find by description
                     inventory_item = find_inventory_item_by_name(db, description)
                     if inventory_item:
-                        success = deduct_inventory_quantity(db, inventory_item.id, quantity, repair_order_id)
+                        success = deduct_inventory_quantity(
+                            db, inventory_item.id, quantity, repair_order_id
+                        )
                         if not success:
                             errors.append(f"Failed to deduct inventory for {description}")
-                    else:
-                        # No matching inventory item found, but continue
-                        pass
-        
+
         if not errors:
             db.commit()
             return True, parts_data, []
-        else:
-            db.rollback()
-            return False, [], errors
-            
+        db.rollback()
+        return False, [], errors
+
     except Exception as e:
         db.rollback()
         return False, [], [f"Unexpected error: {str(e)}"]
@@ -262,98 +274,88 @@ def calculate_inventory_changes(old_parts, new_parts):
 
 
 def handle_repair_order_edit_inventory(db: Session, old_parts, new_parts, repair_order_id=None):
-    """
-    Handle inventory changes when editing a repair order
-    Returns a tuple: (success, errors)
-    """
+    """Handle inventory changes when editing a repair order. Returns (success, errors)."""
     errors = []
 
     try:
-        items_to_add, items_to_remove, items_to_modify = calculate_inventory_changes(old_parts, new_parts)
+        # Filter customer-supplied out of stock math
+        old_shop = [p for p in old_parts if not _is_customer_supplied(p)]
+        new_shop = [p for p in new_parts if not _is_customer_supplied(p)]
+        items_to_add, items_to_remove, items_to_modify = calculate_inventory_changes(
+            old_shop, new_shop
+        )
 
-        # Handle items to remove (restore inventory - parts removed from repair order)
         for item in items_to_remove:
             inventory_id = _resolve_inventory_id(db, item)
             quantity = _parse_part_quantity(item)
-
             if inventory_id and quantity > 0:
                 inventory_item = db.get(Inventory, inventory_id)
                 if inventory_item:
-                    previous_quantity = inventory_item.quantity
-                    inventory_item.quantity += quantity
-
-                    # Log the adjustment (items returned to inventory)
-                    log_adjustment(
-                        db,
-                        inventory_id=inventory_id,
-                        quantity_change=quantity,  # positive because we're adding back
-                        previous_quantity=previous_quantity,
-                        new_quantity=inventory_item.quantity,
-                        repair_order_id=repair_order_id,
-                        reference_description=f"Part removed from Repair Order #{repair_order_id}" if repair_order_id else "Part removed from repair order",
-                        notes=f"Part: {inventory_item.name} - Returned to stock"
-                    )
-
-                    logger.info(f"Restored {quantity} units to {inventory_item.name} (ID: {inventory_id})")
+                    try:
+                        return_from_ro(
+                            db,
+                            item=inventory_item,
+                            qty=quantity,
+                            repair_order_id=repair_order_id,
+                            notes=f"Part: {inventory_item.name} - Returned to stock",
+                        )
+                    except StockError as exc:
+                        errors.append(str(exc))
                 else:
                     errors.append(f"Inventory item with ID {inventory_id} not found for restoration")
 
-        # Handle items to modify (quantity changed for an existing inventory identity)
         for item in items_to_modify:
-            inventory_id = _resolve_inventory_id(db, item['new']) or _resolve_inventory_id(db, item['old'])
-            quantity_change = item['quantity_change']
-
+            inventory_id = _resolve_inventory_id(db, item["new"]) or _resolve_inventory_id(
+                db, item["old"]
+            )
+            quantity_change = item["quantity_change"]
             if not inventory_id or quantity_change == 0:
                 continue
 
             if quantity_change > 0:
-                # Extra units issued for the RO — must be issue_out so it counts as a sale
-                success = deduct_inventory_quantity(db, inventory_id, quantity_change, repair_order_id)
+                success = deduct_inventory_quantity(
+                    db, inventory_id, quantity_change, repair_order_id
+                )
                 if not success:
                     part_label = (
-                        item['new'].get('part_number')
-                        or item['new'].get('description')
+                        item["new"].get("part_number")
+                        or item["new"].get("description")
                         or inventory_id
                     )
                     errors.append(f"Failed to deduct additional inventory for part: {part_label}")
                 continue
 
-            # quantity_change < 0: return units to stock
-            quantity_to_restore = abs(quantity_change)
             inventory_item = db.get(Inventory, inventory_id)
             if inventory_item:
-                previous_quantity = inventory_item.quantity
-                inventory_item.quantity += quantity_to_restore
-
-                log_adjustment(
+                try:
+                    return_from_ro(
                         db,
-                    inventory_id=inventory_id,
-                    quantity_change=quantity_to_restore,
-                    previous_quantity=previous_quantity,
-                    new_quantity=inventory_item.quantity,
-                    repair_order_id=repair_order_id,
-                    reference_description=f"Part quantity reduced in Repair Order #{repair_order_id}" if repair_order_id else "Part quantity reduced in repair order",
-                    notes=f"Part: {inventory_item.name} - Returned to stock: {quantity_to_restore}"
-                )
-
-                logger.info(
-                    f"Restored {quantity_to_restore} units to {inventory_item.name} "
-                    f"after quantity reduction on repair order"
-                )
+                        item=inventory_item,
+                        qty=abs(quantity_change),
+                        repair_order_id=repair_order_id,
+                        notes=f"Part: {inventory_item.name} - qty reduced on RO",
+                    )
+                except StockError as exc:
+                    errors.append(str(exc))
             else:
                 errors.append(f"Inventory item with ID {inventory_id} not found for modification")
 
-        # Handle items to add (deduct inventory - new parts added)
         if items_to_add:
-            success, processed_parts, add_errors = process_repair_order_parts(db, items_to_add, repair_order_id)
+            _ok, _parts, add_errors = process_repair_order_parts(
+                db, items_to_add, repair_order_id
+            )
+            # process_repair_order_parts commits/rollbacks — avoid double-commit path
             errors.extend(add_errors)
+            if add_errors:
+                return False, errors
+            # process already committed adds; continue for remaining consistency
+            return (False, errors) if errors else (True, [])
 
         if not errors:
             db.commit()
             return True, []
-        else:
-            db.rollback()
-            return False, errors
+        db.rollback()
+        return False, errors
 
     except Exception as e:
         db.rollback()
@@ -362,41 +364,40 @@ def handle_repair_order_edit_inventory(db: Session, old_parts, new_parts, repair
 
 
 def restore_inventory_for_deleted_repair_order(db: Session, parts, repair_order_id=None):
-    """
-    Restore inventory when a repair order is deleted
-    Returns a tuple: (success, errors)
-    """
+    """Restore inventory when a repair order is deleted. Returns (success, errors)."""
     errors = []
-    
+
     try:
         for part in parts:
-            inventory_id = part.inventory_id if hasattr(part, 'inventory_id') else part.get('inventory_id')
-            quantity = part.quantity if hasattr(part, 'quantity') else int(part.get('quantity', 0))
-            
+            if _is_customer_supplied(part):
+                continue
+            inventory_id = (
+                part.inventory_id if hasattr(part, "inventory_id") else part.get("inventory_id")
+            )
+            quantity = (
+                part.quantity
+                if hasattr(part, "quantity")
+                else int(part.get("quantity", 0))
+            )
+
             if inventory_id and quantity > 0:
                 inventory_item = db.get(Inventory, inventory_id)
                 if inventory_item:
-                    previous_quantity = inventory_item.quantity
-                    inventory_item.quantity += quantity
-                    
-                    # Log the transaction as received (inventory restored)
-                    log_received(
-                    db,
-                        inventory_id=inventory_id,
-                        quantity=quantity,
-                        previous_quantity=previous_quantity,
-                        new_quantity=inventory_item.quantity,
-                        repair_order_id=repair_order_id,
-                        reference_description=f"Inventory restored from Repair Order #{repair_order_id} deletion" if repair_order_id else "Inventory restored from repair order deletion",
-                        notes=f"Part: {inventory_item.name}"
-                    )
-                    
-                    logger.info(f"Restored {quantity} units to {inventory_item.name} (ID: {inventory_id}) from deleted repair order")
+                    try:
+                        return_from_ro(
+                            db,
+                            item=inventory_item,
+                            qty=quantity,
+                            repair_order_id=repair_order_id,
+                            notes=f"Part: {inventory_item.name}",
+                        )
+                    except StockError as exc:
+                        errors.append(str(exc))
                 else:
                     errors.append(f"Inventory item with ID {inventory_id} not found")
-        
+
         return True, errors
-        
+
     except Exception as e:
         logger.error(f"Error restoring inventory for deleted repair order: {e}")
         return False, [f"Unexpected error: {str(e)}"]

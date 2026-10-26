@@ -1,8 +1,12 @@
-"""Linking an invoice or repair order to the customer and car it was written for."""
+"""Linking an invoice or repair order to the customer and car it was written for.
+
+Reuses existing Customer/Car rows — never invents duplicates when a job card opens.
+"""
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.customer_vehicle import find_existing_car, normalize_phone_safe
 from app.models import Car, Customer
 
 
@@ -13,20 +17,30 @@ def _clean(value):
 def resolve_customer(db: Session, customer_id=None, name=None, phone=None):
     if customer_id:
         found = db.get(Customer, int(customer_id))
+        if found and getattr(found, "deleted_at", None) is None:
+            return found
+
+    name = _clean(name)
+    phone_norm = normalize_phone_safe(phone)
+    phone_raw = _clean(phone)
+
+    if name and phone_norm:
+        found = (
+            db.query(Customer)
+            .filter(Customer.name == name, Customer.phone == phone_norm)
+            .first()
+        )
         if found:
             return found
 
-    name, phone = _clean(name), _clean(phone)
+    if phone_norm or phone_raw:
+        from app.customer_vehicle import find_customers_by_phone
 
-    if name and phone:
-        found = db.query(Customer).filter(Customer.name == name, Customer.phone == phone).first()
-        if found:
-            return found
-    if phone:
-        matches = db.query(Customer).filter(Customer.phone == phone).limit(2).all()
+        matches = find_customers_by_phone(db, phone_norm or phone_raw, limit=2)
         if len(matches) == 1:
             return matches[0]
-    if name:
+
+    if name and name != "N/A":
         matches = db.query(Customer).filter(Customer.name == name).limit(2).all()
         if len(matches) == 1:
             return matches[0]
@@ -34,25 +48,13 @@ def resolve_customer(db: Session, customer_id=None, name=None, phone=None):
 
 
 def resolve_car(db: Session, car_id=None, plate_no=None, vin=None, customer_id=None):
-    if car_id:
-        found = db.get(Car, int(car_id))
-        if found:
-            return found
-
-    plate_no, vin = _clean(plate_no), _clean(vin)
-
-    for column, value in ((Car.vin, vin), (Car.plate_no, plate_no)):
-        if not value:
-            continue
-        query = db.query(Car).filter(column == value)
-        if customer_id:
-            owned = query.filter(Car.customer_id == customer_id).first()
-            if owned:
-                return owned
-        matches = query.limit(2).all()
-        if len(matches) == 1:
-            return matches[0]
-    return None
+    return find_existing_car(
+        db,
+        car_id=int(car_id) if car_id else None,
+        plate_no=plate_no,
+        vin=vin,
+        customer_id=int(customer_id) if customer_id else None,
+    )
 
 
 def adopt_orphan_car(car, customer):
@@ -63,6 +65,7 @@ def adopt_orphan_car(car, customer):
 
 
 def apply_links(db: Session, document, data):
+    """Attach existing customer/car FKs; do not create new master records here."""
     customer = resolve_customer(
         db,
         data.get("customer_id"),

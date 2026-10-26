@@ -533,196 +533,39 @@ def get_completed_repair_orders_today(db):
 
 # ===== DASHBOARD =====
 
-# Each dashboard section is gated by the same permission that guards its page,
-# so a user only ever sees work they can actually act on.
-DASHBOARD_SECTIONS = (
-    ('invoices', 'invoice'),
-    ('quotes', 'invoice'),
-    ('repairs', 'repair-order'),
-    ('expenses', 'daily-expenses'),
-    ('inventory', 'inventory'),
-    ('insights', 'reports'),
-)
-
-
-def _dashboard_invoices(db):
-    """Unpaid / partially paid invoices, using the same maths as receivables."""
-    row = db.execute(text("""
-        SELECT COUNT(*) AS cnt, COALESCE(SUM(due - paid), 0) AS owed
-        FROM (
-            SELECT
-                net_total
-                    + CASE WHEN include_tax THEN COALESCE(tax_amount, 0) ELSE 0 END
-                    - COALESCE(discount, 0) AS due,
-                COALESCE(advance, 0) + COALESCE(paid_amount, 0) AS paid
-            FROM invoice
-            WHERE type_of = 'invoice'
-        ) outstanding
-        WHERE due > paid
-    """)).fetchone()
-
-    recent = db.execute(text("""
-        SELECT id, customer_name, created_at,
-               net_total
-                   + CASE WHEN include_tax THEN COALESCE(tax_amount, 0) ELSE 0 END
-                   - COALESCE(discount, 0)
-                   - COALESCE(advance, 0) - COALESCE(paid_amount, 0) AS owed
-        FROM invoice
-        WHERE type_of = 'invoice'
-          AND net_total
-              + CASE WHEN include_tax THEN COALESCE(tax_amount, 0) ELSE 0 END
-              - COALESCE(discount, 0)
-              > COALESCE(advance, 0) + COALESCE(paid_amount, 0)
-        ORDER BY created_at ASC
-        LIMIT 5
-    """)).fetchall()
-
-    return {
-        'unpaid_count': int(row[0] or 0),
-        'unpaid_total': float(row[1] or 0),
-        'oldest': [
-            {
-                'id': int(r[0]),
-                'customer_name': r[1],
-                'created_at': _iso(r[2]),
-                'owed': float(r[3] or 0),
-            }
-            for r in recent
-        ],
-    }
-
-
-def _dashboard_quotes(db):
-    row = db.execute(text("""
-        SELECT COUNT(*) AS cnt, COALESCE(SUM(net_total), 0) AS value
-        FROM invoice
-        WHERE type_of = 'quote' AND status = 'pending'
-    """)).fetchone()
-    return {
-        'pending_count': int(row[0] or 0),
-        'pending_value': float(row[1] or 0),
-        'items': get_pending_quotes(db)[:5],
-    }
-
-
-def _dashboard_repairs(db):
-    by_status = db.execute(text("""
-        SELECT current_status, COUNT(*)
-        FROM repair_order
-        WHERE current_status NOT IN ('complete', 'completed')
-        GROUP BY current_status
-    """)).fetchall()
-
-    done_today = db.execute(text("""
-        SELECT COUNT(*) FROM repair_order
-        WHERE current_status IN ('complete', 'completed')
-          AND DATE(updated_at) = :today
-    """), {'today': date.today()}).fetchone()
-
-    counts = {str(r[0]): int(r[1]) for r in by_status}
-    return {
-        'open_count': sum(counts.values()),
-        'by_status': counts,
-        'completed_today': int(done_today[0] or 0),
-        'items': get_open_repair_orders(db)[:5],
-    }
-
-
-def _dashboard_expenses(db):
-    today = date.today()
-    row = db.execute(text("""
-        SELECT
-            COALESCE(SUM(CASE WHEN date = :today THEN amount END), 0) AS today_total,
-            COALESCE(SUM(CASE WHEN date >= :month_start THEN amount END), 0) AS month_total
-        FROM expense
-        WHERE date >= :month_start
-    """), {'today': today, 'month_start': today.replace(day=1)}).fetchone()
-    return {
-        'today_total': float(row[0] or 0),
-        'month_total': float(row[1] or 0),
-    }
-
-
-def _dashboard_inventory(db):
-    low = get_low_stock_items(db)
-    return {'low_stock_count': len(low), 'items': low[:5]}
-
-
-def _dashboard_insights(db):
-    """Month-to-date business summary for admins."""
-    today = date.today()
-    start = datetime.combine(today.replace(day=1), datetime.min.time())
-    end = datetime.combine(today, datetime.max.time())
-
-    sales = get_sales_data(db, start, end)
-    expenses = get_expenses_data(db, start, end)
-    return {
-        'sales_month': sales['total'],
-        'expenses_month': expenses['total'],
-        'profit_month': sales['total'] - expenses['total'],
-        'receivables': get_receivables(db),
-        'sales_daily': sales['daily'],
-        'expenses_daily': expenses['daily'],
-    }
-
-
-DASHBOARD_BUILDERS = {
-    'invoices': _dashboard_invoices,
-    'quotes': _dashboard_quotes,
-    'repairs': _dashboard_repairs,
-    'expenses': _dashboard_expenses,
-    'inventory': _dashboard_inventory,
-    'insights': _dashboard_insights,
-}
-
-
-def _user_permissions(db, user):
-    """The user's effective permissions, resolved exactly as
-    /api/auth/permissions/my resolves them so the dashboard and the nav agree."""
-
-    if user.role == 'admin':
-        return set(ADMIN_PERMISSIONS)
-
-    perms = [p.permission for p in db.query(RolePermission).filter_by(role=user.role).all()]
-    if not perms and db.query(RolePermission).first() is None:
-        perms = DEFAULT_ROLE_PERMISSIONS.get(user.role, [])
-    return set(perms)
-
-
 @router.get('/dashboard')
 def get_dashboard(request: Request, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Role-scoped dashboard: KPIs + pending work this user can act on."""
-    permissions = _user_permissions(db, current_user)
+    """Role-scoped dashboard from live DB aggregates (date-filterable).
 
-    data, failed = {}, []
-    for section, permission in DASHBOARD_SECTIONS:
-        if permission not in permissions:
-            continue
-        try:
-            data[section] = DASHBOARD_BUILDERS[section](db)
-        except Exception as e:
-            # One broken widget must not blank the whole dashboard.
-            db.rollback()
-            logger.error(f"Dashboard section '{section}' failed: {e}")
-            failed.append(section)
+    Revenue is reported separately from cash receipts, cash/bank position,
+    receivables, and liabilities. Sections are omitted when the user lacks
+    the matching page permission. Also attaches workshop_kpis for pipeline UX.
+    """
+    from app.dashboard import build_dashboard
 
-    kpis = {}
     try:
-        from app.dashboard_kpis import workshop_kpis
+        payload = build_dashboard(
+            db,
+            current_user,
+            period=request.query_params.get('period'),
+            start_date=request.query_params.get('start_date'),
+            end_date=request.query_params.get('end_date'),
+        )
+        try:
+            from app.dashboard_kpis import workshop_kpis
 
-        kpis = workshop_kpis(db)
+            payload['workshop_kpis'] = workshop_kpis(db)
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Workshop KPIs failed: {e}")
+            failed = list(payload.get('unavailable') or [])
+            failed.append('workshop_kpis')
+            payload['unavailable'] = failed
+        return _json(payload, 200)
     except Exception as e:
-        db.rollback()
-        logger.error(f"Dashboard KPIs failed: {e}")
-        failed.append('kpis')
-
-    return _json({
-        'kpis': kpis,
-        'sections': data,
-        'unavailable': failed,
-        'role': current_user.role,
-        'generated_at': datetime.utcnow().isoformat(),
-    }, 200)
+        import traceback
+        logger.error(f"Dashboard failed: {e}\n{traceback.format_exc()}")
+        return _json({'error': 'Failed to build dashboard', 'details': str(e)}, 500)
 
 
 @router.get('/reports/export/invoices.csv')

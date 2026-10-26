@@ -40,7 +40,7 @@ export const NAV: NavGroup[] = [
       { label: 'Inventory', to: '/inventory', permission: 'inventory' },
       { label: 'Inventory history', to: '/inventory/history', permission: 'inventory' },
       { label: 'Vendors', to: '/vendors', permission: 'vendors' },
-      { label: 'Cars & customers', to: '/cars', permission: 'car' },
+      { label: 'Customers & vehicles', to: '/cars', permission: 'car' },
     ],
   },
   {
