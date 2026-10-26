@@ -210,5 +210,9 @@ def run() -> int:
     return 0
 
 
+def main() -> int:
+    return run()
+
+
 if __name__ == "__main__":
-    run()
+    raise SystemExit(run())

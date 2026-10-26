@@ -25,6 +25,7 @@ from app.models import (
     Customer,
     YardGatePass,
     Inventory,
+    LabourCode,
     Vendor,
     Worker,
 )
@@ -33,7 +34,7 @@ from app.search_suggestions import suggestions_for
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/entities", tags=["entities"])
 
-ENTITY_TYPES = ("customer", "car", "worker", "vendor", "inventory")
+ENTITY_TYPES = ("customer", "car", "worker", "vendor", "inventory", "labour_code")
 
 
 def _json(data: Any = None, status: int = 200):
@@ -140,6 +141,40 @@ def _inventory_row(item: Inventory) -> dict:
         "label": f"{item.part_number} · {item.name} · avail {on_hand - reserved}",
         "entity_type": "inventory",
     }
+
+
+def _labour_code_row(lc: LabourCode) -> dict:
+    return {
+        "id": lc.id,
+        "code": lc.code,
+        "name": lc.description,
+        "description": lc.description,
+        "std_hours": lc.standard_hours,
+        "standard_hours": lc.standard_hours,
+        "rate": float(lc.rate or 0),
+        "price": float(lc.rate or 0),
+        "category": lc.category,
+        "label": f"{lc.code} · {lc.description} · {lc.standard_hours}h @ {lc.rate}",
+        "entity_type": "labour_code",
+    }
+
+
+def _search_labour_codes(db: Session, q: str, limit: int) -> list[dict]:
+    rows = (
+        db.query(LabourCode)
+        .filter(
+            LabourCode.is_active.is_(True),
+            or_(
+                LabourCode.code.ilike(f"%{q}%"),
+                LabourCode.description.ilike(f"%{q}%"),
+                LabourCode.category.ilike(f"%{q}%"),
+            ),
+        )
+        .order_by(LabourCode.code)
+        .limit(limit)
+        .all()
+    )
+    return [_labour_code_row(r) for r in rows]
 
 
 def _search_customers(db: Session, q: str, limit: int) -> list[dict]:
@@ -267,6 +302,14 @@ def search_entities(
             ]
         elif entity == "vendor":
             rows = [_vendor_row(v) for v in db.query(Vendor).order_by(Vendor.id.desc()).limit(limit)]
+        elif entity == "labour_code":
+            rows = [
+                _labour_code_row(r)
+                for r in db.query(LabourCode)
+                .filter(LabourCode.is_active.is_(True))
+                .order_by(LabourCode.code)
+                .limit(limit)
+            ]
         else:
             rows = [_inventory_row(i) for i in db.query(Inventory).order_by(Inventory.id.desc()).limit(limit)]
         return _json({"query": query, "type": entity, "results": rows, "count": len(rows)}, 200)
@@ -277,6 +320,7 @@ def search_entities(
         "worker": lambda: _search_workers(db, query, limit),
         "vendor": lambda: _search_vendors(db, query, limit),
         "inventory": lambda: _search_inventory(db, query, limit),
+        "labour_code": lambda: _search_labour_codes(db, query, limit),
     }
     results = searchers[entity]()
     payload: dict[str, Any] = {
@@ -352,7 +396,8 @@ def check_duplicate(
                 continue
             matches.append(_customer_row(c))
             warnings.append(
-                f"Possible duplicate: {c.code or c.id} · {c.name} · {c.phone}"
+                f"Customer with this phone already exists "
+                f"({c.code or c.id} · {c.name} · {c.phone})"
             )
 
     elif entity == "car":

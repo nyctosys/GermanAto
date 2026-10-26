@@ -13,6 +13,10 @@ SETTING_MANDATORY_RECEIPT_AMOUNT = "mandatory_receipt_amount"
 SETTING_COMEBACK_WINDOW_DAYS = "comeback_window_days"
 SETTING_PAYMENT_GATE_ENABLED = "payment_gate_enabled"
 SETTING_EXPENSE_HEADS = "expense_heads"
+SETTING_ADVANCE_POLICY = "advance_policy"
+SETTING_ESTIMATE_CHANNELS = "estimate_notify_channels"
+SETTING_VARIATION_REQUIRES_APPROVAL = "variation_requires_approval"
+SETTING_ASSIGNMENT_CHANNELS = "assignment_notify_channels"
 
 DEFAULTS: dict[str, Any] = {
     SETTING_DISCOUNT_APPROVAL_PCT: 10.0,  # % — above this needs manager + reason
@@ -26,6 +30,17 @@ DEFAULTS: dict[str, Any] = {
         "Tools & equipment",
         "Misc",
     ],
+    # Advance on estimates (liability deposits until applied to invoice)
+    SETTING_ADVANCE_POLICY: {
+        "mode": "percent",  # none | fixed | percent | full | custom
+        "fixed_amount": 0.0,
+        "percent": 50.0,
+        "allow_authorized_custom": True,
+    },
+    SETTING_ESTIMATE_CHANNELS: ["whatsapp", "link"],
+    SETTING_VARIATION_REQUIRES_APPROVAL: True,
+    # Assignment alerts: "log" writes AppLog; extend later for WhatsApp/email
+    SETTING_ASSIGNMENT_CHANNELS: ["log"],
 }
 
 KNOWN_KEYS = tuple(DEFAULTS.keys())

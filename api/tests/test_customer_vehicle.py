@@ -156,3 +156,80 @@ def test_resolve_customer_by_normalized_phone(db: Session):
     found = resolve_customer(db, None, "Norm", "03009998887")
     assert found is not None
     assert found.id == c.id
+
+
+def test_job_card_reuses_customer_and_car_ids(db: Session):
+    from types import SimpleNamespace
+
+    from app.job_cards import create_job_card
+    from app.models import Attachment, JobCard, Visit, VisitInspectionItem
+
+    c = Customer(name="Reuse", phone="+923001112244", branch_id=DEFAULT_BRANCH_ID)
+    db.add(c)
+    db.flush()
+    car = Car(
+        make="Suzuki",
+        model="Alto",
+        plate_no="ABC-777",
+        customer_id=c.id,
+        branch_id=DEFAULT_BRANCH_ID,
+    )
+    db.add(car)
+    db.flush()
+    sig = Attachment(
+        entity_type="visit_signature",
+        file_path="uploads/sig.png",
+        branch_id=DEFAULT_BRANCH_ID,
+    )
+    db.add(sig)
+    db.flush()
+    visit = Visit(
+        car_id=car.id,
+        customer_id=c.id,
+        signature_attachment_id=sig.id,
+        status="completed",
+        branch_id=DEFAULT_BRANCH_ID,
+    )
+    db.add(visit)
+    db.flush()
+    db.add(
+        VisitInspectionItem(
+            visit_id=visit.id,
+            point_key="ext_front",
+            label="Front",
+            category="exterior",
+            result="ok",
+            branch_id=DEFAULT_BRANCH_ID,
+        )
+    )
+    db.commit()
+
+    card = create_job_card(
+        db,
+        {
+            "customer_name": "Reuse",
+            "customer_phone": "03001112244",
+            "customer_reg_no": "abc-777",
+            "customer_made": "Suzuki Alto",
+            "visit_id": visit.id,
+            "lines": [],
+        },
+        SimpleNamespace(username="advisor"),
+    )
+    db.commit()
+    assert card.customer_id == c.id
+    assert card.car_id == car.id
+    assert card.visit_id == visit.id
+    assert db.query(Customer).count() == 1
+    assert db.query(Car).count() == 1
+    assert db.query(JobCard).count() == 1
+
+
+def test_customer_bundle_includes_ownership_key(db: Session):
+    c = Customer(name="Own", phone="+923005556677", branch_id=DEFAULT_BRANCH_ID)
+    db.add(c)
+    db.commit()
+    bundle = load_customer_bundle(db, c.id)
+    assert bundle is not None
+    assert "ownership_history" in bundle["activity"]
+    assert bundle["activity"]["ownership_history"] == []

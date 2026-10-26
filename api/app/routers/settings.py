@@ -295,11 +295,14 @@ def delete_category(category_id: int, request: Request, db: Session = Depends(ge
 from app.foundation.settings import (
     DEFAULTS,
     KNOWN_KEYS,
+    SETTING_ADVANCE_POLICY,
     SETTING_COMEBACK_WINDOW_DAYS,
     SETTING_DISCOUNT_APPROVAL_PCT,
+    SETTING_ESTIMATE_CHANNELS,
     SETTING_EXPENSE_HEADS,
     SETTING_MANDATORY_RECEIPT_AMOUNT,
     SETTING_PAYMENT_GATE_ENABLED,
+    SETTING_VARIATION_REQUIRES_APPROVAL,
     ensure_default_settings,
     get_workshop_settings,
     set_setting,
@@ -360,6 +363,24 @@ def update_workshop_settings_route(
                 if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
                     return _json({"error": "expense_heads must be a list of strings"}, 400)
                 value = [x.strip() for x in value if str(x).strip()]
+            elif key == SETTING_ADVANCE_POLICY:
+                if not isinstance(value, dict):
+                    return _json({"error": "advance_policy must be an object"}, 400)
+                mode = str(value.get("mode") or "percent").lower()
+                if mode not in ("none", "fixed", "percent", "full", "custom"):
+                    return _json({"error": "invalid advance_policy.mode"}, 400)
+                value = {
+                    "mode": mode,
+                    "fixed_amount": float(value.get("fixed_amount") or 0),
+                    "percent": float(value.get("percent") or 50),
+                    "allow_authorized_custom": bool(value.get("allow_authorized_custom", True)),
+                }
+            elif key == SETTING_ESTIMATE_CHANNELS:
+                if not isinstance(value, list):
+                    return _json({"error": "estimate_notify_channels must be a list"}, 400)
+                value = [str(x).strip().lower() for x in value if str(x).strip()]
+            elif key == SETTING_VARIATION_REQUIRES_APPROVAL:
+                value = bool(value)
             set_setting(
                 db,
                 key,

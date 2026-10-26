@@ -14,10 +14,13 @@ import {
 
 type QuoteRow = {
   id: number
+  document_no?: string
   customer_name?: string
   customer_reg_no?: string
   status?: string
+  approval_state?: string
   net_total?: number
+  required_advance?: number
   created_at?: string
 }
 
@@ -32,8 +35,10 @@ export function PendingQuotesPage() {
       const params = new URLSearchParams()
       params.set('type', 'quote')
       if (keyword.trim()) params.set('q', keyword.trim())
-      const data = await api.get<{ invoices?: QuoteRow[] }>(`/api/search?${params}`)
-      return data.invoices || []
+      const data = await api.get<{ invoices?: QuoteRow[]; quotes?: QuoteRow[] }>(
+        `/api/search?${params}`,
+      )
+      return data.quotes || data.invoices || []
     },
   })
 
@@ -95,10 +100,10 @@ export function PendingQuotesPage() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>ID</th>
+                  <th>Estimate</th>
                   <th>Customer</th>
                   <th>Reg</th>
-                  <th>Status</th>
+                  <th>Approval</th>
                   <th>Total</th>
                   <th>Date</th>
                   <th />
@@ -107,17 +112,19 @@ export function PendingQuotesPage() {
               <tbody>
                 {(q.data || []).map((row) => (
                   <tr key={row.id}>
-                    <td>{row.id}</td>
+                    <td>
+                      <Link to={`/quotes/${row.id}`}>{row.document_no || row.id}</Link>
+                    </td>
                     <td>{row.customer_name}</td>
                     <td>{row.customer_reg_no}</td>
-                    <td>{row.status}</td>
+                    <td>{row.approval_state || row.status}</td>
                     <td>
                       <Money value={row.net_total} />
                     </td>
                     <td>{row.created_at || '—'}</td>
                     <td className="row-actions">
-                      <Link className="btn btn-secondary btn-sm" to={`/invoices/${row.id}/edit`}>
-                        Edit
+                      <Link className="btn btn-secondary btn-sm" to={`/quotes/${row.id}`}>
+                        View
                       </Link>
                       <button
                         type="button"

@@ -15,6 +15,29 @@ export function RepairOrderPipelinePage() {
   const [reason, setReason] = useState('')
   const [varDesc, setVarDesc] = useState('')
   const [varPrice, setVarPrice] = useState('0')
+  const [displayTitle, setDisplayTitle] = useState('')
+
+  const roDetail = useQuery({
+    queryKey: ['ro-detail', id],
+    queryFn: () =>
+      api.get<{
+        id: number
+        document_no?: string
+        display_title?: string
+        version?: number
+      }>(`/api/repair-orders/${id}`),
+    enabled: !!id,
+  })
+
+  const rename = useMutation({
+    mutationFn: () =>
+      api.post(`/api/repair-orders/${id}/rename`, {
+        display_title: displayTitle,
+        version: roDetail.data?.version,
+        reason: reason || 'Repair order rename',
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ro-detail', id] }),
+  })
 
   const qcQ = useQuery({
     queryKey: ['ro-qc', id],
@@ -113,6 +136,10 @@ export function RepairOrderPipelinePage() {
   const hasQc = Boolean(qcQ.data?.qc)
   const hasGate = Boolean(gateQ.data?.gate_pass)
   const step = hasGate || hasQc ? 'handover' : 'check'
+  const docLabel =
+    roDetail.data?.display_title ||
+    roDetail.data?.document_no ||
+    (id ? `RO-${String(id).padStart(5, '0')}` : 'RO')
 
   return (
     <div>
@@ -146,8 +173,34 @@ export function RepairOrderPipelinePage() {
           plan={ro.diagnosis_plan}
         />
       ) : (
-        <h1 style={{ marginBottom: 16 }}>Job #{id}</h1>
+        <h1 style={{ marginBottom: 16 }}>{docLabel}</h1>
       )}
+
+      <Panel title="Rename (keeps original document no)">
+        {rename.error ? <ErrorBox error={rename.error} /> : null}
+        <p className="muted">
+          Permanent reference: {roDetail.data?.document_no || `RO-${id}`} · History and links stay on
+          this ID.
+        </p>
+        <div className="form-grid">
+          <Field label="Display title">
+            <input
+              className="input"
+              value={displayTitle || roDetail.data?.display_title || ''}
+              onChange={(e) => setDisplayTitle(e.target.value)}
+              placeholder="e.g. Civic AC job — Ali"
+            />
+          </Field>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={rename.isPending}
+            onClick={() => rename.mutate()}
+          >
+            Save title
+          </button>
+        </div>
+      </Panel>
 
       <Panel title="Quality check">
         {postQc.error ? <ErrorBox error={postQc.error} /> : null}

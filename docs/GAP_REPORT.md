@@ -28,7 +28,10 @@ Last updated: merged **design** (shell, pipeline, Money In/Out) with **mk** (cus
 | 14 | Monthly / yearly close | **Partial** | Monthly exists; yearly open |
 | 15 | Full reports | **Partial** | Live dashboard + invoices CSV; more exports open |
 | 15b | Live home dashboard | **Done** | Role views + charts + `workshop_kpis` |
-| 16 | Customer & vehicle management | **Done** | Phone search, multi-vehicle, CustomerDetail |
+| 16 | Customer & vehicle management | **Done** | Phone search + duplicate warn, multi-vehicle, CustomerDetail (balances/repairs/estimates/ownership), job-card EntitySelect autofill + ID reuse |
+| 17 | Job card & vehicle intake | **Done** | Quick-entry form, JC document_no, draft/open, priority/deadline/worker, visit link + inspection update, search, post-save Estimate/Assign/View, RO display_title rename |
+| 18 | Estimates & customer approval | **Done** | JC→estimate, advance policies, required/received/remaining advance, stock gaps, channels+send, draft/sent/approved/rejected/revised, deposits as liability, labour EntitySelect |
+| 19 | Worker assignment & scheduling | **Done** | Skills/leave/workload, suggest + assign/reassign, conflicts+override, est. times/deadline/priority, work-time ≠ attendance, server availability (not refresh), schedule board, notify via AppLog |
 | Design system | Shell + tokens | **Done** | Orange/black/off-white, Montserrat / Source Code Pro |
 
 ---
@@ -118,6 +121,6 @@ Labour codes, job cards, WhatsApp line approval, deposits, reserve/issue/return,
 
 | Item | Status |
 |------|--------|
-| pytest | foundation + pipeline + stock + procurement + customer/vehicle + dashboard/PO/money/next_action |
+| pytest | foundation + pipeline + stock + procurement + customer/vehicle + estimates + assignments + dashboard/PO/money/next_action |
 | Lint | `oxlint` |
 | Build | `tsc -b && vite build` |

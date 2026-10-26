@@ -61,6 +61,9 @@ def test_ensure_default_settings(db):
     assert settings["payment_gate_enabled"] is True
     assert isinstance(settings["expense_heads"], list)
     assert len(settings["expense_heads"]) >= 1
+    assert settings["advance_policy"]["percent"] == 50
+    assert "whatsapp" in settings["estimate_notify_channels"]
+    assert settings["variation_requires_approval"] is True
 
 
 def test_set_and_get_setting(db):

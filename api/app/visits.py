@@ -344,3 +344,58 @@ def get_visit(db: Session, visit_id: int) -> Visit:
     if visit is None or getattr(visit, "deleted_at", None) is not None:
         raise HTTPException(status_code=404, detail="Visit not found")
     return visit
+
+
+def update_visit(db: Session, visit_id: int, data: dict, user) -> Visit:
+    """Update intake inspection notes / odometer / fuel / checklist items."""
+    visit = get_visit(db, visit_id)
+    old = visit.to_dict()
+
+    for f in ("odometer", "fuel_level", "reported_complaints", "existing_damage", "status"):
+        if f in data and data[f] is not None:
+            setattr(visit, f, str(data[f]).strip() if not isinstance(data[f], str) else data[f].strip())
+
+    items_raw = data.get("items")
+    if items_raw is not None:
+        by_key = {it.point_key: it for it in (visit.items or [])}
+        for raw in items_raw:
+            key = str(raw.get("point_key") or "").strip()
+            if not key or key not in by_key:
+                continue
+            item = by_key[key]
+            if "result" in raw and raw["result"] is not None:
+                result = str(raw["result"]).strip().lower()
+                if result not in _VALID_RESULTS:
+                    raise HTTPException(status_code=400, detail=f"Invalid result for {key}")
+                item.result = result
+            if "notes" in raw:
+                item.notes = str(raw.get("notes") or "").strip() or None
+            photo_url = raw.get("photo_data_url") or raw.get("photo")
+            if photo_url:
+                bid = visit.branch_id or get_branch() or DEFAULT_BRANCH_ID
+                att = _attach_data_url(
+                    db,
+                    photo_url,
+                    entity_type="visit_inspection_photo",
+                    entity_id=visit.id,
+                    branch_id=bid,
+                    uploaded_by=getattr(user, "username", None),
+                    notes=f"{key} update on visit {visit.id}",
+                    prefix=key,
+                )
+                if att:
+                    item.photo_attachment_id = att.id
+
+    db.flush()
+    audit_write(
+        db,
+        user=user,
+        action="UPDATE",
+        module="visits",
+        reference_id=visit.id,
+        details=f"Updated visit inspection #{visit.id}",
+        old_value=old,
+        new_value=visit.to_dict(),
+        reason=data.get("reason"),
+    )
+    return get_visit(db, visit_id)

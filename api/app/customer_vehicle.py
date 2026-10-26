@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.foundation.validation import normalize_pk_phone, normalize_reg_no
 from app.invoice_math import invoice_amount_due, invoice_amount_paid
-from app.models import Car, Customer, Invoice, RepairOrder
+from app.models import Car, CarOwnership, Customer, Invoice, RepairOrder
 
 CUSTOMER_TYPES = (
     "retail",
@@ -248,6 +248,45 @@ def customer_activity_summary(db: Session, customer_id: int) -> dict:
             "problem_description": (ro.problem_description or "")[:120],
         }
 
+    vehicle_ids = [
+        row[0]
+        for row in db.query(Car.id).filter(Car.customer_id == customer_id).all()
+    ]
+    ownership_rows = []
+    if vehicle_ids:
+        transfers = (
+            db.query(CarOwnership)
+            .options(
+                joinedload(CarOwnership.from_customer),
+                joinedload(CarOwnership.to_customer),
+                joinedload(CarOwnership.car),
+            )
+            .filter(
+                or_(
+                    CarOwnership.from_customer_id == customer_id,
+                    CarOwnership.to_customer_id == customer_id,
+                    CarOwnership.car_id.in_(vehicle_ids),
+                )
+            )
+            .order_by(CarOwnership.transfer_date.desc(), CarOwnership.id.desc())
+            .limit(20)
+            .all()
+        )
+        for t in transfers:
+            ownership_rows.append(
+                {
+                    "id": t.id,
+                    "car_id": t.car_id,
+                    "plate_no": t.car.plate_no if t.car else None,
+                    "from_customer_id": t.from_customer_id,
+                    "from_customer_name": t.from_customer.name if t.from_customer else None,
+                    "to_customer_id": t.to_customer_id,
+                    "to_customer_name": t.to_customer.name if t.to_customer else None,
+                    "transfer_date": t.transfer_date.isoformat() if t.transfer_date else None,
+                    "reason": t.reason,
+                }
+            )
+
     return {
         "receivable_total": round(receivable, 2),
         "open_invoice_count": len(open_invoices),
@@ -255,6 +294,7 @@ def customer_activity_summary(db: Session, customer_id: int) -> dict:
         "recent_invoices": [_inv_row(i) for i in invoices],
         "recent_estimates": [_inv_row(q) for q in quotes],
         "recent_repairs": [_ro_row(r) for r in repairs],
+        "ownership_history": ownership_rows,
         "counts": {
             "invoices": db.query(Invoice)
             .filter(Invoice.customer_id == customer_id, Invoice.type_of == "invoice")
@@ -266,6 +306,7 @@ def customer_activity_summary(db: Session, customer_id: int) -> dict:
             .filter(RepairOrder.customer_id == customer_id)
             .count(),
             "vehicles": db.query(Car).filter(Car.customer_id == customer_id).count(),
+            "ownership_transfers": len(ownership_rows),
         },
     }
 
@@ -279,7 +320,10 @@ def load_customer_bundle(db: Session, customer_id: int) -> dict | None:
     )
     if not customer or getattr(customer, "deleted_at", None) is not None:
         return None
+    customer_payload = customer_dict(customer, include_vehicles=True)
     return {
-        "customer": customer_dict(customer, include_vehicles=True),
+        "customer": customer_payload,
+        # Top-level alias so clients can read bundle.vehicles directly.
+        "vehicles": customer_payload.get("vehicles") or [],
         "activity": customer_activity_summary(db, customer_id),
     }

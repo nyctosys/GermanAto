@@ -14,12 +14,23 @@ import {
 
 type Named = { id: number; name: string; is_active?: boolean; description?: string }
 
+type AdvancePolicy = {
+  mode: 'none' | 'fixed' | 'percent' | 'full' | 'custom'
+  fixed_amount: number
+  percent: number
+  allow_authorized_custom: boolean
+}
+
 type WorkshopSettings = {
   discount_approval_pct: number
   mandatory_receipt_amount: number
   comeback_window_days: number
   payment_gate_enabled: boolean
   expense_heads: string[]
+  advance_policy: AdvancePolicy
+  estimate_notify_channels: string[]
+  variation_requires_approval: boolean
+  assignment_notify_channels: string[]
 }
 
 const emptyWorkshop: WorkshopSettings = {
@@ -28,6 +39,15 @@ const emptyWorkshop: WorkshopSettings = {
   comeback_window_days: 14,
   payment_gate_enabled: true,
   expense_heads: [],
+  advance_policy: {
+    mode: 'percent',
+    fixed_amount: 0,
+    percent: 50,
+    allow_authorized_custom: true,
+  },
+  estimate_notify_channels: ['whatsapp', 'link'],
+  variation_requires_approval: true,
+  assignment_notify_channels: ['log'],
 }
 
 export function SettingsPage() {
@@ -189,6 +209,111 @@ export function SettingsPage() {
               value={headsText}
               onChange={(e) => setHeadsDraft(e.target.value)}
             />
+          </Field>
+          <Field label="Estimate advance policy">
+            <select
+              className="select"
+              value={workshop.advance_policy?.mode || 'percent'}
+              onChange={(e) =>
+                setWorkshopDraft({
+                  ...workshop,
+                  advance_policy: {
+                    ...(workshop.advance_policy || emptyWorkshop.advance_policy),
+                    mode: e.target.value as AdvancePolicy['mode'],
+                  },
+                })
+              }
+            >
+              <option value="none">None</option>
+              <option value="fixed">Fixed amount</option>
+              <option value="percent">Percentage</option>
+              <option value="full">Full advance</option>
+              <option value="custom">Authorized custom</option>
+            </select>
+          </Field>
+          {(workshop.advance_policy?.mode || 'percent') === 'percent' ? (
+            <Field label="Advance % (e.g. 50 → Rs 50,000 on Rs 100,000)">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.5}
+                value={workshop.advance_policy?.percent ?? 50}
+                onChange={(e) =>
+                  setWorkshopDraft({
+                    ...workshop,
+                    advance_policy: {
+                      ...(workshop.advance_policy || emptyWorkshop.advance_policy),
+                      percent: Number(e.target.value),
+                    },
+                  })
+                }
+              />
+            </Field>
+          ) : null}
+          {(workshop.advance_policy?.mode || '') === 'fixed' ? (
+            <Field label="Fixed advance (Rs)">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={workshop.advance_policy?.fixed_amount ?? 0}
+                onChange={(e) =>
+                  setWorkshopDraft({
+                    ...workshop,
+                    advance_policy: {
+                      ...(workshop.advance_policy || emptyWorkshop.advance_policy),
+                      fixed_amount: Number(e.target.value),
+                    },
+                  })
+                }
+              />
+            </Field>
+          ) : null}
+          <Field label="Estimate notify channels (comma: whatsapp,link,sms)">
+            <input
+              className="input"
+              value={(workshop.estimate_notify_channels || []).join(',')}
+              onChange={(e) =>
+                setWorkshopDraft({
+                  ...workshop,
+                  estimate_notify_channels: e.target.value
+                    .split(',')
+                    .map((s) => s.trim().toLowerCase())
+                    .filter(Boolean),
+                })
+              }
+            />
+          </Field>
+          <Field label="Assignment notify channels (comma: log)">
+            <input
+              className="input"
+              value={(workshop.assignment_notify_channels || ['log']).join(',')}
+              onChange={(e) =>
+                setWorkshopDraft({
+                  ...workshop,
+                  assignment_notify_channels: e.target.value
+                    .split(',')
+                    .map((s) => s.trim().toLowerCase())
+                    .filter(Boolean),
+                })
+              }
+            />
+          </Field>
+          <Field label="Additional work (variations) require approval">
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={workshop.variation_requires_approval !== false}
+                onChange={(e) =>
+                  setWorkshopDraft({
+                    ...workshop,
+                    variation_requires_approval: e.target.checked,
+                  })
+                }
+              />
+              Enabled
+            </label>
           </Field>
           <button className="btn" type="submit" disabled={saveWorkshop.isPending}>
             Save workshop settings

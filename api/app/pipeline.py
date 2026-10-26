@@ -50,6 +50,11 @@ def assert_quote_from_job_card(job_card: JobCard | None) -> JobCard:
         raise HTTPException(status_code=400, detail="Job card is required to build a quotation")
     if job_card.status == "cancelled":
         raise HTTPException(status_code=400, detail="Cannot quote a cancelled job card")
+    if job_card.status == "draft":
+        raise HTTPException(
+            status_code=400,
+            detail="Open the draft job card before building a quotation",
+        )
     return job_card
 
 

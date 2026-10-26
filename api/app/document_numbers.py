@@ -29,6 +29,10 @@ def repair_order_document_no(entity_id: int) -> str:
     return f"RO-{int(entity_id):05d}"
 
 
+def job_card_document_no(entity_id: int) -> str:
+    return f"JC-{int(entity_id):05d}"
+
+
 def expense_document_no(entity_id: int) -> str:
     return f"EXP-{int(entity_id):05d}"
 
@@ -64,6 +68,7 @@ def assign_document_numbers(session: Session) -> int:
         Expense,
         YardGatePass,
         Invoice,
+        JobCard,
         PurchaseOrder,
         RepairOrder,
         Vendor,
@@ -93,6 +98,9 @@ def assign_document_numbers(session: Session) -> int:
             updated += 1
         elif isinstance(obj, RepairOrder) and not getattr(obj, "document_no", None):
             obj.document_no = repair_order_document_no(obj.id)
+            updated += 1
+        elif isinstance(obj, JobCard) and not getattr(obj, "document_no", None):
+            obj.document_no = job_card_document_no(obj.id)
             updated += 1
         elif isinstance(obj, Expense) and not getattr(obj, "document_no", None):
             obj.document_no = expense_document_no(obj.id)

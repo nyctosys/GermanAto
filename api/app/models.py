@@ -206,6 +206,13 @@ class Invoice(FoundationMixin, Base):
         ForeignKey("invoice.id", ondelete="SET NULL"), nullable=True, index=True
     )
     is_variation: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Estimate lifecycle (quotes): draft | sent | approved | rejected | revised | partially_approved
+    approval_state: Mapped[str | None] = mapped_column(String(30), default="draft")
+    expected_duration_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_completion_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    required_advance: Mapped[float | None] = mapped_column(Float, default=0.0)
+    advance_policy_mode: Mapped[str | None] = mapped_column(String(20))
+    advance_policy_value: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     items: Mapped[list[InvoiceItem]] = relationship(
         "InvoiceItem", backref="invoice", cascade="all, delete-orphan"
@@ -418,6 +425,8 @@ class RepairOrder(FoundationMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
+    # Staff-facing rename; permanent document_no / id never change.
+    display_title: Mapped[str | None] = mapped_column(String(255))
     customer_name: Mapped[str] = mapped_column(String(255))
     customer_phone: Mapped[str] = mapped_column(String(20))
     customer_address: Mapped[str] = mapped_column(String(255))
@@ -1097,6 +1106,8 @@ class Worker(FoundationMixin, Base):
     department: Mapped[str] = mapped_column(String(100))
     salary: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     status: Mapped[str] = mapped_column(String(20), default="active")
+    # JSON array of skill tags, e.g. ["ac","electrical","diagnostics"]
+    skills_json: Mapped[str | None] = mapped_column(Text)
     emergency_contact_name: Mapped[str | None] = mapped_column(String(100))
     emergency_contact_phone: Mapped[str | None] = mapped_column(String(20))
     notes: Mapped[str | None] = mapped_column(Text)
@@ -1107,6 +1118,20 @@ class Worker(FoundationMixin, Base):
 
     def __repr__(self) -> str:
         return f"<Worker {self.employee_id} - {self.first_name} {self.last_name}>"
+
+    @property
+    def skills(self) -> list[str]:
+        if not self.skills_json:
+            return []
+        try:
+            import json as _json
+
+            raw = _json.loads(self.skills_json)
+            if isinstance(raw, list):
+                return [str(x).strip() for x in raw if str(x).strip()]
+        except Exception:
+            pass
+        return []
 
     def to_dict(self) -> dict:
         return {
@@ -1124,11 +1149,134 @@ class Worker(FoundationMixin, Base):
             "department": self.department,
             "salary": float(self.salary) if self.salary else None,
             "status": self.status,
+            "skills": self.skills,
             "emergency_contact_name": self.emergency_contact_name,
             "emergency_contact_phone": self.emergency_contact_phone,
             "notes": self.notes,
-            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
+            "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S") if self.updated_at else None,
+        }
+
+
+class WorkerLeave(FoundationMixin, Base):
+    """Approved leave blocks scheduling availability (server-side)."""
+
+    __tablename__ = "worker_leave"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    worker_id: Mapped[int] = mapped_column(ForeignKey("workers.id"), index=True)
+    start_date: Mapped[date] = mapped_column(Date, index=True)
+    end_date: Mapped[date] = mapped_column(Date, index=True)
+    leave_type: Mapped[str] = mapped_column(String(40), default="annual")
+    status: Mapped[str] = mapped_column(String(20), default="approved")  # pending|approved|rejected
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "worker_id": self.worker_id,
+            "start_date": _clock(self.start_date, "%Y-%m-%d"),
+            "end_date": _clock(self.end_date, "%Y-%m-%d"),
+            "leave_type": self.leave_type,
+            "status": self.status,
+            "notes": self.notes,
+            "created_by_user": self.created_by_user,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+        }
+
+
+class WorkAssignment(FoundationMixin, Base):
+    """Assignment of a worker to a job card and/or repair order (history preserved)."""
+
+    __tablename__ = "work_assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    worker_id: Mapped[int] = mapped_column(ForeignKey("workers.id"), index=True)
+    job_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("job_cards.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    repair_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("repair_order.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), default="assigned")
+    # assigned | in_progress | completed | cancelled | reassigned
+    priority: Mapped[str] = mapped_column(String(20), default="normal")
+    estimated_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    estimated_completion_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    actual_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    actual_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    override_reason: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
+    assigned_by: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "worker_id": self.worker_id,
+            "job_card_id": self.job_card_id,
+            "repair_order_id": self.repair_order_id,
+            "status": self.status,
+            "priority": self.priority,
+            "estimated_start_at": _clock(self.estimated_start_at, "%Y-%m-%d %H:%M:%S"),
+            "estimated_completion_at": _clock(self.estimated_completion_at, "%Y-%m-%d %H:%M:%S"),
+            "deadline_at": _clock(self.deadline_at, "%Y-%m-%d %H:%M:%S"),
+            "actual_start_at": _clock(self.actual_start_at, "%Y-%m-%d %H:%M:%S"),
+            "actual_end_at": _clock(self.actual_end_at, "%Y-%m-%d %H:%M:%S"),
+            "override_reason": self.override_reason,
+            "notes": self.notes,
+            "assigned_by": self.assigned_by,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
+            "updated_at": _clock(self.updated_at, "%Y-%m-%d %H:%M:%S"),
+            "is_overdue": bool(
+                self.deadline_at
+                and self.status in ("assigned", "in_progress")
+                and self.deadline_at < datetime.utcnow()
+            ),
+        }
+
+
+class WorkTimeEntry(FoundationMixin, Base):
+    """Actual repair time on an RO — separate from attendance clock hours."""
+
+    __tablename__ = "work_time_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    worker_id: Mapped[int] = mapped_column(ForeignKey("workers.id"), index=True)
+    repair_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("repair_order.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    job_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("job_cards.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by_user: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        hrs = self.hours
+        if hrs is None and self.started_at and self.ended_at:
+            hrs = round((self.ended_at - self.started_at).total_seconds() / 3600.0, 2)
+        return {
+            "id": self.id,
+            "worker_id": self.worker_id,
+            "repair_order_id": self.repair_order_id,
+            "job_card_id": self.job_card_id,
+            "started_at": _clock(self.started_at, "%Y-%m-%d %H:%M:%S"),
+            "ended_at": _clock(self.ended_at, "%Y-%m-%d %H:%M:%S"),
+            "hours": hrs,
+            "notes": self.notes,
+            "created_by_user": self.created_by_user,
+            "created_at": _clock(self.created_at, "%Y-%m-%d %H:%M:%S"),
         }
 
 
@@ -1677,6 +1825,7 @@ class JobCard(FoundationMixin, Base):
     __tablename__ = "job_cards"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_no: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
     visit_id: Mapped[int | None] = mapped_column(
         ForeignKey("visits.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -1691,7 +1840,19 @@ class JobCard(FoundationMixin, Base):
     customer_reg_no: Mapped[str] = mapped_column(String(50), default="")
     customer_made: Mapped[str] = mapped_column(String(100), default="")
     status: Mapped[str] = mapped_column(String(20), default="open")
-    # open | quoted | closed | cancelled
+    # draft | open | quoted | closed | cancelled
+    priority: Mapped[str] = mapped_column(String(20), default="normal")
+    # low | normal | high | urgent
+    expected_completion_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    intake_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    worker_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    team_name: Mapped[str | None] = mapped_column(String(120))
+    problem_description: Mapped[str | None] = mapped_column(Text)
+    inspection_notes: Mapped[str | None] = mapped_column(Text)
+    odometer: Mapped[str | None] = mapped_column(String(50))
+    fuel_level: Mapped[str | None] = mapped_column(String(40))
     notes: Mapped[str | None] = mapped_column(Text)
     quote_invoice_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_by_user: Mapped[str | None] = mapped_column(String(80))
@@ -1710,6 +1871,7 @@ class JobCard(FoundationMixin, Base):
     def to_dict(self, *, include_lines: bool = True) -> dict:
         data = {
             "id": self.id,
+            "document_no": self.document_no or f"JC-{self.id:05d}",
             "visit_id": self.visit_id,
             "car_id": self.car_id,
             "customer_id": self.customer_id,
@@ -1718,6 +1880,15 @@ class JobCard(FoundationMixin, Base):
             "customer_reg_no": self.customer_reg_no,
             "customer_made": self.customer_made,
             "status": self.status,
+            "priority": self.priority or "normal",
+            "expected_completion_at": _clock(self.expected_completion_at, "%Y-%m-%d %H:%M:%S"),
+            "intake_at": _clock(self.intake_at, "%Y-%m-%d %H:%M:%S"),
+            "worker_id": self.worker_id,
+            "team_name": self.team_name,
+            "problem_description": self.problem_description,
+            "inspection_notes": self.inspection_notes,
+            "odometer": self.odometer,
+            "fuel_level": self.fuel_level,
             "notes": self.notes,
             "quote_invoice_id": self.quote_invoice_id,
             "created_by_user": self.created_by_user,

@@ -116,6 +116,8 @@ def get_repair_orders(request: Request, db: Session = Depends(get_db), current_u
             
             repair_order_data = {
                 'id': ro.id,
+                'document_no': ro.document_no or f"RO-{ro.id:05d}",
+                'display_title': ro.display_title,
                 'customer_name': ro.customer_name,
                 'customer_phone': ro.customer_phone,
                 'customer_address': ro.customer_address,
@@ -395,31 +397,31 @@ def create_repair_order(request: Request, db: Session = Depends(get_db), body: d
 
 # Update repair order status
 @router.get('/repair-orders/assignable-workers')
-def get_assignable_workers(request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
-    """Just enough about each worker to put them on a job.
+def get_assignable_workers(request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager', 'manager', 'service_advisor']))):
+    """Server-ranked available workers (skills, leave, conflicts, workload).
 
-    Assigning a mechanic is part of writing a repair order, not part of HR, so
-    it must not require the hr permission - an inventory manager needs to name
-    who did the work without being able to see salaries, CNICs, addresses or
-    phone numbers.
-
-    Living under /api/repair-orders is what gives it the repair-order
-    permission: PATH_PERMISSIONS matches on prefix, so /api/workers would have
-    demanded hr no matter which roles the decorator allowed.
-
-    Name, position and id only. Nothing here is worth withholding, and nothing
-    withheld is needed.
+    Assigning is part of writing a repair order, not HR — lives under
+    /api/repair-orders so PATH_PERMISSIONS does not demand hr.
+    Availability is never inferred from a page refresh alone.
     """
     try:
-        workers = db.query(Worker).filter(Worker.status == 'active').order_by(
-            Worker.first_name, Worker.last_name).all()
+        from app.assignments import suggest_workers, _parse_dt
+
+        skills_raw = (request.query_params.get('skills') or '').strip()
+        skills = [s.strip() for s in skills_raw.split(',') if s.strip()] if skills_raw else []
+        rows = suggest_workers(
+            db,
+            required_skills=skills,
+            estimated_start_at=_parse_dt(request.query_params.get('estimated_start_at')),
+            estimated_completion_at=_parse_dt(
+                request.query_params.get('estimated_completion_at')
+            ),
+            deadline_at=_parse_dt(request.query_params.get('deadline_at')),
+            limit=int(request.query_params.get('limit') or 50),
+        )
         return _json({
-            'workers': [{
-                'id': w.id,
-                'first_name': w.first_name,
-                'last_name': w.last_name,
-                'position': w.position,
-            } for w in workers]
+            'workers': rows,
+            'basis': 'server: status, leave, conflicts, workload (not page refresh)',
         }, 200)
     except Exception as e:
         return _json({'error': str(e)}, 500)
@@ -427,7 +429,7 @@ def get_assignable_workers(request: Request, db: Session = Depends(get_db), curr
 
 # Get all repair orders with optional status filter
 @router.get('/repair-orders/{repair_order_id:int}')
-def get_repair_order(repair_order_id, request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
+def get_repair_order(repair_order_id, request: Request, db: Session = Depends(get_db), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager', 'manager', 'service_advisor']))):
     try:
         # Use joinedload to fetch related data in one query
         repair_order = db.query(RepairOrder).options(
@@ -444,6 +446,8 @@ def get_repair_order(repair_order_id, request: Request, db: Session = Depends(ge
         
         repair_order_data = {
             'id': repair_order.id,
+            'document_no': repair_order.document_no or f"RO-{repair_order.id:05d}",
+            'display_title': repair_order.display_title,
             'customer_name': repair_order.customer_name,
             'customer_phone': repair_order.customer_phone,
             'customer_address': repair_order.customer_address,
@@ -496,6 +500,49 @@ def get_repair_order(repair_order_id, request: Request, db: Session = Depends(ge
         return _json({'error': str(e)}, 500)
 
 # Create a new repair order
+@router.post('/repair-orders/{repair_order_id:int}/rename')
+def rename_repair_order(
+    repair_order_id: int,
+    db: Session = Depends(get_db),
+    body: dict | None = Body(None),
+    current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager', 'manager', 'service_advisor'])),
+):
+    """Set a staff-facing display title. document_no and history stay unchanged."""
+    from app.foundation.audit import audit_write
+
+    ro = db.get(RepairOrder, repair_order_id)
+    if not ro or getattr(ro, 'deleted_at', None) is not None:
+        return _json({'error': 'Repair order not found'}, 404)
+    data = body or {}
+    check_version(ro, extract_version(data))
+    old_title = ro.display_title
+    title = data.get('display_title')
+    if title is None:
+        return _json({'error': 'display_title is required'}, 400)
+    ro.display_title = str(title).strip() or None
+    ro.updated_at = datetime.utcnow()
+    ro.updated_by_user = current_user.username if current_user else None
+    bump_version(ro)
+    audit_write(
+        db,
+        user=current_user,
+        action='RENAME',
+        module='repair_orders',
+        reference_id=ro.id,
+        details=f"Renamed RO {ro.document_no or ro.id}",
+        old_value={'display_title': old_title, 'document_no': ro.document_no},
+        new_value={'display_title': ro.display_title, 'document_no': ro.document_no},
+        reason=data.get('reason') or 'Repair order rename',
+    )
+    db.commit()
+    return _json({
+        'id': ro.id,
+        'document_no': ro.document_no or f"RO-{ro.id:05d}",
+        'display_title': ro.display_title,
+        'message': 'Display title updated; original document number preserved',
+    })
+
+
 @router.put('/repair-orders/{repair_order_id:int}')
 def update_repair_order(repair_order_id, request: Request, db: Session = Depends(get_db), body: dict | None = Body(None), current_user=Depends(require_roles(['admin', 'accountant', 'inventory_manager']))):
     try:
@@ -535,7 +582,13 @@ def update_repair_order(repair_order_id, request: Request, db: Session = Depends
 
         if 'problem_description' in data:
             repair_order.problem_description = data['problem_description']
-            
+        # Rename label only — document_no / id stay permanent.
+        if 'display_title' in data:
+            title = data.get('display_title')
+            repair_order.display_title = (
+                str(title).strip() or None if title is not None else None
+            )
+
         # Support multiple workers update
         if 'worker_ids' in data:
             worker_ids = data.get('worker_ids', [])

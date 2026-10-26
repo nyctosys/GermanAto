@@ -585,7 +585,7 @@ export function CarDetailPage() {
                       {!v.repair_order_id ? (
                         <Link
                           className="btn btn-sm"
-                          to={`/repair-orders/new?car_id=${carId}&visit_id=${v.id}`}
+                          to={`/job-cards/new?car_id=${carId}&visit_id=${v.id}`}
                         >
                           Create job card
                         </Link>

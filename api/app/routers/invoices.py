@@ -782,6 +782,8 @@ def search_invoices(request: Request, db: Session = Depends(get_db), current_use
                 "locked": money["locked"],
                 "repair_order_id": invoice.repair_order_id,
                 "job_card_id": invoice.job_card_id,
+                "approval_state": getattr(invoice, "approval_state", None),
+                "required_advance": float(getattr(invoice, "required_advance", None) or 0),
                 "created_by_user": invoice.created_by_user,
                 "updated_by_user": invoice.updated_by_user,
                 "updated_at": invoice.updated_at.strftime("%Y-%m-%d %H:%M:%S") if invoice.updated_at else None,

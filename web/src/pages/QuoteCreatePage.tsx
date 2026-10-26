@@ -30,7 +30,8 @@ export function QuoteCreatePage() {
         onSubmit={onSubmit}
         busy={create.isPending}
         showAdvance={false}
-        submitLabel="Create quote"
+        showEstimateMeta
+        submitLabel="Create estimate"
       />
     </div>
   )

@@ -64,5 +64,8 @@ def test_granular_permissions_defined():
         "adjust_stock",
         "reopen_period",
         "approve_evidence_exception",
+        "approve_po",
+        "override_po_price",
+        "override_assignment_conflict",
     }
     assert expected == set(GRANULAR_PERMISSIONS)

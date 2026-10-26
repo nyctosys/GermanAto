@@ -4,7 +4,9 @@ import { getCustomerBundle, type EntityHit } from '../api/entities'
 import { EntitySelect } from '../components/EntitySelect'
 import { Field, Money, Panel } from '../components/ui'
 import {
+  calcDurationHours,
   calcNet,
+  missingParts,
   type InvoiceFormState,
   type LabourLine,
   type LineItem,
@@ -17,6 +19,8 @@ export function InvoiceDocumentForm({
   onSubmit,
   busy,
   showAdvance = true,
+  showEstimateMeta = false,
+  requiredAdvance,
   submitLabel = 'Save',
   cancelTo = '/invoices',
   readOnly = false,
@@ -28,6 +32,8 @@ export function InvoiceDocumentForm({
   onSubmit: (e: FormEvent) => void
   busy?: boolean
   showAdvance?: boolean
+  showEstimateMeta?: boolean
+  requiredAdvance?: number | null
   submitLabel?: string
   cancelTo?: string
   readOnly?: boolean
@@ -35,7 +41,13 @@ export function InvoiceDocumentForm({
 }) {
   const net = useMemo(() => calcNet(form), [form])
   const tax = form.include_tax ? net * 0.17 : 0
-  const balance = net + tax - Number(form.discount) - Number(form.advance)
+  const finalEst = net + tax - Number(form.discount)
+  const balance = finalEst - Number(form.advance)
+  const gaps = useMemo(() => missingParts(form), [form])
+  const duration = useMemo(
+    () => form.expected_duration_hours ?? calcDurationHours(form),
+    [form],
+  )
 
   function updateItem(idx: number, patch: Partial<LineItem>) {
     const items = form.items.map((it, i) => (i === idx ? { ...it, ...patch } : it))
@@ -96,6 +108,21 @@ export function InvoiceDocumentForm({
       product_name: hit.name || '',
       part_number: hit.part_number || hit.code || '',
       price: Number(hit.price || 0),
+      inventory_id: hit.id,
+      available: hit.available ?? null,
+    })
+  }
+
+  function pickLabour(idx: number, hit: EntityHit | null) {
+    if (!hit) {
+      updateLabour(idx, { labour_code_id: null })
+      return
+    }
+    updateLabour(idx, {
+      description: hit.description || hit.name || hit.label || '',
+      price: Number(hit.rate ?? hit.price ?? 0),
+      labour_code_id: hit.id,
+      std_hours: Number(hit.std_hours ?? hit.standard_hours ?? 0) || null,
     })
   }
 
@@ -283,11 +310,23 @@ export function InvoiceDocumentForm({
       >
         <div className="line-items">
           {form.labours.map((lab, idx) => (
-            <div className="line-item" key={idx}>
-              <Field label="Description">
+            <div className="line-item" key={idx} style={{ gridTemplateColumns: '2fr 100px 100px auto' }}>
+              <EntitySelect
+                label="Labour / task"
+                type="labour_code"
+                valueId={lab.labour_code_id || null}
+                displayValue={lab.description}
+                placeholder="Search labour codes…"
+                onSelect={(hit) => pickLabour(idx, hit)}
+              />
+              <Field label="Hours">
                 <input
-                  value={lab.description}
-                  onChange={(e) => updateLabour(idx, { description: e.target.value })}
+                  type="number"
+                  step="0.1"
+                  value={lab.std_hours ?? ''}
+                  onChange={(e) =>
+                    updateLabour(idx, { std_hours: e.target.value ? Number(e.target.value) : null })
+                  }
                 />
               </Field>
               <Field label="Price">
@@ -315,10 +354,49 @@ export function InvoiceDocumentForm({
         </div>
       </Panel>
 
+      {gaps.length > 0 ? (
+        <Panel title="Missing parts (stock check)">
+          <ul>
+            {gaps.map((g, i) => (
+              <li key={i}>
+                {g.product_name} · need {g.quantity}, available {g.available ?? 0}, missing {g.missing}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
+
+      {showEstimateMeta ? (
+        <Panel title="Schedule">
+          <div className="form-grid">
+            <Field label="Expected duration (hours)">
+              <input
+                type="number"
+                step="0.1"
+                value={form.expected_duration_hours ?? duration}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    expected_duration_hours: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+              />
+            </Field>
+            <Field label="Expected completion">
+              <input
+                type="datetime-local"
+                value={form.expected_completion_at || ''}
+                onChange={(e) => setForm({ ...form, expected_completion_at: e.target.value })}
+              />
+            </Field>
+          </div>
+        </Panel>
+      ) : null}
+
       <Panel title="Totals">
         <div className="form-grid">
           {showAdvance ? (
-            <Field label="Advance">
+            <Field label="Advance (invoice only)">
               <input
                 type="number"
                 step="0.01"
@@ -347,7 +425,7 @@ export function InvoiceDocumentForm({
         </div>
         <div className="totals">
           <span>
-            Net: <Money value={net} />
+            Subtotal: <Money value={net} />
           </span>
           {form.include_tax ? (
             <span>
@@ -355,8 +433,20 @@ export function InvoiceDocumentForm({
             </span>
           ) : null}
           <span>
-            Balance: <Money value={balance} />
+            Final estimate: <Money value={finalEst} />
           </span>
+          {requiredAdvance != null ? (
+            <span>
+              Required advance: <Money value={requiredAdvance} />
+            </span>
+          ) : null}
+          {showAdvance ? (
+            <span>
+              Balance: <Money value={balance} />
+            </span>
+          ) : (
+            <span className="muted">Advances are liabilities (deposits), not revenue</span>
+          )}
         </div>
       </Panel>
       </fieldset>
