@@ -1,0 +1,163 @@
+{
+  "car_growth": {
+    "daily": [
+      {
+        "count": "number",
+        "date": "str"
+      }
+    ],
+    "monthly": [
+      {
+        "count": "number",
+        "month": "str"
+      }
+    ],
+    "total": "number",
+    "yearly": [
+      {
+        "count": "number",
+        "year": "number"
+      }
+    ]
+  },
+  "completed_today": [],
+  "customer_growth": {
+    "daily": [
+      {
+        "count": "number",
+        "date": "str"
+      }
+    ],
+    "monthly": [
+      {
+        "count": "number",
+        "month": "str"
+      }
+    ],
+    "total": "number",
+    "yearly": [
+      {
+        "count": "number",
+        "year": "number"
+      }
+    ]
+  },
+  "date_range": {
+    "end": "str",
+    "start": "str"
+  },
+  "expenses": {
+    "daily": [
+      {
+        "date": "str",
+        "total": "number"
+      }
+    ],
+    "monthly": [
+      {
+        "month": "str",
+        "total": "number"
+      }
+    ],
+    "total": "number",
+    "yearly": [
+      {
+        "total": "number",
+        "year": "number"
+      }
+    ]
+  },
+  "invoice_growth": {
+    "daily": [
+      {
+        "count": "number",
+        "date": "str"
+      }
+    ],
+    "monthly": [
+      {
+        "count": "number",
+        "month": "str"
+      }
+    ],
+    "total": "number",
+    "yearly": [
+      {
+        "count": "number",
+        "year": "number"
+      }
+    ]
+  },
+  "low_stock": [],
+  "open_repairs": [
+    {
+      "created_at": "str",
+      "customer_name": "str",
+      "customer_phone": "str",
+      "id": "number",
+      "problem_description": "str",
+      "status": "str",
+      "updated_at": "str"
+    }
+  ],
+  "pending_quotes": [
+    {
+      "created_at": "str",
+      "customer_name": "str",
+      "id": "number",
+      "quote_number": "str",
+      "status": "str",
+      "total_amount": "number"
+    }
+  ],
+  "period": "str",
+  "profit": {
+    "daily": [
+      {
+        "date": "str",
+        "total": "number"
+      }
+    ],
+    "monthly": [
+      {
+        "month": "str",
+        "total": "number"
+      }
+    ],
+    "total": "number",
+    "yearly": [
+      {
+        "total": "number",
+        "year": "number"
+      }
+    ]
+  },
+  "receivables": "number",
+  "sales": {
+    "daily": [
+      {
+        "date": "str",
+        "total": "number"
+      }
+    ],
+    "monthly": [
+      {
+        "month": "str",
+        "total": "number"
+      }
+    ],
+    "total": "number",
+    "yearly": [
+      {
+        "total": "number",
+        "year": "number"
+      }
+    ]
+  },
+  "vendor_balances": [
+    {
+      "closing_balance": "number",
+      "vendor_name": "str"
+    }
+  ]
+}

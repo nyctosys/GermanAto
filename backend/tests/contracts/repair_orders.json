@@ -1,0 +1,49 @@
+{
+  "repair_orders": [
+    {
+      "car_id": "number",
+      "created_at": "str",
+      "created_by_user": "str",
+      "current_status": "str",
+      "customer_address": "str",
+      "customer_chasis": "str",
+      "customer_code": "str",
+      "customer_color": "str",
+      "customer_id": "number",
+      "customer_made": "str",
+      "customer_mileage": "str",
+      "customer_name": "str",
+      "customer_phone": "str",
+      "customer_reg_no": "str",
+      "customer_vin": "str",
+      "diagnosis_plan": "null",
+      "id": "number",
+      "labour": [
+        {
+          "description": "str",
+          "id": "number",
+          "status": "str"
+        }
+      ],
+      "notes": "null",
+      "parts": [
+        {
+          "description": "str",
+          "id": "number",
+          "inventory_id": "number",
+          "part_number": "str",
+          "quantity": "number",
+          "status": "str"
+        }
+      ],
+      "problem_description": "str",
+      "status_timeline": {},
+      "updated_at": "str",
+      "updated_by_user": "null",
+      "vehicle_condition": {},
+      "worker_id": "null",
+      "worker_name": "str",
+      "workers_json": []
+    }
+  ]
+}

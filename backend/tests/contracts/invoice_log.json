@@ -1,0 +1,22 @@
+{
+  "advance": "number",
+  "amount_due": "number",
+  "amount_paid": "number",
+  "amount_remaining": "number",
+  "created_at": "str",
+  "created_by": "str",
+  "customer_name": "str",
+  "document_id": "number",
+  "entries": [
+    {
+      "action": "str",
+      "details": "str",
+      "ip_address": "str",
+      "user": "str",
+      "when": "str"
+    }
+  ],
+  "kind": "str",
+  "payments": [],
+  "reference": "str"
+}

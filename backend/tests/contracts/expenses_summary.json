@@ -1,0 +1,11 @@
+{
+  "category_totals": {
+    "Utilities": "number"
+  },
+  "month_expenses": "number",
+  "month_total": "number",
+  "today_expenses": "number",
+  "today_total": "number",
+  "total_amount": "number",
+  "total_expenses": "number"
+}

@@ -1,0 +1,15 @@
+{
+  "can_change": "bool",
+  "periods": [
+    {
+      "changed_by": "null",
+      "is_current": "bool",
+      "is_open": "bool",
+      "label": "str",
+      "month": "number",
+      "overridden": "bool",
+      "reason": "null",
+      "year": "number"
+    }
+  ]
+}

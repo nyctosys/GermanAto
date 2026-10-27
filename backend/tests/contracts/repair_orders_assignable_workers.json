@@ -1,0 +1,10 @@
+{
+  "workers": [
+    {
+      "first_name": "str",
+      "id": "number",
+      "last_name": "str",
+      "position": "str"
+    }
+  ]
+}

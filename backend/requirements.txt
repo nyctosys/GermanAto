@@ -8,6 +8,7 @@ Flask-JWT-Extended==4.6.0
 # Database
 PyMySQL==1.1.1
 SQLAlchemy==2.0.40
+alembic==1.13.3
 
 # Environment and Configuration
 python-dotenv==0.21.0

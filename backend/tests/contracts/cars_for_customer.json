@@ -1,0 +1,24 @@
+{
+  "cars": [
+    {
+      "created_at": "str",
+      "customer_id": "number",
+      "customer_name": "str",
+      "customer_phone": "str",
+      "id": "number",
+      "make": "str",
+      "mileage": "str",
+      "model": "str",
+      "plate_no": "str",
+      "updated_at": "str"
+    }
+  ],
+  "count": "number",
+  "customer": {
+    "address": "str",
+    "code": "str",
+    "id": "number",
+    "name": "str",
+    "phone": "str"
+  }
+}

@@ -1,0 +1,13 @@
+[
+  {
+    "amount": "number",
+    "created_at": "str",
+    "date": "str",
+    "description": "str",
+    "id": "number",
+    "invoice_id": "null",
+    "notes": "str",
+    "payment_method": "str",
+    "updated_at": "str"
+  }
+]

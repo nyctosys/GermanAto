@@ -1,0 +1,28 @@
+{
+  "pagination": {
+    "has_next": "bool",
+    "has_prev": "bool",
+    "page": "number",
+    "pages": "number",
+    "per_page": "number",
+    "total": "number"
+  },
+  "transactions": [
+    {
+      "created_at": "str",
+      "created_by": "null",
+      "created_by_username": "null",
+      "id": "number",
+      "inventory_id": "number",
+      "inventory_name": "str",
+      "inventory_part_number": "str",
+      "new_quantity": "number",
+      "notes": "str",
+      "previous_quantity": "number",
+      "quantity": "number",
+      "reference_description": "str",
+      "repair_order_id": "number",
+      "transaction_type": "str"
+    }
+  ]
+}

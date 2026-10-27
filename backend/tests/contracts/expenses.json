@@ -1,0 +1,12 @@
+[
+  {
+    "amount": "number",
+    "category": "str",
+    "created_at": "str",
+    "date": "str",
+    "description": "str",
+    "id": "number",
+    "notes": "str",
+    "updated_at": "str"
+  }
+]

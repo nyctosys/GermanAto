@@ -1,0 +1,10 @@
+{
+  "categories": [
+    {
+      "category": "str",
+      "count": "number"
+    }
+  ],
+  "low_stock_items": "number",
+  "total_items": "number"
+}

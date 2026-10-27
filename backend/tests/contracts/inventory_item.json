@@ -1,0 +1,21 @@
+{
+  "adjustments_quantity": "number",
+  "barcode": "str",
+  "category": "str",
+  "closing_quantity": "number",
+  "created_at": "str",
+  "description": "null",
+  "id": "number",
+  "image_path": "null",
+  "location": "null",
+  "manufacturer_part_number": "null",
+  "movement_date": "str",
+  "name": "str",
+  "opening_quantity": "number",
+  "part_number": "str",
+  "purchases_quantity": "number",
+  "quantity": "number",
+  "reorder_level": "number",
+  "sales_quantity": "number",
+  "updated_at": "str"
+}

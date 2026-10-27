@@ -1,0 +1,11 @@
+{
+  "month_records": "number",
+  "month_total": "number",
+  "payment_method_totals": {
+    "Cash": "number"
+  },
+  "today_records": "number",
+  "today_total": "number",
+  "total_amount": "number",
+  "total_records": "number"
+}

@@ -1,0 +1,20 @@
+{
+  "attendance": [
+    {
+      "check_in_time": "str",
+      "check_out_time": "str",
+      "created_at": "str",
+      "date": "str",
+      "employee_id": "str",
+      "id": "number",
+      "notes": "null",
+      "source": "str",
+      "updated_at": "str",
+      "work_hours": "number",
+      "worker_id": "number",
+      "worker_name": "str",
+      "zkteco_device_id": "null"
+    }
+  ],
+  "total": "number"
+}

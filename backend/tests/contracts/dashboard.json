@@ -1,0 +1,77 @@
+{
+  "generated_at": "str",
+  "role": "str",
+  "sections": {
+    "expenses": {
+      "month_total": "number",
+      "today_total": "number"
+    },
+    "insights": {
+      "expenses_daily": [
+        {
+          "date": "str",
+          "total": "number"
+        }
+      ],
+      "expenses_month": "number",
+      "profit_month": "number",
+      "receivables": "number",
+      "sales_daily": [
+        {
+          "date": "str",
+          "total": "number"
+        }
+      ],
+      "sales_month": "number"
+    },
+    "inventory": {
+      "items": [],
+      "low_stock_count": "number"
+    },
+    "invoices": {
+      "oldest": [
+        {
+          "created_at": "str",
+          "customer_name": "str",
+          "id": "number",
+          "owed": "number"
+        }
+      ],
+      "unpaid_count": "number",
+      "unpaid_total": "number"
+    },
+    "quotes": {
+      "items": [
+        {
+          "created_at": "str",
+          "customer_name": "str",
+          "id": "number",
+          "quote_number": "str",
+          "status": "str",
+          "total_amount": "number"
+        }
+      ],
+      "pending_count": "number",
+      "pending_value": "number"
+    },
+    "repairs": {
+      "by_status": {
+        "received": "number"
+      },
+      "completed_today": "number",
+      "items": [
+        {
+          "created_at": "str",
+          "customer_name": "str",
+          "customer_phone": "str",
+          "id": "number",
+          "problem_description": "str",
+          "status": "str",
+          "updated_at": "str"
+        }
+      ],
+      "open_count": "number"
+    }
+  },
+  "unavailable": []
+}

@@ -1,0 +1,45 @@
+{
+  "blocked_count": "number",
+  "month": "number",
+  "payable_count": "number",
+  "total_advances": "number",
+  "total_earned": "number",
+  "total_to_hand_over": "number",
+  "workers": [
+    {
+      "advances": [
+        {
+          "amount": "number",
+          "created_at": "str",
+          "created_by": "str",
+          "date": "str",
+          "employee_id": "str",
+          "id": "number",
+          "notes": "null",
+          "payment_method": "str",
+          "worker_id": "number",
+          "worker_name": "str"
+        }
+      ],
+      "advances_total": "number",
+      "already_paid": "bool",
+      "base_salary": "number",
+      "blocked": "null",
+      "daily_rate": "number",
+      "days_worked": "number",
+      "department": "str",
+      "earned_salary": "number",
+      "employee_id": "str",
+      "incomplete_dates": [],
+      "incomplete_records_count": "number",
+      "name": "str",
+      "net_salary": "number",
+      "overdrawn": "bool",
+      "position": "str",
+      "requires_manual_review": "bool",
+      "total_hours": "number",
+      "worker_id": "number"
+    }
+  ],
+  "year": "number"
+}

@@ -1,0 +1,13 @@
+{
+  "recent_notifications": "number",
+  "success_rate": "number",
+  "total_delivered": "number",
+  "total_failed": "number",
+  "total_notifications": "number",
+  "total_pending": "number",
+  "total_sent": "number",
+  "type_breakdown": {
+    "invoice": "number",
+    "quote": "number"
+  }
+}

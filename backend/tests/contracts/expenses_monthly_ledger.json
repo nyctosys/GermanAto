@@ -1,0 +1,54 @@
+{
+  "closing_balance": "number",
+  "daily_ledger": [
+    {
+      "closing_balance": "number",
+      "date": "str",
+      "entry_count": "number",
+      "inflow": "number",
+      "opening_balance": "number",
+      "outflow": "number"
+    }
+  ],
+  "days": "number",
+  "details": [
+    {
+      "amount": "number",
+      "balance": "number",
+      "bucket": "str",
+      "date": "str",
+      "description": "str",
+      "id": "str",
+      "invoice_id": "null",
+      "notes": "str",
+      "record_id": "number",
+      "type": "str"
+    }
+  ],
+  "end_date": "str",
+  "entry_count": "number",
+  "expense_breakdown": [
+    {
+      "bucket": "str",
+      "count": "number",
+      "total": "number"
+    }
+  ],
+  "income_breakdown": [
+    {
+      "bucket": "str",
+      "count": "number",
+      "total": "number"
+    }
+  ],
+  "initial_balance": "number",
+  "invoice_settlements": {
+    "count": "number",
+    "total": "number"
+  },
+  "month": "str",
+  "net_change": "number",
+  "start_date": "str",
+  "total_in": "number",
+  "total_out": "number"
+}

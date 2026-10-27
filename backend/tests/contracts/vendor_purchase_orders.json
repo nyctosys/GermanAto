@@ -1,0 +1,17 @@
+[
+  {
+    "amount": "number",
+    "created_at": "str",
+    "created_by_user": "str",
+    "date": "str",
+    "id": "number",
+    "invoice_no": "str",
+    "item_name": "str",
+    "quantity": "number",
+    "rate": "number",
+    "remarks": "null",
+    "status": "str",
+    "updated_at": "str",
+    "vendor_id": "number"
+  }
+]

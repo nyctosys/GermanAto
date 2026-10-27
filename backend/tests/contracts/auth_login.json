@@ -1,0 +1,11 @@
+{
+  "access_token": "str",
+  "message": "str",
+  "refresh_token": "str",
+  "user": {
+    "email": "str",
+    "id": "number",
+    "role": "str",
+    "username": "str"
+  }
+}

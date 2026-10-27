@@ -1,0 +1,19 @@
+{
+  "created_at": "str",
+  "created_by": "str",
+  "current_status": "str",
+  "customer_name": "str",
+  "document_id": "number",
+  "entries": [
+    {
+      "action": "str",
+      "details": "str",
+      "ip_address": "str",
+      "user": "str",
+      "when": "str"
+    }
+  ],
+  "kind": "str",
+  "payments": [],
+  "reference": "str"
+}

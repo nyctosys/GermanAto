@@ -1,0 +1,13 @@
+{
+  "count": "number",
+  "departments": [
+    {
+      "created_at": "str",
+      "description": "null",
+      "id": "number",
+      "is_active": "bool",
+      "name": "str",
+      "updated_at": "str"
+    }
+  ]
+}

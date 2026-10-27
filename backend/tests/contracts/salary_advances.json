@@ -1,0 +1,18 @@
+{
+  "advances": [
+    {
+      "amount": "number",
+      "created_at": "str",
+      "created_by": "str",
+      "date": "str",
+      "employee_id": "str",
+      "id": "number",
+      "notes": "null",
+      "payment_method": "str",
+      "worker_id": "number",
+      "worker_name": "str"
+    }
+  ],
+  "count": "number",
+  "total": "number"
+}

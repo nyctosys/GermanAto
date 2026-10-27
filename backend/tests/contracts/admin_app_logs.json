@@ -1,0 +1,18 @@
+{
+  "current_page": "number",
+  "logs": [
+    {
+      "action": "str",
+      "created_at": "str",
+      "details": "str",
+      "id": "number",
+      "ip_address": "str",
+      "module": "str",
+      "reference_id": "number",
+      "user_id": "number",
+      "username": "str"
+    }
+  ],
+  "pages": "number",
+  "total": "number"
+}

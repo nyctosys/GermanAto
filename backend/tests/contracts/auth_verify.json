@@ -1,0 +1,9 @@
+{
+  "authenticated": "bool",
+  "user": {
+    "email": "str",
+    "id": "number",
+    "role": "str",
+    "username": "str"
+  }
+}

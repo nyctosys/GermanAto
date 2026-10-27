@@ -1,0 +1,6 @@
+{
+  "permissions": [
+    "str"
+  ],
+  "role": "str"
+}

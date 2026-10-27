@@ -1,0 +1,11 @@
+[
+  {
+    "address": "str",
+    "code": "str",
+    "created_at": "str",
+    "id": "number",
+    "name": "str",
+    "phone": "str",
+    "updated_at": "str"
+  }
+]

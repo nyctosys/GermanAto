@@ -1,0 +1,11 @@
+[
+  {
+    "created_at": "str",
+    "email": "str",
+    "id": "number",
+    "is_active": "bool",
+    "last_login": "str",
+    "role": "str",
+    "username": "str"
+  }
+]

@@ -1,0 +1,46 @@
+{
+  "advance": "number",
+  "balance": "number",
+  "car_id": "number",
+  "created_at": "str",
+  "created_by_user": "str",
+  "customer_address": "str",
+  "customer_chasis": "str",
+  "customer_code": "str",
+  "customer_color": "str",
+  "customer_id": "number",
+  "customer_made": "str",
+  "customer_mileage": "str",
+  "customer_name": "str",
+  "customer_phone": "str",
+  "customer_reg_no": "str",
+  "customer_vin": "null",
+  "discount": "number",
+  "id": "number",
+  "include_tax": "bool",
+  "items": [
+    {
+      "id": "number",
+      "part_number": "str",
+      "price": "number",
+      "product_name": "str",
+      "quantity": "number"
+    }
+  ],
+  "labours": [
+    {
+      "description": "str",
+      "id": "number",
+      "price": "number"
+    }
+  ],
+  "net_total": "number",
+  "paid_amount": "number",
+  "payments_history": [],
+  "status": "str",
+  "tax_amount": "number",
+  "total": "number",
+  "type_of": "str",
+  "updated_at": "str",
+  "updated_by_user": "null"
+}

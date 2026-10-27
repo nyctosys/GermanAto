@@ -1,0 +1,40 @@
+{
+  "notifications": [
+    {
+      "created_at": "str",
+      "customer_name": "str",
+      "customer_phone": "str",
+      "delivered_at": "null",
+      "error_message": "null",
+      "id": "number",
+      "message_content": "str",
+      "notification_type": "str",
+      "related_document_id": "number",
+      "related_document_type": "str",
+      "sent_at": "null",
+      "status": "str",
+      "whatsapp_message_id": "str"
+    }
+  ],
+  "pagination": {
+    "has_next": "bool",
+    "has_prev": "bool",
+    "page": "number",
+    "pages": "number",
+    "per_page": "number",
+    "total": "number"
+  },
+  "stats": {
+    "recent_notifications": "number",
+    "success_rate": "number",
+    "total_delivered": "number",
+    "total_failed": "number",
+    "total_notifications": "number",
+    "total_pending": "number",
+    "total_sent": "number",
+    "type_breakdown": {
+      "invoice": "number",
+      "quote": "number"
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "advance_notes": "str",
+  "advances": [
+    {
+      "amount": "number",
+      "created_at": "str",
+      "created_by": "str",
+      "date": "str",
+      "employee_id": "str",
+      "id": "number",
+      "notes": "null",
+      "payment_method": "str",
+      "worker_id": "number",
+      "worker_name": "str"
+    }
+  ],
+  "advances_total": "number",
+  "already_paid": "bool",
+  "base_salary": "number",
+  "bonuses": "number",
+  "daily_rate": "number",
+  "days_worked": "number",
+  "deductions": "number",
+  "department": "str",
+  "earned_salary": "number",
+  "employee_id": "str",
+  "first_name": "str",
+  "incomplete_dates": [],
+  "incomplete_records_count": "number",
+  "last_name": "str",
+  "month": "number",
+  "name": "str",
+  "net_salary": "number",
+  "overdrawn": "bool",
+  "paid_on": "null",
+  "position": "str",
+  "requires_manual_review": "bool",
+  "review_notes": "null",
+  "total_hours": "number",
+  "worker_id": "number",
+  "year": "number"
+}

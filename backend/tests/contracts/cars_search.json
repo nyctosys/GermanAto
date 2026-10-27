@@ -1,0 +1,19 @@
+{
+  "count": "number",
+  "query": "str",
+  "results": [
+    {
+      "created_at": "str",
+      "customer_code": "str",
+      "customer_id": "number",
+      "customer_name": "str",
+      "customer_phone": "str",
+      "id": "number",
+      "make": "str",
+      "mileage": "str",
+      "model": "str",
+      "plate_no": "str",
+      "updated_at": "str"
+    }
+  ]
+}

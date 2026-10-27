@@ -1,0 +1,11 @@
+{
+  "days_worked": "number",
+  "incomplete_dates": [],
+  "incomplete_records_count": "number",
+  "month": "number",
+  "records_count": "number",
+  "requires_manual_review": "bool",
+  "total_hours": "number",
+  "worker_id": "number",
+  "year": "number"
+}

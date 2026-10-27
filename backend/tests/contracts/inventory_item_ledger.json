@@ -1,0 +1,50 @@
+{
+  "daily_rows": [
+    {
+      "adjustments_quantity": "number",
+      "closing": "number",
+      "date": "str",
+      "in_quantity": "number",
+      "opening": "number",
+      "out_quantity": "number"
+    }
+  ],
+  "item": {
+    "adjustments_quantity": "number",
+    "barcode": "str",
+    "category": "str",
+    "closing_quantity": "number",
+    "created_at": "str",
+    "description": "null",
+    "id": "number",
+    "image_path": "null",
+    "location": "null",
+    "manufacturer_part_number": "null",
+    "movement_date": "str",
+    "name": "str",
+    "opening_quantity": "number",
+    "part_number": "str",
+    "purchases_quantity": "number",
+    "quantity": "number",
+    "reorder_level": "number",
+    "sales_quantity": "number",
+    "updated_at": "str"
+  },
+  "movement_date": "str",
+  "transactions": [
+    {
+      "date": "str",
+      "datetime": "str",
+      "id": "number",
+      "in_quantity": "number",
+      "new_quantity": "number",
+      "notes": "str",
+      "out_quantity": "number",
+      "previous_quantity": "number",
+      "quantity": "number",
+      "reference_description": "str",
+      "repair_order_id": "number",
+      "transaction_type": "str"
+    }
+  ]
+}

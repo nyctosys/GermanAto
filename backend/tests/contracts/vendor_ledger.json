@@ -1,0 +1,16 @@
+[
+  {
+    "attachment_path": "null",
+    "balance": "number",
+    "created_at": "str",
+    "created_by_user": "str",
+    "credit": "number",
+    "date": "str",
+    "debit": "number",
+    "description": "str",
+    "folio": "null",
+    "id": "number",
+    "payment_notes": "null",
+    "vendor_id": "number"
+  }
+]

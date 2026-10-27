@@ -1,0 +1,12 @@
+{
+  "address": "str",
+  "cnic": "null",
+  "company_name": "str",
+  "contact_person": "str",
+  "created_at": "str",
+  "email": "null",
+  "id": "number",
+  "name": "str",
+  "phone": "str",
+  "updated_at": "str"
+}

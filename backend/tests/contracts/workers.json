@@ -1,0 +1,26 @@
+{
+  "total": "number",
+  "workers": [
+    {
+      "address": "str",
+      "cnic": "str",
+      "created_at": "str",
+      "date_of_birth": "str",
+      "department": "str",
+      "email": "null",
+      "emergency_contact_name": "null",
+      "emergency_contact_phone": "null",
+      "employee_id": "str",
+      "first_name": "str",
+      "hire_date": "str",
+      "id": "number",
+      "last_name": "str",
+      "notes": "null",
+      "phone": "str",
+      "position": "str",
+      "salary": "number",
+      "status": "str",
+      "updated_at": "str"
+    }
+  ]
+}
