@@ -60,6 +60,29 @@
   --font-body: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* A whole row that is a link carries a chevron on its right edge, so it reads as pressable. */
+.row-link {
+  position: relative;
+}
+.row-link::after {
+  content: "";
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: translateY(-50%) rotate(45deg);
+  opacity: 0.5;
+  pointer-events: none;
+}
+@media (min-width: 60rem) {
+  .row-link::after {
+    right: 1.25rem;
+  }
+}
+
 @layer base {
   html,
   body {
@@ -69,6 +92,18 @@
      the screen instead of letting its rows wrap (and body clips the excess). */
   fieldset {
     min-width: 0;
+  }
+
+  /* Tailwind's reset gives buttons the default arrow; anything you can press shows the pointing hand. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="radio"],
+  [role="option"],
+  summary,
+  select:not(:disabled),
+  label:has(> input[type="checkbox"]:not(:disabled)),
+  label:has(> input[type="file"]) {
+    cursor: pointer;
   }
   html {
     scrollbar-color: var(--color-rule-strong) var(--color-paper);

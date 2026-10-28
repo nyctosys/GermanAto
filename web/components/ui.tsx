@@ -10,7 +10,8 @@ const buttonVariants = {
   primary: "border-accent bg-accent text-accent-ink hover:bg-accent-2 hover:border-accent-2 active:bg-accent-3 active:border-accent-3",
   secondary: "border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3",
   danger: "border-error bg-surface text-error hover:bg-error-soft active:bg-error-soft",
-  ghost: "border-transparent bg-transparent text-ink-2 hover:bg-paper-3 active:bg-paper-3",
+  // A quiet button, but still a visible one: a filled pill, never bare text that could be a label.
+  ghost: "border-transparent bg-paper-3 text-ink hover:bg-silver active:bg-silver",
 };
 
 export function Button({ variant = "primary", className = "", ...props }:

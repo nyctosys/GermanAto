@@ -21,7 +21,7 @@ function Doc() {
   const v = d.data.visit, g = d.data.gate_pass, inv = d.data.invoices.find((i: Any) => i.status === "issued");
   if (!g) return <p className="p-8">This car hasn&apos;t been released yet.</p>;
   return (
-    <div className="mx-auto max-w-[148mm] px-[10mm] py-[8mm] text-[12px] leading-snug print:p-0">
+    <div className="mx-auto max-w-[148mm] px-4 py-4 sm:px-[10mm] sm:py-[8mm] text-[12px] leading-snug print:p-0">
       <PrintBar />
       <Letterhead branch={branch.data} title="GATE PASS" right={<><p>Visit <b>{v.number}</b></p><p>{when(g.at)}</p></>} />
       <table className="mb-6 w-full border-collapse"><tbody>

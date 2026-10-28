@@ -36,7 +36,7 @@ function Cars() {
             <ul>
               {list.data.map((c) => (
                 <li key={c.id} className="border-t border-rule first:border-t-0">
-                  <Link href={`/cars/${c.id}`} className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-3 hover:bg-paper-2 shell:px-5">
+                  <Link href={`/cars/${c.id}`} className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-3 row-link pr-10 shell:pr-12 hover:bg-paper-2 shell:px-5">
                     <span className="flex min-w-0 items-center gap-4">
                       <Plate plate={c.plate} small />
                       <span className="min-w-0">

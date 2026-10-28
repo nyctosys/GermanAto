@@ -73,13 +73,13 @@ function VisitDetail() {
             <h1>{carTitle(v.car)}</h1>
             <p className="text-muted">
               <Link href={`/customers/${v.customer.id}`} className="underline">{v.customer.name}</Link>
-              <a href={`tel:${v.customer.phone}`} className="num ml-3">{phone(v.customer.phone)}</a>
+              <a href={`tel:${v.customer.phone}`} className="num ml-3 underline">{phone(v.customer.phone)}</a>
             </p>
           </div>
         </div>
-        <div className="text-right">
+        <div className="flex flex-col items-start gap-1.5 sm:items-end">
           <p className="font-medium">{v.number}</p>
-          <Link href={`/print/visits/${v.id}`} target="_blank" className="mb-1 block text-sm underline">Print visit record</Link>
+          <Link href={`/print/visits/${v.id}`} target="_blank" className="text-sm underline">Print visit record</Link>
           {open ? <Badge tone="accent">In the workshop {elapsed(v.checked_in_at)}</Badge>
             : v.status === "cancelled" ? <Badge>Cancelled</Badge> : <Badge tone="success">Delivered</Badge>}
         </div>
@@ -92,7 +92,7 @@ function VisitDetail() {
               <ul>
                 {v.inspections.map((i) => (
                   <li key={i.id} className="border-t border-rule first:border-t-0">
-                    <Link href={`/inspections/${i.id}`} className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-paper-2 shell:px-5">
+                    <Link href={`/inspections/${i.id}`} className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3 row-link pr-10 shell:pr-12 hover:bg-paper-2 shell:px-5">
                       <span>
                         <span className="block font-medium">{KIND[i.kind]}</span>
                         <span className="block text-sm text-muted">{i.number}{i.supersedes_id ? ", a revision" : ""}</span>
@@ -209,7 +209,7 @@ function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => voi
       <ul>
         <li>
           {v.job_card ? (
-            <Link href={`/job-cards/${v.job_card.id}`} className={`${row} hover:bg-paper-2`}>
+            <Link href={`/job-cards/${v.job_card.id}`} className={`${row} row-link pr-10 shell:pr-12 hover:bg-paper-2`}>
               <span><span className="block font-medium">Job card</span><span className="block text-sm text-muted">{v.job_card.number}, {v.job_card.lines} {v.job_card.lines === 1 ? "line" : "lines"}</span></span>
             </Link>
           ) : (
@@ -221,7 +221,7 @@ function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => voi
         </li>
         <li>
           {quote ? (
-            <Link href={`/quotations/${quote.id}`} className={`${row} hover:bg-paper-2`}>
+            <Link href={`/quotations/${quote.id}`} className={`${row} row-link pr-10 shell:pr-12 hover:bg-paper-2`}>
               <span><span className="block font-medium">Quotation</span><span className="block text-sm text-muted">{quote.number}{quote.revision > 1 ? `, revision ${quote.revision}` : ""}</span></span>
               <QuoteBadge status={quote.expired ? "expired" : quote.status as QuoteStatus} />
             </Link>
@@ -234,7 +234,7 @@ function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => voi
         )}
         <li>
           {v.repair_order ? (
-            <Link href={`/repair-orders/${v.repair_order.id}`} className={`${row} hover:bg-paper-2`}>
+            <Link href={`/repair-orders/${v.repair_order.id}`} className={`${row} row-link pr-10 shell:pr-12 hover:bg-paper-2`}>
               <span><span className="block font-medium">Repair order</span><span className="block text-sm text-muted">{v.repair_order.number}</span></span>
               <RoBadge status={v.repair_order.status} />
             </Link>
@@ -244,7 +244,7 @@ function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => voi
         </li>
         <li>
           {v.invoice ? (
-            <Link href={`/invoices/${v.invoice.id}`} className={`${row} hover:bg-paper-2`}>
+            <Link href={`/invoices/${v.invoice.id}`} className={`${row} row-link pr-10 shell:pr-12 hover:bg-paper-2`}>
               <span><span className="block font-medium">Invoice</span><span className="block text-sm text-muted">{v.invoice.number}</span></span>
               <Badge tone={v.invoice.status === "issued" ? "success" : "warning"}>{v.invoice.status === "issued" ? "Issued" : "Draft"}</Badge>
             </Link>

@@ -24,7 +24,7 @@ function Quote() {
   const lines = q.lines.filter((l: Any) => !l.declined);
 
   return (
-    <div className="mx-auto max-w-[210mm] px-[12mm] py-[10mm] text-[12px] leading-snug print:p-0">
+    <div className="mx-auto max-w-[210mm] px-4 py-4 sm:px-[12mm] sm:py-[10mm] text-[12px] leading-snug print:p-0">
       <div className="no-print mb-4 flex gap-2">
         <button onClick={() => window.print()} className="min-h-11 rounded-control bg-accent px-4 font-medium text-accent-ink">Print or save as PDF</button>
         {q.status === "draft" && <p className="self-center text-error">Draft: prices may still change.</p>}

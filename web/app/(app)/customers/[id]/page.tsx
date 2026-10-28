@@ -78,7 +78,7 @@ function CustomerDetail() {
             <ul>
               {[...current, ...past].map((c) => (
                 <li key={`${c.id}-${c.since}`} className="border-t border-rule first:border-t-0">
-                  <Link href={`/cars/${c.id}`} className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 hover:bg-paper-2 shell:px-5">
+                  <Link href={`/cars/${c.id}`} className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 row-link pr-10 shell:pr-12 hover:bg-paper-2 shell:px-5">
                     <span>
                       <span className="block font-medium">{c.plate || "No plate"}</span>
                       <span className="block text-sm text-muted">{carTitle(c)}</span>

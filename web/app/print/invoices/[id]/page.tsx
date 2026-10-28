@@ -30,7 +30,7 @@ function A4({ inv, b }: { inv: Invoice; b: Branch }) {
   const t = inv.totals, who = billTo(inv);
   const title = "INVOICE";
   return (
-    <div className="mx-auto max-w-[210mm] px-[12mm] py-[10mm] text-[12px] leading-snug print:p-0">
+    <div className="mx-auto max-w-[210mm] px-4 py-4 sm:px-[12mm] sm:py-[10mm] text-[12px] leading-snug print:p-0">
       <PrintBar>{inv.status !== "issued" && <p className="text-error">Draft: not issued yet.</p>}</PrintBar>
       <Letterhead branch={b} title={title} right={<><p>No. <b>{inv.number}</b></p>{inv.kind === "counter_sale" && <p>Counter sale</p>}<p>Date {day(inv.issued_at ?? inv.created_at)}</p>{inv.visit && <p>Visit {inv.visit.number}</p>}</>} />
       <section className="mb-4 grid grid-cols-2 gap-6">

@@ -76,7 +76,7 @@ A workshop tool that gets out of the way. Surfaces are white on a light ash floo
 |---|---|
 | Primary button | GermanATO Red, white text, 500, 4px radius, min-height 44px, padding 0 20px. Hover Red Hover; pressed Hexagon Oxblood, shown instantly. Disabled: 55% opacity. |
 | Secondary button | White, Carbon text, 1px Silver Fog border, same size. Hover Light Ash. |
-| Ghost button | Transparent, Graphite text. Hover Light Ash. |
+| Ghost button | Cloud Gray fill, Carbon text, no border. Hover Car Silver. A quiet action, but always a visible pill: bare text is reserved for links, which are underlined. |
 | Inputs and selects | White, 1px Silver Fog border, 4px radius, min-height 44px, 16px text. Focus: Carbon border plus focus ring. Invalid: error border plus a message under the field. |
 | Panels (cards) | White on the Light Ash page, 12px radius, **no border, no shadow**. Header separated from the body by a Cloud Gray rule. |
 | Tables | Pewter 14px heads in sentence case, Cloud Gray row rules, rows at least 48px. Under 640px each row becomes a labelled stack. |
@@ -100,6 +100,13 @@ A workshop tool that gets out of the way. Surfaces are white on a light ash floo
 | 0 | Flat | Everything |
 | 1 | Translucent white (`rgba(255,255,255,0.85)` + blur) | Sticky phone top bar and sticky section nav |
 | 2 | Scrim `rgba(23,23,23,0.4)` | Behind the drawer |
+
+## 6b. Pressable things look pressable
+
+- **Buttons** are filled or outlined pills (primary red, secondary white with a border, ghost Cloud Gray). Bare text is never a button.
+- **Text links** are underlined.
+- **A whole row that is a link** (lists of customers, cars, the steps of a job) carries a chevron on its right edge.
+- **Every enabled control shows the pointing hand** on a pointer device; disabled ones show the not-allowed cursor.
 
 ## 7. Do and don't
 

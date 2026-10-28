@@ -32,7 +32,7 @@ function Dossier() {
                   ...quotations.filter((q: Any) => q.approval?.proof_url).map((q: Any) => ({ label: `Approval of ${q.number} rev ${q.revision}`, url: q.approval.proof_url }))];
 
   return (
-    <div className="mx-auto max-w-[210mm] px-[12mm] py-[10mm] text-[11px] leading-snug print:p-0">
+    <div className="mx-auto max-w-[210mm] px-4 py-4 sm:px-[12mm] sm:py-[10mm] text-[11px] leading-snug print:p-0">
       <PrintBar><p className="text-muted">Internal record: includes notes the customer doesn&apos;t see.</p></PrintBar>
       <Letterhead branch={branch.data} title="VISIT RECORD" right={<><p>Visit <b>{v.number}</b></p><p>In {when(v.checked_in_at)}</p>{g && <p>Out {when(g.at)}</p>}</>} />
 

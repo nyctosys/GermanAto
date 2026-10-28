@@ -66,7 +66,7 @@ function CarDetail() {
         <div className="space-y-4">
           <Card title="Owner">
             {c.owner ? (
-              <Link href={`/customers/${c.owner.id}`} className="flex min-h-11 flex-col justify-center rounded-control hover:bg-paper-2">
+              <Link href={`/customers/${c.owner.id}`} className="flex min-h-11 flex-col justify-center rounded-control row-link pr-8 hover:bg-paper-2">
                 <span className="font-medium underline">{c.owner.name}</span>
                 <span className="flex gap-3 text-sm text-muted"><span>{c.owner.number}</span><span className="num">{phone(c.owner.phone)}</span></span>
               </Link>

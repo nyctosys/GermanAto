@@ -20,12 +20,16 @@ PERMISSIONS: dict[str, str] = {
     "invoice-issue": "Issue invoices (locks the prices)",
     "payments-in": "Record money received",
     "release-on-credit": "Let a car leave with an unpaid balance",
-    # Later phases add their own here (payments-out, purchasing, ...).
+    "vendors": "Add and edit vendors, see what is owed to them",
+    "purchasing": "Write and send purchase orders, record vendor bills",
+    "goods-receipt": "Receive stock against a purchase order",
+    "payments-out": "Pay vendors (money out)",
+    # Later phases add their own here (expenses, hr, payroll, ...).
 }
 
 DEFAULT_ROLES: dict[str, dict] = {
     "Admin": {"is_admin": True, "permissions": []},
-    "Accountant": {"is_admin": False, "permissions": ["dashboard", "attachments", "audit", "customers"]},
+    "Accountant": {"is_admin": False, "permissions": ["dashboard", "attachments", "audit", "customers", "vendors", "payments-out"]},
     "Inventory manager": {"is_admin": False, "permissions": ["dashboard", "attachments", "inventory", "stock-adjust",
-                                                            "labour-codes"]},
+                                                            "labour-codes", "vendors", "purchasing", "goods-receipt"]},
 }

@@ -50,7 +50,7 @@ function Customers() {
             <ul>
               {list.data.map((c) => (
                 <li key={c.id} className="border-t border-rule first:border-t-0">
-                  <Link href={`/customers/${c.id}`} className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-3 hover:bg-paper-2 shell:px-5">
+                  <Link href={`/customers/${c.id}`} className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-3 row-link pr-10 shell:pr-12 hover:bg-paper-2 shell:px-5">
                     <span className="min-w-0">
                       <span className="block font-medium">{c.name}{!c.is_active && <span className="ml-2 text-sm text-muted">inactive</span>}</span>
                       <span className="block text-sm text-muted">{c.number}</span>

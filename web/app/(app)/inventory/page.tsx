@@ -64,7 +64,7 @@ function Inventory() {
                 {list.data.map((i) => (
                   <tr key={i.id} className="cursor-pointer border-t border-rule first:border-t-0 hover:bg-paper-2" onClick={() => router.push(`/inventory/${i.id}`)}>
                     <td className="px-5 py-3 max-sm:px-0">
-                      <Link href={`/inventory/${i.id}`} className="block font-medium" onClick={(e) => e.stopPropagation()}>{i.name}</Link>
+                      <Link href={`/inventory/${i.id}`} className="block font-medium underline" onClick={(e) => e.stopPropagation()}>{i.name}</Link>
                       <span className="num block text-sm text-muted">{[i.brand, i.codes[0]?.code].filter(Boolean).join(", ")}</span>
                     </td>
                     <td data-label="Shelf" className="px-3 py-3 max-sm:px-0">{i.location || <span className="text-muted">None</span>}</td>

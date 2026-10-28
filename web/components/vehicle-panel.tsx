@@ -91,7 +91,7 @@ function PersonRow({ label, p, onEdit }: { label: string; p: Person; onEdit?: ()
         <p className="font-medium">{p.id ? <Link href={`/customers/${p.id}`} className="underline">{p.name}</Link> : p.name}</p>
         <p className="flex flex-wrap gap-3 text-sm text-muted">
           <span>{p.number}</span>
-          {p.phone && <a href={`tel:${p.phone}`} className="num">{phone(p.phone)}</a>}
+          {p.phone && <a href={`tel:${p.phone}`} className="num underline">{phone(p.phone)}</a>}
         </p>
       </div>
       {onEdit && <Button variant="ghost" onClick={onEdit}>Edit</Button>}

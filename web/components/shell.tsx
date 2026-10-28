@@ -9,7 +9,11 @@ import { useSession } from "@/lib/session";
 
 // One list drives the navigation; an entry shows only if the user holds its
 // permission (the API enforces the same permission on the data).
-const NAV: { section: string; items: { href: string; label: string; permission: string }[] }[] = [
+/** A nav item or page needs one permission, or any of a list. */
+type Needs = string | string[];
+export const PURCHASING: string[] = ["vendors", "purchasing", "goods-receipt", "payments-out"];
+
+const NAV: { section: string; items: { href: string; label: string; permission: Needs }[] }[] = [
   {
     section: "Workshop",
     items: [
@@ -27,6 +31,14 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
     items: [
       { href: "/inventory", label: "Inventory", permission: "inventory" },
       { href: "/labour-codes", label: "Labour codes", permission: "dashboard" },
+    ],
+  },
+  {
+    section: "Purchasing",
+    items: [
+      { href: "/vendors", label: "Vendors", permission: PURCHASING },
+      { href: "/purchase-orders", label: "Purchase orders", permission: PURCHASING },
+      { href: "/bills", label: "Bills and payments", permission: PURCHASING },
     ],
   },
   {
@@ -91,7 +103,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {NAV.map(({ section, items }) => {
-        const visible = items.filter((i) => session.can(i.permission));
+        const visible = items.filter((i) => [i.permission].flat().some((p) => session.can(p)));
         if (!visible.length) return null;
         return (
           <div key={section}>
@@ -206,13 +218,14 @@ export function Shell({ children }: { children: ReactNode }) {
 }
 
 /** Wrap a page that needs a permission; the API refuses the data anyway. */
-export function RequirePermission({ permission, children }: { permission: string; children: ReactNode }) {
+export function RequirePermission({ permission, children }: { permission: Needs; children: ReactNode }) {
   const session = useSession();
-  if (!session.can(permission)) {
+  const needs = [permission].flat();
+  if (!needs.some((p) => session.can(p))) {
     return (
       <div className="rounded-card bg-surface p-6">
         <p className="font-medium">You don&apos;t have access to this page</p>
-        <p className="mt-1 text-muted">Ask an administrator to add the “{permission}” permission to your role.</p>
+        <p className="mt-1 text-muted">Ask an administrator to add the “{needs[0]}” permission to your role.</p>
       </div>
     );
   }

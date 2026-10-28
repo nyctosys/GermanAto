@@ -26,7 +26,8 @@ export function ProofInput({ proof, setProof, reason, setReason, error }:
   );
 }
 
-export function PaymentList({ title, payments, footer }: { title: string; payments: Payment[]; footer?: ReactNode }) {
+export function PaymentList({ title, payments, footer, action }:
+  { title: string; payments: Payment[]; footer?: ReactNode; action?: (p: Payment) => ReactNode }) {
   return (
     <Card title={title} flush>
       <ul>
@@ -35,10 +36,14 @@ export function PaymentList({ title, payments, footer }: { title: string; paymen
             <span className="min-w-0">
               <span className="block font-medium">{p.number}{p.kind === "advance" ? ", advance" : ""}</span>
               <span className="block text-sm text-muted">{ACCOUNT[p.account]}{p.reference ? `, ref ${p.reference}` : ""}, {when(p.received_at)}{p.received_by ? `, ${p.received_by}` : ""}</span>
+              {p.status === "voided" && <span className="block text-sm text-error">Voided</span>}
               {p.proof_url ? <a href={p.proof_url} target="_blank" rel="noreferrer" className="text-sm underline">Proof</a>
                 : <span className="block text-sm text-warning">No proof: {p.no_proof_reason}</span>}
             </span>
-            <span className={`num shrink-0 ${p.status === "voided" ? "text-muted line-through" : ""}`}>{money(p.amount)}</span>
+            <span className="flex shrink-0 flex-col items-end gap-1">
+              <span className={`num ${p.status === "voided" ? "text-muted line-through" : ""}`}>{money(p.amount)}</span>
+              {action?.(p)}
+            </span>
           </li>
         ))}
       </ul>

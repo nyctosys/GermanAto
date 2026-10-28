@@ -136,3 +136,30 @@ export const gatePassSchema = z.object({
   note: text(500),
   credit_reason: z.string().trim().max(500).optional().transform((v) => v ?? ""),
 });
+
+// --- purchasing ----------------------------------------------------------------------------------
+
+/** A purchase cost, up to four decimals (per-unit costs of cheap parts). */
+export const unitCost = z.string().trim().refine((v) => /^\d{1,9}(\.\d{1,4})?$/.test(v) && Number(v) > 0, "Enter the cost");
+const signedMoney = z.string().trim().refine((v) => !v || (/^-?\d{1,9}(\.\d{1,2})?$/.test(v) && Number(v) !== 0 || v === "0"), "Enter an amount");
+
+export const vendorSchema = z.object({
+  name,
+  contact_person: text(120),
+  phone: phoneOrEmpty,
+  email,
+  address: text(300),
+  terms_days: optionalInt(0, 365, "Payment terms").transform((v) => v ?? 0),
+  notes: text(),
+});
+
+export const billSchema = z.object({
+  vendor_invoice_no: text(60),
+  bill_date: z.string().min(1, "Required"),
+  due_on: z.string(),
+  adjustment: signedMoney,
+  adjustment_reason: text(200),
+}).superRefine((b, ctx) => {
+  if (Number(b.adjustment || 0) !== 0 && b.adjustment_reason.length < 3) ctx.addIssue({ code: "custom", path: ["adjustment_reason"], message: "Say what it is for (freight, discount)" });
+  if (b.due_on && b.due_on < b.bill_date) ctx.addIssue({ code: "custom", path: ["due_on"], message: "Before the bill date" });
+});

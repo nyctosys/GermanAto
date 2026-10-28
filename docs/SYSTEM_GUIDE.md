@@ -2,7 +2,7 @@
 
 This guide describes the software **as it is built today**, module by module: what each part is for, how to use it, the rules the system enforces, and where it lives. It is updated in the same commit as every change, so it always matches the code. The plan for what comes next is in [NEW_SYSTEM_SPEC.md](NEW_SYSTEM_SPEC.md).
 
-Last updated: 28 Oct 2026, stage 3d (invoices, counter sales, gate pass, visit record).
+Last updated: 28 Oct 2026, Phase 4 (purchasing: vendors, purchase orders, goods received, bills, vendor payments).
 
 ## Contents
 
@@ -26,6 +26,8 @@ Last updated: 28 Oct 2026, stage 3d (invoices, counter sales, gate pass, visit r
 18. [Not built yet](#18-not-built-yet)
 19. [For developers](#19-for-developers)
 
+Purchasing (vendors, purchase orders, goods received, bills and vendor payments) is [section 20](#20-purchasing).
+
 ---
 
 ## 1. What is built
@@ -47,7 +49,8 @@ Last updated: 28 Oct 2026, stage 3d (invoices, counter sales, gate pass, visit r
 | Counter sale (parts over the counter) | Built | New counter sale, printed A4 invoice |
 | Gate pass, with release on credit | Built | Visit page, printed gate pass |
 | Visit record (the whole visit on paper) | Built | Printed visit record |
-| Purchasing, money out, accounts, closing, reports, HR, WhatsApp, offline sync | Not yet | See [section 18](#18-not-built-yet) |
+| Vendors, purchase orders, goods received, vendor bills, vendor payments, vendor account | Built | Vendors, Purchase orders, Bills and payments, printed purchase order |
+| Money out pages, expenses, accounts, closing, reports, HR, WhatsApp, offline sync | Not yet | See [section 18](#18-not-built-yet) |
 
 ---
 
@@ -91,8 +94,14 @@ The visit page shows where the job stands in its **The job** panel: job card, qu
 | `invoice-issue` | Issue invoices (locks the prices) |
 | `payments-in` | Record money received |
 | `release-on-credit` | Let a car leave with an unpaid balance |
+| `vendors` | Add and edit vendors, see what is owed to them |
+| `purchasing` | Write and send purchase orders, record and void vendor bills |
+| `goods-receipt` | Count stock in against a purchase order |
+| `payments-out` | Pay vendors (and void a vendor payment) |
 
-Roles set up at the start: **Admin** (everything), **Accountant**, **Inventory manager**. More roles (front desk, technician, cashier) are made under Roles and permissions.
+Roles set up at the start: **Admin** (everything), **Accountant** (including vendors and paying them), **Inventory manager** (including vendors, purchase orders and receiving stock). More roles (front desk, technician, cashier) are made under Roles and permissions. A role that already exists keeps the permissions it had: tick the four purchasing permissions on it under Roles and permissions to use purchasing.
+
+Purchasing deliberately splits the work: the person who orders and counts the goods in cannot pay the bill, and the person who pays cannot receive stock.
 
 ---
 
@@ -364,6 +373,9 @@ It is an **internal** record and includes notes the customer doesn't see. Every 
 | Reports with drill-down | Phase 7 |
 | Offline branch server and sync | Phase 9 |
 | Dashboard figures | With reports |
+| Returning goods to a vendor (purchase returns), correcting a wrong goods receipt | Phase 5 (with credit notes) |
+| Purchase order sent to the vendor on WhatsApp | Phase 8 |
+| Vendor payments on the Money Out page, with the other money out | Phase 5 |
 
 ---
 
@@ -401,6 +413,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0006 | Job cards, quotations, payments |
 | 0007 | Repair orders and their activity |
 | 0008 | Invoices, gate pass fields, payment links to invoices |
+| 0009 | Vendors, purchase orders, goods receipts, vendor bills, vendor payments |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).
@@ -419,7 +432,79 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Repair order | `POST quotations/{id}/repair-order`, `GET repair-orders`, `GET repair-orders/{id}`, `POST repair-orders/{id}/status`, `POST …/lines`, `PATCH/DELETE …/lines/{line}`, `POST …/lines/{line}/issue`, `…/return`, `POST …/activity`, `GET technicians` |
 | Billing | `POST repair-orders/{id}/invoice`, `POST counter-sales`, `PUT counter-sales/{id}`, `GET invoices`, `GET/PUT invoices/{id}`, `POST invoices/{id}/refresh`, `…/issue`, `…/payments`, `…/void` |
 | Gate and record | `GET visits/{id}/gate-check`, `POST visits/{id}/gate-pass`, `GET visits/{id}/dossier` |
+| Purchasing | `GET/POST vendors`, `GET/PUT vendors/{id}`, `GET purchase-catalog`, `GET/POST purchase-orders`, `GET/PUT purchase-orders/{id}`, `POST purchase-orders/{id}/send`, `…/cancel`, `…/close`, `…/receive`, `POST goods-receipts/{id}/bill`, `GET bills`, `GET bills/{id}`, `POST bills/{id}/payments`, `POST bills/{id}/void`, `POST vendor-payments/{id}/void` |
 
 ### Quality checks run on every stage
 - API tests (`api/tests`), TypeScript, ESLint, and the Hallmark design checker.
 - Each new or changed screen is opened in the browser at **375px (phone), 768px (tablet) and desktop**, and scanned for sideways scrolling, elements past the screen edge, clipped text, content wider than its card and touch targets under 44px.
+
+---
+
+## 20. Purchasing
+
+```
+Vendor ─► Purchase order ─► (send) ─► Goods received ─► Bill ─► Payment
+            draft → sent        count on arrival     what we owe   money out, with proof
+                              stock in + average cost
+```
+
+Prices and stock change **only** through a goods receipt, so the cost of a part is always traceable to a delivery.
+
+### Vendors
+**Where:** Purchasing → Vendors.
+- Name, contact person, phone, email, address, notes, and **days to pay a bill** (sets the due date on each bill; 0 means due at once).
+- A vendor name can't be used twice (capitals ignored). Phones are stored as `+92…`.
+- An inactive vendor can't be put on new orders; its history stays.
+- The vendor page shows **what we owe** and the **account**: every bill and payment, newest first, with the amount owed after each. The account is **worked out from bills and payments every time it is shown; nobody types a balance**, so it cannot drift. Voided entries stay visible, struck through, and don't count.
+
+### Purchase order
+**Where:** Purchasing → Purchase orders → New purchase order (or a vendor's page → New purchase order).
+- Choose the vendor, then add **items already in Inventory**: search by name or number, or **scan a barcode or part number**. An item can only be listed once.
+- Each line has a quantity and the agreed **cost each**. The line shows the stock on hand and the item's average cost, for comparison.
+- **Add everything below its reorder level** fills the list from the items under their reorder level, using each item's reorder quantity (needs the `inventory` permission).
+- **Create this item** (when a search finds nothing and you have `inventory`) opens the item form with the scanned code filled in, then adds the new item to the order.
+- Optional expected date and notes for the vendor.
+- **Send** locks the order. A sent order cannot be edited; to change one, cancel it and make a new one. Print it to hand or send (WhatsApp comes with the messaging stage).
+
+| Status | Meaning |
+|---|---|
+| Draft | Being written |
+| Sent | Locked, waiting for goods |
+| Part received | Some goods have arrived |
+| Received | Everything arrived |
+| Closed early | Part received, and the vendor won't send the rest (reason kept) |
+| Cancelled | Nothing arrived; cancelled with a reason |
+
+Numbers: `PO-A1F3-000001`.
+
+### Goods received (counting stock in)
+**Where:** a sent purchase order → Count the goods in (needs `goods-receipt`).
+- Each line starts at **what is still expected** and the agreed cost. Change the **Arrived** quantity to what you actually counted, and the **cost each** if the vendor charged something different.
+- You can receive **part of an order**; the rest stays expected. Receiving **more than is still expected is refused**.
+- Optional **new sale price** per item. Before you confirm, the screen shows what the **average cost** and the **margin** become.
+- The vendor's delivery note number and the receipt date can be recorded.
+- **Putting the stock in** does three things in one step: adds the quantity to stock, moves the item's **weighted average cost** (for example 10 in stock at 100 plus 10 arriving at 200 gives 20 at 150), and applies the new sale price if you gave one. It can't be undone from this screen.
+- Warnings after a receipt: the average cost is above the sale price, the margin is under 10%, or no sale price is set.
+- Numbers: `GRN-A1F3-000001`.
+
+### Bill
+**Where:** under each delivery on the purchase order → Record the vendor's bill (needs `purchasing`).
+- One bill per delivery. The **goods value comes from the receipt**; the bill date, the **vendor's invoice number**, an optional due date, and an optional **adjustment** (freight as a plus, a discount as a minus, with a reason) are entered.
+- The **same vendor invoice number can't be recorded twice** for a vendor.
+- A blank due date uses the vendor's days to pay.
+- A bill can be **voided** with a reason only while nothing is paid on it; the delivery can then be billed again.
+- Numbers: `BILL-A1F3-000001`.
+
+### Paying a vendor
+**Where:** Purchasing → Bills and payments → a bill → Pay this bill (needs `payments-out`).
+- Any part of the balance can be paid; **more than is owed is refused**.
+- Every payment has the amount, where it came from (**Cash**, **Bank transfer**, **Mobile wallet**), a reference, and **proof** (photo, screenshot or PDF) or a written reason why there is none. A bank or wallet payment also needs its **transaction reference** or a screenshot.
+- A wrong payment is **voided** with a reason: it stays on record, struck through, and the bill owes that money again.
+- Numbers: `VPAY-A1F3-000001`.
+- The **Bills and payments** list shows what is owing, oldest due date first, with an **Overdue** mark, and the total shown.
+
+### Rules
+- Stock only goes up through a goods receipt, and only against a sent order.
+- A purchase order, receipt and bill each keep their number; nothing is deleted.
+- Money paid to vendors is recorded the same way as money received: with proof or a reason.
+- Vendor payments will also appear on the Money Out page when it is built.

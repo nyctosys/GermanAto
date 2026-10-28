@@ -614,3 +614,142 @@ class InvoiceLine(Entity):
     qty: Mapped[Decimal] = mapped_column(Numeric(12, 3))
     unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     in_quote: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+# --- purchasing (spec R3): vendor -> purchase order -> goods received -> bill -> payment ----------
+
+PO_STATUSES = ("draft", "sent", "partly_received", "received", "closed", "cancelled")
+
+
+class Vendor(BranchScoped):
+    __tablename__ = "vendors"
+    __table_args__ = (
+        CheckConstraint("terms_days >= 0 AND terms_days <= 365", name="vendor_terms"),
+        Index("uq_vendor_name", "branch_id", func.lower(text("name")), unique=True),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    name: Mapped[str] = mapped_column(String(120))
+    contact_person: Mapped[str] = mapped_column(String(120), default="")
+    phone: Mapped[str] = mapped_column(String(16), default="")
+    email: Mapped[str] = mapped_column(String(120), default="")
+    address: Mapped[str] = mapped_column(String(300), default="")
+    terms_days: Mapped[int] = mapped_column(Integer, default=0)  # days to pay a bill; sets its due date
+    notes: Mapped[str] = mapped_column(Text, default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class PurchaseOrder(BranchScoped):
+    __tablename__ = "purchase_orders"
+    __table_args__ = (CheckConstraint(f"status IN {PO_STATUSES}", name="po_status"),)
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("vendors.id"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    expected_on: Mapped[date | None] = mapped_column(Date)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_reason: Mapped[str] = mapped_column(Text, default="")  # why it was cancelled or closed early
+
+    lines: Mapped[list["PurchaseOrderLine"]] = relationship(cascade="all, delete-orphan", lazy="selectin",
+                                                            order_by="PurchaseOrderLine.position")
+
+
+class PurchaseOrderLine(Entity):
+    __tablename__ = "purchase_order_lines"
+    __table_args__ = (
+        CheckConstraint("qty > 0", name="po_line_qty"),
+        CheckConstraint("unit_cost > 0", name="po_line_cost"),
+    )
+
+    purchase_order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("purchase_orders.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("items.id"))
+    qty: Mapped[Decimal] = mapped_column(Numeric(12, 3))
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4))  # the agreed cost; received quantity is derived from receipts
+
+
+class GoodsReceipt(BranchScoped):
+    """Stock actually counted on arrival. Posting it puts the stock in and
+    updates the weighted average cost; it is never edited."""
+
+    __tablename__ = "goods_receipts"
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    purchase_order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("purchase_orders.id"), index=True)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("vendors.id"), index=True)
+    received_on: Mapped[date] = mapped_column(Date)
+    supplier_ref: Mapped[str] = mapped_column(String(60), default="")  # the vendor's challan or delivery note number
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+    lines: Mapped[list["GoodsReceiptLine"]] = relationship(cascade="all, delete-orphan", lazy="selectin",
+                                                           order_by="GoodsReceiptLine.position")
+
+
+class GoodsReceiptLine(Entity):
+    __tablename__ = "goods_receipt_lines"
+    __table_args__ = (
+        CheckConstraint("qty > 0", name="grn_line_qty"),
+        CheckConstraint("unit_cost > 0", name="grn_line_cost"),
+    )
+
+    goods_receipt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("goods_receipts.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    po_line_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("purchase_order_lines.id"), index=True)
+    item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("items.id"))
+    qty: Mapped[Decimal] = mapped_column(Numeric(12, 3))
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4))  # what it actually cost; may differ from the PO
+
+
+class VendorBill(BranchScoped):
+    """What we owe for one goods receipt. The amount is fixed when the bill is
+    recorded; what has been paid is derived from vendor payments."""
+
+    __tablename__ = "vendor_bills"
+    __table_args__ = (
+        CheckConstraint("status IN ('posted', 'void')", name="bill_status"),
+        CheckConstraint("goods_value > 0", name="bill_goods_value"),
+        CheckConstraint("goods_value + adjustment > 0", name="bill_total"),
+        CheckConstraint("adjustment = 0 OR adjustment_reason <> ''", name="bill_adjustment_reason"),
+        Index("uq_bill_grn", "goods_receipt_id", unique=True, postgresql_where=text("status <> 'void'")),
+        Index("uq_bill_vendor_invoice", "vendor_id", "vendor_invoice_no", unique=True,
+              postgresql_where=text("status <> 'void' AND vendor_invoice_no <> ''")),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("vendors.id"), index=True)
+    goods_receipt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("goods_receipts.id"))
+    status: Mapped[str] = mapped_column(String(8), default="posted")
+    vendor_invoice_no: Mapped[str] = mapped_column(String(60), default="")
+    bill_date: Mapped[date] = mapped_column(Date)
+    due_on: Mapped[date] = mapped_column(Date)
+    goods_value: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    adjustment: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))  # freight (+) or discount (-)
+    adjustment_reason: Mapped[str] = mapped_column(String(200), default="")
+    void_reason: Mapped[str] = mapped_column(Text, default="")
+
+
+class VendorPayment(BranchScoped):
+    """Money out to a vendor, against one bill. Never edited: a mistake is voided with a reason."""
+
+    __tablename__ = "vendor_payments"
+    __table_args__ = (
+        CheckConstraint("status IN ('posted', 'voided')", name="vpay_status"),
+        CheckConstraint("account IN ('cash', 'bank', 'wallet')", name="vpay_account"),
+        CheckConstraint("amount > 0", name="vpay_amount"),
+        CheckConstraint("proof_id IS NOT NULL OR no_proof_reason <> ''", name="vpay_proof"),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("vendors.id"), index=True)
+    bill_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("vendor_bills.id"), index=True)
+    status: Mapped[str] = mapped_column(String(8), default="posted")
+    account: Mapped[str] = mapped_column(String(8))
+    reference: Mapped[str] = mapped_column(String(60), default="")
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    proof_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
+    no_proof_reason: Mapped[str] = mapped_column(Text, default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paid_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    void_reason: Mapped[str] = mapped_column(Text, default="")

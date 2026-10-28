@@ -43,12 +43,14 @@ export function Section({ title, children }: { title: string; children: ReactNod
 
 export function Grid({ head, rows, right = [] }: { head: string[]; rows: ReactNode[][]; right?: number[] }) {
   return (
-    <table className="mb-2 w-full border-collapse">
+    <div className="mb-2 overflow-x-auto print:overflow-visible">
+    <table className="w-full border-collapse">
       <thead><tr className="[print-color-adjust:exact]">{head.map((h, i) => <th key={h} className={`border border-rule bg-paper-2 px-2 py-1 ${right.includes(i) ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
       <tbody>
         {rows.length ? rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={`border border-rule px-2 py-1 align-top ${right.includes(j) ? "num text-right" : ""}`}>{c}</td>)}</tr>)
           : <tr><td colSpan={head.length} className="border border-rule px-2 py-1 text-muted">None</td></tr>}
       </tbody>
     </table>
+    </div>
   );
 }
