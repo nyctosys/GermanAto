@@ -12,7 +12,8 @@ import { Button, Card, Field, Input, Notice, PageHeader } from "@/components/ui"
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { FuelGauge } from "@/components/visits";
 import { api, ApiError } from "@/lib/api";
-import { type FieldErrors, checkInSchema, parseForm } from "@/lib/schemas";
+import { useFormErrors } from "@/lib/form";
+import { checkInSchemaAt, parseForm } from "@/lib/schemas";
 
 export default function CheckInPage() {
   const [car, setCar] = useState<Car | null>(null);
@@ -70,19 +71,16 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
   const [photos, setPhotos] = useState<Uploaded[]>([]);
   const [signature, setSignature] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const schema = () => checkInSchemaAt(car.odometer_km);
+  const { errors, setErrors, live, applyApi } = useFormErrors(schema);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const { data: f, errors } = parseForm(checkInSchema, e.currentTarget);
+    const { data: f, errors } = parseForm(schema(), e.currentTarget);
     const buyerMissing = kind === "pre_purchase" && !buyer;
     setErrors({ ...errors, ...(buyerMissing ? { buyer: "Choose the buyer" } : {}) });
     if (!f || buyerMissing) return;
-    if (car.odometer_km != null && f.odometer_in! < car.odometer_km) {
-      setErrors({ odometer_in: `Lower than the last reading (${car.odometer_km.toLocaleString("en-PK")} km)` });
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
@@ -95,13 +93,13 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
     } catch (err) {
       const d = err instanceof ApiError ? (err.detail as { visit_id?: string }) : undefined;
       if (d?.visit_id) { router.push(`/visits/${d.visit_id}`); return; }
-      setError((err as Error).message);
+      setError(applyApi(err));
       setBusy(false);
     }
   }
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-4">
+    <form onSubmit={submit} noValidate className="space-y-4" {...live}>
       {car.owner ? <VehiclePanel carId={car.id} ownerId={car.owner.id} />
         : <Notice>This car has no owner on file. Add or transfer it to a customer first.</Notice>}
       <Button type="button" variant="ghost" onClick={onChangeCar}>Different car</Button>

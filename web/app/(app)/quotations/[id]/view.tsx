@@ -271,7 +271,7 @@ function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () =
                 <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_price} placeholder={l.kind === "labour" ? "Labour price" : ""}
                        onChange={(e) => edit(l.id, { unit_price: e.target.value })} />
               </Field>
-              <Button variant="ghost" onClick={() => { setLines((ls) => ls.filter((x) => x.id !== l.id)); setDirty(true); }}>Remove</Button>
+              <Button variant="danger" onClick={() => { setLines((ls) => ls.filter((x) => x.id !== l.id)); setDirty(true); }}>Remove</Button>
             </li>
           ))}
         </ul>
@@ -298,7 +298,7 @@ function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () =
       <Notice>{error}</Notice>
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => save(true)} disabled={saving || busy}>{busy ? "Sending" : "Send to the customer"}</Button>
-        <Button variant="secondary" onClick={() => save(false)} disabled={saving || !dirty}>{saving ? "Saving" : "Save draft"}</Button>
+        <Button variant="success" onClick={() => save(false)} disabled={saving || !dirty}>{saving ? "Saving" : "Save draft"}</Button>
       </div>
       <p className="text-sm text-muted">Sending locks the prices. WhatsApp delivery comes with the messaging stage; print it for now.</p>
     </>

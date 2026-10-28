@@ -8,7 +8,8 @@ import { useQueryParam } from "@/components/search";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money, today } from "@/lib/format";
-import { entrySchema, type FieldErrors } from "@/lib/schemas";
+import { fieldErrorsFromApi, useLiveErrors } from "@/lib/form";
+import { entrySchema, type FieldErrors, issuesToFieldErrors } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 import Link from "next/link";
 
@@ -140,7 +141,7 @@ export function MoneyBook({ direction }: { direction: "in" | "out" }) {
                     <td data-label="Amount" className="px-4 py-3 text-right shell:pr-5 max-sm:px-0">
                       <span className={`num block ${r.status === "voided" ? "line-through" : ""}`}>{money(r.amount)}</span>
                       {r.status === "voided" && <Badge>Voided</Badge>}
-                      {r.entry_id && r.status === "posted" && canRecord && <Button variant="ghost" onClick={() => setVoiding(r)}>Void</Button>}
+                      {r.entry_id && r.status === "posted" && canRecord && <Button variant="danger" onClick={() => setVoiding(r)}>Void</Button>}
                     </td>
                   </tr>
                 ))}
@@ -160,18 +161,20 @@ function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; o
   const [v, setV] = useState({ amount: "", account: "cash", to_account: "", category_id: "", party: "", reference: "", note: "", occurred_on: today() });
   const [proof, setProof] = useState<Uploaded[]>([]);
   const [reason, setReason] = useState("");
-  const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
   const transfer = kind === "transfer";
+  const snapshot = { ...v, kind, proof, reason };
+  const { errors, activate, live } = useLiveErrors(snapshot, (s) => {
+    const r = entrySchema.safeParse(s);
+    return r.success ? {} : issuesToFieldErrors(r.error.issues);
+  });
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const r = entrySchema.safeParse({ ...v, kind, proof, reason });
-    const found: FieldErrors = {};
-    if (!r.success) for (const i of r.error.issues) found[String(i.path[0])] ??= i.message;
-    setErrors(found);
+    activate();
+    const r = entrySchema.safeParse(snapshot);
     if (!r.success) return;
     setBusy(true);
     setError(null);
@@ -181,7 +184,8 @@ function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; o
         proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : reason } });
       onDone();
     } catch (err) {
-      setError((err as Error).message);
+      const mapped = fieldErrorsFromApi(err);
+      setError(mapped.banner ?? (Object.values(mapped.fields)[0] ?? null));
       setBusy(false);
     }
   }
@@ -189,7 +193,7 @@ function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; o
 
   return (
     <Card title={direction === "in" ? "Record money in" : "Record money out"}>
-      <form noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
+      <form noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2" {...live}>
         <Field label="What is it">
           <Select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
             {kinds.map((k) => <option key={k} value={k}>{LABEL[k]}</option>)}

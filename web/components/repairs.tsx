@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui";
 
-export type RoStatus = "received" | "diagnosis" | "awaiting_approval" | "in_repair" | "testing" | "ready" | "delivered" | "on_hold";
+export type RoStatus = "received" | "in_repair" | "testing" | "ready" | "delivered" | "on_hold";
 export type RoLine = {
   id: string; kind: "labour" | "part"; labour_code_id: string | null; item_id: string | null; qty: string;
   labour_code?: { code: string; name: string };
@@ -12,11 +12,31 @@ export type RoLine = {
   approval?: { method: string; reason: string; proof_url: string | null } | null;
 };
 
-export const RO_STAGES: RoStatus[] = ["received", "diagnosis", "awaiting_approval", "in_repair", "testing", "ready", "delivered"];
-export const STAGE: Record<RoStatus, string> = {
-  received: "Received", diagnosis: "Diagnosis", awaiting_approval: "Awaiting approval", in_repair: "In repair",
-  testing: "Testing", ready: "Ready", delivered: "Delivered", on_hold: "On hold",
+export const RO_STAGES: RoStatus[] = ["received", "in_repair", "testing", "ready", "delivered"];
+export const STAGE: Record<string, string> = {
+  received: "Received", in_repair: "In repair", testing: "Testing",
+  ready: "Ready", delivered: "Delivered", on_hold: "On hold",
+  // Kept for activity history written before stages were simplified.
+  diagnosis: "Diagnosis", awaiting_approval: "Awaiting approval",
 };
+
+/** Effective work stage (on hold resumes to held_from). */
+export function workStage(status: RoStatus, heldFrom: RoStatus | null): RoStatus {
+  return status === "on_hold" ? (heldFrom ?? "received") : status;
+}
+
+/** What the Work and parts card allows at each stage. */
+export function stageActions(stage: RoStatus) {
+  return {
+    markLabour: stage === "in_repair" || stage === "testing",
+    markPart: stage === "in_repair" || stage === "testing",
+    issue: stage === "received" || stage === "in_repair" || stage === "testing",
+    returnStock: stage === "received" || stage === "in_repair" || stage === "testing" || stage === "ready",
+    assignTech: stage === "received" || stage === "in_repair" || stage === "testing",
+    extraWork: stage === "in_repair" || stage === "testing",
+    removeExtra: stage === "in_repair" || stage === "testing",
+  };
+}
 
 export function RoBadge({ status }: { status: RoStatus }) {
   const tone = status === "ready" || status === "delivered" ? "success" : status === "on_hold" ? "warning" : "accent";

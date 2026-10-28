@@ -231,7 +231,8 @@ export const CHAPTERS: Chapter[] = [
         id: "repair-order", title: "Run the repair order", who: "Service advisor and mechanics",
         steps: [
           "On the approved quotation, press Make the repair order. Only the approved lines come across.",
-          "Move the job forward as work progresses: Received, Diagnosis, Awaiting approval, In repair, Testing, Ready.",
+          "Move the job forward as work progresses: Received → In repair → Testing → Ready. Put on hold from any stage if you are waiting.",
+          "Issue parts and mark work Done while In repair. You cannot move to Testing until every line is Done or Not done. In Testing you can still update marks; you cannot move to Ready until every line is Done or Not done. Ready locks marks but still lets you return unused parts.",
           "Press Issue on each part line to take the part out of stock.",
           "Choose the mechanic on each line. Mark the line Done or Not done when finished.",
           "Write notes in the activity list: a Note, a Finding, or a Customer update (the customer can see this one).",

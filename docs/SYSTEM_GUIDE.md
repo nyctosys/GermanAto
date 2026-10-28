@@ -2,7 +2,7 @@
 
 This guide describes the software **as it is built today**, module by module: what each part is for, how to use it, the rules the system enforces, and where it lives. It is updated in the same commit as every change, so it always matches the code. The plan for what comes next is in [NEW_SYSTEM_SPEC.md](NEW_SYSTEM_SPEC.md).
 
-Last updated: 28 Oct 2026. Every phase (0 to 9) is built; see section 18 for what is deliberately left for later.
+Last updated: 29 Oct 2026 (repair order stages simplified). Every phase (0 to 9) is built; see section 18 for what is deliberately left for later.
 
 ## Contents
 
@@ -261,17 +261,25 @@ A4 quotation with the customer, car, lines (declined lines left out), totals, an
 
 ### Progress
 ```
-Received → Diagnosis → Awaiting approval → In repair → Testing → Ready → (Delivered at the gate pass)
-                                 On hold (from any stage)
+Received → In repair → Testing → Ready → (Delivered at the gate pass)
+                    On hold (from any stage)
 ```
 - **Moving back a stage or putting the job on hold needs a note.** Resume returns the job to the stage it was paused at.
-- **Ready** needs every line marked **Done** or **Not done**.
+- **Moving to Testing or Ready** needs every line marked **Done** or **Not done** first (no line left as To do).
 
-### Lines
+### Lines (what you can do depends on the stage)
+| Stage | Work and parts | Issue / return stock | Mark Done / Not done |
+|---|---|---|---|
+| Received | Shown; mostly read | Issue allowed (early); return allowed | Locked |
+| In repair | Full edit | Main issue window; return unused | Labour and parts |
+| Testing | Shown | Top-up issue and return unused | Finish remaining lines |
+| Ready | Read-only lines | Return unused only (before the invoice) | Locked |
+| Delivered | Closed | Locked | Locked |
+
 - Each line: Done / Not done / To do, and the **technician** who did it.
-- **Parts are issued from stock here**, at average cost. **Return unused** puts them back at the cost they left at, so the stock value doesn't drift.
+- **Parts are issued from stock here**, at average cost, up to the quantity on the line. **Return unused** puts them back at the cost they left at, so the stock value doesn't drift.
 - A part can't be marked Done before it is issued, or Not done while issued parts are still out.
-- **Extra work** found during the repair (labour code or part, price, and a reason) is flagged **"Not in the quotation"**. It also records **how the customer agreed** (in person, WhatsApp or phone) with **proof or a written reason**; this shows on the repair order and carries to the invoice. Only those added lines can be removed.
+- **Extra work** (In repair / Testing): labour code or part, price, and a reason, flagged **"Not in the quotation"**. It also records **how the customer agreed** (in person, WhatsApp or phone) with **proof or a written reason**; this shows on the repair order and carries to the invoice. Only those added lines can be removed.
 
 ### Activity
 One timeline of everything that happened, newest first, with who and when:
@@ -408,6 +416,15 @@ cd api && uv run alembic upgrade head && uv run uvicorn app.main:app --reload
 cd web && pnpm dev
 ```
 
+### Demo / test data
+After `app.seed` has created a branch and admin, load sample customers, stock, a finished job, an open repair, purchasing, counter sales, money entries and HR rows:
+
+```bash
+cd api && set ADMIN_PASSWORD=your-password && uv run python -m app.demo_data
+```
+
+Safe to run again: it exits without duplicating if the marker customer (`Demo Ali Khan`, phone `0399 0000001`) is already there. Data goes through the same API routes the UI uses, so journals and stock stay consistent.
+
 ### Test it
 ```bash
 cd api && TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:55432/germanato_test uv run pytest -q
@@ -429,6 +446,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | `attendance.py`, `reports.py` | Attendance summary rules; every report figure (routers are thin wrappers) |
 | `messaging.py` | Templates, queue, Twilio provider, webhook signature check, reminders |
 | `sync.py`, `sync_worker.py` | Applying incoming changes with conflict detection; the push/pull worker |
+| `seed.py`, `demo_data.py` | First-run branch/admin; optional sample data for local browsing (`python -m app.demo_data`) |
 | `routers/*.py` | One file per area; each route checks a permission and commits once |
 
 **Web (`web`)**: `app/(app)/...` are the screens, `app/print/...` the printable documents, `components/` the shared pieces per area (`ui.tsx` primitives, `print.tsx` PrintBar), `lib/` holds `api.ts` (fetch and `useApi`), `schemas.ts` (zod, `parseForm`), `session.tsx` and `records.ts` (zustand), `format.ts`, `csv.ts`.
@@ -472,6 +490,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0021 | Sync bookkeeping: credentials, state, inbox, conflicts |
 | 0022 | Idempotency keys (retry protection for writes) |
 | 0023 | Quotation terms and conditions on the branch |
+| 0024 | Repair order stages simplified: received → in_repair → testing → ready → delivered |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).

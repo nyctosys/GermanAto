@@ -92,7 +92,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
   }
 
   return (
-    <div className="grid gap-4 shell:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+    <div className="grid gap-4 shell:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]" onBlurCapture={() => setTried(true)}>
       <div className="space-y-4">
         <Card title="Customer">
           <div className="space-y-4">
@@ -141,7 +141,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
                 <Field label="Price (Rs)" error={tried && !linePrice.safeParse(l.unit_price).success ? "Enter the price" : undefined}>
                   <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_price} onChange={(e) => edit(l.key, { unit_price: e.target.value })} />
                 </Field>
-                <Button variant="ghost" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>Remove</Button>
+                <Button variant="danger" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>Remove</Button>
               </li>
             ))}
           </ul>
@@ -167,8 +167,8 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
         )}
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
-          {can("invoice-issue") && can("payments-in") && <Button disabled={busy || !lines.length} onClick={() => save(true)}>{busy ? "Working" : `Take ${money(t.total)} and finish`}</Button>}
-          <Button variant="secondary" disabled={busy || !lines.length} onClick={() => save(false)}>Save as draft</Button>
+          {can("invoice-issue") && can("payments-in") && <Button variant="success" disabled={busy || !lines.length} onClick={() => save(true)}>{busy ? "Working" : `Take ${money(t.total)} and finish`}</Button>}
+          <Button variant="success" disabled={busy || !lines.length} onClick={() => save(false)}>Save as draft</Button>
         </div>
       </div>
 

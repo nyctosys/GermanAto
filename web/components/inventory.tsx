@@ -70,7 +70,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
                      onChange={(e) => setCodes(codes.map((r, j) => (j === i ? { ...r, code: e.target.value } : r)))}
                      placeholder={row.kind === "barcode" ? "Scan or type" : "e.g. 11 42 7 583 220"} />
             </div>
-            {codes.length > 1 && <Button type="button" variant="ghost" onClick={() => setCodes(codes.filter((_, j) => j !== i))}>Remove</Button>}
+            {codes.length > 1 && <Button type="button" variant="danger" onClick={() => setCodes(codes.filter((_, j) => j !== i))}>Remove</Button>}
           </div>
         ))}
         {codes.length < 10 && (
@@ -98,7 +98,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
       <div className="flex flex-col gap-3 sm:col-span-2 shell:col-span-3">
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy}>{busy ? "Saving" : item ? "Save changes" : "Add item"}</Button>
+          <Button type="submit" variant={item ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : item ? "Save changes" : "Add item"}</Button>
           <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         </div>
       </div>

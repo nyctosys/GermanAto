@@ -105,7 +105,7 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
                 <Button disabled={busy} onClick={() => call("/issue", { version: inv.version })}>Issue the invoice</Button>
               )}
               {draft && !counter && <Button variant="secondary" disabled={busy} onClick={() => call("/refresh")}>Refresh from the repair order</Button>}
-              {draft && <Button variant="ghost" onClick={() => setVoiding(true)}>Void this draft</Button>}
+              {draft && <Button variant="danger" onClick={() => setVoiding(true)}>Void this draft</Button>}
             </div>
           )}
           {draft && !counter && <p className="text-sm text-muted">Issuing locks the prices and applies the advances held on this visit. After that, corrections need a credit note.</p>}
@@ -197,7 +197,7 @@ function WorkshopDraft({ inv, busy, call }: { inv: Invoice; busy: boolean; call:
       </Card>
       {dirty && (
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="secondary" disabled={busy || bad.length > 0}
+          <Button variant="success" disabled={busy || bad.length > 0}
                   onClick={async () => { if (await call("", { prices, include_tax: includeTax, discount: discount || "0", notes, version: inv.version }, "PUT")) setDirty(false); }}>
             Save changes
           </Button>
@@ -274,7 +274,7 @@ function ReturnForm({ inv, busy, onSubmit, onCancel }: { inv: Invoice; busy: boo
 
   return (
     <Card title="Return or correct">
-      <form noValidate className="space-y-5" onSubmit={(e) => {
+      <form noValidate className="space-y-5" onBlurCapture={() => setTried(true)} onSubmit={(e) => {
         e.preventDefault();
         setTried(true);
         if (!picked.length || reason.trim().length < 3 || picked.some((l) => badQty(l.id, l.qty))) return;

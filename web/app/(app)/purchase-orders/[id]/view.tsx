@@ -10,6 +10,7 @@ import { PURCHASING, RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money, qty, today } from "@/lib/format";
+import { liveForm } from "@/lib/form";
 import { billSchema, type FieldErrors, lineQty, parseForm, unitCost } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
@@ -105,7 +106,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
   }
 
   return (
-    <>
+    <div onBlurCapture={() => setTried(true)}>
       <div className="mb-6">
         <h1>{initial ? `Purchase order ${initial.number}` : "New purchase order"}</h1>
         <p className="text-muted">{initial ? <PoBadge status="draft" /> : "Choose the vendor, add what you need, then send it."}</p>
@@ -138,7 +139,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
                   <Field label="Cost each (Rs)" error={tried && costBad(l) ? "Enter the cost" : undefined}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_cost} onChange={(e) => edit(l.key, { unit_cost: e.target.value })} />
                   </Field>
-                  <Button variant="ghost" onClick={() => { setLines((ls) => ls.filter((x) => x.key !== l.key)); setDirty(true); }}>Remove</Button>
+                  <Button variant="danger" onClick={() => { setLines((ls) => ls.filter((x) => x.key !== l.key)); setDirty(true); }}>Remove</Button>
                 </li>
               ))}
             </ul>
@@ -147,7 +148,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
           <Notice>{error}</Notice>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => save(true)} disabled={busy}>{busy ? "Working" : "Send to the vendor"}</Button>
-            <Button variant="secondary" onClick={() => save(false)} disabled={busy || (!!initial && !dirty)}>Save draft</Button>
+            <Button variant="success" onClick={() => save(false)} disabled={busy || (!!initial && !dirty)}>Save draft</Button>
           </div>
           <p className="text-sm text-muted">Sending locks the order. Print it to hand or send to the vendor; WhatsApp comes with the messaging stage.</p>
         </div>
@@ -170,7 +171,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
           <Card title="Total"><p className="num text-xl">{money(total)}</p><p className="text-sm text-muted">{lines.length} {lines.length === 1 ? "item" : "items"}</p></Card>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -236,7 +237,7 @@ function View({ po, onChange, reload }: { po: Po; onChange: (p: Po) => void; rel
           <Notice>{error}</Notice>
           {!panel && can("purchasing") && (
             <div className="flex flex-wrap gap-2">
-              {["sent"].includes(po.status) && <Button variant="secondary" onClick={() => setPanel("cancel")}>Cancel the order</Button>}
+              {["sent"].includes(po.status) && <Button variant="danger" onClick={() => setPanel("cancel")}>Cancel the order</Button>}
               {po.status === "partly_received" && <Button variant="secondary" onClick={() => setPanel("close")}>The vendor won&apos;t send the rest</Button>}
             </div>
           )}
@@ -330,7 +331,7 @@ function ReceiveForm({ po, onDone }: { po: Po; onDone: (p: Po) => void }) {
 
   return (
     <Card title="Count the goods in" flush>
-      <form noValidate onSubmit={submit}>
+      <form noValidate onSubmit={submit} onBlurCapture={() => setTried(true)}>
         <ul>
           {open.map((l) => {
             const p = preview(l);
@@ -403,6 +404,7 @@ function BillForm({ receipt, po, onCancel }: { receipt: Receipt; po: Po; onCance
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const live = liveForm(billSchema, errors, setErrors);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -421,7 +423,7 @@ function BillForm({ receipt, po, onCancel }: { receipt: Receipt; po: Po; onCance
     }
   }
   return (
-    <form noValidate onSubmit={submit} className="grid gap-4 rounded-control bg-paper-2 p-4 sm:grid-cols-2">
+    <form noValidate onSubmit={submit} className="grid gap-4 rounded-control bg-paper-2 p-4 sm:grid-cols-2" {...live}>
       <p className="font-medium sm:col-span-2">Bill for {receipt.number}, goods {money(receipt.value)}</p>
       <Field label="Vendor's invoice number" error={errors.vendor_invoice_no} hint="Stops the same invoice being entered twice."><Input name="vendor_invoice_no" maxLength={60} /></Field>
       <Field label="Bill date" error={errors.bill_date}><Input name="bill_date" type="date" max={today()} defaultValue={today()} /></Field>

@@ -40,6 +40,9 @@ const vin = z.string().transform((v) => v.toUpperCase().replace(/\s/g, ""))
   .refine((v) => !v || /^[A-Z0-9-]{5,30}$/.test(v), "Use the VIN or chassis number: 5 to 30 letters, digits or dashes")
   .refine((v) => !(v.length === 17 && !v.includes("-") && /[IOQ]/.test(v)), "A 17-character VIN never contains I, O or Q");
 
+/** Matches the API's usual odometer ceiling (api/app/routers/workshop.py). */
+export const ODOMETER_MAX = 3_000_000;
+
 /** "" becomes null; anything else must be a whole number in range. */
 const optionalInt = (min: number, max: number, label: string) => z.string().trim().transform((v, ctx) => {
   if (!v) return null;
@@ -73,16 +76,29 @@ export const carSchema = z.object({
   color: text(40),
   vin,
   engine_no: text(40).toUpperCase(),
-  odometer_km: optionalInt(0, 2_000_000, "Odometer"),
+  odometer_km: optionalInt(0, ODOMETER_MAX, "Odometer"),
   notes: text(),
 });
 
 export const checkInSchema = z.object({
   complaint: text(),
-  odometer_in: optionalInt(0, 2_000_000, "Odometer").refine((v) => v != null, "Required"),
+  odometer_in: optionalInt(0, ODOMETER_MAX, "Odometer").refine((v) => v != null, "Required"),
   condition_notes: text(),
   items_left: text(1000),
 });
+
+/** Check-in with the car's last reading: leaving the field shows "lower than last" at once. */
+export function checkInSchemaAt(lastKm: number | null) {
+  return checkInSchema.superRefine((d, ctx) => {
+    if (lastKm != null && d.odometer_in != null && d.odometer_in < lastKm) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["odometer_in"],
+        message: `Lower than the last reading (${lastKm.toLocaleString("en-PK")} km)`,
+      });
+    }
+  });
+}
 
 export const userSchema = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,32}$/, "3 to 32 letters, digits, dots, dashes or underscores").optional(),
@@ -94,6 +110,12 @@ export const userSchema = z.object({
 
 export type FieldErrors = Partial<Record<string, string>>;
 
+export function issuesToFieldErrors(issues: { path: PropertyKey[]; message: string }[]): FieldErrors {
+  const errors: FieldErrors = {};
+  for (const issue of issues) errors[String(issue.path[0])] ??= issue.message;
+  return errors;
+}
+
 /**
  * Validate a form's values. Returns the cleaned data, or one message per field.
  * Fields the schema doesn't know (and missing checkboxes) are handled by the schema.
@@ -103,13 +125,20 @@ export function parseForm<S extends z.ZodType>(schema: S, form: HTMLFormElement 
   const values = Object.fromEntries(form instanceof FormData ? form : new FormData(form));
   const r = schema.safeParse(values);
   if (r.success) return { data: r.data, errors: null };
-  const errors: FieldErrors = {};
-  for (const issue of r.error.issues) errors[String(issue.path[0])] ??= issue.message;
+  const errors = issuesToFieldErrors(r.error.issues);
   // Take the person straight to the first thing to fix.
   if (!(form instanceof FormData)) {
     form.querySelector<HTMLElement>(Object.keys(errors).map((k) => `[name="${k}"]`).join(","))?.focus();
   }
   return { data: null, errors };
+}
+
+/** The message for one named control, if that control is wrong right now. */
+export function fieldErrorAt(schema: z.ZodType, form: HTMLFormElement, name: string): string | undefined {
+  if (!name) return undefined;
+  const r = schema.safeParse(Object.fromEntries(new FormData(form)));
+  if (r.success) return undefined;
+  return r.error.issues.find((i) => String(i.path[0]) === name)?.message;
 }
 
 /** A line quantity on a job card or quotation. */
@@ -132,11 +161,30 @@ export const paymentRowSchema = z.object({
 });
 
 export const gatePassSchema = z.object({
-  odometer_out: optionalInt(0, 2_000_000, "Odometer"),
+  odometer_out: optionalInt(0, ODOMETER_MAX, "Odometer"),
   handed_to: text(120),
   note: text(500),
   credit_reason: z.string().trim().max(500).optional().transform((v) => v ?? ""),
 });
+
+/** Gate pass: exit reading can't go backwards; unpaid release needs a reason. */
+export function gatePassSchemaAt(opts: { minOut?: number | null; requireHandedTo?: boolean; creditBalance?: number } = {}) {
+  return gatePassSchema.superRefine((d, ctx) => {
+    if (opts.minOut != null && d.odometer_out != null && d.odometer_out < opts.minOut) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["odometer_out"],
+        message: `Less than at check-in (${opts.minOut.toLocaleString("en-PK")} km)`,
+      });
+    }
+    if (opts.requireHandedTo && !d.handed_to) {
+      ctx.addIssue({ code: "custom", path: ["handed_to"], message: "Write who is taking the car" });
+    }
+    if ((opts.creditBalance ?? 0) > 0 && d.credit_reason.length < 5) {
+      ctx.addIssue({ code: "custom", path: ["credit_reason"], message: "Give the reason" });
+    }
+  });
+}
 
 // --- purchasing ----------------------------------------------------------------------------------
 

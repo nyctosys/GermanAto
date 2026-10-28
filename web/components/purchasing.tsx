@@ -4,7 +4,8 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Badge, Button, Card, Field, Input, Notice } from "@/components/ui";
 import { api } from "@/lib/api";
 import { money, qty } from "@/lib/format";
-import { type FieldErrors, parseForm, vendorSchema } from "@/lib/schemas";
+import { useFormErrors } from "@/lib/form";
+import { parseForm, vendorSchema } from "@/lib/schemas";
 import { phone } from "@/lib/format";
 
 // --- types mirroring app/routers/purchasing.py -----------------------------------------------------
@@ -111,7 +112,7 @@ export function ItemPicker({ onPick, onNotFound }: { onPick: (i: PickItem) => vo
 /** Add or edit a vendor. A name already on file is refused by the server. */
 export function VendorForm({ vendor, onSaved, onCancel }: { vendor?: Vendor; onSaved: (v: Vendor) => void; onCancel: () => void }) {
   const [error, setError] = useState<string | null>(null);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const { errors, setErrors, live, applyApi } = useFormErrors(vendorSchema);
   const [busy, setBusy] = useState(false);
   const form = useRef<HTMLFormElement>(null);
 
@@ -127,12 +128,12 @@ export function VendorForm({ vendor, onSaved, onCancel }: { vendor?: Vendor; onS
         ? await api<Vendor>(`/api/vendors/${vendor.id}`, { method: "PUT", json: { ...data, version: vendor.version, is_active: new FormData(form.current!).get("is_active") === "on" } })
         : await api<Vendor>("/api/vendors", { method: "POST", json: data }));
     } catch (err) {
-      setError((err as Error).message);
+      setError(applyApi(err));
       setBusy(false);
     }
   }
   return (
-    <form ref={form} noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
+    <form ref={form} noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2" {...live}>
       <Field error={errors.name} label="Vendor name"><Input name="name" defaultValue={vendor?.name} required maxLength={120} autoComplete="off" autoFocus /></Field>
       <Field error={errors.contact_person} label="Contact person (optional)"><Input name="contact_person" defaultValue={vendor?.contact_person} maxLength={120} /></Field>
       <Field error={errors.phone} label="Phone (optional)"><Input name="phone" defaultValue={vendor ? phone(vendor.phone) : ""} inputMode="tel" /></Field>
@@ -151,7 +152,7 @@ export function VendorForm({ vendor, onSaved, onCancel }: { vendor?: Vendor; onS
       <div className="flex flex-col gap-3 sm:col-span-2">
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy}>{busy ? "Saving" : vendor ? "Save changes" : "Add vendor"}</Button>
+          <Button type="submit" variant={vendor ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : vendor ? "Save changes" : "Add vendor"}</Button>
           <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         </div>
       </div>

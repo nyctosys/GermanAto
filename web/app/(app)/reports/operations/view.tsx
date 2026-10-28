@@ -16,7 +16,7 @@ type Ops = {
   quotations: { made: number; sent: number; won: number; conversion_pct: number | null };
   avg_hours_in_stage: Record<string, number>; open_repair_orders_by_age: Record<string, number>;
 };
-const STAGE: Record<string, string> = { received: "Received", diagnosis: "Diagnosis", awaiting_approval: "Awaiting approval", in_repair: "In repair", testing: "Testing", ready: "Ready" };
+const STAGE: Record<string, string> = { received: "Received", in_repair: "In repair", testing: "Testing", ready: "Ready", diagnosis: "Diagnosis", awaiting_approval: "Awaiting approval" };
 const hours = (h: number | null) => (h == null ? "None yet" : h < 48 ? `${h.toFixed(1)} hours` : `${(h / 24).toFixed(1)} days`);
 
 export default function OperationsReport() {

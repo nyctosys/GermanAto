@@ -5,7 +5,8 @@ import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money } from "@/lib/format";
-import { closeSchema, type FieldErrors } from "@/lib/schemas";
+import { useLiveErrors } from "@/lib/form";
+import { closeSchema, issuesToFieldErrors } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 type Status = { account: string; name: string; expected: string; last_close: { close_date: string; counted: string; difference: string } | null; closed_today: boolean };
@@ -64,18 +65,19 @@ function AccountCard({ s, onDone }: { s: Status; onDone: () => void }) {
   const [counting, setCounting] = useState(false);
   const [counted, setCounted] = useState("");
   const [reason, setReason] = useState("");
-  const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const expected = Number(s.expected);
   const diff = /^\d/.test(counted) ? Math.round((Number(counted) - expected) * 100) / 100 : null;
+  const { errors, activate, live } = useLiveErrors({ counted, reason, note: "" }, (v) => {
+    const r = closeSchema(expected).safeParse(v);
+    return r.success ? {} : issuesToFieldErrors(r.error.issues);
+  });
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    activate();
     const r = closeSchema(expected).safeParse({ counted, reason, note: "" });
-    const found: FieldErrors = {};
-    if (!r.success) for (const i of r.error.issues) found[String(i.path[0])] ??= i.message;
-    setErrors(found);
     if (!r.success) return;
     setBusy(true);
     setError(null);
@@ -100,7 +102,7 @@ function AccountCard({ s, onDone }: { s: Status; onDone: () => void }) {
         <div className="mt-4"><Button onClick={() => setCounting(true)}>Count and close</Button></div>
       )}
       {counting && (
-        <form noValidate onSubmit={submit} className="mt-4 space-y-4">
+        <form noValidate onSubmit={submit} className="mt-4 space-y-4" {...live}>
           <Field label="What is really in it (Rs)" error={errors.counted}><Input inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} autoFocus /></Field>
           {diff !== null && diff !== 0 && (
             <>

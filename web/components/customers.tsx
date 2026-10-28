@@ -6,7 +6,8 @@ import { Button, Checkbox, Field, Input, Notice, Select } from "@/components/ui"
 import { api, ApiError } from "@/lib/api";
 import { phone } from "@/lib/format";
 import { useRecords } from "@/lib/records";
-import { type FieldErrors, customerSchema, parseForm } from "@/lib/schemas";
+import { useFormErrors } from "@/lib/form";
+import { customerSchema, parseForm } from "@/lib/schemas";
 
 export type Customer = {
   id: string; number: string; kind: "individual" | "company"; name: string; phone: string; phone_alt: string;
@@ -89,7 +90,7 @@ export function CustomerPicker({ value, onChange, exclude }:
 export function CustomerForm({ customer, onSaved, onCancel }:
   { customer?: Customer; onSaved: (c: Customer) => void; onCancel: () => void }) {
   const [error, setError] = useState<string | null>(null);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const { errors, setErrors, live, applyApi } = useFormErrors(customerSchema);
   const [matches, setMatches] = useState<Customer[] | null>(null);
   const [busy, setBusy] = useState(false);
   const form = useRef<HTMLFormElement>(null);
@@ -111,13 +112,13 @@ export function CustomerForm({ customer, onSaved, onCancel }:
     } catch (err) {
       const detail = err instanceof ApiError ? (err.detail as { code?: string; matches?: Customer[] }) : undefined;
       if (detail?.code === "duplicate_phone") setMatches(detail.matches ?? []);
-      else setError((err as Error).message);
+      else setError(applyApi(err));
       setBusy(false);
     }
   }
 
   return (
-    <form ref={form} noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); save(); }} className="grid gap-5 sm:grid-cols-2">
+    <form ref={form} noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); save(); }} className="grid gap-5 sm:grid-cols-2" {...live}>
       <Field error={errors.name} label="Name"><Input name="name" defaultValue={customer?.name} required maxLength={120} autoComplete="off" /></Field>
       <Field error={errors.kind} label="Type">
         <Select name="kind" defaultValue={customer?.kind ?? "individual"}>
@@ -152,7 +153,7 @@ export function CustomerForm({ customer, onSaved, onCancel }:
       <div className="flex flex-col gap-3 sm:col-span-2">
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy}>{busy ? "Saving" : customer ? "Save changes" : "Add customer"}</Button>
+          <Button type="submit" variant={customer ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : customer ? "Save changes" : "Add customer"}</Button>
           <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         </div>
       </div>

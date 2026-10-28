@@ -14,7 +14,8 @@ def ready_repair(admin):
     admin.post(f"/api/quotations/{q['id']}/advances", json={"amount": "4000", **CASH})
     ro = admin.post(f"/api/quotations/{q['id']}/repair-order").json()
     url = f"/api/repair-orders/{ro['id']}"
-    for l in ro["lines"]:
+    admin.post(f"{url}/status", json={"to": "in_repair", "version": ro["version"]})
+    for l in admin.get(url).json()["lines"]:
         if l["kind"] == "part":
             admin.post(f"{url}/lines/{l['id']}/issue", json={"qty": l["qty"]})
         admin.patch(f"{url}/lines/{l['id']}", json={"state": "done"})

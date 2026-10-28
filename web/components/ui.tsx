@@ -1,17 +1,20 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import { Children, cloneElement, isValidElement, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes } from "react";
 
 // Every control is at least 44px tall (a finger, not a cursor) and changes
 // only colour on hover/press, never size.
 const control =
-  "min-h-11 rounded-control border px-3 text-base transition-colors duration-(--dur-micro) " +
+  "min-h-11 cursor-pointer rounded-control border px-3 text-base transition-colors duration-(--dur-micro) " +
   "disabled:cursor-not-allowed disabled:opacity-55";
 
 const buttonVariants = {
-  primary: "border-accent bg-accent text-accent-ink hover:bg-accent-2 hover:border-accent-2 active:bg-accent-3 active:border-accent-3",
-  secondary: "border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3",
-  danger: "border-error bg-surface text-error hover:bg-error-soft active:bg-error-soft",
+  primary: "border-primary bg-primary text-primary-ink hover:bg-primary-2 hover:border-primary-2 active:bg-primary-3 active:border-primary-3",
+  secondary: "border-rule-strong bg-surface text-ink hover:border-ink-2 hover:bg-paper-3 active:bg-silver active:border-ink-2",
+  // Destructive: delete, discard, void, cancel permanently, reject.
+  danger: "border-error bg-error text-error-ink hover:bg-error-2 hover:border-error-2 active:bg-error-3 active:border-error-3",
+  // Persist / finish: save, save draft, mark complete.
+  success: "border-success bg-success text-success-ink hover:bg-success-2 hover:border-success-2 active:bg-success-3 active:border-success-3",
   // A quiet button, but still a visible one: a filled pill, never bare text that could be a label.
-  ghost: "border-transparent bg-paper-3 text-ink hover:bg-silver active:bg-silver",
+  ghost: "border-transparent bg-paper-3 text-ink hover:border-rule-strong hover:bg-silver active:bg-rule-strong",
 };
 
 export function Button({ variant = "primary", className = "", ...props }:
@@ -37,12 +40,16 @@ export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSe
   return <select className={`${field} pr-8 ${className}`} {...props} />;
 }
 
-/** A labelled control. `error` (from parseForm) replaces the hint and outlines the control in red. */
+/** A labelled control. `error` (from parseForm / liveForm) replaces the hint and outlines the control in red. */
 export function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
+  const marked = Children.map(children, (child) => {
+    if (!isValidElement(child)) return child;
+    return cloneElement(child as ReactElement<{ "aria-invalid"?: boolean }>, { "aria-invalid": !!error || undefined });
+  });
   return (
     <label className={`flex min-w-0 flex-col gap-1.5 ${error ? "[&_:is(input,select,textarea)]:border-error" : ""}`}>
       <span className="text-[0.9375rem] font-medium text-ink-2">{label}</span>
-      {children}
+      {marked}
       {error ? <span role="alert" className="text-sm text-error">{error}</span>
         : hint && <span className="text-sm text-muted">{hint}</span>}
     </label>

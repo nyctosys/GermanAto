@@ -4,7 +4,8 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { type Uploaded, PhotoCapture } from "@/components/capture";
 import { Button, Card, Field, Input, Select } from "@/components/ui";
 import { money, when } from "@/lib/format";
-import { paymentRowSchema } from "@/lib/schemas";
+import { useLiveErrors } from "@/lib/form";
+import { type FieldErrors, issuesToFieldErrors, paymentRowSchema } from "@/lib/schemas";
 
 export type Payment = { id: string; number: string; kind?: string; refunded?: boolean; invoice_id?: string | null; status: string; account: string; reference: string; amount: string;
   received_at: string; received_by: string | null; proof_url: string | null; no_proof_reason: string };
@@ -61,11 +62,9 @@ type Row = { key: string; amount: string; account: string; reference: string; pr
 const newRow = (amount = ""): Row => ({ key: crypto.randomUUID(), amount, account: "cash", reference: "", proof: [], reason: "" });
 
 /** One row's problems, by field (lib/schemas paymentRowSchema). */
-function rowErrors(r: Row): Record<string, string> {
+function rowErrors(r: Row): FieldErrors {
   const res = paymentRowSchema.safeParse(r);
-  const e: Record<string, string> = {};
-  if (!res.success) for (const i of res.error.issues) e[String(i.path[0])] ??= i.message;
-  return e;
+  return res.success ? {} : issuesToFieldErrors(res.error.issues);
 }
 
 const toBody = (r: Row, note = ""): PaymentBody => ({
@@ -73,7 +72,7 @@ const toBody = (r: Row, note = ""): PaymentBody => ({
   proof_id: r.proof[0]?.id ?? null, no_proof_reason: r.proof.length ? "" : r.reason.trim(),
 });
 
-function RowFields({ r, set, errors }: { r: Row; set: (p: Partial<Row>) => void; errors: Record<string, string> }) {
+function RowFields({ r, set, errors }: { r: Row; set: (p: Partial<Row>) => void; errors: FieldErrors }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="Amount (Rs)" error={errors.amount}>
@@ -101,13 +100,12 @@ export function PaymentForm({ title, hint, suggested, busy, onSubmit, onCancel, 
   { title: string; hint?: string; suggested?: string; busy: boolean; note?: ReactNode;
     onSubmit: (b: PaymentBody) => void; onCancel: () => void }) {
   const [row, setRow] = useState<Row>(() => newRow(suggested ?? ""));
-  const [tried, setTried] = useState(false);
-  const errors = tried ? rowErrors(row) : {};
+  const { errors, activate, live } = useLiveErrors(row, rowErrors);
   return (
     <Card title={title}>
-      <form noValidate className="space-y-4" onSubmit={(e: FormEvent) => {
+      <form noValidate className="space-y-4" {...live} onSubmit={(e: FormEvent) => {
         e.preventDefault();
-        setTried(true);
+        activate();
         if (!Object.keys(rowErrors(row)).length) onSubmit(toBody(row));
       }}>
         {hint && <p className="text-sm text-muted">{hint}</p>}
@@ -133,7 +131,7 @@ export function SplitPayments({ total, rows, setRows, tried }:
           {rows.length > 1 && (
             <div className="mb-2 flex items-center justify-between">
               <p className="text-sm font-medium text-ink-2">Payment {i + 1}</p>
-              <Button type="button" variant="ghost" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>Remove</Button>
+              <Button type="button" variant="danger" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>Remove</Button>
             </div>
           )}
           <RowFields r={r} set={(p) => setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, ...p } : x)))} errors={tried ? rowErrors(r) : {}} />
@@ -163,18 +161,17 @@ export function RefundForm({ title, hint, amount, fixedAmount, needsReason, busy
     onSubmit: (b: PaymentBody & { reason: string }) => void; onCancel: () => void }) {
   const [row, setRow] = useState<Row>(() => newRow(amount));
   const [why, setWhy] = useState("");
-  const [tried, setTried] = useState(false);
-  const errors = tried ? rowErrors(row) : {};
+  const { errors, active, activate, live } = useLiveErrors(row, rowErrors);
   const whyBad = needsReason && why.trim().length < 3;
   return (
     <Card title={title}>
-      <form noValidate className="space-y-4" onSubmit={(e: FormEvent) => {
+      <form noValidate className="space-y-4" {...live} onSubmit={(e: FormEvent) => {
         e.preventDefault();
-        setTried(true);
+        activate();
         if (!Object.keys(rowErrors(row)).length && !whyBad) onSubmit({ ...toBody(row), reason: why.trim() });
       }}>
         {hint && <p className="text-sm text-muted">{hint}</p>}
-        {needsReason && <Field label="Why is it being refunded?" error={tried && whyBad ? "Say why" : undefined}><Input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={500} /></Field>}
+        {needsReason && <Field label="Why is it being refunded?" error={active && whyBad ? "Say why" : undefined}><Input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={500} /></Field>}
         <RowFields r={row} set={(p) => setRow((r) => ({ ...r, ...(fixedAmount ? { ...p, amount: r.amount } : p) }))} errors={errors} />
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="danger" disabled={busy}>{busy ? "Recording" : "Give the money back"}</Button>

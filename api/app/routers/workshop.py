@@ -444,8 +444,9 @@ def revise_inspection(inspection_id: uuid.UUID, actor: Actor = Depends(can_visit
     old = _get_inspection(db, actor, inspection_id)
     if old.status != "signed":
         raise HTTPException(409, "Only a signed inspection needs a revision; edit the draft instead")
-    if db.scalar(select(Inspection.id).where(Inspection.supersedes_id == old.id)):
-        raise HTTPException(409, "This inspection already has a revision")
+    existing = db.scalar(select(Inspection).where(Inspection.supersedes_id == old.id))
+    if existing:
+        raise HTTPException(409, {"message": "This inspection already has a revision", "inspection_id": str(existing.id)})
     findings = {k: v for k, v in old.data.items() if k != "snapshot"}  # a revision re-reads the current records
     new = Inspection(number=next_number(db, actor.branch, "inspection"), kind=old.kind, visit_id=old.visit_id,
                      car_id=old.car_id, template_version=tpl.VERSION, supersedes_id=old.id, data=findings,
@@ -453,3 +454,21 @@ def revise_inspection(inspection_id: uuid.UUID, actor: Actor = Depends(can_visit
     db.add(new)
     db.commit()
     return inspection_out(db, new)
+
+
+@router.delete("/inspections/{inspection_id}")
+def discard_inspection(inspection_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Session = Depends(get_db)):
+    """Throw away a revision draft so the signed report can be revised again (or left as-is)."""
+    i = _get_inspection(db, actor, inspection_id)
+    if i.status != "draft":
+        raise HTTPException(409, "A signed inspection can't be deleted. Start a revision to correct it.")
+    if i.supersedes_id is None:
+        raise HTTPException(409, "Only a revision can be discarded. Cancel the visit if this check-in was a mistake.")
+    if db.scalar(select(InspectionRepairLink.id).where(InspectionRepairLink.inspection_id == i.id)):
+        raise HTTPException(409, "This revision already sent repairs to the job card")
+    parent_id = i.supersedes_id
+    for a in db.scalars(select(Attachment).where(Attachment.entity_type == "inspections", Attachment.entity_id == i.id)):
+        a.entity_type, a.entity_id = None, None
+    db.delete(i)
+    db.commit()
+    return {"ok": True, "supersedes_id": str(parent_id)}

@@ -19,7 +19,8 @@ const TABS = [["active", "In progress"], ["on_hold", "On hold"], ["ready", "Read
 export default function RepairOrdersPage() {
   return (
     <RequirePermission permission="repair-orders">
-      <PageHeader title="Repair orders" description="The work under way. A repair order is made from an approved quotation." />
+      <PageHeader title="Repair orders" description="The work under way. A repair order is made from an approved quotation."
+                  actions={<Link href="/repair-orders/new" className="flex min-h-11 items-center rounded-control bg-primary px-5 font-medium text-primary-ink hover:bg-primary-2 active:bg-primary-3 active:duration-0">Make a repair order</Link>} />
       <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
         <Board />
       </Suspense>
@@ -40,7 +41,7 @@ function Board() {
       {list.error ? <Card flush><ErrorState message={list.error} onRetry={list.reload} /></Card>
         : !list.data ? <Card flush><SkeletonRows /></Card>
         : !list.data.length ? (
-          <Card flush><EmptyState title="No repair orders here">Approve a quotation, then make its repair order from the quotation page.</EmptyState></Card>
+          <Card flush><EmptyState title="No repair orders here" action={<Link href="/repair-orders/new" className="text-accent underline">Make a repair order</Link>}>Approve a quotation first, then make its repair order here.</EmptyState></Card>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 shell:grid-cols-3">
             {list.data.map((r) => (

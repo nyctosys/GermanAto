@@ -88,3 +88,12 @@
 - Bug found by the toast work: message wording form never saved (checkbox 'on' vs z.boolean()).
 ## Roles and My work
 - Default roles in permissions.py (Manager, Front desk, Technician, Cashier, Guard + Accountant, Inventory manager); `app.seed` adds missing ones. routers/mywork.py builds queues from record state, filtered by permission. New permission `gate`; gate endpoints use require_any(visits, gate). When adding a workflow step, add its queue in mywork.build.
+
+## Button colours + demo data (29 Oct 2026)
+- Button variants: `success` (green) for Save / Save draft / Save as draft / finish; `danger` (filled red) for Remove / Void / Discard / Retire / Cancel permanently / Reject. Primary stays brand red for forward actions; secondary for Cancel/Keep it.
+- Tokens in `web/app/globals.css`: error-2/3, success-2/3, *-ink. DESIGN.md section 4 updated.
+- `api/app/demo_data.py`: `uv run python -m app.demo_data` loads sample customers, stock, completed + open jobs, quotes, purchasing, counter sales, money book, HR. Idempotent (skips if Demo Bilal exists). Documented in SYSTEM_GUIDE section 19.
+
+## Repair order stages (29 Oct 2026)
+- Stages are now Received ? In repair ? Testing ? Ready ? Delivered (+ On hold). Diagnosis and Awaiting approval removed (migration 0024 remaps old rows).
+- Work and parts actions are gated by stage in `api/app/routers/repairs.py` and `web/components/repairs.tsx` (`stageActions`). Issue qty cannot exceed the line qty.
