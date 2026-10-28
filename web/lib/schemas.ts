@@ -113,10 +113,11 @@ export function parseForm<S extends z.ZodType>(schema: S, form: HTMLFormElement 
 }
 
 /** A line quantity on a job card or quotation. */
-export const lineQty = z.string().trim().refine((v) => Number(v) > 0 && Number(v) <= 10000, "More than 0");
+// coerce: the API sends saved quantities and prices as numbers, which must count as valid just like typed text.
+export const lineQty = z.coerce.string().trim().refine((v) => Number(v) > 0 && Number(v) <= 10000, "More than 0");
 
 /** A price typed on a quotation line: whole rupees or paisa, more than zero to send. */
-export const linePrice = z.string().trim().refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(v) && Number(v) > 0, "Enter the price");
+export const linePrice = z.coerce.string().trim().refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(v) && Number(v) > 0, "Enter the price");
 
 /** One payment being recorded: proof or a reason; a transfer needs its reference or a screenshot (mirrors the API). */
 export const paymentRowSchema = z.object({
