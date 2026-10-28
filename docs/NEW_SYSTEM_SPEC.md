@@ -23,6 +23,7 @@ Status: draft for review, 2026-10-28. It builds on [feature-inventory/](feature-
 | D11 | Counter sales | A **Counter Sale** invoice with no visit, for a walk-in who only buys parts (e.g. a headlight) | ✅ Decided by the owner, 2026-10-28 (see §2.1) |
 | D12 | Quote approval | Quotations have a real **Approved** status, recorded with who, when, how and proof | ✅ Decided by the owner, 2026-10-28 (see §2.2) |
 | D13 | Tracking work on the car | Each repair order has an **activity trail** of notes, findings, photos and status changes | ✅ Decided by the owner, 2026-10-28 (see §2.3) |
+| D14 | Vehicle inspection report | The owner's **Germanato Vehicle Inspection Report** (pre-purchase / workshop / delivery) becomes a digital form on the visit, with the same printed layout | ✅ Requested by the owner, 2026-10-28 (see §2.4) |
 
 ---
 
@@ -137,6 +138,61 @@ Every repair order has an **Activity** panel: a single timeline of everything th
 - **Statuses:** Received → Diagnosis → Awaiting approval → In repair → Testing → Ready → Delivered, plus On hold (from any stage). Each change is timestamped, which gives time-in-stage figures for the Operations report.
 - **Vehicle condition:** captured at the visit check-in (§2: photos, odometer, fuel, body-damage marks, items left in the car), not on the repair order. The repair order shows it read-only at the top.
 - **Delivery:** the condition at exit (photos, odometer) is captured on the gate pass. Check-in and exit are shown side by side in the visit record.
+
+### 2.4 Vehicle inspection report [D14]
+The owner's two-page paper form ([docs/reference/Germanato_Vehicle_Inspection_Report.pdf](reference/Germanato_Vehicle_Inspection_Report.pdf)) becomes a digital inspection, filled in on a tablet or phone at the car and printed in the same layout.
+
+**Three kinds**, chosen when the inspection is started:
+
+| Kind | When | Linked to | Billing |
+|---|---|---|---|
+| **Workshop** | At check-in, or during diagnosis | The visit (§2) | Usually free; its findings feed the job card |
+| **Delivery** | At the gate pass, before the car leaves | The visit; shown next to the check-in | Free |
+| **Pre-purchase** | A buyer brings a car they are thinking of buying | Its own visit. The car may belong to the **seller**; buyer and seller are both recorded | Billed: a labour code such as `INSP-PRE`, invoiced like any other work, or as a counter sale |
+
+**Sections** (same order and wording as the paper form):
+
+| # | Section | Captured as |
+|---|---|---|
+| 1 | Vehicle & customer details | Pre-filled from the car and customer. Adds: year, engine no., fuel (Petrol / Diesel / Hybrid / EV); for pre-purchase, buyer and seller with phones |
+| 2 | Exterior / body / paint | 16 items (bumpers, bonnet, roof, boot, each fender, door and quarter, glass, lamps, mirrors, panel gaps), each with a rating |
+| 3 | Paint / accident check | Paint-meter findings per panel (Original / Repaint / Filler / Replaced), accident finding (no obvious structural repair / repair signs found), notes on chassis, apron, pillars and floor |
+| 4 | Tyres & wheels | Tread in mm and % for FL, FR, RL, RR, the spare, and whether the wheels are damaged |
+| 5 | Engine / transmission / mechanical | 16 items, each rated |
+| 6 | Suspension / steering / brakes | 10 checks |
+| 7 | Electrical / interior | 10 checks, plus notes |
+| 8 | Diagnostic scan | Tool, scan date, 12V battery (rest / running), warning lights, modules not communicating, and a **fault-code table**: module, DTC, description / status, priority |
+| 9 | Hybrid / EV (only if the fuel is Hybrid or EV) | HV battery SOC %, SOH % / kWh, pack voltage, cell imbalance mV, isolation MΩ, AC / DC charging OK or issue, cooling OK or issue, notes |
+| 10 | Road test | 12 items, each rated |
+| 11 | Repairs / estimated work required | Rows of priority, repair or part, remarks, estimated cost |
+| 12 | Overall assessment | Condition (Excellent / Good / Average / Poor), recommendation (Recommended / Recommended after repairs / Not recommended), immediate repair budget (PKR), inspector summary, inspector name and signature, customer/buyer acknowledgement and signature, inspection time, odometer |
+
+**Ratings and the "N/A" problem.** The paper form uses G = Good, A = Average, N/A = Needs Attention and N/C = Not Checked. Everyone reads "N/A" as "not applicable", so a customer could take a car that needs attention to mean "this item doesn't apply".
+- **On screen:** the ratings are shown as full words, with colour: Good, Average, **Needs attention**, Not checked.
+- **On the printed form:** the code becomes **NA = Needs attention**, with the legend printed on every page. ⚠️ Confirm this with the owner.
+- **Unrated items:** an item nobody rated is saved and printed as Not checked, never as Good.
+
+**Working on a tablet:**
+- Each item is a row of four large rating buttons (at least 44px), plus a note and a photo or video from the camera.
+- **"Mark section Good"** fills a section in one tap. The inspector then changes only the exceptions, and the activity trail records that the bulk action was used.
+- The form saves as you go, so a lost signal or a closed tab loses nothing, and it works offline on the branch server (§6).
+- Sections can be skipped. Hybrid / EV is hidden unless the fuel is Hybrid or EV.
+- **Signatures:** the inspector and the customer or buyer sign on the screen, stored as proof attachments. The inspector field is the signed-in user.
+
+**What it feeds:**
+- **Section 11 → job card:** each repair row can be sent to the visit's job card in one tap (§2), as a labour code or an inventory part. The estimated cost becomes the proposed price on the quotation. The customer can see the finding, its photo and the price side by side.
+- **Delivery inspection:** compared item by item against the check-in. Anything that got worse while the car was in the workshop is flagged before the gate pass.
+- **Car history (R2):** every inspection is listed with its date, odometer and overall condition; tyre tread and battery health show their trend across visits.
+- **Reports:** inspections done per inspector, pre-purchase inspections billed, and the most common "Needs attention" items.
+
+**Output:**
+- **The printed report** follows the paper layout: two A4 pages, the logo, numbered as `INS-A1F3-000123`. Photos go in an appendix, and the disclaimer is printed word for word: "Condition is recorded as observed at inspection time; this is not a warranty…"
+- **Sharing:** the report can be sent as a PDF on WhatsApp and is included in the visit record (§2, R1).
+- **Locking:** once signed by the inspector and customer, the inspection is **locked**. A correction creates a new version, and the signed one is kept.
+
+**Template:**
+- The sections and items are stored as a **versioned template**, so the owner can add or rename an item later without a code change.
+- Each saved inspection keeps the template version it was filled in on, so old reports print exactly as they were signed.
 
 ---
 
@@ -288,7 +344,7 @@ All tables have: `id uuid (v7)`, `branch_id` (except global tables), `created_at
 |---|---|
 | Org | `branches`, `users`, `user_branches`, `roles`, `role_permissions`, `settings` (per branch: tax rate, numbering, workshop details, WhatsApp config) |
 | Customers & cars | `customers` (global), `cars` (global), `car_ownerships` (car, customer, from, to, transfer reason, proof) |
-| Workshop | `visits`, `visit_checkins` (+ `visit_photos`), `job_cards` + `job_card_lines`, `quotations` (versioned) + `quotation_lines` + `quotation_approvals` (who, when, method, proof, approved lines), `repair_orders` + `repair_order_lines` + `repair_order_activity` (status changes, findings, notes, photos, parts events, customer updates, holds; with an internal/customer-visible flag), `invoices` (kind: workshop / counter sale; visit optional for counter sales) + `invoice_lines`, `credit_notes`, `gate_passes` |
+| Workshop | `visits`, `visit_checkins` (+ `visit_photos`), `inspection_templates` (versioned JSON: sections, items, field types), `inspections` (kind workshop / delivery / pre-purchase, visit, car, buyer, seller, template version, status draft / signed, overall condition, recommendation, budget, signatures) + `inspection_items` (item key, rating good / average / needs-attention / not-checked, note, photos) + `inspection_tyres` + `inspection_dtcs` + `inspection_repairs` (priority, repair, remarks, estimated cost, sent-to-job-card link), `job_cards` + `job_card_lines`, `quotations` (versioned) + `quotation_lines` + `quotation_approvals` (who, when, method, proof, approved lines), `repair_orders` + `repair_order_lines` + `repair_order_activity` (status changes, findings, notes, photos, parts events, customer updates, holds; with an internal/customer-visible flag), `invoices` (kind: workshop / counter sale; visit optional for counter sales) + `invoice_lines`, `credit_notes`, `gate_passes` |
 | Catalogue | `labour_codes` (no rate yet; see §3 R4), `inventory_items`, `item_codes` (barcode/MPN aliases), `item_price_history` |
 | Stock | `stock_movements` (item, qty ±, unit cost, type: grn / issue / return / adjustment / transfer, source doc), view `stock_levels` |
 | Purchasing | `vendors`, `purchase_orders` + lines, `goods_receipts` + lines, `vendor_bills` |
@@ -392,7 +448,7 @@ There is no production data to carry over, so this is a **new build** that uses 
 | **0** (done) | Feature inventory; Postgres; Alembic; contract tests of the old app (reference only) | — |
 | **1. Foundation** | Monorepo (`api/` FastAPI, `web/` Next.js), auth with httpOnly cookies, users/roles/permissions, branches, settings, audit log, attachments, UUIDv7 + outbox written from day 1, CI | 2 wk |
 | **2. Catalogue & people** | Customers, cars, ownership transfer [R7], car history page [R2], labour codes [R4], inventory items with barcode/MPN [R6], stock movements | 2–3 wk |
-| **3. Workshop chain** | Visit/check-in → job card → quotation (versions, approval, advance) → repair order (issue parts, activity trail) → invoice → gate pass, plus the Visit Dossier PDF [R1, R5]; **counter sales** with receipt printing [D11] | 5–6 wk |
+| **3. Workshop chain** | Visit/check-in → **vehicle inspection** (workshop / delivery / pre-purchase, printable, findings → job card) [D14] → job card → quotation (versions, approval, advance) → repair order (issue parts, activity trail) → invoice → gate pass, plus the Visit Dossier PDF [R1, R5]; **counter sales** with receipt printing [D11] | 6–7 wk |
 | **4. Purchasing** | Vendors, PO → GRN → bill → payment, weighted average cost, vendor ledger [R3] | 2 wk |
 | **5. Money** | Accounts, Money In / Money Out pages [R12, R13], expense categories, journal posting, daily cash close, evidence rules [R11] | 2–3 wk |
 | **6. HR** | Employees, attendance (ZKTeco push secured), advances, payroll posting to Money Out | 2 wk |
@@ -400,7 +456,7 @@ There is no production data to carry over, so this is a **new build** that uses 
 | **8. WhatsApp** | Templates, queue, webhooks, reminders, onboarding [R14] | 1–2 wk |
 | **9. Offline sync** | Branch server packaging (Docker on the workshop PC), nightly backups, sync worker to the cloud, conflict review screen [R10]. Cloud admin panel and inter-branch stock transfers are deferred until the 2nd branch [R9] | 2–3 wk |
 
-Total ≈ **22–28 weeks** for one developer, or about half that with two working in parallel after Phase 1. Each phase ends usable on its own; the workshop can start on the new system after Phase 5.
+Total ≈ **23–29 weeks** for one developer, or about half that with two working in parallel after Phase 1. Each phase ends usable on its own; the workshop can start on the new system after Phase 5.
 
 ---
 

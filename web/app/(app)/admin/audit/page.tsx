@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { RequirePermission } from "@/components/shell";
-import { Button, Card, ErrorBox, Field, PageTitle, Select } from "@/components/ui";
+import { Button, Card, EmptyState, ErrorState, Field, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 
 type Entry = {
@@ -11,25 +12,47 @@ type Entry = {
 };
 
 const PAGE = 50;
+const ACTIONS: Record<string, string> = {
+  create: "Created", update: "Changed", delete: "Deleted", login: "Signed in",
+  login_failed: "Failed sign-in", switch_branch: "Switched branch",
+};
+const RECORDS: Record<string, string> = {
+  users: "User", user_branches: "User's branch access", roles: "Role", role_permissions: "Role permission",
+  branches: "Branch", attachments: "Attachment",
+};
+const HIDDEN_FIELDS = new Set(["id", "created_at", "updated_at", "version", "created_by", "updated_by"]);
 
 export default function AuditPage() {
   return (
     <RequirePermission permission="audit">
-      <Audit />
+      <PageHeader
+        title="Audit log"
+        description="Every change and sign-in in this branch, newest first. Entries can't be edited or deleted."
+      />
+      {/* The filter lives in the URL, which needs a Suspense boundary. */}
+      <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
+        <Audit />
+      </Suspense>
     </RequirePermission>
   );
 }
 
 function Audit() {
-  const [action, setAction] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const action = useSearchParams().get("action") ?? "";
+
+  function setAction(value: string) {
+    router.replace(value ? `${pathname}?action=${value}` : pathname, { scroll: false });
+  }
+
   return (
     <>
-      <PageTitle title="Audit log" subtitle="Every change and sign-in in this branch, newest first. Entries can't be edited or deleted." />
       <div className="mb-4 max-w-xs">
-        <Field label="Action">
+        <Field label="Show">
           <Select value={action} onChange={(e) => setAction(e.target.value)}>
-            <option value="">All</option>
-            {["create", "update", "delete", "login", "login_failed", "switch_branch"].map((a) => <option key={a}>{a}</option>)}
+            <option value="">Everything</option>
+            {Object.entries(ACTIONS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
           </Select>
         </Field>
       </div>
@@ -43,60 +66,83 @@ function AuditList({ action }: { action: string }) {
   const first = useApi<Entry[]>(`/api/audit?${new URLSearchParams({ limit: String(PAGE), ...(action && { action }) })}`);
   const [older, setOlder] = useState<Entry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const entries = [...(first.data ?? []), ...older];
   const lastPageSize = older.length ? older.length % PAGE || PAGE : first.data?.length ?? 0;
 
   async function loadOlder() {
     const params = new URLSearchParams({ limit: String(PAGE), before: entries[entries.length - 1].at, ...(action && { action }) });
+    setBusy(true);
     try {
       const page = await api<Entry[]>(`/api/audit?${params}`);
       setOlder((prev) => [...prev, ...page]);
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
-    <>
-      <ErrorBox message={first.error ?? error} />
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-neutral-500">
-              <tr><th className="py-2">When</th><th>Who</th><th>Action</th><th>Record</th><th>Details</th></tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id} className="border-t border-neutral-100 align-top">
-                  <td className="whitespace-nowrap py-2 pr-3">{new Date(e.at).toLocaleString()}</td>
-                  <td className="pr-3">{e.user ?? "system"}</td>
-                  <td className="pr-3 font-medium">{e.action}</td>
-                  <td className="pr-3">{e.entity_type}</td>
-                  <td><Changes changes={e.changes} /></td>
+    <Card flush>
+      {first.error ? <ErrorState message={first.error} onRetry={first.reload} />
+        : !first.data ? <SkeletonRows rows={6} />
+        : !entries.length ? (
+          <EmptyState title="Nothing recorded yet">Changes and sign-ins appear here the moment they happen.</EmptyState>
+        ) : (
+          <>
+            <table className="table-stack w-full text-left">
+              <thead className="border-b border-rule text-sm text-muted">
+                <tr>
+                  <th className="px-5 py-3 font-medium">When</th>
+                  <th className="px-3 py-3 font-medium">Who</th>
+                  <th className="px-3 py-3 font-medium">What</th>
+                  <th className="px-5 py-3 font-medium">Details</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {first.loading && <p className="py-4 text-neutral-500">Loading…</p>}
-          {first.data && !entries.length && <p className="py-4 text-neutral-500">Nothing logged yet.</p>}
-        </div>
-        {lastPageSize === PAGE && <Button variant="secondary" className="mt-4" onClick={loadOlder}>Load older</Button>}
-      </Card>
-    </>
+              </thead>
+              <tbody>
+                {entries.map((e) => (
+                  <tr key={e.id} className="border-t border-rule align-top first:border-t-0">
+                    <td data-label="When" className="num whitespace-nowrap px-5 py-3 max-sm:px-0">{new Date(e.at).toLocaleString()}</td>
+                    <td data-label="Who" className="px-3 py-3 max-sm:px-0">{e.user ?? "System"}</td>
+                    <td data-label="What" className="px-3 py-3 max-sm:px-0">
+                      <span className="font-medium">{ACTIONS[e.action] ?? e.action}</span>{" "}
+                      <span className="text-muted">{RECORDS[e.entity_type] ?? e.entity_type}</span>
+                    </td>
+                    <td className="px-5 py-3 max-sm:px-0"><Changes changes={e.changes} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex flex-col gap-3 border-t border-rule p-4 shell:px-5">
+              <Notice>{error}</Notice>
+              {lastPageSize === PAGE && (
+                <div><Button variant="secondary" onClick={loadOlder} disabled={busy}>{busy ? "Loading" : "Show older entries"}</Button></div>
+              )}
+            </div>
+          </>
+        )}
+    </Card>
   );
 }
 
 function Changes({ changes }: { changes: Record<string, unknown> }) {
-  const rows = Object.entries(changes).filter(([k]) => !["id", "created_at", "updated_at", "version", "created_by", "updated_by"].includes(k));
-  if (!rows.length) return <span className="text-neutral-400">—</span>;
+  const rows = Object.entries(changes).filter(([k]) => !HIDDEN_FIELDS.has(k));
+  if (!rows.length) return <span className="text-muted">No field changes</span>;
   return (
-    <ul className="space-y-0.5 text-xs">
+    <ul className="space-y-1 text-sm">
       {rows.map(([k, v]) => (
-        <li key={k}>
-          <span className="text-neutral-500">{k}:</span>{" "}
-          {Array.isArray(v) && v.length === 2
-            ? <><s className="text-red-700">{String(v[0] ?? "∅")}</s> → <span className="text-green-700">{String(v[1] ?? "∅")}</span></>
-            : String(v ?? "∅")}
+        <li key={k} className="break-words">
+          <span className="text-muted">{k.replaceAll("_", " ")}</span>{" "}
+          {Array.isArray(v) && v.length === 2 ? (
+            <>
+              <del className="text-error">{String(v[0] ?? "empty")}</del>
+              <span aria-hidden="true" className="px-1 text-muted">→</span>
+              <ins className="text-success no-underline">{String(v[1] ?? "empty")}</ins>
+            </>
+          ) : (
+            <span>{String(v ?? "empty")}</span>
+          )}
         </li>
       ))}
     </ul>

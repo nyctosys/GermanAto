@@ -1,68 +1,147 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 
+// Every control is at least 44px tall (a finger, not a cursor) and changes
+// only colour on hover/press, never size.
+const control =
+  "min-h-11 rounded-control border px-3 text-base transition-colors duration-(--dur-micro) " +
+  "disabled:cursor-not-allowed disabled:opacity-55";
+
+const buttonVariants = {
+  primary: "border-accent bg-accent text-accent-ink hover:bg-accent-2 hover:border-accent-2 active:bg-accent-2",
+  secondary: "border-rule-strong bg-surface text-ink hover:bg-paper-2 active:bg-paper-3",
+  danger: "border-error bg-surface text-error hover:bg-error-soft active:bg-error-soft",
+  ghost: "border-transparent bg-transparent text-ink-2 hover:bg-paper-3 active:bg-paper-3",
+};
+
 export function Button({ variant = "primary", className = "", ...props }:
-  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" }) {
-  const styles = {
-    primary: "bg-brand text-white hover:bg-brand-dark",
-    secondary: "border border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-50",
-    danger: "bg-red-600 text-white hover:bg-red-700",
-  }[variant];
+  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof buttonVariants }) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50 ${styles} ${className}`}
+      className={`${control} inline-flex shrink-0 items-center justify-center gap-2 px-4 font-medium ${buttonVariants[variant]} ${className}`}
       {...props}
     />
   );
 }
 
+const field =
+  `${control} w-full border-rule-strong bg-surface text-ink placeholder:text-muted ` +
+  "hover:border-muted focus-visible:border-accent aria-invalid:border-error";
+
+export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={field} {...props} />;
+}
+
+export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select className={`${field} pr-8`} {...props} />;
+}
+
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <label className="block text-sm">
-      <span className="mb-1 block font-medium text-neutral-700">{label}</span>
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-sm font-medium text-ink-2">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-neutral-500">{hint}</span>}
+      {hint && <span className="text-sm text-muted">{hint}</span>}
     </label>
   );
 }
 
-const inputClass =
-  "w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand";
-
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={inputClass} {...props} />;
-}
-
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={inputClass} {...props} />;
-}
-
-export function ErrorBox({ message }: { message: string | null }) {
-  if (!message) return null;
-  return <p role="alert" className="whitespace-pre-line rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{message}</p>;
-}
-
-export function Card({ title, actions, children }: { title?: string; actions?: ReactNode; children: ReactNode }) {
+/** A checkbox whose whole row is the hit target. */
+export function Checkbox({ label, hint, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: ReactNode; hint?: string }) {
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white">
+    <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-control px-1 py-2.5 hover:bg-paper-2">
+      <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-accent" {...props} />
+      <span className="text-base leading-snug">
+        {label}
+        {hint && <span className="block text-sm text-muted">{hint}</span>}
+      </span>
+    </label>
+  );
+}
+
+const tones = {
+  error: "bg-error-soft text-error border-error/25",
+  success: "bg-success-soft text-success border-success/25",
+  warning: "bg-warning-soft text-warning border-warning/25",
+};
+
+export function Notice({ tone = "error", children }: { tone?: keyof typeof tones; children: ReactNode }) {
+  if (!children) return null;
+  return (
+    <p role={tone === "error" ? "alert" : "status"} className={`whitespace-pre-line rounded-control border px-3 py-2.5 text-sm ${tones[tone]}`}>
+      {children}
+    </p>
+  );
+}
+
+export function Card({ title, actions, children, flush = false }:
+  { title?: string; actions?: ReactNode; children: ReactNode; flush?: boolean }) {
+  return (
+    <section className="min-w-0 rounded-card border border-rule bg-surface">
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-3">
-          {title && <h2 className="font-semibold">{title}</h2>}
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-rule px-4 py-3 shell:px-5">
+          {title && <h2>{title}</h2>}
           {actions}
         </header>
       )}
-      <div className="p-4">{children}</div>
+      <div className={flush ? "" : "p-4 shell:p-5"}>{children}</div>
     </section>
   );
 }
 
-export function PageTitle({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">{title}</h1>
-        {subtitle && <p className="text-sm text-neutral-500">{subtitle}</p>}
+      <div className="min-w-0">
+        <h1>{title}</h1>
+        {description && <p className="mt-1 max-w-[60ch] text-muted">{description}</p>}
       </div>
-      {actions}
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   );
+}
+
+// The four states of anything that loads data: loading, empty, error, full.
+
+export function SkeletonRows({ rows = 4 }: { rows?: number }) {
+  return (
+    <div aria-busy="true" aria-label="Loading" className="space-y-3 p-4 shell:p-5">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex gap-4">
+          <div className="skeleton h-5 w-1/3" />
+          <div className="skeleton h-5 flex-1" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-start gap-3 p-6">
+      <p className="font-medium">{title}</p>
+      {children && <p className="max-w-[55ch] text-muted">{children}</p>}
+      {action}
+    </div>
+  );
+}
+
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div role="alert" className="flex flex-col items-start gap-3 p-6">
+      <p className="font-medium text-error">This didn&apos;t load</p>
+      <p className="max-w-[55ch] text-muted">{message}</p>
+      {onRetry && <Button variant="secondary" onClick={onRetry}>Try again</Button>}
+    </div>
+  );
+}
+
+export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "success" | "warning" | "error" | "accent"; children: ReactNode }) {
+  const styles = {
+    neutral: "bg-paper-3 text-ink-2",
+    success: "bg-success-soft text-success",
+    warning: "bg-warning-soft text-warning",
+    error: "bg-error-soft text-error",
+    accent: "bg-accent-soft text-accent",
+  }[tone];
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${styles}`}>{children}</span>;
 }

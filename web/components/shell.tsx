@@ -1,31 +1,42 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
-// One list drives the sidebar; an entry shows only if the user holds its
+// One list drives the navigation; an entry shows only if the user holds its
 // permission (the API enforces the same permission on the data).
 const NAV: { section: string; items: { href: string; label: string; permission: string }[] }[] = [
-  { section: "Overview", items: [{ href: "/", label: "Dashboard", permission: "dashboard" }] },
+  { section: "Workshop", items: [{ href: "/", label: "Dashboard", permission: "dashboard" }] },
   {
     section: "Administration",
     items: [
       { href: "/admin/users", label: "Users", permission: "users" },
-      { href: "/admin/roles", label: "Roles & permissions", permission: "users" },
+      { href: "/admin/roles", label: "Roles and permissions", permission: "users" },
       { href: "/admin/audit", label: "Audit log", permission: "audit" },
       { href: "/settings/branch", label: "Branch settings", permission: "settings" },
     ],
   },
 ];
 
-export function Shell({ children }: { children: ReactNode }) {
+function Brand() {
+  return (
+    <Link href="/" className="flex min-h-11 items-center gap-2.5 rounded-control">
+      <Image src="/logo.png" alt="" width={36} height={36} priority />
+      <span className="text-lg font-semibold">
+        <span className="text-accent">German</span>ATO
+      </span>
+    </Link>
+  );
+}
+
+function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   const session = useSession();
   const pathname = usePathname();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
 
   async function logout() {
     await api("/api/auth/logout", { method: "POST" });
@@ -34,34 +45,39 @@ export function Shell({ children }: { children: ReactNode }) {
 
   async function switchBranch(branchId: string) {
     await api("/api/auth/switch-branch", { method: "POST", json: { branch_id: branchId } });
-    window.location.reload();
+    window.location.reload(); // every screen reloads for the new branch
   }
 
-  const sidebar = (
-    <nav className="flex h-full flex-col gap-6 p-4">
-      <div>
-        <p className="text-lg font-semibold text-brand">GermanATO</p>
+  return (
+    <nav aria-label="Main" className="flex h-full flex-col gap-5 overflow-y-auto p-4">
+      <div className="rounded-control border border-rule bg-surface px-3 py-2.5">
         {session.branches.length > 1 ? (
-          <select
-            aria-label="Branch"
-            className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1 text-xs"
-            value={session.branch.id}
-            onChange={(e) => switchBranch(e.target.value)}
-          >
-            {session.branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-            ))}
-          </select>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm text-muted">Branch</span>
+            <select
+              className="min-h-11 rounded-control border border-rule-strong bg-surface px-2 text-base"
+              value={session.branch.id}
+              onChange={(e) => switchBranch(e.target.value)}
+            >
+              {session.branches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+              ))}
+            </select>
+          </label>
         ) : (
-          <p className="text-xs text-neutral-500">{session.branch.name} · {session.branch.code}</p>
+          <>
+            <p className="font-medium leading-snug">{session.branch.name}</p>
+            <p className="text-sm text-muted">Branch {session.branch.code}</p>
+          </>
         )}
       </div>
+
       {NAV.map(({ section, items }) => {
         const visible = items.filter((i) => session.can(i.permission));
         if (!visible.length) return null;
         return (
           <div key={section}>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">{section}</p>
+            <p className="mb-1 px-3 text-sm text-muted">{section}</p>
             <ul className="space-y-0.5">
               {visible.map((i) => {
                 const active = i.href === "/" ? pathname === "/" : pathname.startsWith(i.href);
@@ -69,8 +85,11 @@ export function Shell({ children }: { children: ReactNode }) {
                   <li key={i.href}>
                     <Link
                       href={i.href}
-                      onClick={() => setOpen(false)}
-                      className={`block rounded-md px-2 py-1.5 text-sm ${active ? "bg-brand-light font-medium text-brand" : "text-neutral-700 hover:bg-neutral-100"}`}
+                      onClick={onNavigate}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex min-h-11 items-center rounded-control px-3 transition-colors duration-(--dur-micro) ${
+                        active ? "bg-accent-soft font-medium text-accent" : "text-ink-2 hover:bg-paper-3 hover:text-ink"
+                      }`}
                     >
                       {i.label}
                     </Link>
@@ -81,29 +100,87 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         );
       })}
-      <div className="mt-auto border-t border-neutral-200 pt-3 text-sm">
-        <p className="font-medium">{session.user.full_name}</p>
-        <p className="text-xs text-neutral-500">{session.role.name}</p>
-        <button onClick={logout} className="mt-2 text-xs text-brand hover:underline">Sign out</button>
+
+      <div className="mt-auto border-t border-rule pt-4">
+        <p className="px-3 font-medium leading-snug">{session.user.full_name}</p>
+        <p className="px-3 text-sm text-muted">{session.role.name}</p>
+        <button
+          onClick={logout}
+          className="mt-2 flex min-h-11 w-full items-center rounded-control px-3 text-left text-ink-2 transition-colors duration-(--dur-micro) hover:bg-paper-3 hover:text-ink"
+        >
+          Sign out
+        </button>
       </div>
     </nav>
   );
+}
+
+export function Shell({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLDivElement>(null);
+
+  // Drawer: Escape closes, focus moves in and back out, the page behind can't scroll.
+  useEffect(() => {
+    if (!open) return;
+    const trigger = menuButton.current;
+    drawer.current?.querySelector<HTMLElement>("a, button, select")?.focus();
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+      trigger?.focus();
+    };
+  }, [open]);
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="no-print hidden w-60 shrink-0 border-r border-neutral-200 bg-white md:block">{sidebar}</aside>
+    <div className="flex min-h-dvh">
+      <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-rule bg-paper-2 shell:flex">
+        <div className="border-b border-rule px-4 py-3"><Brand /></div>
+        <Navigation />
+      </aside>
+
       {open && (
-        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 bg-black/30" />
-          <aside className="absolute inset-y-0 left-0 w-64 bg-white" onClick={(e) => e.stopPropagation()}>{sidebar}</aside>
+        <div className="fixed inset-0 z-40 shell:hidden">
+          <button aria-label="Close menu" className="absolute inset-0 bg-scrim" onClick={() => setOpen(false)} />
+          <div
+            ref={drawer}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
+            className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col bg-paper-2 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-rule px-4 py-2">
+              <Brand />
+              <button
+                aria-label="Close menu"
+                onClick={() => setOpen(false)}
+                className="flex size-11 items-center justify-center rounded-control text-ink-2 hover:bg-paper-3"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+              </button>
+            </div>
+            <Navigation onNavigate={() => setOpen(false)} />
+          </div>
         </div>
       )}
+
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="no-print flex items-center gap-3 border-b border-neutral-200 bg-white px-4 py-3 md:hidden">
-          <button aria-label="Open menu" onClick={() => setOpen(true)} className="rounded border border-neutral-300 px-2 py-1">☰</button>
-          <span className="font-semibold text-brand">GermanATO</span>
+        <header className="no-print sticky top-0 z-30 flex items-center gap-2 border-b border-rule bg-paper/95 px-2 py-1.5 backdrop-blur shell:hidden">
+          <button
+            ref={menuButton}
+            aria-label="Open menu"
+            aria-expanded={open}
+            onClick={() => setOpen(true)}
+            className="flex size-11 items-center justify-center rounded-control text-ink-2 hover:bg-paper-3"
+          >
+            <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 6h16M3 11h16M3 16h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+          </button>
+          <Brand />
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 shell:px-10 shell:py-10">{children}</main>
       </div>
     </div>
   );
@@ -113,7 +190,12 @@ export function Shell({ children }: { children: ReactNode }) {
 export function RequirePermission({ permission, children }: { permission: string; children: ReactNode }) {
   const session = useSession();
   if (!session.can(permission)) {
-    return <p className="rounded-md bg-amber-50 p-4 text-sm text-amber-900">You don&apos;t have access to this page.</p>;
+    return (
+      <div className="rounded-card border border-rule bg-surface p-6">
+        <p className="font-medium">You don&apos;t have access to this page</p>
+        <p className="mt-1 text-muted">Ask an administrator to add the “{permission}” permission to your role.</p>
+      </div>
+    );
   }
   return <>{children}</>;
 }

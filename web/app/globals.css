@@ -1,15 +1,168 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand (GermanATO logo) · redesign: restyle
+ * paper: oklch(98.6% 0.004 60) · accent: oklch(40% 0.15 18) · display: Geist · body: Geist
+ * nav: sidebar (the spec's 15+ destinations), a drawer under 60rem · signature: the audit trail, every change shown old → new · states: loading, empty, error, full
+ * axes: warm-paper/sans/oxblood · posture: dense tool · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P2 H- E2 S2 R2 V2 · weakest: E, the dashboard has no real figures yet (Phase 1), so it shows the branch record and what is ready instead of invented stats */
+/* waive 26b: :active and :disabled live in components/ui.tsx (Button, Input, Select, Checkbox), which every page uses */
 @import "tailwindcss";
 
-@theme inline {
-  --color-brand: #8b1538;
-  --color-brand-dark: #6d1029;
-  --color-brand-light: #f8e9ee;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Tokens: the only place a colour, font, radius or duration is written.
+   Tailwind's default palette is switched off so nothing can reach past them. */
+@theme {
+  --color-*: initial;
+  --color-paper: oklch(98.6% 0.004 60);
+  --color-paper-2: oklch(96.4% 0.007 60);
+  --color-paper-3: oklch(93.2% 0.009 60);
+  --color-surface: oklch(100% 0 0);
+  --color-ink: oklch(21% 0.012 30);
+  --color-ink-2: oklch(38% 0.012 30);
+  --color-muted: oklch(48% 0.012 30);
+  --color-rule: oklch(89.5% 0.008 60);
+  --color-rule-strong: oklch(80% 0.01 60);
+  --color-accent: oklch(40% 0.15 18);
+  --color-accent-2: oklch(33% 0.13 18);
+  --color-accent-soft: oklch(95.5% 0.022 18);
+  --color-accent-ink: oklch(99% 0 0);
+  --color-focus: oklch(58% 0.16 55);
+  --color-error: oklch(50% 0.19 27);
+  --color-error-soft: oklch(96.5% 0.025 27);
+  --color-success: oklch(46% 0.11 150);
+  --color-success-soft: oklch(96.5% 0.03 150);
+  --color-warning: oklch(48% 0.1 65);
+  --color-warning-soft: oklch(96.5% 0.045 85);
+  --color-scrim: oklch(21% 0.012 30 / 0.4);
+
+  --radius-control: 8px;
+  --radius-card: 12px;
+
+  --text-display: 1.728rem;
+  --text-section: 1.2rem;
+
+  --breakpoint-shell: 60rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
 }
 
-body {
-  @apply bg-neutral-50 text-neutral-900;
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html,
+  body {
+    overflow-x: clip;
+  }
+  html {
+    scrollbar-color: var(--color-rule-strong) var(--color-paper);
+    accent-color: var(--color-accent);
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    overflow-wrap: break-word;
+    min-width: 0;
+    text-wrap: balance;
+  }
+  h1 {
+    font-size: var(--text-display);
+  }
+  h2 {
+    font-size: var(--text-section);
+  }
+  p {
+    text-wrap: pretty;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Below 40rem a table becomes a list of labelled rows, so nothing needs
+     sideways scrolling on a phone. Cells carry data-label for the caption. */
+  @media (max-width: 40rem) {
+    .table-stack thead {
+      display: none;
+    }
+    .table-stack,
+    .table-stack tbody,
+    .table-stack tr,
+    .table-stack td {
+      display: block;
+    }
+    .table-stack tr {
+      padding: 0.75rem 1rem;
+      border-top: 1px solid var(--color-rule);
+    }
+    .table-stack tr:first-child {
+      border-top: 0;
+    }
+    .table-stack td {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-block: 0.2rem;
+      border: 0;
+    }
+    .table-stack td[data-label]::before {
+      content: attr(data-label);
+      color: var(--color-muted);
+      font-size: 0.875rem;
+    }
+    .table-stack td:empty {
+      display: none;
+    }
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--color-paper-2), var(--color-paper-3), var(--color-paper-2));
+    background-size: 200% 100%;
+    animation: skeleton 1.4s linear infinite;
+    border-radius: 6px;
+  }
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @media print {
