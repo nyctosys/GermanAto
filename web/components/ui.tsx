@@ -17,7 +17,8 @@ export function Button({ variant = "primary", className = "", ...props }:
   ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof buttonVariants }) {
   return (
     <button
-      className={`${control} inline-flex shrink-0 items-center justify-center gap-2 px-4 font-medium ${buttonVariants[variant]} ${className}`}
+      // Feedback on press, not on release (Apple's "response" principle): a 2% dip while held.
+      className={`${control} inline-flex shrink-0 items-center justify-center gap-2 px-4 font-medium transition-[color,background-color,border-color,scale] active:scale-[0.98] disabled:active:scale-100 ${buttonVariants[variant]} ${className}`}
       {...props}
     />
   );

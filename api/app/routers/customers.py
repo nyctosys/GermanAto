@@ -1,7 +1,7 @@
 """Customers, cars, ownership transfers and car history (spec R2, R7)."""
 
 import uuid
-from datetime import date, datetime
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -268,7 +268,8 @@ def car_history(car_id: uuid.UUID, _: Actor = Depends(can_view), db: Session = D
     events: list[dict] = []
     for o, c in db.execute(select(CarOwnership, Customer).join(Customer, Customer.id == CarOwnership.customer_id)
                            .where(CarOwnership.car_id == car.id)):
-        events.append({"at": datetime.combine(o.since, datetime.min.time()).isoformat(), "kind": "ownership",
+        # Sorted by when it was recorded (two owners can share a date); shown with the transfer date.
+        events.append({"at": o.created_at.isoformat(), "on": o.since.isoformat(), "kind": "ownership",
                        "title": f"Owned by {c.name}", "detail": o.reason, "odometer_km": o.odometer_km,
                        "link": f"/customers/{c.id}"})
     for a, username in db.execute(select(AuditLog, User.username).outerjoin(User, User.id == AuditLog.user_id)
@@ -276,7 +277,7 @@ def car_history(car_id: uuid.UUID, _: Actor = Depends(can_view), db: Session = D
                                          AuditLog.action == "update")):
         fields = [k for k in a.changes if k not in ("plate_norm",)]
         if fields:
-            events.append({"at": a.at.isoformat(), "kind": "edit", "title": "Details changed",
+            events.append({"at": a.at.isoformat(), "on": None, "kind": "edit", "title": "Details changed",
                            "detail": ", ".join(f.replace("_", " ") for f in fields) + (f" by {username}" if username else ""),
                            "odometer_km": None, "link": None})
     events.sort(key=lambda e: e["at"], reverse=True)

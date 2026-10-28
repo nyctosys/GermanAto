@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  /** `detail` keeps structured errors, e.g. {code: "duplicate_phone", matches: [...]}. */
+  constructor(public status: number, message: string, public detail?: unknown) {
     super(message);
   }
 }
@@ -12,6 +13,7 @@ export class ApiError extends Error {
 function messageOf(body: unknown, status: number): string {
   const detail = (body as { detail?: unknown })?.detail;
   if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && "message" in detail) return String((detail as { message: unknown }).message);
   if (Array.isArray(detail)) {
     return detail
       .map((d: { loc?: (string | number)[]; msg?: string }) => {
@@ -37,7 +39,7 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
   }
-  if (!res.ok) throw new ApiError(res.status, messageOf(body, res.status));
+  if (!res.ok) throw new ApiError(res.status, messageOf(body, res.status), (body as { detail?: unknown })?.detail);
   return body as T;
 }
 

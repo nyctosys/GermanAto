@@ -10,7 +10,21 @@ import { useSession } from "@/lib/session";
 // One list drives the navigation; an entry shows only if the user holds its
 // permission (the API enforces the same permission on the data).
 const NAV: { section: string; items: { href: string; label: string; permission: string }[] }[] = [
-  { section: "Workshop", items: [{ href: "/", label: "Dashboard", permission: "dashboard" }] },
+  {
+    section: "Workshop",
+    items: [
+      { href: "/", label: "Dashboard", permission: "dashboard" },
+      { href: "/customers", label: "Customers", permission: "customers" },
+      { href: "/cars", label: "Cars", permission: "customers" },
+    ],
+  },
+  {
+    section: "Stock and services",
+    items: [
+      { href: "/inventory", label: "Inventory", permission: "inventory" },
+      { href: "/labour-codes", label: "Labour codes", permission: "dashboard" },
+    ],
+  },
   {
     section: "Administration",
     items: [
