@@ -169,7 +169,7 @@ The owner's two-page paper form ([docs/reference/Germanato_Vehicle_Inspection_Re
 
 **Ratings and the "N/A" problem.** The paper form uses G = Good, A = Average, N/A = Needs Attention and N/C = Not Checked. Everyone reads "N/A" as "not applicable", so a customer could take a car that needs attention to mean "this item doesn't apply".
 - **On screen:** the ratings are shown as full words, with colour: Good, Average, **Needs attention**, Not checked.
-- **On the printed form:** the code becomes **NA = Needs attention**, with the legend printed on every page. ⚠️ Confirm this with the owner.
+- **On the printed form:** the code becomes **NA = Needs attention**, with the legend printed on every page. ✅ Owner confirmed, 2026-10-28.
 - **Unrated items:** an item nobody rated is saved and printed as Not checked, never as Good.
 
 **Working on a tablet:**
