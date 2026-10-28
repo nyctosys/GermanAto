@@ -26,7 +26,7 @@ Last updated: 28 Oct 2026, Phase 4 (purchasing: vendors, purchase orders, goods 
 18. [Not built yet](#18-not-built-yet)
 19. [For developers](#19-for-developers)
 
-Purchasing (vendors, purchase orders, goods received, bills and vendor payments) is [section 20](#20-purchasing).
+Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money).
 
 ---
 
@@ -98,6 +98,7 @@ The visit page shows where the job stands in its **The job** panel: job card, qu
 | `purchasing` | Write and send purchase orders, record and void vendor bills |
 | `goods-receipt` | Count stock in against a purchase order |
 | `payments-out` | Pay vendors (and void a vendor payment) |
+| `expenses` | Record daily and major expenses |
 
 Roles set up at the start: **Admin** (everything), **Accountant** (including vendors and paying them), **Inventory manager** (including vendors, purchase orders and receiving stock). More roles (front desk, technician, cashier) are made under Roles and permissions. A role that already exists keeps the permissions it had: tick the four purchasing permissions on it under Roles and permissions to use purchasing.
 
@@ -414,6 +415,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0007 | Repair orders and their activity |
 | 0008 | Invoices, gate pass fields, payment links to invoices |
 | 0009 | Vendors, purchase orders, goods receipts, vendor bills, vendor payments |
+| 0010 | Accounts and expense categories |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).
@@ -508,3 +510,14 @@ Numbers: `PO-A1F3-000001`.
 - A purchase order, receipt and bill each keep their number; nothing is deleted.
 - Money paid to vendors is recorded the same way as money received: with proof or a reason.
 - Vendor payments will also appear on the Money Out page when it is built.
+
+---
+
+## 21. Money
+
+### Accounts and expense categories
+**Where:** Administration → Money settings (needs `settings`).
+- Every branch has three **accounts**: **Cash in hand**, **Bank account** and **Mobile wallet**. They are created the first time they are needed.
+- Each account has an **opening balance** and the date it applies from: what was in the account when you started using the system. Every later change to the account comes from money in and money out; nobody types a balance.
+- **Expense categories** are a managed list (tea, fuel, rent, electricity, repairs, equipment, stationery, internet, marketing, bank charges, taxes, other). Add one, rename one, or **retire** one: a retired category can't be chosen for new expenses but stays on the expenses already recorded. A name can't be used twice (capitals ignored).
+- The accountant can see accounts and categories; only people with `settings` change them.

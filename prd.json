@@ -17,7 +17,7 @@
         "docs/SYSTEM_GUIDE.md updated in the same commit"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

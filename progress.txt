@@ -15,3 +15,6 @@
 ## Done before the PRD
 - Phases 0 to 4 and the workshop chain (check-in to gate pass), purchasing, guide sections 1 to 20.
 
+## US-501 (accounts and categories)
+- Accounts are keyed by kind (cash/bank/wallet), one each per branch; payments keep storing the kind string. ensure_money_setup() creates them lazily on first read.
+- Tests live in api/tests/test_phase5_money.py; add later money stories there.

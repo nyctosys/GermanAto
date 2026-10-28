@@ -48,6 +48,7 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
       { href: "/admin/roles", label: "Roles and permissions", permission: "users" },
       { href: "/admin/audit", label: "Audit log", permission: "audit" },
       { href: "/settings/branch", label: "Branch settings", permission: "settings" },
+      { href: "/settings/money", label: "Money settings", permission: "settings" },
     ],
   },
 ];

@@ -163,3 +163,16 @@ export const billSchema = z.object({
   if (Number(b.adjustment || 0) !== 0 && b.adjustment_reason.length < 3) ctx.addIssue({ code: "custom", path: ["adjustment_reason"], message: "Say what it is for (freight, discount)" });
   if (b.due_on && b.due_on < b.bill_date) ctx.addIssue({ code: "custom", path: ["due_on"], message: "Before the bill date" });
 });
+
+// --- money ----------------------------------------------------------------------------------------
+
+/** A money amount typed by a person: whole rupees or paisa, never negative. */
+export const rupees = z.string().trim().refine((v) => v === "" || /^\d{1,10}(\.\d{1,2})?$/.test(v), "Enter an amount");
+
+export const accountSchema = z.object({
+  name,
+  opening_balance: rupees.transform((v) => v || "0"),
+  opening_date: z.string().min(1, "Required").refine((v) => v <= new Date().toLocaleDateString("en-CA"), "Can't be in the future"),
+});
+
+export const categorySchema = z.object({ name: text(80).min(1, "Required") });

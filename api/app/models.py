@@ -753,3 +753,31 @@ class VendorPayment(BranchScoped):
     paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     paid_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     void_reason: Mapped[str] = mapped_column(Text, default="")
+
+
+# --- money: accounts and expense categories (spec R12, R13) ----------------------------------------
+
+class Account(BranchScoped):
+    """Where money physically is: the cash drawer, the bank, a mobile wallet. One of each per branch."""
+
+    __tablename__ = "accounts"
+    __table_args__ = (
+        CheckConstraint("kind IN ('cash', 'bank', 'wallet')", name="account_kind"),
+        UniqueConstraint("branch_id", "kind"),
+    )
+
+    kind: Mapped[str] = mapped_column(String(8))
+    name: Mapped[str] = mapped_column(String(60))
+    opening_balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    opening_date: Mapped[date] = mapped_column(Date)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ExpenseCategory(BranchScoped):
+    """A managed list, so expenses never drift into free-text categories."""
+
+    __tablename__ = "expense_categories"
+    __table_args__ = (Index("uq_expense_category_name", "branch_id", func.lower(text("name")), unique=True),)
+
+    name: Mapped[str] = mapped_column(String(80))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
