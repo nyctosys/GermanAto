@@ -13,6 +13,7 @@ PERMISSIONS: dict[str, str] = {
     "inventory": "See stock and add or edit items",
     "stock-adjust": "Correct stock levels (opening stock, counts, write-offs)",
     "visits": "Check cars in and out, run inspections",
+    "gate": "See the cars ready to leave and release them with a gate pass (guard)",
     "job-cards": "Write job cards",
     "quotations": "Price and send quotations, record approvals",
     "repair-orders": "Work repair orders and issue parts",
@@ -42,6 +43,14 @@ PERMISSIONS: dict[str, str] = {
 
 DEFAULT_ROLES: dict[str, dict] = {
     "Admin": {"is_admin": True, "permissions": []},
+    # Each role holds exactly the permissions for its own part of the work, so the system hands a job from one person
+    # to the next by itself (the Dashboard's "My work" shows each person what is waiting for them).
+    "Manager": {"is_admin": False, "permissions": ["dashboard", "attachments", "customers", "visits", "job-cards", "quotations", "repair-orders", "invoices",
+                                                   "labour-codes", "inventory", "messages", "reports-ops", "evidence-signoff"]},
+    "Front desk": {"is_admin": False, "permissions": ["dashboard", "attachments", "customers", "visits", "job-cards", "quotations", "messages", "labour-codes"]},
+    "Technician": {"is_admin": False, "permissions": ["dashboard", "attachments", "visits", "job-cards", "repair-orders"]},
+    "Cashier": {"is_admin": False, "permissions": ["dashboard", "attachments", "customers", "invoices", "invoice-issue", "payments-in"]},
+    "Guard": {"is_admin": False, "permissions": ["dashboard", "gate"]},
     "Accountant": {"is_admin": False, "permissions": ["dashboard", "attachments", "audit", "customers", "vendors", "payments-out", "expenses", "reports-finance", "cash-close", "hr", "payroll", "period-close", "reports-ops"]},
     "Inventory manager": {"is_admin": False, "permissions": ["dashboard", "attachments", "inventory", "stock-adjust",
                                                             "labour-codes", "vendors", "purchasing", "goods-receipt"]},

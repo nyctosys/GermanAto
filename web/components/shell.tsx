@@ -23,6 +23,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { href: "/", label: "Dashboard", permission: "dashboard", keys: "g d" },
       { href: "/visits", label: "Cars in the workshop", permission: "visits", keys: "g v" },
+      { href: "/gate", label: "Cars ready to leave", permission: ["gate", "visits"], keys: "g l" },
       { href: "/quotations", label: "Quotations", permission: "quotations", keys: "g q" },
       { href: "/repair-orders", label: "Repair orders", permission: "repair-orders", keys: "g r" },
       { href: "/invoices", label: "Invoices and counter sales", permission: "invoices", keys: "g i" },

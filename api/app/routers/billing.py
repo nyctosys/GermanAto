@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.auth import Actor, require
+from app.auth import Actor, require, require_any
 from app import messaging
 from app.models import Car, Customer, Visit  # noqa: F811
 from app.db import get_db, utcnow
@@ -34,6 +34,7 @@ can_bill = require("invoices")
 can_issue = require("invoice-issue")
 can_take = require("payments-in")
 can_visit = require("visits")
+can_gate = require_any("visits", "gate")  # the guard holds only "gate"
 
 
 def _get_invoice(db: Session, actor: Actor, invoice_id: uuid.UUID, *, lock: bool = False) -> Invoice:
@@ -450,13 +451,31 @@ def gate_check(db: Session, v: Visit) -> dict:
     return {"blockers": blockers, "warnings": warnings, "balance": balance, "invoice_id": inv and inv.id}
 
 
+@router.get("/gate/queue")
+def gate_queue(actor: Actor = Depends(can_gate), db: Session = Depends(get_db)):
+    """Cars that can leave now: repair finished and invoiced. What the guard works from. A balance means only an admin may release."""
+    out = []
+    rows = db.execute(select(Visit, RepairOrder).join(RepairOrder, RepairOrder.visit_id == Visit.id)
+                      .where(Visit.branch_id == actor.branch.id, Visit.status == "open", RepairOrder.status == "ready").order_by(Visit.checked_in_at))
+    for v, ro in rows:
+        check = gate_check(db, v)
+        if check["blockers"]:
+            continue
+        car, cust = db.get(Car, v.car_id), db.get(Customer, v.customer_id)
+        inv = db.get(Invoice, check["invoice_id"]) if check["invoice_id"] else None
+        out.append({"id": v.id, "number": v.number, "plate": car.plate, "car": " ".join(str(x) for x in (car.year, car.make, car.model) if x),
+                    "customer": cust.name, "invoice": inv.number if inv else None, "balance": check["balance"], "odometer_in": v.odometer_in,
+                    "can_release": check["balance"] <= 0 or actor.can("release-on-credit")})
+    return out
+
+
 @router.get("/visits/{visit_id}/gate-check")
-def get_gate_check(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Session = Depends(get_db)):
+def get_gate_check(visit_id: uuid.UUID, actor: Actor = Depends(can_gate), db: Session = Depends(get_db)):
     return gate_check(db, _get_visit(db, actor, visit_id))
 
 
 @router.post("/visits/{visit_id}/gate-pass")
-def gate_pass(visit_id: uuid.UUID, body: GatePassIn, actor: Actor = Depends(can_visit), db: Session = Depends(get_db)):
+def gate_pass(visit_id: uuid.UUID, body: GatePassIn, actor: Actor = Depends(can_gate), db: Session = Depends(get_db)):
     """The car leaves. Blocked while there is a balance, unless someone with
     release-on-credit approves with a reason (owner decision 3)."""
     v = _get_visit(db, actor, visit_id, lock=True)

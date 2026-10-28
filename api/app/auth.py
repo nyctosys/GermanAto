@@ -107,6 +107,20 @@ def require(permission: str):
     return check
 
 
+def require_any(*permissions: str):
+    """Allow a person holding any one of these (a role whose work only touches part of a screen)."""
+    for permission in permissions:
+        if permission not in PERMISSIONS:
+            raise ValueError(f"Unknown permission {permission!r}")
+
+    def check(actor: Actor = Depends(current_actor)) -> Actor:
+        if not any(actor.can(p) for p in permissions):
+            raise HTTPException(403, "You don't have permission to do this")
+        return actor
+
+    return check
+
+
 def user_branch_ids(db: Session, user: User) -> list[uuid.UUID]:
     if user.role.is_admin:
         return list(db.scalars(select(Branch.id).where(Branch.is_active)))

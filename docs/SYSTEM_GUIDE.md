@@ -26,7 +26,7 @@ Last updated: 28 Oct 2026. Every phase (0 to 9) is built; see section 18 for wha
 18. [Not built yet](#18-not-built-yet)
 19. [For developers](#19-for-developers)
 
-Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end). Customer messages (WhatsApp) is [section 24](#24-customer-messages). Running the server and syncing is [section 25](#25-server-backups-and-sync). The in-app user manual is [section 26](#26-the-help-page-user-manual). Interface behaviour (search, shortcuts, loading, duplicate protection) is [section 27](#27-interface-behaviour).
+Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end). Customer messages (WhatsApp) is [section 24](#24-customer-messages). Running the server and syncing is [section 25](#25-server-backups-and-sync). The in-app user manual is [section 26](#26-the-help-page-user-manual). Interface behaviour (search, shortcuts, loading, duplicate protection) is [section 27](#27-interface-behaviour). Who does what (roles and hand-offs) is [section 28](#28-roles-and-hand-offs).
 
 ---
 
@@ -108,6 +108,7 @@ The visit page shows where the job stands in its **The job** panel: job card, qu
 | `period-close` | Close a finished month, with its checklist |
 | `period-approve` | Reopen a closed month (admin) |
 | `reports-ops` | See operations reports |
+| `gate` | See the cars ready to leave and release them with a gate pass (guard) |
 | `hr` | Manage employees, attendance and attendance devices |
 | `payroll` | Run payroll and give salary advances |
 | `evidence-signoff` | Accept a money record that has no proof, with a reason (admin) |
@@ -876,3 +877,48 @@ A step-by-step manual with procedures (SOPs) for every area: start here, front d
 - **Every printed document is laid out for A4 portrait**, 12 mm margins, black on white, table headings repeated on each page, and no table row, list item or heading split across a page break. This is applied by the bar at the top of every document (`web/components/print.tsx`). The gate pass and the payslip, which were A5, are now A4 too.
 - **Quotation terms and conditions.** A quotation prints on one sheet, followed by a page headed **TERMS & CONDITIONS** with a signature line. The standard text is the 15 clauses of the legacy system's quotation, word for word (`api/app/terms.py`). Administration → Branch settings has a box to change them (one clause per line); clearing the box and saving returns to the standard text. Invoices do not carry terms (as in the legacy system).
 - **Download for Excel** is on every printed document (quotation, invoice, purchase order, visit record, inspection, gate pass, payslip, closing pack). It makes a real `.xlsx` of what is on the page: headings, lines of text, numbered clauses and every table, one row each, with amounts as real numbers so Excel can add them up, bold headings, and A4 page setup. Code: `web/lib/xlsx.ts` (no spreadsheet library; it writes the file format directly with `fflate`).
+
+---
+
+## 28. Roles and hand-offs
+
+The system is built so that one job passes from person to person **without anyone telling anyone**. Each step ends in a state (a quotation is approved, a repair is Ready, an invoice is paid), and that state puts the next task in front of the right role.
+
+### Suggested roles
+Each person gets **one** role, holding only the permissions for their part. Seven standard roles are created by the first-run setup (`uv run python -m app.seed ...`; running it again adds any that are missing and never changes a role that exists).
+| Role | Does | Cannot |
+|---|---|---|
+| **Owner (Admin)** | Everything, and the decisions only an owner makes: releasing a car on credit, accepting a payment with no proof, reopening a month, refunding a held advance. | |
+| **Manager** | Runs the workshop floor: customers, check-in, job cards, quotations, repair orders, invoices; sees stock and the workshop report; messages; accepts payments without proof. | Take or pay money, close months, see the books. |
+| **Front desk** | Receives customers and cars, checks cars in, inspections, job cards, prices and sends quotations, records the customer's approval, WhatsApp messages. | Issue invoices, take money, issue parts. |
+| **Technician** | Repair orders: issues parts, marks jobs done, writes findings, moves the job to Ready. Inspections. | See prices of other work, money, customers' accounts. |
+| **Cashier** | Makes and issues invoices, takes payments and advances, counter sales. | Pay vendors, change stock, close the day. |
+| **Guard** | Sees only **Cars ready to leave** and releases a car with the gate pass (odometer, who took it). A car that still owes money cannot be released by the guard. | Everything else. |
+| **Accountant** | Pays vendors, records expenses, cash close each evening, missing-proof follow-up, payroll, reports, month end. | Take customer payments, receive stock. |
+| **Inventory manager** | Inventory, stock counts, vendors, purchase orders, receiving deliveries. | Pay the bill, see the books. |
+
+**Small workshop?** Make a custom role under Administration → Roles and permissions that adds the permissions of two roles (for example **Front desk + Cashier**). Keep these apart even in a small team, so no one person can take the money and also close the day: *receiving stock* and *paying the bill*, and *recording money* and *closing the day*.
+
+### The hand-off chain
+| Step | Who finishes it | What puts the next task on someone's screen |
+|---|---|---|
+| Car arrives, checked in | Front desk | Front desk (and technician): **Cars waiting for a job card** |
+| Job card done, quotation made | Front desk | **Quotations to price and send** |
+| Quotation sent | Front desk | **Waiting for the customer's answer** (follow-up) |
+| Customer approves | Front desk | Manager: **Approved: make the repair order** |
+| Repair order made | Manager | Technician: **Repairs in progress** |
+| Repair moved to Ready | Technician | Cashier or manager: **Finished repairs: make the invoice** |
+| Invoice made | Cashier | **Invoices to check and issue** |
+| Invoice issued | Cashier | Cashier: **Waiting for payment**; guard: car appears in **Cars ready to leave**, marked "owes" until paid |
+| Invoice paid | Cashier | Guard: **Release this car** |
+| Car released | Guard | Visit closes |
+| Stock runs low | (automatic) | Inventory manager: **Running low: order more**; accountant sees the **bills to pay** |
+| Purchase order sent / goods arrive | Inventory manager | **Deliveries to receive**, then accountant/purchasing: **Deliveries waiting for the vendor's bill**, then **Vendor bills to pay** |
+| Evening | Accountant | **Close today's cash**; owner: **Payments with no proof** |
+| Month ends | Accountant | **Months to close** |
+
+### My work
+**Where:** the Dashboard, first section. It lists only the queues for the work **the signed-in person's permissions allow**, each with a count, the oldest items (and how long they have waited) and a "See all" link. Nothing there to do: "Nothing is waiting for you." People whose work is not the overview (guard, technician, cashier) see only My work; owners, managers and accountants also see the overview numbers below it. Queues are worked out from the records themselves (`api/app/routers/mywork.py`, `GET /api/my-work`), so they depend on **permissions, not role names**, and a custom role gets exactly the queues its permissions imply. Each visit also shows **Next step ... For: Cashier** at the top.
+
+### Cars ready to leave (guard)
+**Where:** Cars ready to leave (needs `gate` or `visits`; endpoint `GET /api/gate/queue`). Each car shows its plate, car, customer and invoice. **Release this car** opens a short form (odometer now, who is taking the car); a car that still owes money shows "Do not release" instead, because only a person holding `release-on-credit` may release it on credit, from the visit page.

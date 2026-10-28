@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MyWork } from "@/components/my-work";
 import { Stat, StatGroup } from "@/components/reports";
 import { Card, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
 import { useApi } from "@/lib/api";
@@ -23,6 +24,7 @@ export default function Dashboard() {
   if (d.error) return <Card flush><ErrorState message={d.error} onRetry={d.reload} /></Card>;
   if (!d.data) return <Card flush><SkeletonRows rows={6} /></Card>;
   const { workshop: w, money: m, alerts: a } = d.data;
+  const overview = can("visits") || can("reports-ops") || can("reports-finance") || can("inventory");
   const todo: [string, string, string][] = a ? [
     ...(a.missing_proof ? [[`${a.missing_proof} payment${a.missing_proof === 1 ? "" : "s"} with no proof`, "/missing-evidence", "Waiting for an admin to accept them"] as [string, string, string]] : []),
     ...(a.overdue_invoices ? [[`${a.overdue_invoices} invoice${a.overdue_invoices === 1 ? "" : "s"} unpaid for over 30 days`, "/reports/finance?r=receivables", "Customers who owe us"] as [string, string, string]] : []),
@@ -37,6 +39,10 @@ export default function Dashboard() {
         description={`${branch.name}. ${todo.length ? `${todo[0][0]}${todo.length > 1 ? `, and ${todo.length - 1} more thing${todo.length > 2 ? "s" : ""} to look at` : ""}.` : "Everything is up to date."}`}
         actions={can("visits") ? <Link href="/visits/new" className="flex min-h-11 items-center rounded-control bg-accent px-5 font-medium text-accent-ink hover:bg-accent-2 active:bg-accent-3 active:duration-0">Check in a car</Link> : undefined} />
 
+      <h2 className="mb-2">My work</h2>
+      <div className="mb-6"><MyWork /></div>
+
+      {overview && <>
       <section aria-label="Needs attention" className="mb-4">
         <Card title="Needs attention" flush>
           {!todo.length ? <p className="px-4 py-4 text-success shell:px-5">Nothing needs attention.</p> : (
@@ -79,6 +85,7 @@ export default function Dashboard() {
           </StatGroup></div>
         </>
       )}
+      </>}
     </>
   );
 }

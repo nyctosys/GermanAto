@@ -86,3 +86,5 @@
 ## Terms, A4, Excel, toasts, back
 - Terms: Branch.quotation_terms (blank = app/terms.py defaults, from the legacy quotation). PrintBar applies shared A4 print CSS and builds .xlsx from the rendered document (lib/xlsx.ts sheetFromDocument), so a new print page gets both for free. api() shows toasts (DONE list); pass toast:false to silence. Shell shows BackButton for PARENT paths.
 - Bug found by the toast work: message wording form never saved (checkbox 'on' vs z.boolean()).
+## Roles and My work
+- Default roles in permissions.py (Manager, Front desk, Technician, Cashier, Guard + Accountant, Inventory manager); `app.seed` adds missing ones. routers/mywork.py builds queues from record state, filtered by permission. New permission `gate`; gate endpoints use require_any(visits, gate). When adding a workflow step, add its queue in mywork.build.

@@ -37,6 +37,58 @@ export const WORDS: [string, string][] = [
 
 export const CHAPTERS: Chapter[] = [
   {
+    id: "roles", title: "Who does what",
+    intro: "Each person has one role and sees only their own work. A job passes from one person to the next by itself, so nobody has to tell anyone.",
+    sops: [
+      {
+        id: "my-work", title: "Start your day with My work", who: "Everyone",
+        steps: [
+          "Open the Dashboard. The first section, My work, lists what is waiting for you, and only you.",
+          "Each box is one kind of task: how many there are, the oldest ones, and how long each has waited. Press a line to open it and do it.",
+          "When you finish your part, the next person's task appears on their screen by itself. You do not need to call or message them.",
+          "If it says \"Nothing is waiting for you\", you are up to date.",
+        ],
+        right: ["You never have to search for what to do next. Each visit also shows a Next step line saying what is needed and who it is for."],
+      },
+      {
+        id: "role-list", title: "The roles", who: "Owner, to decide who gets which role",
+        steps: [
+          "Owner (Admin): everything, and the owner-only decisions: release a car on credit, accept a payment with no proof, reopen a month.",
+          "Manager: runs the workshop floor. Starts repair orders after approval, makes invoices, watches stock and the workshop report.",
+          "Front desk: receives customers and cars, checks cars in, writes job cards, prices and sends quotations, records the customer's approval.",
+          "Technician: does the repair. Issues parts, marks jobs done, writes findings, moves the job to Ready.",
+          "Cashier: makes and issues invoices, takes payments and advances, counter sales.",
+          "Guard: sees only Cars ready to leave and releases a car with the gate pass.",
+          "Accountant: pays vendors, records expenses, counts the cash each evening, payroll, reports and month end.",
+          "Inventory manager: stock, vendors, purchase orders, receiving deliveries.",
+        ],
+        avoid: ["In a small workshop one person can do two jobs: ask the owner for a custom role. Never combine receiving stock with paying the bill, or taking money with closing the day."],
+      },
+      {
+        id: "chain", title: "How a car moves from person to person", who: "Everyone",
+        steps: [
+          "Front desk checks the car in. Front desk is asked for a job card, then a quotation, and follows up the customer.",
+          "When the customer agrees, the manager is asked to make the repair order. The technician then sees the repair under Repairs in progress.",
+          "The technician finishes and moves it to Ready. The cashier is asked to make and issue the invoice, then to collect payment.",
+          "When the invoice is paid, the car appears for the guard under Cars ready to leave. The guard releases it.",
+          "Behind the scenes: low stock asks the inventory manager to order; deliveries ask for receiving, then for the vendor's bill, then the accountant is asked to pay it. Each evening the accountant counts the cash.",
+        ],
+        right: ["Every person's list is short, because it only holds their own work."],
+      },
+      {
+        id: "guard", title: "Release a car (guard)", who: "Guard",
+        steps: [
+          "Open Cars ready to leave. Each box is a car that is repaired and invoiced.",
+          "Check the car and the person collecting it. Press Release this car.",
+          "Type the odometer reading and the name of the person taking the car. Press Release the car.",
+          "If a car shows Do not release, it still owes money. Send the customer to the cashier. Do not let it go.",
+        ],
+        right: ["A short notice says the plate was released, and the car leaves your list."],
+        avoid: ["Only an administrator can release a car that owes money."],
+      },
+    ],
+  },
+  {
     id: "start", title: "Start here",
     intro: "How to sign in, move around, and understand what the screens tell you.",
     sops: [

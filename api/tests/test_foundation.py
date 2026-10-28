@@ -95,7 +95,7 @@ def test_disabled_user_cannot_sign_in_and_reset_unlocks(admin):
 
 def test_unknown_permission_rejected(admin):
     assert admin.post("/api/roles", json={"name": "Weird", "permissions": ["launch-rockets"]}).status_code == 422
-    r = admin.post("/api/roles", json={"name": "Cashier", "permissions": ["attachments", "dashboard"]})
+    r = admin.post("/api/roles", json={"name": "Shop assistant", "permissions": ["attachments", "dashboard"]})
     assert r.status_code == 201 and r.json()["permissions"] == ["attachments", "dashboard"]
 
 
