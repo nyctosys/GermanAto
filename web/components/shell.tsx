@@ -3,35 +3,37 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
+import { CommandMenu, Kbd, useModKey, type Command } from "@/components/command-menu";
 import { useSession } from "@/lib/session";
 
 // One list drives the navigation; an entry shows only if the user holds its
 // permission (the API enforces the same permission on the data).
 /** A nav item or page needs one permission, or any of a list. */
 type Needs = string | string[];
+type NavItem = { href: string; label: string; permission: Needs; keys?: string };  // keys: "g" then a letter jumps here
 export const MONEY: string[] = ["payments-in", "payments-out", "expenses", "reports-finance"];
 export const PEOPLE: string[] = ["hr", "payroll"];
 export const PURCHASING: string[] = ["vendors", "purchasing", "goods-receipt", "payments-out"];
 
-const NAV: { section: string; items: { href: string; label: string; permission: Needs }[] }[] = [
+const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: "Workshop",
     items: [
-      { href: "/", label: "Dashboard", permission: "dashboard" },
-      { href: "/visits", label: "Cars in the workshop", permission: "visits" },
-      { href: "/quotations", label: "Quotations", permission: "quotations" },
-      { href: "/repair-orders", label: "Repair orders", permission: "repair-orders" },
-      { href: "/invoices", label: "Invoices and counter sales", permission: "invoices" },
-      { href: "/customers", label: "Customers", permission: "customers" },
-      { href: "/cars", label: "Cars", permission: "customers" },
+      { href: "/", label: "Dashboard", permission: "dashboard", keys: "g d" },
+      { href: "/visits", label: "Cars in the workshop", permission: "visits", keys: "g v" },
+      { href: "/quotations", label: "Quotations", permission: "quotations", keys: "g q" },
+      { href: "/repair-orders", label: "Repair orders", permission: "repair-orders", keys: "g r" },
+      { href: "/invoices", label: "Invoices and counter sales", permission: "invoices", keys: "g i" },
+      { href: "/customers", label: "Customers", permission: "customers", keys: "g c" },
+      { href: "/cars", label: "Cars", permission: "customers", keys: "g a" },
     ],
   },
   {
     section: "Stock and services",
     items: [
-      { href: "/inventory", label: "Inventory", permission: "inventory" },
+      { href: "/inventory", label: "Inventory", permission: "inventory", keys: "g s" },
       { href: "/labour-codes", label: "Labour codes", permission: "dashboard" },
     ],
   },
@@ -46,7 +48,7 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
   },
   {
     section: "Customers",
-    items: [{ href: "/messages", label: "Messages", permission: "messages" }],
+    items: [{ href: "/messages", label: "Messages", permission: "messages", keys: "g m" }],
   },
   {
     section: "People",
@@ -85,8 +87,27 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
       { href: "/settings/sync", label: "Cloud sync", permission: "sync" },
     ],
   },
-  { section: "Help", items: [{ href: "/help", label: "User manual", permission: [] }] },  // for everyone
+  { section: "Help", items: [{ href: "/help", label: "User manual", permission: [], keys: "g h" }] },  // for everyone
 ];
+
+const allowed = (needs: Needs, can: (p: string) => boolean) => [needs].flat().length === 0 || [needs].flat().some(can);
+
+// Things people start often, beside the pages, in the command menu.
+const ACTIONS: { label: string; href: string; permission: Needs; keys: string }[] = [
+  { label: "Check in a car", href: "/visits/new", permission: "visits", keys: "g n" },
+  { label: "New counter sale", href: "/counter-sales/new", permission: "invoices", keys: "g p" },
+];
+
+function SearchButton({ onOpen, className = "" }: { onOpen: () => void; className?: string }) {
+  const mod = useModKey();
+  return (
+    <button onClick={onOpen} className={`flex min-h-11 items-center gap-3 rounded-control border border-rule-strong bg-surface px-3 text-left text-ink-2 hover:bg-paper active:bg-paper-3 ${className}`}>
+      <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" className="shrink-0"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M13.5 13.5L17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+      <span className="flex-1">Search</span>
+      <span className="hidden shell:flex shell:gap-1"><Kbd>{mod}</Kbd><Kbd>K</Kbd></span>
+    </button>
+  );
+}
 
 function Brand() {
   return (
@@ -154,7 +175,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
                       onClick={onNavigate}
                       aria-current={active ? "page" : undefined}
                       className={`relative flex min-h-11 items-center rounded-control px-3 transition-colors duration-(--dur-micro) active:duration-0 ${
-                        active ? "bg-paper font-medium text-ink before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-accent"
+                        active ? "bg-paper-3 font-medium text-ink"
                           : "text-ink-2 hover:bg-paper hover:text-ink active:bg-paper-3"
                       }`}
                     >
@@ -183,7 +204,13 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
+  const session = useSession();
   const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const commands = useMemo<Command[]>(() => [
+    ...NAV.flatMap(({ section, items }) => items.filter((i) => allowed(i.permission, session.can)).map((i) => ({ label: i.label, group: section, href: i.href, keys: i.keys }))),
+    ...ACTIONS.filter((a) => allowed(a.permission, session.can)).map((a) => ({ label: a.label, group: "Start", href: a.href, keys: a.keys })),
+  ], [session]);
   const menuButton = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLDivElement>(null);
 
@@ -206,6 +233,7 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="flex min-h-dvh">
       <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-surface shell:flex">
         <div className="px-4 py-3"><Brand /></div>
+        <div className="px-3 pb-2"><SearchButton onOpen={() => setSearching(true)} className="w-full" /></div>
         <Navigation />
       </aside>
 
@@ -217,7 +245,7 @@ export function Shell({ children }: { children: ReactNode }) {
             role="dialog"
             aria-modal="true"
             aria-label="Menu"
-            className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col bg-surface"
+            className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col bg-surface pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]"
           >
             <div className="flex items-center justify-between px-4 py-2">
               <Brand />
@@ -235,7 +263,7 @@ export function Shell({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="no-print sticky top-0 z-30 flex items-center gap-2 bg-surface/85 px-2 py-1.5 backdrop-blur shell:hidden">
+        <header className="no-print sticky top-0 z-30 flex items-center gap-2 bg-surface/85 px-2 pb-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] backdrop-blur shell:hidden">
           <button
             ref={menuButton}
             aria-label="Open menu"
@@ -246,9 +274,13 @@ export function Shell({ children }: { children: ReactNode }) {
             <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 6h16M3 11h16M3 16h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
           </button>
           <Brand />
+          <button aria-label="Search pages and actions" onClick={() => setSearching(true)} className="ml-auto flex size-11 items-center justify-center rounded-control text-ink-2 hover:bg-paper-3">
+            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M13.5 13.5L17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+          </button>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 shell:px-10 shell:py-10">{children}</main>
       </div>
+      <CommandMenu commands={commands} open={searching} setOpen={setSearching} />
     </div>
   );
 }

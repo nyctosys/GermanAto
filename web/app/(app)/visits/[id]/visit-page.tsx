@@ -40,6 +40,23 @@ export default function VisitPage() {
   );
 }
 
+/** The one thing to do next on this visit, in plain words, worked out from where the visit has got to. */
+function nextStep(v: Visit): { text: string; href?: string } | null {
+  if (v.status !== "open") return null;
+  const q = v.quotations.find((x) => x.status !== "revised");
+  const ro = v.repair_order;
+  if (v.invoice?.status === "issued") return { text: "The invoice is issued. Take any payment that is owed, then release the car with the gate pass below.", href: `/invoices/${v.invoice.id}` };
+  if (v.invoice) return { text: "The invoice is a draft. Check it, then issue it.", href: `/invoices/${v.invoice.id}` };
+  if (ro?.status === "ready") return { text: "The repair is finished. Make the invoice.", href: `/repair-orders/${ro.id}` };
+  if (ro) return { text: "The repair is under way. When every job is done, move it to Ready.", href: `/repair-orders/${ro.id}` };
+  if (q?.status === "approved") return { text: "The customer approved the quotation. Make the repair order.", href: `/quotations/${q.id}` };
+  if (q?.status === "rejected") return { text: "The customer said no. Revise the quotation, or cancel the visit.", href: `/quotations/${q.id}` };
+  if (q && (q.status === "sent" || q.expired)) return { text: q.expired ? "The quotation has expired. Revise it and send it again." : "Waiting for the customer. When they agree, record the approval.", href: `/quotations/${q.id}` };
+  if (q) return { text: "Price the quotation and send it to the customer.", href: `/quotations/${q.id}` };
+  if (v.job_card) return { text: "Make the quotation from the job card.", href: `/job-cards/${v.job_card.id}` };
+  return { text: "Write the job card: the list of work to quote. Inspect the car first if you need to." };
+}
+
 function VisitDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -84,6 +101,16 @@ function VisitDetail() {
             : v.status === "cancelled" ? <Badge>Cancelled</Badge> : <Badge tone="success">Delivered</Badge>}
         </div>
       </div>
+
+      {(() => {
+        const n = nextStep(v);
+        return n && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-card bg-surface px-4 py-3 shell:px-5">
+            <p><span className="font-medium">Next step: </span>{n.text}</p>
+            {n.href && <Link href={n.href} className="inline-flex min-h-11 items-center font-medium underline underline-offset-4">Open it</Link>}
+          </div>
+        );
+      })()}
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">

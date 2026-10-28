@@ -108,7 +108,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
 
 export function SkeletonRows({ rows = 4 }: { rows?: number }) {
   return (
-    <div aria-busy="true" aria-label="Loading" className="space-y-3 p-4 shell:p-5">
+    <div aria-busy="true" aria-label="Loading" className="skeleton-wait space-y-3 p-4 shell:p-5">
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="flex gap-4">
           <div className="skeleton h-5 w-1/3" />

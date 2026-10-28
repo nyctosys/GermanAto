@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Stat } from "@/components/reports";
+import { Stat, StatGroup } from "@/components/reports";
 import { Card, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { money } from "@/lib/format";
@@ -18,7 +18,7 @@ const ACCOUNT: Record<string, string> = { cash: "Cash", bank: "Bank", wallet: "W
 const monthName = (m: string) => new Date(`${m}-01`).toLocaleDateString("en-PK", { month: "long", year: "numeric" });
 
 export default function Dashboard() {
-  const { branch } = useSession();
+  const { branch, can } = useSession();
   const d = useApi<Dash>("/api/dashboard");
   if (d.error) return <Card flush><ErrorState message={d.error} onRetry={d.reload} /></Card>;
   if (!d.data) return <Card flush><SkeletonRows rows={6} /></Card>;
@@ -33,7 +33,9 @@ export default function Dashboard() {
 
   return (
     <>
-      <PageHeader title="Dashboard" description={`${branch.name}. What needs attention, and where things stand today.`} />
+      <PageHeader title="Dashboard"
+        description={`${branch.name}. ${todo.length ? `${todo[0][0]}${todo.length > 1 ? `, and ${todo.length - 1} more thing${todo.length > 2 ? "s" : ""} to look at` : ""}.` : "Everything is up to date."}`}
+        actions={can("visits") ? <Link href="/visits/new" className="flex min-h-11 items-center rounded-control bg-accent px-5 font-medium text-accent-ink hover:bg-accent-2 active:bg-accent-3 active:duration-0">Check in a car</Link> : undefined} />
 
       <section aria-label="Needs attention" className="mb-4">
         <Card title="Needs attention" flush>
@@ -52,29 +54,29 @@ export default function Dashboard() {
       </section>
 
       <h2 className="mb-2">In the workshop</h2>
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 shell:grid-cols-4">
+      <div className="mb-6"><StatGroup>
         <Stat label="Cars in the workshop" value={w.cars_in} href="/visits" />
         <Stat label="Quotations open" value={w.open_quotes} hint={`${w.quotes_waiting} waiting for the customer`} href="/quotations?status=sent" />
         <Stat label="Repair orders under way" value={w.repair_orders} hint={`${w.ready_for_pickup} ready, ${w.on_hold} on hold`} href="/repair-orders" />
         <Stat label="Low on stock" value={d.data.stock.low_stock} hint={`of ${d.data.stock.items} items`} href="/inventory?stock=low" tone={d.data.stock.low_stock ? "warning" : undefined} />
-      </div>
+      </StatGroup></div>
 
       {m && (
         <>
           <h2 className="mb-2">Money this month</h2>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 shell:grid-cols-4">
+          <div className="mb-6"><StatGroup>
             <Stat label="Revenue" value={money(m.revenue_month)} href="/reports/finance?r=pnl" />
             <Stat label="Profit" value={money(m.profit_month)} hint="Revenue less cost of parts and expenses" href="/reports/finance?r=pnl" tone={Number(m.profit_month) < 0 ? "error" : undefined} />
             <Stat label="Money in" value={money(m.money_in_month)} href="/money-in" />
             <Stat label="Money out" value={money(m.money_out_month)} href="/money-out" />
-          </div>
+          </StatGroup></div>
           <h2 className="mb-2">Where the money is</h2>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 shell:grid-cols-4">
+          <div className="mb-6"><StatGroup>
             <Stat label="Cash, bank and wallet" value={money(m.cash_total)} hint={Object.entries(m.cash).map(([k, v]) => `${ACCOUNT[k]} ${money(v)}`).join(", ")} href="/reports/finance?r=cashflow" />
             <Stat label="Customers owe us" value={money(m.receivables)} hint={Number(m.overdue_receivables) ? `${money(m.overdue_receivables)} over 30 days` : "Nothing overdue"} href="/reports/finance?r=receivables" tone={Number(m.overdue_receivables) ? "warning" : undefined} />
             <Stat label="We owe vendors" value={money(m.payables)} hint={Number(m.overdue_payables) ? `${money(m.overdue_payables)} past due` : "Nothing past due"} href="/reports/finance?r=payables" tone={Number(m.overdue_payables) ? "warning" : undefined} />
             <Stat label="Stock at cost" value={money(m.stock_value)} href="/reports/finance?r=stock" />
-          </div>
+          </StatGroup></div>
         </>
       )}
     </>

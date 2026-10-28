@@ -66,6 +66,11 @@ export function Stat({ label, value, hint, href, tone }: { label: string; value:
     : <div className="rounded-card bg-surface p-4 shell:p-5">{body}</div>;
 }
 
+/** Peer numbers as one card split by hairlines (not a row of separate tiles). Put Stats inside. */
+export function StatGroup({ children }: { children: ReactNode }) {
+  return <div className="grid gap-px overflow-hidden rounded-card bg-rule sm:grid-cols-2 shell:grid-cols-4 [&>*]:rounded-none">{children}</div>;
+}
+
 /** A line in a statement: a label, an amount, and an optional link to the records behind it. */
 export function Line({ label, value, href, strong, indent }: { label: ReactNode; value: string | number; href?: string; strong?: boolean; indent?: boolean }) {
   const amount = <span className="num">{money(value)}</span>;

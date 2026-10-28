@@ -145,8 +145,28 @@
   p {
     text-wrap: pretty;
   }
-  .num {
+  .num,
+  td,
+  th,
+  input[inputmode="decimal"],
+  input[inputmode="numeric"],
+  input[type="number"],
+  input[type="date"] {
     font-variant-numeric: tabular-nums;
+  }
+  /* Notch and rounded-corner phones: nothing sits under the sensor housing or the home indicator
+     (the viewport asks for the full screen with viewport-fit=cover, see app/layout.tsx). */
+  body {
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+}
+
+/* Continuous (squircle) corners where the browser can draw them; others keep the plain radius. */
+@supports (corner-shape: squircle) {
+  .rounded-card,
+  .rounded-control,
+  .skeleton {
+    corner-shape: squircle;
   }
 }
 
@@ -197,6 +217,17 @@
     background-size: 200% 100%;
     animation: skeleton 1.4s linear infinite;
     border-radius: 6px;
+  }
+}
+
+/* Fast loads never flash a skeleton: it stays invisible for the first 300ms. */
+.skeleton-wait {
+  opacity: 0;
+  animation: skeleton-wait 0s linear 300ms forwards;
+}
+@keyframes skeleton-wait {
+  to {
+    opacity: 1;
   }
 }
 
