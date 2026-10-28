@@ -9,10 +9,20 @@ from flask_jwt_extended import (
 from models import db, User
 from datetime import datetime
 from functools import wraps
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from jwt_auth import ADMIN_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS
 
 auth_bp = Blueprint('auth', __name__)
+
+
+def find_user(column, value):
+    """Case-insensitive lookup, as MySQL's default collation made it.
+
+    Postgres compares case-sensitively, so without this 'Admin' could no
+    longer log in as 'admin', and both could be registered.
+    """
+    return User.query.filter(func.lower(column) == str(value).lower()).first()
 
 # Role-based access decorator
 def role_required(required_roles):
@@ -74,10 +84,10 @@ def register():
             return jsonify({'error': f'{field} is required'}), 400
     
     # Check if user already exists
-    if User.query.filter_by(username=data['username']).first():
+    if find_user(User.username, data['username']):
         return jsonify({'error': 'Username already exists'}), 400
     
-    if User.query.filter_by(email=data['email']).first():
+    if find_user(User.email, data['email']):
         return jsonify({'error': 'Email already exists'}), 400
     
     # Validate role
@@ -127,7 +137,7 @@ def login():
         return jsonify({'error': 'Username and password are required'}), 400
     
     # Find user
-    user = User.query.filter_by(username=username).first()
+    user = find_user(User.username, username)
     
     if not user or not user.check_password(password) or not user.is_active:
         return jsonify({'error': 'Invalid username or password'}), 401
@@ -219,7 +229,7 @@ def logout():
 def get_users():
     """Get all users (admin only)"""
     try:
-        users = User.query.all()
+        users = User.query.order_by(User.id).all()
         return jsonify([{
             'id': user.id,
             'username': user.username,
@@ -251,12 +261,12 @@ def update_user(user_id):
         
         # Update fields
         if 'username' in data and data['username'] != user.username:
-            if User.query.filter_by(username=data['username']).first():
+            if find_user(User.username, data['username']):
                 return jsonify({'error': 'Username already exists'}), 400
             user.username = data['username']
         
         if 'email' in data and data['email'] != user.email:
-            if User.query.filter_by(email=data['email']).first():
+            if find_user(User.email, data['email']):
                 return jsonify({'error': 'Email already exists'}), 400
             user.email = data['email']
         

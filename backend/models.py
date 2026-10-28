@@ -127,8 +127,11 @@ class Invoice(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     payments_history = db.Column(db.Text, nullable=True)
 
-    items = db.relationship('InvoiceItem', backref='invoice', cascade='all, delete-orphan', lazy=True)
-    labours = db.relationship('InvoiceLabour', backref='invoice', cascade='all, delete-orphan', lazy=True)
+    # Postgres returns rows in no fixed order without ORDER BY (an updated row
+    # moves to the end), so line items are ordered explicitly to keep printed
+    # documents in the order they were entered.
+    items = db.relationship('InvoiceItem', backref='invoice', cascade='all, delete-orphan', lazy=True, order_by='InvoiceItem.id')
+    labours = db.relationship('InvoiceLabour', backref='invoice', cascade='all, delete-orphan', lazy=True, order_by='InvoiceLabour.id')
 
 
 class InvoiceItem(db.Model):
@@ -205,7 +208,7 @@ class Customer(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    cars = db.relationship('Car', backref='customer', cascade='all, delete-orphan', lazy=True)
+    cars = db.relationship('Car', backref='customer', cascade='all, delete-orphan', lazy=True, order_by='Car.id')
 
     @property
     def code(self):
@@ -271,8 +274,8 @@ class RepairOrder(db.Model):
     updated_by_user = db.Column(db.String(80), nullable=True)
     workers_json = db.Column(db.Text, nullable=True)
     
-    parts = db.relationship('RepairOrderPart', backref='repair_order', cascade='all, delete-orphan', lazy=True)
-    labour = db.relationship('RepairOrderLabour', backref='repair_order', cascade='all, delete-orphan', lazy=True)
+    parts = db.relationship('RepairOrderPart', backref='repair_order', cascade='all, delete-orphan', lazy=True, order_by='RepairOrderPart.id')
+    labour = db.relationship('RepairOrderLabour', backref='repair_order', cascade='all, delete-orphan', lazy=True, order_by='RepairOrderLabour.id')
 
 
 class RepairOrderPart(db.Model):

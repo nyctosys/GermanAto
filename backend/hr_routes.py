@@ -1004,7 +1004,7 @@ def _process_attlog(body, sn):
 def list_zkteco_devices():
     """List registered ZKTeco devices (PUSH: identified by serial number)."""
     try:
-        devices = ZKTecoDevice.query.filter_by(is_active=True).all()
+        devices = ZKTecoDevice.query.filter_by(is_active=True).order_by(ZKTecoDevice.id).all()
         return jsonify({'devices': [d.to_dict() for d in devices]})
     except Exception as e:
         logger.error(f"Error listing ZKTeco devices: {e}", exc_info=True)

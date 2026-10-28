@@ -287,7 +287,9 @@ def get_low_stock_items():
             SELECT name, quantity, reorder_level, category
             FROM inventory 
             WHERE quantity <= reorder_level
-            ORDER BY (quantity / NULLIF(reorder_level, 0)) ASC
+            -- * 1.0: integer division floors on Postgres, tying items 1 and 4
+            -- short of a reorder level of 5.
+            ORDER BY (quantity * 1.0 / NULLIF(reorder_level, 0)) ASC
         """)).fetchall()
         
         return [
@@ -405,7 +407,8 @@ def get_vendor_balances():
             FROM vendors v
             LEFT JOIN vendor_ledger vl ON v.id = vl.vendor_id
             GROUP BY v.id, v.name
-            HAVING current_balance > 0
+            -- Postgres won't resolve the SELECT alias here.
+            HAVING COALESCE(SUM(vl.balance), 0) > 0
             ORDER BY current_balance DESC
             LIMIT 10
         """)).fetchall()

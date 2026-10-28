@@ -965,7 +965,7 @@ def get_low_stock_items(current_user=None):
     """Get inventory items that are below reorder level, separated by urgency"""
     try:
         # Get items where quantity is less than or equal to reorder_level
-        low_stock_items = Inventory.query.filter(Inventory.quantity <= Inventory.reorder_level).all()
+        low_stock_items = Inventory.query.filter(Inventory.quantity <= Inventory.reorder_level).order_by(Inventory.id).all()
         movement_totals = get_inventory_movement_totals(low_stock_items)
         
         urgent_items = []  # Negative values (urgent)

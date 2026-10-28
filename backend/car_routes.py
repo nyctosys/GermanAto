@@ -79,7 +79,7 @@ def validate_customer_data(data):
 def get_customers(current_user=None):
     """Get all customers"""
     try:
-        customers = Customer.query.all()
+        customers = Customer.query.order_by(Customer.id).all()
         customers_data = []
         
         for customer in customers:
@@ -267,7 +267,7 @@ def delete_customer(customer_id, current_user=None):
 def get_cars(current_user=None):
     """Get all cars with customer information"""
     try:
-        cars = Car.query.join(Customer).all()
+        cars = Car.query.join(Customer).order_by(Car.id).all()
         cars_data = []
         
         for car in cars:
@@ -665,7 +665,7 @@ def get_cars_by_customer(customer_id, current_user=None):
         if not customer:
             return jsonify({'error': 'Customer not found'}), 404
         
-        cars = Car.query.filter_by(customer_id=customer_id).all()
+        cars = Car.query.filter_by(customer_id=customer_id).order_by(Car.id).all()
         cars_data = []
         
         for car in cars:

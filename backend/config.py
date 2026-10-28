@@ -1,11 +1,27 @@
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def database_url():
+    """DATABASE_URL, pointed at the psycopg 3 driver.
+
+    Hosts hand out postgres:// or postgresql:// URLs; on those SQLAlchemy
+    picks psycopg2, which isn't installed.
+    """
+    url = os.getenv("DATABASE_URL")
+    if url:
+        url = re.sub(r"^postgres(ql)?://", "postgresql+psycopg://", url)
+    return url
+
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key")
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
+    SQLALCHEMY_DATABASE_URI = database_url()
+    # Drop connections the server has closed instead of failing the next request.
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # JWT Configuration - Production Optimized

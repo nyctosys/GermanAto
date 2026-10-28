@@ -9,13 +9,14 @@ from sqlalchemy import create_engine
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
 
+from config import database_url  # noqa: E402
 from models import db  # noqa: E402
 
 config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
 
-url = os.getenv("DATABASE_URL")
+url = database_url()
 if not url:
     sys.exit("Set DATABASE_URL before running alembic.")
 
