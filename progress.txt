@@ -59,3 +59,7 @@
 - Dedupe keys (messages.dedupe_key unique) make events and reminders idempotent; reminders send only the latest due step.
 - Webhooks verify X-Twilio-Signature (HMAC-SHA1 of PUBLIC_URL + path + sorted fields) and return 503 when TWILIO_AUTH_TOKEN is unset.
 - ui.Select used to drop its own classes when given a className; it now merges them.
+## US-901 (server packaging and backups)
+- docker-compose.yml (db, api, web, optional sync profile), api/Dockerfile (migrates on start), web/Dockerfile (API_URL is a build arg: Next bakes the /api rewrite in). Docker daemon was not running on the dev Mac, so images were NOT built here; `docker compose config` passes.
+- deploy/backup.sh and restore.sh tested with BACKUP_LOCAL=1 against a scratch Postgres: dump, files, checksums, pruning (KEEP), restore, damaged backup refused. Scripts avoid GNU-only flags so they run on macOS and Linux.
+- Env sample is workshop.env.example because .gitignore ignores .env.* and *.env.

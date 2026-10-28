@@ -1,0 +1,44 @@
+# The workshop PC: database, API and web app on one machine. Every device on the LAN opens http://<this PC>:3000.
+# Copy workshop.env.example to .env, fill it in, then: docker compose up -d --build
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: germanato
+    volumes: [dbdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U postgres -d germanato"], interval: 5s, retries: 12 }
+  api:
+    build: ./api
+    restart: unless-stopped
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD}@db:5432/germanato
+      TIMEZONE: ${TIMEZONE:-Asia/Karachi}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+    volumes: [files:/data/files]
+    ports: ["8000:8000"]  # attendance terminals push to this port
+  web:
+    build: { context: ./web, args: { API_URL: "http://api:8000" } }
+    restart: unless-stopped
+    depends_on: [api]
+    ports: ["3000:3000"]
+  sync:
+    build: ./api
+    restart: unless-stopped
+    command: ["python", "-m", "app.sync_worker"]
+    depends_on: [api]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD}@db:5432/germanato
+      SYNC_CLOUD_URL: ${SYNC_CLOUD_URL:-}
+      SYNC_TOKEN: ${SYNC_TOKEN:-}
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-60}
+    profiles: ["sync"]  # started only when the cloud address is set: docker compose --profile sync up -d
+volumes:
+  dbdata:
+  files:

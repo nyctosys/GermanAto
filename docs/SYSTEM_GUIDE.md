@@ -26,7 +26,7 @@ Last updated: 28 Oct 2026, Phase 4 (purchasing: vendors, purchase orders, goods 
 18. [Not built yet](#18-not-built-yet)
 19. [For developers](#19-for-developers)
 
-Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end). Customer messages (WhatsApp) is [section 24](#24-customer-messages).
+Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end). Customer messages (WhatsApp) is [section 24](#24-customer-messages). Running the server and syncing is [section 25](#25-server-backups-and-sync).
 
 ---
 
@@ -775,3 +775,13 @@ In Twilio, point the sender's **status callback** to `PUBLIC_URL/api/webhooks/tw
 - A failed send never stops a sale, invoice or payment: the message is kept as **Failed** and can be retried.
 - Phone numbers are turned into international form (03001234567 becomes +923001234567).
 - Customer-facing documents can still be shared by hand from their print page (section 15).
+
+---
+
+## 25. Server, backups and sync
+
+### The workshop server
+One PC in the workshop runs everything (database, API, web app) in Docker; every device uses it over the Wi-Fi. If the internet is down, nothing stops: the workshop never needs the internet to work. The step-by-step install, update, backup and restore instructions are in [docs/RUNBOOK.md](RUNBOOK.md).
+
+- `docker-compose.yml` starts **db**, **api** and **web** (and **sync**, only when asked for). `workshop.env.example` lists the settings; copy it to `.env`.
+- **Backups:** `deploy/backup.sh` writes the database and all proof files to a dated folder with checksums and keeps the last 14. Run it nightly and copy the folder off the PC. `deploy/restore.sh` puts a backup back after checking its checksums and asking for confirmation. A damaged backup is refused before anything changes.
