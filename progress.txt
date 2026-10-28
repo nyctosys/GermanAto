@@ -75,3 +75,4 @@
 - Not verified here: Docker image build (daemon not running on this Mac), real Twilio sends, a second server syncing over HTTP (worker and endpoints are tested separately with a fake transport and direct calls).
 ## Docs
 - Guide section 19 now has the code map and the rules the code depends on; AGENTS.md points to it. Keep it current when adding modules.
+- Next 16 dev overlay "Could not validate that a segment has instant navigation": `export const instant = false` works only in a Server Component page. visits/[id]/page.tsx is a server wrapper around the client screen visit-page.tsx; copy that pattern if another page shows the same warning.
