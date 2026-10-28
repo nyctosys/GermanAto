@@ -7,6 +7,7 @@ export type InvoiceLine = {
   id: string; kind: "labour" | "part"; labour_code_id: string | null; item_id: string | null; qty: string;
   labour_code?: { code: string; name: string }; item?: { number: string; name: string; unit: string; sale_price: string; on_hand: string; short: string };
   description: string; unit_price: string; amount: string; in_quote: boolean; repair_order_line_id: string | null;
+  approval?: { method: string; reason: string; proof_url: string | null } | null;
 };
 export type PayStatus = "draft" | "void" | "unpaid" | "partly_paid" | "paid";
 export type Invoice = {

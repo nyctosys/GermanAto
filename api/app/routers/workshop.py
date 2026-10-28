@@ -15,7 +15,7 @@ from app import inspection_template as tpl
 from app.auth import Actor, require
 from app.db import get_db, utcnow
 from app.models import (
-    Attachment, Car, CarOwnership, Customer, Inspection, Invoice, JobCard, Payment, Quotation, RepairOrder, RepairOrderLine, User, Visit,
+    InspectionRepairLink, Attachment, Car, CarOwnership, Customer, Inspection, Invoice, JobCard, Payment, Quotation, RepairOrder, RepairOrderLine, User, Visit,
 )
 from app.numbering import next_number
 from app.validators import Text
@@ -359,7 +359,9 @@ def inspection_out(db: Session, i: Inspection) -> dict:
                       "car_id": v.car_id, "customer_id": v.customer_id, "buyer_id": v.buyer_id},
             "car": {"id": car.id, **{k: getattr(car, k) for k in CAR_FIELDS}},
             # Live details while drafting; the frozen copy once signed.
-            "snapshot": i.data.get("snapshot") or snapshot_of(db, v, car)}
+            "snapshot": i.data.get("snapshot") or snapshot_of(db, v, car),
+            # Repair rows (by position) already sent to the job card, and which job card.
+            "repairs_sent": {l.repair_index: l.job_card_id for l in db.scalars(select(InspectionRepairLink).where(InspectionRepairLink.inspection_id == i.id))}}
 
 
 def _get_inspection(db: Session, actor: Actor, inspection_id: uuid.UUID) -> Inspection:

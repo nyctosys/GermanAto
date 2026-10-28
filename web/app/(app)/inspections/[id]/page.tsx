@@ -5,11 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { type Uploaded, PhotoCapture, SignaturePad, upload } from "@/components/capture";
 import { carTitle, Plate } from "@/components/cars";
+import { CatalogPicker, type Pick } from "@/components/estimates";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { type Snapshot, VehiclePanel } from "@/components/vehicle-panel";
 import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
 import { api, ApiError, useApi } from "@/lib/api";
+import { money } from "@/lib/format";
+import { useSession } from "@/lib/session";
 import { when } from "@/lib/format";
 
 // --- types mirroring app/routers/workshop.py ---------------------------------------------------
@@ -39,6 +42,7 @@ type Inspection = {
   visit: { id: string; number: string; car_id: string; customer_id: string; buyer_id: string | null };
   car: { plate: string; make: string; model: string; year: number | null; fuel: string };
   snapshot: Snapshot;
+  repairs_sent: Record<string, string>;
 };
 
 const RATING_STYLE: Record<Rating, string> = {
@@ -282,7 +286,7 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
             )}
             addLabel="Add repair" empty="No repairs recommended."
           />
-          <p className="mt-3 text-sm text-muted">Repairs are sent to the job card in one tap once job cards are switched on.</p>
+          <p className="mt-3 text-sm text-muted">After the report is signed, each repair can be sent to the job card from the panel below.</p>
         </Section>
 
         <Section id="assessment" title="Overall assessment">
@@ -312,6 +316,8 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
           </div>
         </Section>
       </fieldset>
+
+      {readOnly && initial.data.repairs.length > 0 && <RepairHandoff inspection={initial} reload={reload} />}
 
       {!readOnly && <SignOff inspection={initial} data={data} saveState={save.state} version={version} onSigned={reload} />}
       {readOnly && (
@@ -450,6 +456,54 @@ function SignOff({ inspection, data, saveState, version, onSigned }:
             {busy ? "Signing" : saveState !== "saved" ? "Saving first" : "Sign and lock the report"}
           </Button>
         </div>
+      </Card>
+    </div>
+  );
+}
+
+
+/** Send a signed report's recommended repairs to the visit's job card, one at a time, as a labour code or a part. */
+function RepairHandoff({ inspection, reload }: { inspection: Inspection; reload: () => void }) {
+  const { can } = useSession();
+  const [picking, setPicking] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  if (!can("job-cards")) return null;
+
+  async function send(index: number, p: Pick) {
+    setError(null);
+    try {
+      await api(`/api/inspections/${inspection.id}/repairs/${index}/send`, { method: "POST", json: {
+        kind: p.kind, labour_code_id: p.kind === "labour" ? p.id : null, item_id: p.kind === "part" ? p.id : null, qty: "1" } });
+      setPicking(null);
+      reload();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <div className="mt-4">
+      <Card title="Send repairs to the job card">
+        <p className="mb-4 text-sm text-muted">Each repair becomes a labour code or a part on the visit&apos;s job card. The estimate here becomes the proposed price on the quotation.</p>
+        <ul className="space-y-4">
+          {inspection.data.repairs.map((r, i) => {
+            const jobCard = inspection.repairs_sent[String(i)];
+            return (
+              <li key={i} className="space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{r.repair || "Unnamed repair"} <Badge tone={r.priority === "high" ? "error" : r.priority === "medium" ? "warning" : "neutral"}>{r.priority}</Badge></p>
+                    <p className="text-sm text-muted">{r.estimated_cost ? `Estimate ${money(r.estimated_cost)}` : "No estimate"}{r.remarks ? `. ${r.remarks}` : ""}</p>
+                  </div>
+                  {jobCard ? <Link href={`/job-cards/${jobCard}`} className="text-sm underline">On the job card</Link>
+                    : picking === i ? <Button variant="secondary" onClick={() => setPicking(null)}>Cancel</Button>
+                    : <Button variant="secondary" onClick={() => setPicking(i)}>Send to job card</Button>}
+                </div>
+                {picking === i && <div><CatalogPicker onPick={(p) => send(i, p)} /></div>}
+              </li>
+            );
+          })}
+        </ul>
+        {error && <div className="mt-4"><Notice>{error}</Notice></div>}
       </Card>
     </div>
   );

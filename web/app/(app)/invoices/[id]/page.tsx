@@ -137,7 +137,7 @@ function Lines({ inv }: { inv: Invoice }) {
               <td className="px-4 py-3 shell:px-5 max-sm:px-0">
                 <span className="block font-medium">{l.description}</span>
                 <span className="flex flex-wrap gap-3 text-sm text-muted"><span>{l.kind === "labour" ? "Labour" : "Part"}</span><span>{lineCode(l)}</span>
-                  {!l.in_quote && <Badge tone="warning">Added after the quotation</Badge>}</span>
+                  {!l.in_quote && <Badge tone="warning">Added after the quotation{l.approval ? `, agreed ${l.approval.method === "in_person" ? "in person" : l.approval.method === "whatsapp" ? "on WhatsApp" : "by phone"}` : ""}</Badge>}</span>
               </td>
               <td data-label="Qty" className="num px-4 py-3 text-right max-sm:px-0">{qty(l.qty)}</td>
               <td data-label="Price" className="num px-4 py-3 text-right max-sm:px-0">{money(l.unit_price)}</td>
@@ -171,7 +171,7 @@ function WorkshopDraft({ inv, busy, call }: { inv: Invoice; busy: boolean; call:
                 <p className="font-medium">{l.description}</p>
                 <p className="flex flex-wrap gap-3 text-sm text-muted">
                   <span>{l.kind === "labour" ? "Labour" : "Part"}</span><span>{lineCode(l)}</span><span className="num">Qty {qty(l.qty)}</span>
-                  {!l.in_quote && <Badge tone="warning">Added after the quotation</Badge>}
+                  {!l.in_quote && <Badge tone="warning">Added after the quotation{l.approval ? `, agreed ${l.approval.method === "in_person" ? "in person" : l.approval.method === "whatsapp" ? "on WhatsApp" : "by phone"}` : ""}</Badge>}
                 </p>
               </div>
               <Field label="Price (Rs)" error={bad.includes(l.id) ? "Enter the price" : undefined}>

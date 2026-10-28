@@ -176,6 +176,7 @@ Three kinds: **Workshop** (at check-in or during diagnosis), **Delivery** (befor
 - The form saves itself as you work. Two devices editing the same draft are caught: the second one is asked to reload.
 - **Signing** needs the overall condition and recommendation. Anything left unrated is recorded as Not checked, never as Good. The vehicle and people details are **frozen** at signing, so later edits to the car don't change a signed report.
 - A signed report can't be edited. **Revise** makes a new draft that replaces it and keeps the old one.
+- **Send repairs to the job card:** once a report is signed, a panel under it lists the recommended repairs. **Send to job card** turns a repair into a labour code or a part on the visit's job card (creating the job card if needed), and the inspector's **estimate becomes the proposed price** on the quotation. Each repair can be sent once; a repair that is already there shows **On the job card**. Not possible once the visit has a quotation (revise the quotation instead).
 - Prints as the A4 report from the owner's paper form.
 
 ---
@@ -258,7 +259,7 @@ Received → Diagnosis → Awaiting approval → In repair → Testing → Ready
 - Each line: Done / Not done / To do, and the **technician** who did it.
 - **Parts are issued from stock here**, at average cost. **Return unused** puts them back at the cost they left at, so the stock value doesn't drift.
 - A part can't be marked Done before it is issued, or Not done while issued parts are still out.
-- **Extra work** found during the repair (labour code or part, price, and a reason) is flagged **"Not in the quotation"**. Only those added lines can be removed.
+- **Extra work** found during the repair (labour code or part, price, and a reason) is flagged **"Not in the quotation"**. It also records **how the customer agreed** (in person, WhatsApp or phone) with **proof or a written reason**; this shows on the repair order and carries to the invoice. Only those added lines can be removed.
 
 ### Activity
 One timeline of everything that happened, newest first, with who and when:
@@ -366,8 +367,7 @@ It is an **internal** record and includes notes the customer doesn't see. Every 
 
 | Item | Where it comes |
 |---|---|
-| Inspection repair rows sent straight to the job card | Next workshop round |
-| Supplementary quotation for extra work found during the repair | Next workshop round |
+| A separate supplementary quotation document for extra work (today the customer's go-ahead is recorded on the repair order line instead) | Later, if wanted |
 | Below-cost price approval (`discount-approve`), selling below zero stock with an admin override | Phase 4 / 5 |
 | WhatsApp: quotation, ready, receipt, reminders | Phase 8 |
 | Purchasing: purchase orders, goods received, supplier bills | Phase 4 |
@@ -422,6 +422,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0013 | Credit notes and refunds |
 | 0014 | Daily cash closes |
 | 0015 | Evidence sign-offs |
+| 0016 | Inspection repairs sent to the job card, extra-work approval on repair order lines |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).

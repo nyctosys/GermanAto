@@ -39,3 +39,7 @@
 - cashclose.assert_day_open(db, branch_id, {accounts}, date) is the lock check; call it from any new route that records or voids money on a past date.
 ## US-508 (missing evidence)
 - Rows from moneybook._gather carry source_type and signoff; month-end checks (US-701) should use /api/missing-evidence open count.
+## US-509 (inspection repairs to job card, extra work approval)
+- Repairs link to a job card through InspectionRepairLink (by index) and only from SIGNED inspections, so indices can't shift.
+- JobCardLine.proposed_price must be carried through job card saves (the web sends it back) and starts the quotation price.
+- Browser state (scan functions on window) is lost when navigating the pane: do not navigate while a background scan runs.

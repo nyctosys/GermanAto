@@ -13,7 +13,7 @@ type LineRef = {
   labour_code?: { code: string; name: string };
   item?: { number: string; name: string; unit: string; sale_price: string; on_hand: string; short: string };
 };
-export type JobLine = LineRef & { note: string };
+export type JobLine = LineRef & { note: string; proposed_price?: string | null };
 export type QuoteLine = LineRef & { description: string; unit_price: string; amount: string; declined: boolean };
 export type QuoteStatus = "draft" | "sent" | "approved" | "rejected" | "expired" | "revised" | "converted";
 

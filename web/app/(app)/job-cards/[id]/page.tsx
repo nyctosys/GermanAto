@@ -8,7 +8,7 @@ import { RequirePermission } from "@/components/shell";
 import { Button, Card, EmptyState, ErrorState, Input, Notice, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, ApiError, useApi } from "@/lib/api";
-import { qty, when } from "@/lib/format";
+import { money, qty, when } from "@/lib/format";
 import { lineQty } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
@@ -73,7 +73,7 @@ function Editor({ initial }: { initial: JobCard }) {
     try {
       const saved = await api<JobCard>(`/api/job-cards/${card.id}`, { method: "PUT", json: {
         notes, version: card.version,
-        lines: lines.map(({ kind, labour_code_id, item_id, qty, note }) => ({ kind, labour_code_id, item_id, qty, note })),
+        lines: lines.map(({ kind, labour_code_id, item_id, qty, note, proposed_price }) => ({ kind, labour_code_id, item_id, qty, note, proposed_price: proposed_price ?? null })),
       } });
       setCard(saved);
       setLines(saved.lines);
@@ -129,6 +129,7 @@ function Editor({ initial }: { initial: JobCard }) {
                       <p className="font-medium">{lineName(l)}</p>
                       <p className="flex flex-wrap gap-3 text-sm text-muted">
                         <span>{l.kind === "labour" ? "Labour" : "Part"}</span><span>{lineCode(l)}</span>
+                        {l.proposed_price != null && <span className="num">Inspector&apos;s estimate {money(l.proposed_price)}</span>}
                         {l.item && (Number(l.qty) > Number(l.item.on_hand)
                           ? <span className="text-error">{Number(l.item.on_hand) > 0 ? `Only ${qty(l.item.on_hand)} in stock` : "Out of stock"}</span>
                           : <span>{qty(l.item.on_hand)} {l.item.unit} in stock</span>)}

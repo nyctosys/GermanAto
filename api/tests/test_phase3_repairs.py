@@ -91,10 +91,12 @@ def test_extra_work_is_flagged_and_removable(admin):
     _, item, code, q = approved_quote(admin)
     ro = admin.post(f"/api/quotations/{approve(admin, q)['id']}/repair-order").json()
     url = f"/api/repair-orders/{ro['id']}"
-    assert admin.post(f"{url}/lines", json={"kind": "labour", "labour_code_id": code["id"], "unit_price": "1500"}).status_code == 422  # reason
-    ro = admin.post(f"{url}/lines", json={"kind": "labour", "labour_code_id": code["id"], "unit_price": "1500",
-                                          "reason": "Found a leaking sump plug"}).json()
+    base = {"kind": "labour", "labour_code_id": code["id"], "unit_price": "1500", "reason": "Found a leaking sump plug"}
+    assert admin.post(f"{url}/lines", json={**base, "reason": "", "approval_method": "phone", "no_proof_reason": "Agreed on a call"}).status_code == 422  # reason
+    assert admin.post(f"{url}/lines", json={**base}).status_code == 422  # how did the customer agree?
+    assert admin.post(f"{url}/lines", json={**base, "approval_method": "phone"}).status_code == 422  # proof or a reason
+    ro = admin.post(f"{url}/lines", json={**base, "approval_method": "phone", "no_proof_reason": "Agreed on a call"}).json()
     extra = ro["lines"][-1]
-    assert extra["in_quote"] is False
+    assert extra["in_quote"] is False and extra["approval"] == {"method": "phone", "reason": "Agreed on a call", "proof_url": None}
     assert admin.delete(f"{url}/lines/{ro['lines'][0]['id']}").status_code == 409  # approved lines stay
     assert len(admin.delete(f"{url}/lines/{extra['id']}").json()["lines"]) == 2

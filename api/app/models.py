@@ -397,6 +397,18 @@ class JobCardLine(Entity):
     item_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("items.id"))
     qty: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("1"))
     note: Mapped[str] = mapped_column(String(300), default="")
+    proposed_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))  # an inspection's estimate; starts the quotation's price
+
+
+class InspectionRepairLink(BranchScoped):
+    """Which repair rows of a signed inspection have been sent to the visit's job card."""
+
+    __tablename__ = "inspection_repair_links"
+    __table_args__ = (UniqueConstraint("inspection_id", "repair_index"),)
+
+    inspection_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("inspections.id"), index=True)
+    repair_index: Mapped[int] = mapped_column(Integer)
+    job_card_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("job_cards.id"))
 
 
 class Quotation(BranchScoped):
@@ -524,6 +536,8 @@ class RepairOrderLine(Entity):
         CheckConstraint("qty > 0", name="ro_line_qty"),
         CheckConstraint("unit_price >= 0", name="ro_line_price"),
         CheckConstraint("state IN ('pending', 'done', 'not_done')", name="ro_line_state"),
+        CheckConstraint("approval_method IS NULL OR approval_method IN ('in_person', 'whatsapp', 'phone')", name="ro_line_approval_method"),
+        CheckConstraint("in_quote OR (approval_method IS NOT NULL AND (approval_proof_id IS NOT NULL OR approval_reason <> ''))", name="ro_line_extra_approved"),
         CheckConstraint("issued_qty >= 0 AND (kind = 'part' OR issued_qty = 0)", name="ro_line_issued"),
     )
 
@@ -538,6 +552,10 @@ class RepairOrderLine(Entity):
     in_quote: Mapped[bool] = mapped_column(Boolean, default=True)  # False: extra work added after approval
     state: Mapped[str] = mapped_column(String(8), default="pending")
     technician_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    # Extra work added after the quote records how the customer agreed to it.
+    approval_method: Mapped[str | None] = mapped_column(String(10))
+    approval_proof_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
+    approval_reason: Mapped[str] = mapped_column(Text, default="")
     issued_qty: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("0"))  # net of returns
 
 

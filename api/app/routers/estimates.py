@@ -14,12 +14,12 @@ from sqlalchemy.orm import Session
 from app.auth import Actor, current_actor, require
 from app.db import get_db, utcnow
 from app.models import (
-    Car, Customer, Item, ItemCode, JobCard, JobCardLine, LabourCode, Payment, Quotation, QuotationLine, RepairOrder, User, Visit,
+    InspectionRepairLink, Car, Customer, Item, ItemCode, JobCard, JobCardLine, LabourCode, Payment, Quotation, QuotationLine, RepairOrder, User, Visit,
 )
 from app import posting
 from app.numbering import next_number
 from app.pricing import CENT, money, totals  # noqa: F401  (re-exported for the other routers)
-from app.routers.workshop import _attach, _get_visit, _require_open, snapshot_of
+from app.routers.workshop import _attach, _get_inspection, _get_visit, _require_open, snapshot_of
 from app.stock import on_hand_map
 from app.validators import Text, normalize_code
 
@@ -126,6 +126,7 @@ def job_card_out(db: Session, jc: JobCard) -> dict:
     lines = _line_refs(db, jc.lines)
     for out, l in zip(lines, jc.lines):
         out["note"] = l.note
+        out["proposed_price"] = l.proposed_price
     return {"id": jc.id, "number": jc.number, "notes": jc.notes, "version": jc.version, "updated_at": jc.updated_at,
             "visit": {"id": v.id, "number": v.number, "status": v.status, "car_id": v.car_id, "customer_id": v.customer_id,
                       "buyer_id": v.buyer_id, "complaint": v.complaint},
@@ -153,6 +154,7 @@ def get_job_card(job_card_id: uuid.UUID, actor: Actor = Depends(can_job), db: Se
 
 class JobLineIn(LineIn):
     note: Text = Field(default="", max_length=300)
+    proposed_price: Decimal | None = Field(default=None, ge=0, le=100_000_000, decimal_places=2)  # an inspection's estimate
 
 
 class JobCardIn(BaseModel):
@@ -256,7 +258,7 @@ def start_quotation(job_card_id: uuid.UUID, actor: Actor = Depends(can_quote), d
                   tax_rate=actor.branch.tax_rate, valid_until=date.today() + timedelta(days=QUOTE_VALID_DAYS),
                   lines=[QuotationLine(position=n, kind=l.kind, labour_code_id=l.labour_code_id, item_id=l.item_id, qty=l.qty,
                                        description=(codes[l.labour_code_id] if l.labour_code_id else items[l.item_id]).name,
-                                       unit_price=items[l.item_id].sale_price if l.item_id else Decimal(0))
+                                       unit_price=l.proposed_price if l.proposed_price is not None else items[l.item_id].sale_price if l.item_id else Decimal(0))
                          for n, l in enumerate(jc.lines)])
     db.add(q)
     db.commit()
@@ -445,3 +447,42 @@ def take_advance(quotation_id: uuid.UUID, body: AdvanceIn, actor: Actor = Depend
     posting.customer_payment(db, actor.branch, p)
     db.commit()
     return payment_out(db, p)
+
+
+# --- from an inspection to the job card -------------------------------------------------------------------
+
+class SendRepairIn(LineIn):
+    """The labour code or part that the inspector's repair note becomes."""
+
+
+@router.post("/inspections/{inspection_id}/repairs/{index}/send", status_code=201)
+def send_repair_to_job_card(inspection_id: uuid.UUID, index: int, body: SendRepairIn, response: Response, actor: Actor = Depends(can_job),
+                            db: Session = Depends(get_db)):
+    """One tap from a signed inspection's recommended repairs to the visit's job card. The
+    inspector's estimate becomes the proposed price on the quotation. Each repair goes once."""
+    ins = _get_inspection(db, actor, inspection_id)
+    if ins.status != "signed":
+        raise HTTPException(409, "Sign the inspection first. Its repair list is then fixed, so each repair can be sent once.")
+    repairs = ins.data.get("repairs") or []
+    if not 0 <= index < len(repairs):
+        raise HTTPException(404, "That repair isn't on this inspection")
+    if db.scalar(select(InspectionRepairLink.id).where(InspectionRepairLink.inspection_id == ins.id, InspectionRepairLink.repair_index == index)):
+        raise HTTPException(409, "This repair is already on the job card")
+    v = _get_visit(db, actor, ins.visit_id, lock=True)
+    _require_open(v)
+    jc = db.scalar(select(JobCard).where(JobCard.visit_id == v.id))
+    if not jc:
+        jc = JobCard(number=next_number(db, actor.branch, "job_card"), visit_id=v.id)
+        db.add(jc)
+        db.flush()
+    if _current_quote(db, v.id):
+        raise HTTPException(409, "This visit already has a quotation. Revise the quotation instead of changing the job card.")
+    _targets(db, actor, [body])
+    row = repairs[index]
+    cost = row.get("estimated_cost")
+    jc.lines.append(JobCardLine(position=len(jc.lines), note=str(row.get("repair", ""))[:300], kind=body.kind, labour_code_id=body.labour_code_id,
+                                item_id=body.item_id, qty=body.qty, proposed_price=Decimal(str(cost)) if cost not in (None, "") else None))
+    db.add(InspectionRepairLink(inspection_id=ins.id, repair_index=index, job_card_id=jc.id))
+    jc.updated_at = utcnow()
+    db.commit()
+    return job_card_out(db, jc)

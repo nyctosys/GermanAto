@@ -86,3 +86,34 @@ def test_picker_finds_codes_names_and_scanned_barcodes(admin):
     assert [r["kind"] for r in admin.get("/api/estimate-catalog", params={"q": "oil"}).json()] == ["labour", "part"]
     scanned = admin.get("/api/estimate-catalog", params={"q": "4006 633 123 456"}).json()
     assert [r["name"] for r in scanned] == ["Oil filter"]
+
+
+def test_inspection_repairs_go_to_the_job_card_once_with_their_estimate(admin):
+    from test_phase3_visits import PNG, checked_in, upload
+    visit, _, _ = checked_in(admin)
+    code = admin.post("/api/labour-codes", json={"code": "IGN-COIL", "name": "Replace ignition coils", "category": "Engine"}).json()
+    ins = admin.post(f"/api/visits/{visit['id']}/inspections", json={"kind": "workshop"}).json()
+    data = ins["data"]
+    data["repairs"] = [{"priority": "high", "repair": "Replace ignition coils", "estimated_cost": "45000"},
+                       {"priority": "low", "repair": "Wash the engine bay", "estimated_cost": None}]
+    data["assessment"].update(overall="average", recommendation="after_repairs")
+    version = admin.put(f"/api/inspections/{ins['id']}", json={"data": data, "version": ins["version"]}).json()["version"]
+    url = f"/api/inspections/{ins['id']}/repairs/0/send"
+    pick = {"kind": "labour", "labour_code_id": code["id"]}
+    assert admin.post(url, json=pick).status_code == 409  # still a draft: its rows could move
+    admin.post(f"/api/inspections/{ins['id']}/sign", json={"inspector_signature_id": upload(admin, PNG + b"i"), "version": version})
+    assert admin.post(f"/api/inspections/{ins['id']}/repairs/9/send", json=pick).status_code == 404
+
+    jc = admin.post(url, json=pick)
+    assert jc.status_code == 201, jc.json()
+    line = jc.json()["lines"][0]
+    assert line["note"] == "Replace ignition coils" and Decimal(str(line["proposed_price"])) == 45000
+    assert admin.post(url, json=pick).status_code == 409  # each repair goes once
+    assert list(admin.get(f"/api/inspections/{ins['id']}").json()["repairs_sent"]) == ["0"]
+    assert admin.get(f"/api/visits/{visit['id']}").json()["job_card"]["lines"] == 1
+
+    q = admin.post(f"/api/job-cards/{jc.json()['id']}/quotation").json()
+    assert Decimal(str(q["lines"][0]["unit_price"])) == 45000  # the inspector's estimate starts the price
+    send = admin.post(f"/api/quotations/{q['id']}/send", json={"version": q["version"]})
+    assert send.status_code == 200  # no labour line left unpriced
+    assert admin.post(f"/api/inspections/{ins['id']}/repairs/1/send", json=pick).status_code == 409  # the quotation exists now

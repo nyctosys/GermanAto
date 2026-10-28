@@ -15,7 +15,7 @@ from app.auth import Actor, require
 from app.db import get_db, utcnow
 from app.models import (
     AuditLog, Car, CreditNote, CreditNoteLine, Customer, Inspection, Invoice, InvoiceLine, JobCard, MoneyEntry, Payment, Quotation,
-    RepairOrder, StockMovement, User, Visit,
+    RepairOrder, RepairOrderLine, StockMovement, User, Visit,
 )
 from app import posting
 from app.numbering import next_number
@@ -90,8 +90,11 @@ def invoice_out(db: Session, inv: Invoice) -> dict:
     b = balance_of(db, inv)
     lines = _line_refs(db, inv.lines)
     for out, l in zip(lines, inv.lines):
+        ro_line = db.get(RepairOrderLine, l.repair_order_line_id) if l.repair_order_line_id and not l.in_quote else None
         out.update(description=l.description, unit_price=l.unit_price, amount=money(l.qty * l.unit_price), in_quote=l.in_quote,
-                   repair_order_line_id=l.repair_order_line_id)
+                   repair_order_line_id=l.repair_order_line_id,
+                   approval=ro_line and {"method": ro_line.approval_method, "reason": ro_line.approval_reason,
+                                         "proof_url": f"/api/attachments/{ro_line.approval_proof_id}/file" if ro_line.approval_proof_id else None})
     v = db.get(Visit, inv.visit_id) if inv.visit_id else None
     car = db.get(Car, inv.car_id) if inv.car_id else None
     customer = db.get(Customer, inv.customer_id) if inv.customer_id else None
