@@ -25,12 +25,13 @@ PERMISSIONS: dict[str, str] = {
     "goods-receipt": "Receive stock against a purchase order",
     "payments-out": "Pay vendors (money out)",
     "expenses": "Record daily and major expenses",
+    "reports-finance": "See the journal, trial balance and finance reports",
     # Later phases add their own here (expenses, hr, payroll, ...).
 }
 
 DEFAULT_ROLES: dict[str, dict] = {
     "Admin": {"is_admin": True, "permissions": []},
-    "Accountant": {"is_admin": False, "permissions": ["dashboard", "attachments", "audit", "customers", "vendors", "payments-out"]},
+    "Accountant": {"is_admin": False, "permissions": ["dashboard", "attachments", "audit", "customers", "vendors", "payments-out", "expenses", "reports-finance"]},
     "Inventory manager": {"is_admin": False, "permissions": ["dashboard", "attachments", "inventory", "stock-adjust",
                                                             "labour-codes", "vendors", "purchasing", "goods-receipt"]},
 }

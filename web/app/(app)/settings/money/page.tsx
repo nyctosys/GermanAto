@@ -7,7 +7,7 @@ import { api, useApi } from "@/lib/api";
 import { day, money } from "@/lib/format";
 import { accountSchema, categorySchema, type FieldErrors, parseForm } from "@/lib/schemas";
 
-type Account = { id: string; kind: string; name: string; opening_balance: string; opening_date: string; is_active: boolean; version: number };
+type Account = { id: string; kind: string; name: string; opening_balance: string; opening_date: string; is_active: boolean; version: number; balance?: string };
 type Category = { id: string; name: string; is_active: boolean; version: number };
 const KIND: Record<string, string> = { cash: "Cash", bank: "Bank", wallet: "Mobile wallet" };
 
@@ -37,6 +37,7 @@ function Accounts() {
                   <div>
                     <p className="font-medium">{a.name} <Badge>{KIND[a.kind]}</Badge></p>
                     <p className="text-sm text-muted">Started with {money(a.opening_balance)} on {day(a.opening_date)}</p>
+                    {a.balance != null && <p className="num text-sm">In the account now: {money(a.balance)}</p>}
                   </div>
                   <Button variant="secondary" onClick={() => setEditing(a.id)}>Edit</Button>
                 </div>

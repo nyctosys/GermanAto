@@ -18,3 +18,7 @@
 ## US-501 (accounts and categories)
 - Accounts are keyed by kind (cash/bank/wallet), one each per branch; payments keep storing the kind string. ensure_money_setup() creates them lazily on first read.
 - Tests live in api/tests/test_phase5_money.py; add later money stories there.
+## US-502 (journal engine)
+- app/journal.py: post(db, branch, memo, [Line(code, debit, credit)], on=, source=(type,id)); reverse(); live_entry(); balances(); sync_opening(). Ledger codes in CHART; money accounts map via MONEY_CODE.
+- journal_entries/journal_lines are append-only through a DB trigger (migration 0011); tests build tables with create_all so the trigger is not exercised there.
+- Post inside the same transaction as the event, right before db.commit().

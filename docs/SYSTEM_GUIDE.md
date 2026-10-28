@@ -99,6 +99,7 @@ The visit page shows where the job stands in its **The job** panel: job card, qu
 | `goods-receipt` | Count stock in against a purchase order |
 | `payments-out` | Pay vendors (and void a vendor payment) |
 | `expenses` | Record daily and major expenses |
+| `reports-finance` | See the journal, trial balance and finance reports |
 
 Roles set up at the start: **Admin** (everything), **Accountant** (including vendors and paying them), **Inventory manager** (including vendors, purchase orders and receiving stock). More roles (front desk, technician, cashier) are made under Roles and permissions. A role that already exists keeps the permissions it had: tick the four purchasing permissions on it under Roles and permissions to use purchasing.
 
@@ -416,6 +417,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0008 | Invoices, gate pass fields, payment links to invoices |
 | 0009 | Vendors, purchase orders, goods receipts, vendor bills, vendor payments |
 | 0010 | Accounts and expense categories |
+| 0011 | Journal: chart of accounts, entries and lines (append-only, enforced by the database) |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).
@@ -521,3 +523,12 @@ Numbers: `PO-A1F3-000001`.
 - Each account has an **opening balance** and the date it applies from: what was in the account when you started using the system. Every later change to the account comes from money in and money out; nobody types a balance.
 - **Expense categories** are a managed list (tea, fuel, rent, electricity, repairs, equipment, stationery, internet, marketing, bank charges, taxes, other). Add one, rename one, or **retire** one: a retired category can't be chosen for new expenses but stays on the expenses already recorded. A name can't be used twice (capitals ignored).
 - The accountant can see accounts and categories; only people with `settings` change them.
+
+### The journal (double-entry books)
+Every business event posts a **balanced journal entry** automatically, so the books are provable without anyone doing bookkeeping. Users never type journal entries; they record documents and payments, and the system posts the matching entry.
+- **Always balanced.** An entry whose debits and credits differ is refused, as is one with a single line.
+- **Append-only.** Entries are never edited or deleted (the database itself refuses). A mistake is fixed by a **reversing entry** that mirrors the original; an entry can be reversed once.
+- **Chart of accounts** (created automatically): cash, bank, mobile wallet, receivables, inventory, payables, goods received not billed, customer advances, sales tax payable, owner capital and drawings, opening balance equity, revenue (labour, parts, other), cost of parts sold, operating expenses (by expense category), salaries, freight and purchase adjustments, stock write-offs.
+- **Opening balances.** Setting an account's opening balance posts an entry (money account against opening balance equity). Changing it later posts a reversal and a new entry, so the history of the correction is kept.
+- **What is in an account** is worked out from the journal: Money settings shows each account's balance now.
+- **Trial balance** (`GET /api/journal/trial-balance`, needs `reports-finance`) lists every account with debits and credits; the two totals are always equal. `GET /api/journal/entries` lists the entries behind it, filterable by the document that caused them.

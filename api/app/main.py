@@ -6,11 +6,11 @@ from sqlalchemy.orm.exc import StaleDataError
 
 import app.events  # noqa: F401  registers the audit/outbox flush hook
 from app.db import engine
-from app.routers import admin, auth, billing, branch, catalog, customers, estimates, files, money, purchasing, repairs, workshop
+from app.routers import admin, auth, billing, branch, catalog, customers, estimates, files, ledger, money, purchasing, repairs, workshop
 
 app = FastAPI(title="GermanATO API", version="0.1.0")
 
-for r in (auth.router, admin.router, branch.router, files.router, customers.router, catalog.router, workshop.router, estimates.router, repairs.router, billing.router, purchasing.router, money.router):
+for r in (auth.router, admin.router, branch.router, files.router, customers.router, catalog.router, workshop.router, estimates.router, repairs.router, billing.router, purchasing.router, money.router, ledger.router):
     app.include_router(r)
 
 

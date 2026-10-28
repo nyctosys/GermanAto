@@ -781,3 +781,53 @@ class ExpenseCategory(BranchScoped):
 
     name: Mapped[str] = mapped_column(String(80))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+# --- the journal (spec D3): every business event posts a balanced entry ------------------------------
+
+class LedgerAccount(BranchScoped):
+    """The chart of accounts. Users never see it as such: they work with documents and payments."""
+
+    __tablename__ = "ledger_accounts"
+    __table_args__ = (
+        CheckConstraint("type IN ('asset', 'liability', 'equity', 'revenue', 'expense')", name="ledger_type"),
+        UniqueConstraint("branch_id", "code"),
+    )
+
+    code: Mapped[str] = mapped_column(String(8))
+    name: Mapped[str] = mapped_column(String(80))
+    type: Mapped[str] = mapped_column(String(10))
+
+
+class JournalEntry(BranchScoped):
+    """Append-only. A mistake is reversed by a new entry that mirrors it, never edited."""
+
+    __tablename__ = "journal_entries"
+    __table_args__ = (
+        Index("ix_journal_source", "source_type", "source_id"),
+        Index("uq_journal_reverses", "reverses_id", unique=True, postgresql_where=text("reverses_id IS NOT NULL")),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    entry_date: Mapped[date] = mapped_column(Date, index=True)
+    memo: Mapped[str] = mapped_column(String(300), default="")
+    source_type: Mapped[str | None] = mapped_column(String(40))  # invoice, payment, goods_receipt, ...
+    source_id: Mapped[uuid.UUID | None] = mapped_column()
+    reverses_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("journal_entries.id"))
+
+    lines: Mapped[list["JournalLine"]] = relationship(cascade="all, delete-orphan", lazy="selectin", order_by="JournalLine.position")
+
+
+class JournalLine(Entity):
+    __tablename__ = "journal_lines"
+    __table_args__ = (
+        CheckConstraint("(debit > 0 AND credit = 0) OR (credit > 0 AND debit = 0)", name="journal_line_one_side"),
+    )
+
+    entry_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("journal_entries.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    ledger_account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ledger_accounts.id"), index=True)
+    debit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    credit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("expense_categories.id"))  # for expense lines
+    note: Mapped[str] = mapped_column(String(200), default="")

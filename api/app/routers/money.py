@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import Actor, current_actor, require
 from app.db import get_db
+from app import journal
 from app.models import Account, ExpenseCategory
 from app.money_setup import ensure_money_setup
 from app.validators import Name, Text
@@ -25,15 +26,20 @@ def can_read_money(actor: Actor = Depends(current_actor)) -> Actor:
     return actor
 
 
-def account_out(a: Account) -> dict:
-    return {k: getattr(a, k) for k in ("id", "kind", "name", "opening_balance", "opening_date", "is_active", "version")}
+def account_out(a: Account, balance: Decimal | None = None) -> dict:
+    data = {k: getattr(a, k) for k in ("id", "kind", "name", "opening_balance", "opening_date", "is_active", "version")}
+    if balance is not None:
+        data["balance"] = balance  # what is in the account now, worked out from the journal
+    return data
 
 
 @router.get("/accounts")
 def list_accounts(actor: Actor = Depends(can_read_money), db: Session = Depends(get_db)):
     ensure_money_setup(db, actor.branch)
     db.commit()
-    return [account_out(a) for a in db.scalars(select(Account).where(Account.branch_id == actor.branch.id).order_by(Account.kind))]
+    totals = journal.balances(db, actor.branch)
+    accounts = db.scalars(select(Account).where(Account.branch_id == actor.branch.id).order_by(Account.kind))
+    return [account_out(a, (lambda d, c: d - c)(*totals.get(journal.MONEY_CODE[a.kind], (Decimal(0), Decimal(0))))) for a in accounts]
 
 
 class AccountUpdate(BaseModel):
@@ -55,8 +61,10 @@ def update_account(account_id: uuid.UUID, body: AccountUpdate, actor: Actor = De
         raise HTTPException(422, "The opening date is in the future")
     for k, v in body.model_dump(exclude={"version"}).items():
         setattr(a, k, v)
+    db.flush()
+    journal.sync_opening(db, actor.branch, a)
     db.commit()
-    return account_out(a)
+    return account_out(a, journal.money_balance(db, actor.branch, a.kind))
 
 
 # --- expense categories --------------------------------------------------------------------------------
