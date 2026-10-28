@@ -439,3 +439,43 @@ def test_only_cash_close_users_sign_counts(admin):
     assert signed_in("inv", "inv-pass-1234").get("/api/cash-closes/status").status_code == 403
     acct = signed_in("acct", "acct-pass-1234")
     assert acct.post("/api/cash-closes", json={"account": "bank", "counted": "0"}).status_code == 201
+
+
+# --- missing evidence ---------------------------------------------------------------------------------------
+
+def test_missing_evidence_lists_every_record_without_proof_and_an_admin_signs_it_off(admin):
+    visit, item, ro = ready_repair(admin)  # the advance has a reason, not a photo
+    entry(admin, kind="other_income", amount="750", party="Scrap dealer")
+    entry(admin, kind="transfer", amount="100", account="bank", to_account="cash", reference="ATM")
+    with_proof = entry(admin, kind="other_income", amount="60", proof_id=upload(admin, PNG + b"x"), no_proof_reason="").json()
+    assert with_proof["proof_url"]
+
+    page = admin.get("/api/missing-evidence").json()
+    assert page["open"] == 3 and D(str(page["open_total"])) == 4000 + 750 + 100  # the transfer shows once, not twice
+    assert {r["source"] for r in page["rows"]} == {"advance", "other_income", "transfer"}
+    money_in = admin.get("/api/money-in").json()
+    assert money_in["missing_proof"] == 3
+
+    target = next(r for r in page["rows"] if r["source"] == "other_income")
+    body = {"source_type": target["source_type"], "source_id": target["id"]}
+    assert admin.post("/api/missing-evidence/sign", json={**body, "reason": "x"}).status_code == 422
+    assert admin.post("/api/missing-evidence/sign", json={**body, "reason": "Small cash sale, no slip given"}).status_code == 201
+    assert admin.post("/api/missing-evidence/sign", json={**body, "reason": "Again and again"}).status_code == 409
+    after = admin.get("/api/missing-evidence").json()
+    assert after["open"] == 2 and after["signed_off"] == 1
+    assert admin.get("/api/money-in").json()["missing_proof"] == 2  # the sign-off clears the alert count
+    both = admin.get("/api/missing-evidence", params={"include_signed": True}).json()
+    signed = next(r for r in both["rows"] if r["id"] == target["id"])
+    assert signed["signoff"]["reason"] == "Small cash sale, no slip given" and signed["signoff"]["by"] == "Administrator"
+    ok = next(r for r in admin.get("/api/money-in").json()["rows"] if r["id"] == with_proof["id"])
+    assert admin.post("/api/missing-evidence/sign", json={"source_type": "money_entry", "source_id": ok["id"], "reason": "Not needed here"}).status_code == 409  # it has proof
+
+
+def test_only_admins_with_the_permission_sign_off(admin):
+    roles = {r["name"]: r["id"] for r in admin.get("/api/roles").json()}
+    branch_id = admin.get("/api/auth/me").json()["branch"]["id"]
+    admin.post("/api/users", json={"username": "acct", "full_name": "Acct", "password": "acct-pass-1234", "role_id": roles["Accountant"], "branch_ids": [branch_id]})
+    e = entry(admin, kind="other_income", amount="10").json()
+    acct = signed_in("acct", "acct-pass-1234")
+    assert acct.get("/api/missing-evidence").status_code == 200
+    assert acct.post("/api/missing-evidence/sign", json={"source_type": "money_entry", "source_id": e["id"], "reason": "Not allowed to do this"}).status_code == 403

@@ -934,3 +934,18 @@ class CashClose(BranchScoped):
     difference: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     reason: Mapped[str] = mapped_column(Text, default="")
     note: Mapped[str] = mapped_column(Text, default="")
+
+
+class EvidenceSignoff(BranchScoped):
+    """An admin accepts that a money record has no proof, and says why. The record stays flagged
+    (it still has no proof); the sign-off clears it from the open list and from month-end checks."""
+
+    __tablename__ = "evidence_signoffs"
+    __table_args__ = (
+        CheckConstraint("source_type IN ('payment', 'vendor_payment', 'money_entry')", name="signoff_source"),
+        UniqueConstraint("source_type", "source_id"),
+    )
+
+    source_type: Mapped[str] = mapped_column(String(16))
+    source_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    reason: Mapped[str] = mapped_column(Text)

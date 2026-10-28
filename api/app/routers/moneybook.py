@@ -13,9 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import posting
-from app.auth import Actor, current_actor
+from app.auth import Actor, current_actor, require
 from app.db import get_db
-from app.models import Customer, ExpenseCategory, Invoice, MoneyEntry, Payment, User, Vendor, VendorPayment
+from app.models import Customer, EvidenceSignoff, ExpenseCategory, Invoice, MoneyEntry, Payment, User, Vendor, VendorPayment
 from app.numbering import next_number
 from app.routers.cashclose import assert_day_open
 from app.routers.estimates import Proof
@@ -121,7 +121,11 @@ def void_entry(entry_id: uuid.UUID, body: VoidIn, actor: Actor = Depends(current
 # --- the two pages ---------------------------------------------------------------------------------------
 
 def _row(**kw) -> dict:
-    return {"missing_proof": kw.get("proof_url") is None, "detail": "", "link": None, "by": None, **kw}
+    return {"missing_proof": kw.get("proof_url") is None, "detail": "", "link": None, "by": None, "signoff": None, **kw}
+
+
+def source_type(source: str) -> str:
+    return {"advance": "payment", "invoice_payment": "payment", "vendor_payment": "vendor_payment"}.get(source, "money_entry")
 
 
 def _gather(db: Session, actor: Actor, direction: Literal["in", "out"]) -> list[dict]:
@@ -158,6 +162,11 @@ def _gather(db: Session, actor: Actor, direction: Literal["in", "out"]) -> list[
         rows.append(_row(id=e.id, number=e.number, date=e.occurred_on, source=e.kind, party=e.party, detail=detail, account=account,
                          reference=e.reference, amount=e.amount, proof_url=proof(e.proof_id), no_proof_reason=e.no_proof_reason,
                          status=e.status, entry_id=e.id, by=users.get(e.created_by), note=e.note, link=link))
+    signed = {(s.source_type, s.source_id): s for s in db.scalars(select(EvidenceSignoff).where(EvidenceSignoff.branch_id == branch))}
+    for r in rows:
+        r["source_type"] = source_type(r["source"])
+        s = signed.get((r["source_type"], r["id"]))
+        r["signoff"] = s and {"reason": s.reason, "by": users.get(s.created_by), "at": s.created_at}
     return rows
 
 
@@ -185,7 +194,7 @@ def page(db: Session, actor: Actor, direction: str, *, date_from, date_to, sourc
         by_source[r["source"]] = by_source.get(r["source"], Decimal(0)) + r["amount"]
     outside = sum((r["amount"] for r in live if r["source"] != "transfer"), Decimal(0))  # transfers just move money between accounts
     return {"rows": rows[:limit], "count": len(rows), "total": outside, "by_account": by_account, "by_source": by_source,
-            "missing_proof": sum(1 for r in live if r["missing_proof"])}
+            "missing_proof": sum(1 for r in live if r["missing_proof"] and not r["signoff"])}
 
 
 @router.get("/money-in")
@@ -200,3 +209,47 @@ def money_out(date_from: date | None = None, date_to: date | None = None, source
               account: Literal["cash", "bank", "wallet"] | None = None, q: str = "", missing_proof: bool = False,
               limit: int = Query(300, ge=1, le=1000), actor: Actor = Depends(see_money), db: Session = Depends(get_db)):
     return page(db, actor, "out", date_from=date_from, date_to=date_to, source=source, account=account, q=q, missing_proof=missing_proof, limit=limit)
+
+
+# --- missing evidence -----------------------------------------------------------------------------------
+
+can_signoff = require("evidence-signoff")
+
+
+@router.get("/missing-evidence")
+def missing_evidence(include_signed: bool = False, actor: Actor = Depends(see_money), db: Session = Depends(get_db)):
+    """Every money record, in or out, that has a reason but no proof. A transfer appears once."""
+    seen, rows = set(), []
+    for direction in ("in", "out"):
+        for r in _gather(db, actor, direction):  # type: ignore[arg-type]
+            key = (r["source_type"], r["id"])
+            if key in seen or not r["missing_proof"] or r["status"] != "posted":
+                continue
+            seen.add(key)
+            rows.append(r)
+    open_rows = [r for r in rows if not r["signoff"]]
+    shown = rows if include_signed else open_rows
+    shown.sort(key=lambda r: (r["date"], r["number"]), reverse=True)
+    return {"rows": shown, "open": len(open_rows), "signed_off": len(rows) - len(open_rows),
+            "open_total": sum((r["amount"] for r in open_rows), Decimal(0))}
+
+
+class SignoffIn(BaseModel):
+    source_type: Literal["payment", "vendor_payment", "money_entry"]
+    source_id: uuid.UUID
+    reason: Text = Field(min_length=5, max_length=500)
+
+
+@router.post("/missing-evidence/sign", status_code=201)
+def sign_off(body: SignoffIn, actor: Actor = Depends(can_signoff), db: Session = Depends(get_db)):
+    model = {"payment": Payment, "vendor_payment": VendorPayment, "money_entry": MoneyEntry}[body.source_type]
+    rec = db.get(model, body.source_id)
+    if not rec or rec.branch_id != actor.branch.id:
+        raise HTTPException(404, "Record not found")
+    if rec.proof_id:
+        raise HTTPException(409, "This record has proof; there is nothing to sign off")
+    if db.scalar(select(EvidenceSignoff.id).where(EvidenceSignoff.source_type == body.source_type, EvidenceSignoff.source_id == body.source_id)):
+        raise HTTPException(409, "Already signed off")
+    db.add(EvidenceSignoff(**body.model_dump()))
+    db.commit()
+    return {"ok": True}

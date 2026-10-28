@@ -40,6 +40,7 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
       { href: "/money-in", label: "Money in", permission: MONEY },
       { href: "/money-out", label: "Money out", permission: MONEY },
       { href: "/cash-close", label: "Cash close", permission: ["cash-close", "reports-finance"] },
+      { href: "/missing-evidence", label: "Missing proof", permission: MONEY },
     ],
   },
   {

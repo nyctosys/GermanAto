@@ -37,3 +37,5 @@
 - Held advances exclude refunded ones everywhere (_held_advances, quotation totals, visit cancel guard).
 ## US-507 (daily cash close)
 - cashclose.assert_day_open(db, branch_id, {accounts}, date) is the lock check; call it from any new route that records or voids money on a past date.
+## US-508 (missing evidence)
+- Rows from moneybook._gather carry source_type and signoff; month-end checks (US-701) should use /api/missing-evidence open count.
