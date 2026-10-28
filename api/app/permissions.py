@@ -25,6 +25,9 @@ PERMISSIONS: dict[str, str] = {
     "goods-receipt": "Receive stock against a purchase order",
     "payments-out": "Pay vendors (money out)",
     "expenses": "Record daily and major expenses",
+    "period-close": "Close a finished month, with its checklist",
+    "period-approve": "Reopen a closed month (admin)",
+    "reports-ops": "See operations reports",
     "hr": "Manage employees, attendance and attendance devices",
     "payroll": "Run payroll and give salary advances",
     "evidence-signoff": "Accept a money record that has no proof, with a reason (admin)",
@@ -37,7 +40,7 @@ PERMISSIONS: dict[str, str] = {
 
 DEFAULT_ROLES: dict[str, dict] = {
     "Admin": {"is_admin": True, "permissions": []},
-    "Accountant": {"is_admin": False, "permissions": ["dashboard", "attachments", "audit", "customers", "vendors", "payments-out", "expenses", "reports-finance", "cash-close", "hr", "payroll"]},
+    "Accountant": {"is_admin": False, "permissions": ["dashboard", "attachments", "audit", "customers", "vendors", "payments-out", "expenses", "reports-finance", "cash-close", "hr", "payroll", "period-close", "reports-ops"]},
     "Inventory manager": {"is_admin": False, "permissions": ["dashboard", "attachments", "inventory", "stock-adjust",
                                                             "labour-codes", "vendors", "purchasing", "goods-receipt"]},
 }

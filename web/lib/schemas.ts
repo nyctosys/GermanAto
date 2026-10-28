@@ -208,3 +208,48 @@ export const closeSchema = (expected: number) => z.object({
   const diff = Math.round((Number(c.counted) - expected) * 100) / 100;
   if (/^\d/.test(c.counted) && diff !== 0 && c.reason.length < 5) ctx.addIssue({ code: "custom", path: ["reason"], message: "Say why the count differs" });
 });
+
+// --- people ----------------------------------------------------------------------------------------
+
+export const employeeSchema = z.object({
+  full_name: name,
+  title: text(80),
+  phone: phoneOrEmpty,
+  cnic,
+  device_pin: text(20),
+  monthly_salary: rupees.transform((v) => v || "0"),
+  shift_start: z.string().min(1, "Required"),
+  shift_end: z.string().min(1, "Required"),
+  weekly_off: z.string().transform(Number),
+  joined_on: z.string().min(1, "Required"),
+  left_on: z.string().optional().transform((v) => v || null),
+  user_id: z.string().optional().transform((v) => v || null),
+  notes: text(),
+}).superRefine((e, ctx) => {
+  if (e.shift_end <= e.shift_start) ctx.addIssue({ code: "custom", path: ["shift_end"], message: "Must be after the shift starts" });
+  if (e.left_on && e.left_on < e.joined_on) ctx.addIssue({ code: "custom", path: ["left_on"], message: "Before they joined" });
+});
+
+export const deviceSchema = z.object({
+  serial: z.string().trim().regex(/^[A-Za-z0-9_-]{3,40}$/, "3 to 40 letters, digits, dashes or underscores"),
+  name: text(80).min(1, "Required"),
+});
+
+export const punchSchema = z.object({
+  punched_at: z.string().min(1, "Required"),
+  reason: text(500).refine((v) => v.length >= 5, "Say why (at least five characters)"),
+});
+
+export const markSchema = z.object({
+  day: z.string().min(1, "Required"),
+  kind: z.enum(["paid_leave", "unpaid_leave"]),
+  reason: text(500).refine((v) => v.length >= 3, "Say why"),
+});
+
+export const payrollLineSchema = z.object({
+  adjustment: z.string().trim().refine((v) => v === "" || /^-?\d{1,9}(\.\d{1,2})?$/.test(v), "Enter an amount").transform((v) => v || "0"),
+  adjustment_reason: text(200),
+  advance_recovery: rupees.transform((v) => v || "0"),
+}).superRefine((l, ctx) => {
+  if (Number(l.adjustment) !== 0 && l.adjustment_reason.length < 3) ctx.addIssue({ code: "custom", path: ["adjustment_reason"], message: "Say what it is for" });
+});

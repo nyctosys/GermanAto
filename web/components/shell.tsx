@@ -12,6 +12,7 @@ import { useSession } from "@/lib/session";
 /** A nav item or page needs one permission, or any of a list. */
 type Needs = string | string[];
 export const MONEY: string[] = ["payments-in", "payments-out", "expenses", "reports-finance"];
+export const PEOPLE: string[] = ["hr", "payroll"];
 export const PURCHASING: string[] = ["vendors", "purchasing", "goods-receipt", "payments-out"];
 
 const NAV: { section: string; items: { href: string; label: string; permission: Needs }[] }[] = [
@@ -32,6 +33,14 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
     items: [
       { href: "/inventory", label: "Inventory", permission: "inventory" },
       { href: "/labour-codes", label: "Labour codes", permission: "dashboard" },
+    ],
+  },
+  {
+    section: "People",
+    items: [
+      { href: "/employees", label: "Employees", permission: "hr" },
+      { href: "/attendance", label: "Attendance", permission: "hr" },
+      { href: "/payroll", label: "Payroll and advances", permission: "payroll" },
     ],
   },
   {

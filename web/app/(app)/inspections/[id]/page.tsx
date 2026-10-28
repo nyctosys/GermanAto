@@ -149,9 +149,9 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
       {readOnly && <div className="mb-4"><Notice tone="success">This report is signed and can&apos;t be changed. A correction creates a new version that keeps this one.</Notice></div>}
 
       <nav aria-label="Sections" className="no-print sticky top-[57px] z-20 -mx-4 mb-4 overflow-x-auto bg-paper/85 px-4 py-2 backdrop-blur shell:top-0 sm:-mx-6 sm:px-6 shell:-mx-10 shell:px-10">
-        <ul className="flex gap-1">
+        <ul className="flex gap-2">
           {sections.map((s) => (
-            <li key={s.id}><a href={`#${s.id}`} className="flex min-h-11 items-center whitespace-nowrap rounded-control px-3 text-sm text-ink-2 hover:bg-paper-3">{s.title}</a></li>
+            <li key={s.id}><a href={`#${s.id}`} className="flex min-h-11 items-center whitespace-nowrap rounded-control bg-surface px-3.5 text-sm text-ink-2 hover:bg-paper-3 active:bg-silver">{s.title}</a></li>
           ))}
         </ul>
       </nav>
@@ -317,22 +317,24 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
         </Section>
       </fieldset>
 
-      {readOnly && initial.data.repairs.length > 0 && <RepairHandoff inspection={initial} reload={reload} />}
+      <div className="mt-4 space-y-4">
+        {readOnly && initial.data.repairs.length > 0 && <RepairHandoff inspection={initial} reload={reload} />}
 
-      {!readOnly && <SignOff inspection={initial} data={data} saveState={save.state} version={version} onSigned={reload} />}
-      {readOnly && (
-        <Card title="Signatures">
-          <div className="flex flex-wrap gap-8">
-            {[["Inspector", initial.inspector_signature_url, initial.inspector], ["Customer", initial.customer_signature_url, data.customer_ack_name]].map(([l, url, name]) => (
-              <figure key={l}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- authenticated API files */}
-                {url ? <img src={url} alt={`${l} signature`} className="h-20 rounded-control border border-rule bg-surface" /> : <p className="text-muted">Not signed</p>}
-                <figcaption className="mt-1 text-sm text-muted">{l}{name ? `: ${name}` : ""}</figcaption>
-              </figure>
-            ))}
-          </div>
-        </Card>
-      )}
+        {!readOnly && <SignOff inspection={initial} data={data} saveState={save.state} version={version} onSigned={reload} />}
+        {readOnly && (
+          <Card title="Signatures">
+            <div className="flex flex-wrap gap-8">
+              {[["Inspector", initial.inspector_signature_url, initial.inspector], ["Customer", initial.customer_signature_url, data.customer_ack_name]].map(([l, url, name]) => (
+                <figure key={l}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- authenticated API files */}
+                  {url ? <img src={url} alt={`${l} signature`} className="h-20 rounded-control border border-rule bg-surface" /> : <p className="text-muted">Not signed</p>}
+                  <figcaption className="mt-1 text-sm text-muted">{l}{name ? `: ${name}` : ""}</figcaption>
+                </figure>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
     </>
   );
 }
@@ -481,7 +483,7 @@ function RepairHandoff({ inspection, reload }: { inspection: Inspection; reload:
     }
   }
   return (
-    <div className="mt-4">
+    <div>
       <Card title="Send repairs to the job card">
         <p className="mb-4 text-sm text-muted">Each repair becomes a labour code or a part on the visit&apos;s job card. The estimate here becomes the proposed price on the quotation.</p>
         <ul className="space-y-4">

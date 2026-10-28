@@ -10,7 +10,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Account, Branch, JournalEntry, JournalLine, LedgerAccount
+from app.models import Account, Branch, JournalEntry, JournalLine, LedgerAccount, PeriodClose
 from app.numbering import next_number
 
 CENT = Decimal("0.01")
@@ -46,6 +46,16 @@ def q(v: Decimal) -> Decimal:
     return Decimal(v).quantize(CENT, ROUND_HALF_UP)
 
 
+def closed_period(db: Session, branch: Branch, on: date) -> str | None:
+    """The label of the closed month or year that contains this date, if there is one."""
+    row = db.execute(select(PeriodClose.kind, PeriodClose.period).where(
+        PeriodClose.branch_id == branch.id, PeriodClose.status == "closed",
+        ((PeriodClose.kind == "month") & (PeriodClose.period == on.strftime("%Y-%m"))) | ((PeriodClose.kind == "year") & (PeriodClose.period == str(on.year))))).first()
+    if not row:
+        return None
+    return on.strftime("%B %Y") if row[0] == "month" else str(on.year)
+
+
 def ensure_chart(db: Session, branch: Branch) -> dict[str, LedgerAccount]:
     have = {a.code: a for a in db.scalars(select(LedgerAccount).where(LedgerAccount.branch_id == branch.id))}
     missing = [c for c in CHART if c[0] not in have]
@@ -72,6 +82,9 @@ def post(db: Session, branch: Branch, memo: str, lines: list[Line], *, on: date 
     debit, credit = sum((l.debit for l in lines), Decimal(0)), sum((l.credit for l in lines), Decimal(0))
     if debit != credit:
         raise JournalError(f"Unbalanced entry for {memo!r}: debits {debit} and credits {credit}")
+    closed = closed_period(db, branch, on or date.today())
+    if closed:
+        raise JournalError(f"{closed} is closed, so nothing can be recorded in it. Record it today instead, or ask an admin to reopen the month.")
     chart = ensure_chart(db, branch)
     unknown = {l.code for l in lines} - set(chart)
     if unknown:
@@ -133,3 +146,35 @@ def sync_opening(db: Session, branch: Branch, account: Account) -> None:
         post(db, branch, f"Opening balance of {account.name}",
              [Line(MONEY_CODE[account.kind], debit=account.opening_balance), Line("3900", credit=account.opening_balance)],
              on=account.opening_date, source=("account_opening", account.id))
+
+
+def category_totals(db: Session, branch: Branch, start: date, end: date) -> dict:
+    """Operating expenses by category for a period (debits less credits on 'Operating expenses')."""
+    from app.models import ExpenseCategory
+    rows = db.execute(select(JournalLine.category_id, func.sum(JournalLine.debit - JournalLine.credit))
+                      .join(JournalEntry, JournalEntry.id == JournalLine.entry_id).join(LedgerAccount, LedgerAccount.id == JournalLine.ledger_account_id)
+                      .where(JournalEntry.branch_id == branch.id, LedgerAccount.code == "6000", JournalEntry.entry_date >= start, JournalEntry.entry_date <= end)
+                      .group_by(JournalLine.category_id)).all()
+    names = {c.id: c.name for c in db.scalars(select(ExpenseCategory).where(ExpenseCategory.branch_id == branch.id))}
+    return {names.get(cid, "Uncategorised"): total for cid, total in rows if total}
+
+
+def money_movement(db: Session, branch: Branch, start: date, end: date) -> dict:
+    """Per money account: what came in and went out in the period, by the kind of event behind it."""
+    rows = db.execute(select(LedgerAccount.code, JournalEntry.source_type, func.sum(JournalLine.debit), func.sum(JournalLine.credit))
+                      .join(JournalLine, JournalLine.ledger_account_id == LedgerAccount.id).join(JournalEntry, JournalEntry.id == JournalLine.entry_id)
+                      .where(JournalEntry.branch_id == branch.id, LedgerAccount.code.in_(list(MONEY_CODE.values())),
+                             JournalEntry.entry_date >= start, JournalEntry.entry_date <= end)
+                      .group_by(LedgerAccount.code, JournalEntry.source_type)).all()
+    kinds = {v: k for k, v in MONEY_CODE.items()}
+    out: dict = {k: {"in": Decimal(0), "out": Decimal(0), "in_by_source": {}, "out_by_source": {}} for k in MONEY_CODE}
+    for code, source, debit, credit in rows:
+        a = out[kinds[code]]
+        label = source or "other"
+        if debit:
+            a["in"] += debit
+            a["in_by_source"][label] = a["in_by_source"].get(label, Decimal(0)) + debit
+        if credit:
+            a["out"] += credit
+            a["out_by_source"][label] = a["out_by_source"].get(label, Decimal(0)) + credit
+    return out

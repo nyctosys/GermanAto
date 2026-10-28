@@ -43,3 +43,9 @@
 - Repairs link to a job card through InspectionRepairLink (by index) and only from SIGNED inspections, so indices can't shift.
 - JobCardLine.proposed_price must be carried through job card saves (the web sends it back) and starts the quotation price.
 - Browser state (scan functions on window) is lost when navigating the pane: do not navigate while a background scan runs.
+## US-601 to US-604 (HR)
+- Attendance days come from app/attendance.py summarise(); payroll uses the same function, so screens and pay always agree. TIMEZONE env (default Asia/Karachi) turns device wall-clock times into UTC.
+- Device push is /iclock/cdata (no session): registered serial + optional secret via ?token= or X-Device-Secret. Resends are ignored; unknown pins are kept and claimed when an employee gets that device number.
+- A day's pay = salary / working days in the month; deduction = (absent + unpaid leave) days; late days cost nothing. Salary advances are MoneyEntry kind salary_advance (Dr 1300 Employee advances); payroll approval posts Dr 6100 / Cr 1300 recovery / Cr 2400 net; paying posts Dr 2400 / Cr money.
+- Next.js pages cannot export extra names: shared constants belong in components/.
+- Layout checker (touching cards/controls, overflow) lives in this session's notes: scan sibling section.rounded-card gaps < 8px and controls < 6px apart; section pills on the inspection page were the only offender.

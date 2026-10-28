@@ -1096,3 +1096,24 @@ class PayrollLine(Entity):
     adjustment_reason: Mapped[str] = mapped_column(String(200), default="")
     advance_recovery: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
     net_pay: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+
+
+class PeriodClose(BranchScoped):
+    """A closed month (or year). Once closed, nothing can be posted dated inside it."""
+
+    __tablename__ = "period_closes"
+    __table_args__ = (
+        CheckConstraint("kind IN ('month', 'year')", name="period_kind"),
+        CheckConstraint("status IN ('closed', 'open')", name="period_status"),  # 'open' = reopened
+        CheckConstraint("(kind = 'month' AND period ~ '^[0-9]{4}-(0[1-9]|1[0-2])$') OR (kind = 'year' AND period ~ '^[0-9]{4}$')", name="period_format"),
+        UniqueConstraint("branch_id", "kind", "period"),
+    )
+
+    kind: Mapped[str] = mapped_column(String(5))
+    period: Mapped[str] = mapped_column(String(7))
+    status: Mapped[str] = mapped_column(String(6), default="closed")
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    reopen_reason: Mapped[str] = mapped_column(Text, default="")
+    reopened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reopened_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
