@@ -26,6 +26,19 @@ pnpm install
 pnpm dev            # http://localhost:3000; /api is forwarded to the API on :8000 (API_URL to change it)
 ```
 
+## Try it with demo data
+
+After the steps above, sign in as the admin you just seeded and walk one car through the workshop (the full picture is in [section 2 of the guide](docs/SYSTEM_GUIDE.md#2-the-life-of-a-car-in-the-workshop)):
+
+1. **Administration → Branch settings:** check the name and tax rate. **Money settings:** the cash, bank and wallet accounts already exist; set the opening balances.
+2. **Inventory** and **Labour codes:** add one part with opening stock and one labour code.
+3. **Visits → Check in a car:** add the customer and car, then check it in.
+4. On the visit: **Job card → Quotation** (price it, send it, record the approval), take an **Advance**, start the **Repair order**, issue the part, mark the work done and move it to **Ready**.
+5. **Invoices:** make the invoice, issue it, take the payment with proof, then give the **Gate pass**.
+6. Look at what that did: **Dashboard**, **Reports → Finance reports**, **Money in**, **Messages** (queued WhatsApp messages; nothing is sent without Twilio details), and **Reports → Month end** for the checklist.
+
+To run it on a workshop PC with Docker, back it up and connect the cloud, follow [docs/RUNBOOK.md](docs/RUNBOOK.md).
+
 ## Tests
 
 ```bash

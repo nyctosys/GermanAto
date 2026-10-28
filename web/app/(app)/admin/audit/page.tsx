@@ -98,6 +98,7 @@ function AuditList({ action }: { action: string }) {
           <EmptyState title="Nothing recorded yet">Changes and sign-ins appear here the moment they happen.</EmptyState>
         ) : (
           <>
+            <div className="overflow-x-auto">
             <table className="table-stack w-full text-left">
               <thead className="border-b border-rule text-sm text-muted">
                 <tr>
@@ -110,17 +111,18 @@ function AuditList({ action }: { action: string }) {
               <tbody>
                 {entries.map((e) => (
                   <tr key={e.id} className="border-t border-rule align-top first:border-t-0">
-                    <td data-label="When" className="num px-5 py-3 max-sm:px-0 sm:whitespace-nowrap">{when(e.at)}</td>
+                    <td data-label="When" className="num px-5 py-3 max-sm:px-0">{when(e.at)}</td>
                     <td data-label="Who" className="px-3 py-3 max-sm:px-0">{e.user ?? "System"}</td>
                     <td data-label="What" className="px-3 py-3 max-sm:px-0">
                       <span className="font-medium">{ACTIONS[e.action] ?? e.action}</span>{" "}
                       <span className="text-muted">{recordName(e.entity_type)}</span>
                     </td>
-                    <td className="px-5 py-3 max-sm:px-0"><Changes changes={e.changes} /></td>
+                    <td className="[overflow-wrap:anywhere] px-5 py-3 max-sm:px-0"><Changes changes={e.changes} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
             <div className="flex flex-col gap-3 border-t border-rule p-4 shell:px-5">
               <Notice>{error}</Notice>
               {lastPageSize === PAGE && (
@@ -139,7 +141,7 @@ function Changes({ changes }: { changes: Record<string, unknown> }) {
   return (
     <ul className="space-y-1 text-sm">
       {rows.map(([k, v]) => (
-        <li key={k} className="break-words">
+        <li key={k} className="[overflow-wrap:anywhere]">
           <span className="text-muted">{k.replaceAll("_", " ")}</span>{" "}
           {Array.isArray(v) && v.length === 2 ? (
             <>
