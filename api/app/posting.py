@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import journal
 from app.journal import MONEY_CODE, Line, q
-from app.models import Branch, Invoice, Payment, StockMovement, VendorBill, VendorPayment
+from app.models import Branch, Invoice, MoneyEntry, Payment, StockMovement, VendorBill, VendorPayment
 from app.pricing import totals
 
 Z = Decimal(0)
@@ -60,6 +60,19 @@ def vendor_bill(db: Session, branch: Branch, b: VendorBill) -> None:
 def vendor_payment(db: Session, branch: Branch, p: VendorPayment) -> None:
     journal.post(db, branch, f"Vendor payment {p.number}", [Line("2000", debit=p.amount), Line(MONEY_CODE[p.account], credit=p.amount)],
                  on=p.paid_at.date(), source=("vendor_payment", p.id))
+
+
+def money_entry(db: Session, branch: Branch, e: MoneyEntry) -> None:
+    """Other income, owner capital, an expense (by category), owner drawings, or a transfer between accounts."""
+    here = MONEY_CODE[e.account]
+    lines = {
+        "other_income": [Line(here, debit=e.amount), Line("4900", credit=e.amount)],
+        "owner_capital": [Line(here, debit=e.amount), Line("3000", credit=e.amount)],
+        "expense": [Line("6000", debit=e.amount, category_id=e.category_id), Line(here, credit=e.amount)],
+        "drawings": [Line("3100", debit=e.amount), Line(here, credit=e.amount)],
+        "transfer": [Line(MONEY_CODE[e.to_account or "cash"], debit=e.amount), Line(here, credit=e.amount)],
+    }[e.kind]
+    journal.post(db, branch, f"{e.number}" + (f": {e.party}" if e.party else ""), lines, on=e.occurred_on, source=("money_entry", e.id))
 
 
 def void_source(db: Session, branch: Branch, source_type: str, source_id, memo: str, on: date | None = None) -> None:

@@ -831,3 +831,41 @@ class JournalLine(Entity):
     credit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
     category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("expense_categories.id"))  # for expense lines
     note: Mapped[str] = mapped_column(String(200), default="")
+
+
+MONEY_KINDS = ("other_income", "owner_capital", "transfer", "expense", "drawings")
+
+
+class MoneyEntry(BranchScoped):
+    """Money moved that isn't a customer payment or a vendor payment: other income, owner
+    capital, an expense, owner drawings, or a transfer between two accounts. Never edited:
+    a mistake is voided with a reason."""
+
+    __tablename__ = "money_entries"
+    __table_args__ = (
+        CheckConstraint(f"kind IN {MONEY_KINDS}", name="money_kind"),
+        CheckConstraint("status IN ('posted', 'voided')", name="money_status"),
+        CheckConstraint("account IN ('cash', 'bank', 'wallet')", name="money_account"),
+        CheckConstraint("to_account IS NULL OR to_account IN ('cash', 'bank', 'wallet')", name="money_to_account"),
+        CheckConstraint("(kind = 'transfer') = (to_account IS NOT NULL)", name="money_transfer_has_target"),
+        CheckConstraint("to_account IS NULL OR to_account <> account", name="money_transfer_differs"),
+        CheckConstraint("(kind = 'expense') = (category_id IS NOT NULL)", name="money_expense_category"),
+        CheckConstraint("amount > 0", name="money_amount"),
+        CheckConstraint("proof_id IS NOT NULL OR no_proof_reason <> ''", name="money_proof"),
+        Index("ix_money_entries_date", "occurred_on"),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    kind: Mapped[str] = mapped_column(String(14))
+    status: Mapped[str] = mapped_column(String(8), default="posted")
+    occurred_on: Mapped[date] = mapped_column(Date)
+    account: Mapped[str] = mapped_column(String(8))               # the money account it came from or went into
+    to_account: Mapped[str | None] = mapped_column(String(8))      # transfers: where it went
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("expense_categories.id"))
+    party: Mapped[str] = mapped_column(String(120), default="")    # who it was paid to or received from
+    reference: Mapped[str] = mapped_column(String(60), default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    proof_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
+    no_proof_reason: Mapped[str] = mapped_column(Text, default="")
+    void_reason: Mapped[str] = mapped_column(Text, default="")

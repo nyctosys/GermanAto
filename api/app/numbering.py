@@ -9,7 +9,8 @@ from app.models import Branch, NumberSequence
 PREFIXES = {"customer": "CUS", "item": "ITM", "visit": "VIS", "inspection": "INS", "job_card": "JC",
             "quotation": "QT", "repair_order": "RO", "invoice": "INV", "counter_sale": "CS", "payment": "PAY",
             "credit_note": "CN", "vendor": "VEN", "purchase_order": "PO", "goods_receipt": "GRN",
-            "vendor_bill": "BILL", "vendor_payment": "VPAY", "journal": "JE"}
+            "vendor_bill": "BILL", "vendor_payment": "VPAY", "journal": "JE",
+            "other_income": "INC", "owner_capital": "CAP", "transfer": "TRF", "expense": "EXP", "drawings": "DRW"}
 
 
 def next_number(db: Session, branch: Branch, kind: str) -> str:

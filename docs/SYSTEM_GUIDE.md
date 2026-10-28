@@ -418,6 +418,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0009 | Vendors, purchase orders, goods receipts, vendor bills, vendor payments |
 | 0010 | Accounts and expense categories |
 | 0011 | Journal: chart of accounts, entries and lines (append-only, enforced by the database) |
+| 0012 | Money entries (other income, owner capital, expenses, drawings, transfers) |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).
@@ -436,6 +437,7 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Repair order | `POST quotations/{id}/repair-order`, `GET repair-orders`, `GET repair-orders/{id}`, `POST repair-orders/{id}/status`, `POST …/lines`, `PATCH/DELETE …/lines/{line}`, `POST …/lines/{line}/issue`, `…/return`, `POST …/activity`, `GET technicians` |
 | Billing | `POST repair-orders/{id}/invoice`, `POST counter-sales`, `PUT counter-sales/{id}`, `GET invoices`, `GET/PUT invoices/{id}`, `POST invoices/{id}/refresh`, `…/issue`, `…/payments`, `…/void` |
 | Gate and record | `GET visits/{id}/gate-check`, `POST visits/{id}/gate-pass`, `GET visits/{id}/dossier` |
+| Money | `GET/PUT accounts`, `GET/POST expense-categories`, `PUT expense-categories/{id}`, `GET money-in`, `GET money-out`, `POST money-entries`, `POST money-entries/{id}/void`, `GET journal/trial-balance`, `GET journal/entries` |
 | Purchasing | `GET/POST vendors`, `GET/PUT vendors/{id}`, `GET purchase-catalog`, `GET/POST purchase-orders`, `GET/PUT purchase-orders/{id}`, `POST purchase-orders/{id}/send`, `…/cancel`, `…/close`, `…/receive`, `POST goods-receipts/{id}/bill`, `GET bills`, `GET bills/{id}`, `POST bills/{id}/payments`, `POST bills/{id}/void`, `POST vendor-payments/{id}/void` |
 
 ### Quality checks run on every stage
@@ -553,3 +555,35 @@ Every business event posts a **balanced journal entry** automatically, so the bo
 - Stock entries are posted from the single place stock changes, so the inventory balance in the books always equals the stock ledger (quantity times the cost each unit moved at).
 - **Reconciliation checks** run in the tests: after a full workshop job and a purchase, the trial balance is zero; receivables, payables, advances held and inventory match the figures derived from the documents.
 - For a database that predates posting, `uv run python -m app.backfill_journal` posts what is missing; it is safe to run again.
+
+### Money in
+**Where:** Money → Money in (needs one of `payments-in`, `payments-out`, `expenses` or `reports-finance` to see it).
+One page for **every payment received**, whatever its source:
+
+| Source | Comes from |
+|---|---|
+| Invoice payment | a payment on a workshop invoice or counter sale |
+| Advance | an advance taken on a quotation |
+| Other income | scrap sale, rent received, commission (recorded here) |
+| Owner capital | money the owner puts into the business (recorded here) |
+| Transfer | money moved between the cash drawer, bank and wallet (recorded here; counted in each account but **not as income**) |
+
+- **Record money in** (needs `payments-in`): other income, owner capital, or a transfer. Each has an amount, the account it went into, who it came from, the date, a transaction reference for bank or wallet money, and **proof or a written reason**.
+- **Find:** search by name, number or reference; filter by source, account, and date range; and **Only those with no proof**.
+- The page shows the **total** (transfers excluded), the total **by account** and **by source**, and a warning with the number of records that have a reason but no proof.
+- Each row links to its document (invoice, quotation). A record entered here can be **voided** with a reason: it stays on the list, struck through, and the books are corrected.
+
+### Money out
+**Where:** Money → Money out. The same page for **every payment made**:
+
+| Source | Comes from |
+|---|---|
+| Vendor payment | paying a vendor's bill |
+| Expense | a daily or major expense, with its **category** from the managed list (needs `expenses`) |
+| Owner drawings | money the owner takes out (needs `payments-out`) |
+| Transfer | money moved between accounts (needs `payments-out`) |
+
+- A vendor payment appears here once, from the bill it paid; it is not entered twice.
+- An expense needs a category, an amount, the account it was paid from, the date and proof or a reason. A bank or wallet payment needs its reference or a screenshot.
+- Same filters, totals and voiding as Money in.
+- **Who can record what:** money in needs `payments-in`; expenses need `expenses`; owner drawings and transfers need `payments-out`. The accountant role can record expenses and pay vendors but not receive money.

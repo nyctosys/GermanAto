@@ -27,3 +27,7 @@
 - Shared rounding/totals live in app/pricing.py (estimates re-exports them).
 - Add new money events by writing a posting.* function and calling it before db.commit() in the route; add a reconciliation test in test_phase5_money.py.
 - Dev DB backfill: uv run python -m app.backfill_journal
+## US-504 and US-505 (money in/out)
+- MoneyEntry (migration 0012) holds other income, owner capital, expense, drawings, transfer; customer payments (Payment) and vendor payments stay in their own tables and are merged by routers/moneybook.py into /money-in and /money-out.
+- Web: components/moneybook.tsx is shared by both pages; entrySchema in lib/schemas.ts mirrors the API rules.
+- zsh: do not use ${var^} in shell heredocs; write files from python instead.

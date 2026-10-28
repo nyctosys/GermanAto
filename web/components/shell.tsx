@@ -11,6 +11,7 @@ import { useSession } from "@/lib/session";
 // permission (the API enforces the same permission on the data).
 /** A nav item or page needs one permission, or any of a list. */
 type Needs = string | string[];
+export const MONEY: string[] = ["payments-in", "payments-out", "expenses", "reports-finance"];
 export const PURCHASING: string[] = ["vendors", "purchasing", "goods-receipt", "payments-out"];
 
 const NAV: { section: string; items: { href: string; label: string; permission: Needs }[] }[] = [
@@ -31,6 +32,13 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
     items: [
       { href: "/inventory", label: "Inventory", permission: "inventory" },
       { href: "/labour-codes", label: "Labour codes", permission: "dashboard" },
+    ],
+  },
+  {
+    section: "Money",
+    items: [
+      { href: "/money-in", label: "Money in", permission: MONEY },
+      { href: "/money-out", label: "Money out", permission: MONEY },
     ],
   },
   {

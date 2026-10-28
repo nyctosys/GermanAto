@@ -194,3 +194,102 @@ def test_stock_adjustments_hit_the_books(admin):
     admin.post(f"/api/items/{item['id']}/adjust", json={"qty": "-2", "reason": "Damaged on the shelf"})
     b = rows(admin)
     assert b["1200"] == 800 and b["6900"] == 200
+
+
+# --- money in and money out -----------------------------------------------------------------------------
+
+from test_phase3_visits import PNG, upload
+
+
+def category(admin, name="Rent"):
+    return next(c for c in admin.get("/api/expense-categories").json() if c["name"] == name)
+
+
+def entry(admin, **kw):
+    body = {"amount": "1000", "account": "cash", "no_proof_reason": "No slip from the shop", **kw}
+    return admin.post("/api/money-entries", json=body)
+
+
+def test_an_expense_needs_a_category_and_proof_or_a_reason_and_posts_to_the_books(admin):
+    rent = category(admin)
+    assert entry(admin, kind="expense").status_code == 422  # no category
+    assert entry(admin, kind="other_income", category_id=rent["id"]).status_code == 422  # only expenses have one
+    assert entry(admin, kind="expense", category_id=rent["id"], no_proof_reason="").status_code == 422  # no proof, no reason
+    assert entry(admin, kind="expense", category_id=rent["id"], account="bank").status_code == 422  # a transfer needs its reference
+    e = entry(admin, kind="expense", category_id=rent["id"], amount="45000", party="Landlord", account="bank", reference="IBFT-55").json()
+    assert e["number"].startswith("EXP-") and e["proof_url"] is None
+    assert rows(admin)["6000"] == 45000 and rows(admin)["1020"] == -45000
+    lines = admin.get("/api/journal/entries", params={"source_type": "money_entry"}).json()[0]["lines"]
+    assert any(l["category"] == "Rent" for l in lines)  # the P&L can split expenses by category
+
+    gone = admin.post(f"/api/money-entries/{e['id']}/void", json={"reason": "Wrong month"}).json()
+    assert gone["status"] == "voided" and rows(admin)["6000"] == 0 and rows(admin)["1020"] == 0
+    assert admin.post(f"/api/money-entries/{e['id']}/void", json={"reason": "Again"}).status_code == 409
+    retired = admin.put(f"/api/expense-categories/{rent['id']}", json={"name": "Rent", "is_active": False, "version": rent["version"]})
+    assert entry(admin, kind="expense", category_id=rent["id"]).status_code == 422  # a retired category can't be chosen
+
+
+def test_other_income_capital_drawings_and_transfers_post_the_right_entries(admin):
+    entry(admin, kind="other_income", amount="3000", party="Scrap dealer")
+    entry(admin, kind="owner_capital", amount="100000", account="bank", reference="OWN-1")
+    entry(admin, kind="drawings", amount="2000")
+    b = rows(admin)
+    assert b["4900"] == -3000 and b["3000"] == -100000 and b["3100"] == 2000
+    assert b["1010"] == 3000 - 2000 and b["1020"] == 100000
+
+    assert entry(admin, kind="transfer", amount="5000", account="bank", to_account="bank", reference="x").status_code == 422
+    assert entry(admin, kind="transfer", amount="5000", account="bank").status_code == 422  # no destination
+    t = entry(admin, kind="transfer", amount="5000", account="bank", to_account="cash", reference="ATM-1")
+    assert t.status_code == 201, t.json()
+    b = rows(admin)
+    assert b["1010"] == 1000 + 5000 and b["1020"] == 95000  # moved, not earned
+
+
+def test_money_in_gathers_every_source_with_filters_and_totals(admin):
+    visit, item, ro = ready_repair(admin)  # a 4000 cash advance, taken without proof
+    inv = admin.post(f"/api/repair-orders/{ro['id']}/invoice").json()
+    inv = admin.post(f"/api/invoices/{inv['id']}/issue", json={"version": inv["version"]}).json()
+    admin.post(f"/api/invoices/{inv['id']}/payments", json={"amount": "2000", "account": "bank", "reference": "IBFT-9", "proof_id": upload(admin, PNG + b"s")})
+    entry(admin, kind="other_income", amount="750", party="Scrap dealer")
+    entry(admin, kind="transfer", amount="500", account="bank", to_account="cash", reference="ATM")
+
+    page = admin.get("/api/money-in").json()
+    assert {r["source"] for r in page["rows"]} == {"advance", "invoice_payment", "other_income", "transfer"}
+    assert D(str(page["total"])) == 4000 + 2000 + 750  # the transfer isn't income
+    assert D(str(page["by_account"]["cash"])) == 4000 + 750 + 500 and D(str(page["by_account"]["bank"])) == 2000
+    assert page["missing_proof"] == 3  # the advance, the other income and the transfer have a reason but no proof
+    only = admin.get("/api/money-in", params={"missing_proof": True, "account": "cash"}).json()
+    assert {r["source"] for r in only["rows"]} == {"advance", "other_income", "transfer"}
+    assert [r["source"] for r in admin.get("/api/money-in", params={"source": "invoice_payment"}).json()["rows"]] == ["invoice_payment"]
+    assert [r["party"] for r in admin.get("/api/money-in", params={"q": "scrap"}).json()["rows"]] == ["Scrap dealer"]
+    assert admin.get("/api/money-in", params={"date_from": (date.today() + timedelta(days=1)).isoformat()}).json()["rows"] == []
+    assert D(str(admin.get("/api/money-in", params={"date_to": date.today().isoformat()}).json()["total"])) == D(str(page["total"]))
+
+
+def test_money_out_gathers_vendor_payments_expenses_and_transfers_once_each(admin):
+    vendor, item, po = sent_po(admin)
+    grn = receive(admin, po, "10").json()["receipts"][0]
+    bill = admin.post(f"/api/goods-receipts/{grn['id']}/bill", json={"bill_date": date.today().isoformat()}).json()
+    admin.post(f"/api/bills/{bill['id']}/payments", json={"amount": "1500", **CASH})
+    entry(admin, kind="expense", category_id=category(admin, "Tea and refreshments")["id"], amount="300")
+    entry(admin, kind="transfer", amount="900", account="cash", to_account="bank", reference="DEP-1")
+    out = admin.get("/api/money-out").json()
+    assert sorted(r["source"] for r in out["rows"]) == ["expense", "transfer", "vendor_payment"]
+    assert D(str(out["total"])) == 1500 + 300
+    assert D(str(out["by_account"]["cash"])) == 1500 + 300 + 900
+    assert [r["party"] for r in admin.get("/api/money-out", params={"source": "vendor_payment"}).json()["rows"]] == [vendor["name"]]
+    assert rows(admin)["1010"] == -(1500 + 300 + 900)
+
+
+def test_who_may_record_what(admin):
+    roles = {r["name"]: r["id"] for r in admin.get("/api/roles").json()}
+    branch_id = admin.get("/api/auth/me").json()["branch"]["id"]
+    for name, role in (("inv", "Inventory manager"), ("acct", "Accountant")):
+        admin.post("/api/users", json={"username": name, "full_name": name, "password": f"{name}-pass-1234", "role_id": roles[role], "branch_ids": [branch_id]})
+    inv, acct = signed_in("inv", "inv-pass-1234"), signed_in("acct", "acct-pass-1234")
+    tea = category(admin, "Tea and refreshments")["id"]
+    assert entry(inv, kind="expense", category_id=tea).status_code == 403
+    assert inv.get("/api/money-out").status_code == 403
+    assert entry(acct, kind="expense", category_id=tea).status_code == 201  # the accountant records expenses
+    assert entry(acct, kind="other_income").status_code == 403  # but money in needs payments-in
+    assert acct.get("/api/money-in").status_code == 200

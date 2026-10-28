@@ -176,3 +176,25 @@ export const accountSchema = z.object({
 });
 
 export const categorySchema = z.object({ name: text(80).min(1, "Required") });
+
+/** A money entry that isn't a customer or vendor payment (mirrors api/app/routers/moneybook.py). */
+export const entrySchema = z.object({
+  kind: z.enum(["other_income", "owner_capital", "transfer", "expense", "drawings"]),
+  amount: z.string().trim().refine((v) => /^\d{1,10}(\.\d{1,2})?$/.test(v) && Number(v) > 0, "Enter the amount"),
+  account: z.enum(["cash", "bank", "wallet"]),
+  to_account: z.string(),
+  category_id: z.string(),
+  party: text(120),
+  reference: text(60),
+  note: text(500),
+  occurred_on: z.string().min(1, "Required").refine((v) => v <= new Date().toLocaleDateString("en-CA"), "Can't be in the future"),
+  proof: z.array(z.object({ id: z.string() })),
+  reason: z.string().trim(),
+}).superRefine((e, ctx) => {
+  const bad = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+  if (e.kind === "transfer" && (!e.to_account || e.to_account === e.account)) bad("to_account", "Choose a different account");
+  if (e.kind === "expense" && !e.category_id) bad("category_id", "Choose a category");
+  if (!e.proof.length && e.reason.length < 5) bad("reason", "Attach proof, or explain why there is none");
+  const touched = [e.account, e.kind === "transfer" ? e.to_account : "cash"].some((a) => a && a !== "cash");
+  if (touched && !e.reference && !e.proof.length) bad("reference", "Add the transaction reference or a screenshot");
+});
