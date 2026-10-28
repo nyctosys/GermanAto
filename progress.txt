@@ -1,0 +1,17 @@
+# Progress log (append-only, Ralph style)
+
+## Codebase patterns
+- API: FastAPI + SQLAlchemy 2 sync in api/app; routers in api/app/routers; models in api/app/models.py; one Alembic revision per story that changes tables (autogenerate, then check with `alembic check`).
+- New numbered documents: add the kind to api/app/numbering.py PREFIXES, call next_number(db, actor.branch, kind).
+- Permissions live in api/app/permissions.py; routes use require("perm"); add the permission there and to DEFAULT_ROLES where it fits.
+- Money records always carry proof_id or no_proof_reason (CHECK constraint) and reuse estimates.Proof; bank/wallet need a reference or screenshot.
+- Stock only changes through app.stock.move(); do not db.refresh() an item after move() (it discards the unflushed average cost).
+- Web: Next.js 16 App Router, Tailwind v4 tokens in globals.css, zustand for shared state, zod schemas in web/lib/schemas.ts with parseForm; shared components in web/components (ui, payments, estimates, purchasing, print).
+- Pressable things must look pressable (DESIGN.md 6b): filled ghost buttons, underlined links, chevron on whole-row links (class row-link).
+- After editing globals.css, Turbopack may serve stale CSS: stop the web preview, rm -rf web/.next/dev, restart.
+- Browser checks: scan every new screen at 320/375/768/1280 for sideways scroll, clipped text, small touch targets.
+- Push: git -c credential.https://github.com.helper= -c 'credential.https://github.com.helper=!/usr/local/bin/gh auth git-credential' push https://github.com/nyctosys/GermanAto.git dev:refs/heads/dev
+
+## Done before the PRD
+- Phases 0 to 4 and the workshop chain (check-in to gate pass), purchasing, guide sections 1 to 20.
+

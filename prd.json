@@ -1,0 +1,444 @@
+{
+  "project": "GermanATO",
+  "branchName": "dev",
+  "description": "Complete the remaining phases (5 to 9) of docs/NEW_SYSTEM_SPEC.md, one small story at a time, Ralph style.",
+  "userStories": [
+    {
+      "id": "US-501",
+      "title": "Accounts and expense categories",
+      "description": "Cash, bank and wallet accounts per branch with opening balances, and a managed list of expense categories.",
+      "acceptanceCriteria": [
+        "Accounts table with opening balance and date",
+        "Expense categories table, seeded with sensible defaults, add/rename/deactivate from Settings",
+        "Settings screens for both",
+        "Existing payments map to an account by method",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-502",
+      "title": "Journal engine",
+      "description": "Chart of accounts and double-entry journal with a post() helper that refuses unbalanced entries; trial balance endpoint.",
+      "acceptanceCriteria": [
+        "Chart of accounts seeded (cash, bank, wallet, receivables, inventory, payables, customer advances, revenue labour/parts, cost of parts sold, tax payable, expenses, goods received not billed, owner capital/drawings)",
+        "post() inserts balanced lines in one transaction; unbalanced raises",
+        "Trial balance endpoint sums to zero in tests",
+        "Entries are append-only; reversal creates a new entry",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-503",
+      "title": "Post journals for existing events",
+      "description": "Invoice issue, payments in, advances, part issue cost, counter sale cost, goods received, vendor bill, vendor payment each post a journal.",
+      "acceptanceCriteria": [
+        "Each event posts exactly once",
+        "Voids post reversals",
+        "Test: a full workshop job plus a purchase leaves the trial balance at zero and receivables/payables equal the derived figures",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-504",
+      "title": "Money In page",
+      "description": "One page listing every incoming payment (invoice payments, advances, other income, owner capital, bank-to-cash transfers).",
+      "acceptanceCriteria": [
+        "Other income, owner capital and transfer-in records with proof or a reason",
+        "Unified list with filters (date, source, account, customer, missing proof) and totals by account and source",
+        "Proof thumbnail column and missing-proof flag",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-505",
+      "title": "Money Out page and expenses",
+      "description": "One page listing every outgoing payment: vendor payments, daily and major expenses, owner drawings, transfers, refunds.",
+      "acceptanceCriteria": [
+        "Expense records with category, account, proof or reason",
+        "Unified list with filters and totals",
+        "Vendor payments appear without duplication",
+        "Permissions: payments-out / expenses",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-506",
+      "title": "Advance refunds and credit notes",
+      "description": "Refund a held advance with admin approval; credit note for returns and corrections on an issued invoice.",
+      "acceptanceCriteria": [
+        "advance-refund permission and approval record",
+        "Credit note puts returned parts back in stock at cost, reduces the invoice balance or creates a refund to Money Out",
+        "Original invoice never edited; journal reversal posts",
+        "Counter sale returns work the same way",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-507",
+      "title": "Daily cash close",
+      "description": "Count cash per account against the expected balance, record the difference and sign off.",
+      "acceptanceCriteria": [
+        "Expected balance derived from the journal",
+        "Counted amount, difference reason when not zero",
+        "One close per account per day, locked once signed",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-508",
+      "title": "Missing evidence and sign-off",
+      "description": "List every money record without proof; an admin can sign each off with a reason.",
+      "acceptanceCriteria": [
+        "Report of missing-proof records across money in and out",
+        "Admin sign-off per record, recorded with name and time",
+        "Count shown as an alert",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-509",
+      "title": "Inspection repairs to job card; extra work approval",
+      "description": "Send inspection section 11 rows to the job card; extra work on a repair order records how the customer approved it.",
+      "acceptanceCriteria": [
+        "One tap sends a repair row to the job card as a labour code or stock item, with the estimate as proposed price",
+        "Extra work line records approval method with proof or a reason, shown on the invoice",
+        "Tests for both",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-601",
+      "title": "Employees",
+      "description": "Employee records linked optionally to a user, with pay type and monthly salary.",
+      "acceptanceCriteria": [
+        "Employees CRUD with permissions hr",
+        "Active/inactive, CNIC and phone validation, zod forms",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-602",
+      "title": "Attendance and ZKTeco devices",
+      "description": "Registered attendance devices accept punches only from known serials with an optional shared secret; daily summaries.",
+      "acceptanceCriteria": [
+        "Device registry screen",
+        "Push endpoint rejects unregistered devices and bad secrets",
+        "Punches become daily attendance with late and absent days",
+        "Manual correction with a reason",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-603",
+      "title": "Salary advances",
+      "description": "Advance against salary paid from Money Out and recovered in payroll.",
+      "acceptanceCriteria": [
+        "Create advance with proof, outstanding balance per employee",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-604",
+      "title": "Payroll run",
+      "description": "Monthly payroll with attendance deductions and advance recovery, posted to Money Out.",
+      "acceptanceCriteria": [
+        "Draft, review and approve a run",
+        "Payslips printable",
+        "Payment posts to Money Out and the journal",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-701",
+      "title": "Period close wizard and lock",
+      "description": "Month and year closing with a checklist, and locking so closed periods cannot change.",
+      "acceptanceCriteria": [
+        "Checklist: missing proof, unsigned cash closes, drafts, unbalanced entries",
+        "Close and reopen (admin, reason)",
+        "Posting into a closed period is refused with a clear message",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-702",
+      "title": "Closing pack",
+      "description": "Printable month-end pack with P&L, cash by account, receivables, payables, stock value and proofs index.",
+      "acceptanceCriteria": [
+        "Print page with all sections and links to proofs",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-703",
+      "title": "Owner overview and dashboard",
+      "description": "Real dashboard numbers.",
+      "acceptanceCriteria": [
+        "Cars in the workshop, open quotes, money in/out, cash by account, receivables, payables, low stock, alerts",
+        "Drill-down from each number",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-704",
+      "title": "Finance reports",
+      "description": "P&L, cash flow, receivables aging, payables aging, stock value, discounts given, voids.",
+      "acceptanceCriteria": [
+        "Date-range filters, totals reconcile with the journal",
+        "Each row links to its documents",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-705",
+      "title": "Operations reports",
+      "description": "Visits by status, turnaround, revenue per visit, top labour codes, comebacks, quotation conversion, open repair order aging.",
+      "acceptanceCriteria": [
+        "Report screens with filters and drill-down",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-706",
+      "title": "HR reports and CSV export",
+      "description": "Attendance, payroll cost, advances; CSV export for every report.",
+      "acceptanceCriteria": [
+        "Export button on each report",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-801",
+      "title": "Messaging foundation",
+      "description": "Templates, a message queue and a provider interface with Twilio WhatsApp and a dry-run mode.",
+      "acceptanceCriteria": [
+        "Message templates managed in Settings",
+        "Queue with status; opt-out respected",
+        "Twilio sender reads credentials from environment; no credentials means messages stay queued/dry-run",
+        "Tests with a fake provider",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-802",
+      "title": "Event messages",
+      "description": "Quotation sent, car ready, invoice issued, payment received messages.",
+      "acceptanceCriteria": [
+        "Each event queues a message to the customer unless opted out",
+        "Messages screen with status and retry",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-803",
+      "title": "Reminders",
+      "description": "Payment reminders at +3, +7, +15 days, service reminders, welcome after first visit.",
+      "acceptanceCriteria": [
+        "Scheduler endpoint or worker that queues due reminders once",
+        "Configurable days in settings",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-804",
+      "title": "Webhooks",
+      "description": "Twilio status and inbound webhooks with signature validation; STOP opts out.",
+      "acceptanceCriteria": [
+        "Webhook validates the signature",
+        "Delivery status updates messages",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-901",
+      "title": "Branch server packaging and backups",
+      "description": "Docker compose for the workshop PC, environment sample, nightly backup and restore scripts.",
+      "acceptanceCriteria": [
+        "docker-compose.yml with api, web, postgres",
+        "backup and restore scripts tested",
+        "Runbook in docs",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-902",
+      "title": "Sync API and worker",
+      "description": "Outbox events pushed to the cloud and pulled back with a cursor, idempotent.",
+      "acceptanceCriteria": [
+        "Push and pull endpoints with branch authentication",
+        "Worker with retry and cursor",
+        "Tests for idempotency and ordering",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-903",
+      "title": "Conflict review",
+      "description": "Stale edits during sync land in a review screen.",
+      "acceptanceCriteria": [
+        "Conflict records with both versions",
+        "Admin resolves keep-local or keep-remote",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-904",
+      "title": "Sync status page",
+      "description": "Show last sync, pending events and failures.",
+      "acceptanceCriteria": [
+        "Settings page with status and a manual sync button",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-990",
+      "title": "Final verification",
+      "description": "End-to-end walkthrough, all docs current, every screen scanned at four widths, CI green.",
+      "acceptanceCriteria": [
+        "Seed and demo instructions in README",
+        "All stories pass",
+        "Final report to the user",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Every new screen is checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md updated in the same commit"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
