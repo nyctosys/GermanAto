@@ -5,8 +5,8 @@
 #   ./release.sh              deploy
 #   ./release.sh --dry-run    show what would change, touch nothing
 #
-# Deploys code, then runs migrate_release_schema.py (idempotent column/index
-# adds). Heavier data migrations still run by hand when a release says so.
+# Deploys code, then runs `alembic upgrade head` to apply any new schema
+# revisions.
 #
 # Run as yourself, not with sudo: the clone uses your GitHub credentials, and
 # the script escalates only for the steps that write to /opt.
@@ -73,7 +73,7 @@ sudo cp "$STAGE"/repo/*.py "$APP_DIR/"
 sudo chown "$OWNER" "$APP_DIR"/*.py
 
 say "Applying schema migrations"
-sudo -u "${OWNER%%:*}" bash -c "cd '$APP_DIR/backend' && source env/bin/activate && python ../migrate_release_schema.py" \
+sudo -u "${OWNER%%:*}" bash -c "cd '$APP_DIR/backend' && source env/bin/activate && alembic upgrade head" \
     || die "schema migration failed - restore with: sudo tar xzf $BACKUP -C $APP_DIR"
 
 say "Restarting $SERVICE"

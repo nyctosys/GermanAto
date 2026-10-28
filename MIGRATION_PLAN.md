@@ -71,7 +71,7 @@ Schema changes from now on are `alembic revision --autogenerate` + `alembic upgr
   - Login/registration: username and email lookups are case-insensitive, as MySQL's collation made them.
   - Lists that relied on MySQL's implicit id order (users, customers, cars, low stock, devices, and invoice/repair-order line items) now `ORDER BY id`. Postgres moves updated rows to the end.
 - Not covered: other string `==` lookups that used to be case-insensitive (vendor/customer duplicate checks, exact-match filters). Searches already use `ilike`. The shell deploy/backup scripts (`deploy.sh`, `safe_db_migration*.sh`, `database_optimization.sh`, …) are still MySQL-only.
-- No data is migrated. The root-level `migrate_*.py`, `fix_*`, `backfill_*` and `import_cleaned_inventory.py` scripts only repaired old MySQL data and can be deleted.
+- No data is migrated. The root-level `migrate_*.py`, `fix_*` and `backfill_*` scripts that repaired old MySQL data are deleted; `release.sh` and `deploy.sh` run `alembic upgrade head` instead. `import_cleaned_inventory.py` stays because `resolve_duplicate_codes.py` feeds it.
 
 Original steps:
 1. Snapshot prod schema (`mysqldump --no-data`) and create an **Alembic baseline** that matches it exactly; retire `migrate_*.py`/`fix_*.sh` into `scripts/legacy/`.

@@ -244,14 +244,8 @@ with app.app_context():
 \""
     fi
 
-    print_status "Applying idempotent schema migrations..."
-    if [ -f "$APP_DIR/migrate_release_schema.py" ]; then
-        sudo -u "$APP_USER" bash -c "cd '$BACKEND_DIR' && source env/bin/activate && $PYTHON_VERSION '$APP_DIR/migrate_release_schema.py'"
-    elif [ -f "add_inventory_barcode_fields.py" ]; then
-        sudo -u "$APP_USER" bash -c "source env/bin/activate && $PYTHON_VERSION add_inventory_barcode_fields.py"
-    else
-        print_warning "No schema migration script found"
-    fi
+    print_status "Applying schema migrations..."
+    sudo -u "$APP_USER" bash -c "cd '$BACKEND_DIR' && source env/bin/activate && alembic upgrade head"
     
     print_success "Database initialization complete"
 }

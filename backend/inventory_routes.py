@@ -383,11 +383,11 @@ def inventory_database_error_message(error):
         if missing:
             return (
                 f"Database schema is missing the '{missing}' column. "
-                "Run: python migrate_release_schema.py"
+                "Run: alembic upgrade head"
             )
         return (
             "Database schema is out of date for inventory. "
-            "Run: python migrate_release_schema.py"
+            "Run: alembic upgrade head"
         )
 
     if isinstance(error, IntegrityError) or 'Duplicate entry' in detail:

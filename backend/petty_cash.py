@@ -18,12 +18,6 @@ hid 435 entries worth Rs 8.7M from the very page they belong on.
 None of it is hidden. Reports, the monthly ledger and every export still count
 all of it exactly as before - this narrowing applies only where a caller asks
 for it with `scope=till`, which is the Daily Expenses page and nothing else.
-
-One limitation worth knowing: receipts taken before `cash_received.invoice_id`
-existed all have it NULL, so widening the date range on that page back past
-2026-08-31 will show historical settlements among the petty cash. Those 765
-rows carry no invoice reference to recover - see
-migrate_cash_received_invoice_link.py.
 """
 from models import CashReceived, Expense
 
