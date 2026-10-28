@@ -34,7 +34,7 @@ def create_admin_user():
             admin_user = User(
                 username='admin',
                 email='admin@germanato.com',
-                password_hash=generate_password_hash('admin123'),
+                password_hash=generate_password_hash('admin123', method='pbkdf2:sha256'),
                 role='admin',
                 is_active=True
             )
@@ -70,7 +70,7 @@ def create_default_roles():
                 accountant_user = User(
                     username='accountant',
                     email='accountant@germanato.com',
-                    password_hash=generate_password_hash('accountant123'),
+                    password_hash=generate_password_hash('accountant123', method='pbkdf2:sha256'),
                     role='accountant',
                     is_active=True
                 )
@@ -83,7 +83,7 @@ def create_default_roles():
                 inventory_user = User(
                     username='inventory',
                     email='inventory@germanato.com',
-                    password_hash=generate_password_hash('inventory123'),
+                    password_hash=generate_password_hash('inventory123', method='pbkdf2:sha256'),
                     role='inventory_manager',
                     is_active=True
                 )

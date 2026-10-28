@@ -25,7 +25,7 @@ def check_dependencies():
     try:
         import flask
         import gunicorn
-        import pymysql
+        import psycopg
         logger.info("✅ All required dependencies are available")
         return True
     except ImportError as e:

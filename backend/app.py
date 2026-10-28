@@ -65,9 +65,8 @@ jwt = JWTManager(app)
 # Initialize compression
 Compress(app)
 
-# Create all database tables
-with app.app_context():
-    db.create_all()
+# Tables come from `alembic upgrade head`. create_all() here would build them
+# behind alembic's back, and the first upgrade would then fail on existing tables.
 
 # Register the blueprint for auth routes
 app.register_blueprint(auth_bp, url_prefix='/api/auth')

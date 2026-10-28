@@ -7,8 +7,6 @@ Flask-JWT-Extended==4.6.0
 
 # Database
 psycopg[binary]==3.2.3
-# PyMySQL is only needed by migrate_mysql_to_postgres.py; drop it after cut-over.
-PyMySQL==1.1.1
 SQLAlchemy==2.0.40
 alembic==1.13.3
 
