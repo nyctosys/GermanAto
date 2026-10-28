@@ -24,6 +24,7 @@ CHART: tuple[tuple[str, str, str], ...] = (
     ("4000", "Revenue: labour", "revenue"), ("4100", "Revenue: parts", "revenue"), ("4900", "Other income", "revenue"),
     ("5000", "Cost of parts sold", "expense"), ("6000", "Operating expenses", "expense"), ("6100", "Salaries and wages", "expense"),
     ("6200", "Freight and purchase adjustments", "expense"), ("6900", "Stock write-offs and corrections", "expense"),
+    ("6910", "Cash over and short", "expense"),
 )
 MONEY_CODE = {"cash": "1010", "bank": "1020", "wallet": "1030"}
 

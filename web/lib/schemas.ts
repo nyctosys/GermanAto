@@ -198,3 +198,13 @@ export const entrySchema = z.object({
   const touched = [e.account, e.kind === "transfer" ? e.to_account : "cash"].some((a) => a && a !== "cash");
   if (touched && !e.reference && !e.proof.length) bad("reference", "Add the transaction reference or a screenshot");
 });
+
+/** A count of one account. A difference from the books needs a reason (mirrors api/app/routers/cashclose.py). */
+export const closeSchema = (expected: number) => z.object({
+  counted: z.string().trim().refine((v) => /^\d{1,10}(\.\d{1,2})?$/.test(v), "Enter what is in the account"),
+  reason: z.string().trim(),
+  note: text(500),
+}).superRefine((c, ctx) => {
+  const diff = Math.round((Number(c.counted) - expected) * 100) / 100;
+  if (/^\d/.test(c.counted) && diff !== 0 && c.reason.length < 5) ctx.addIssue({ code: "custom", path: ["reason"], message: "Say why the count differs" });
+});

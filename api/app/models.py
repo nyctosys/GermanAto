@@ -913,3 +913,24 @@ class CreditNoteLine(Entity):
     qty: Mapped[Decimal] = mapped_column(Numeric(12, 3))
     unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     restocked: Mapped[bool] = mapped_column(Boolean, default=False)  # the part went back on the shelf
+
+
+class CashClose(BranchScoped):
+    """A signed count of one account at the end of a day. Once signed it is never changed; any
+    difference is posted to the books as cash over or short, so tomorrow starts from what was counted."""
+
+    __tablename__ = "cash_closes"
+    __table_args__ = (
+        CheckConstraint("account IN ('cash', 'bank', 'wallet')", name="close_account"),
+        CheckConstraint("difference = counted - expected", name="close_difference"),
+        CheckConstraint("difference = 0 OR reason <> ''", name="close_reason"),
+        UniqueConstraint("branch_id", "account", "close_date"),
+    )
+
+    account: Mapped[str] = mapped_column(String(8))
+    close_date: Mapped[date] = mapped_column(Date, index=True)
+    expected: Mapped[Decimal] = mapped_column(Numeric(14, 2))  # what the books said was in the account
+    counted: Mapped[Decimal] = mapped_column(Numeric(14, 2))   # what was actually there
+    difference: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    note: Mapped[str] = mapped_column(Text, default="")

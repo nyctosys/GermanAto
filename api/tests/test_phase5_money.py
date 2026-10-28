@@ -386,3 +386,56 @@ def test_a_counter_sale_return_puts_the_part_back_at_its_cost(admin):
     assert b["5000"] == 0 and b["4100"] == 0 and b["1200"] == 60000 == stock_value()  # 3 headlights at 20000 again
     admin.post(f"/api/invoices/{cs['id']}/refund", json={"amount": "30000", **CASH})
     assert rows(admin)["1010"] == 0
+
+
+# --- daily cash close ------------------------------------------------------------------------------------
+
+def test_closing_a_day_signs_the_count_and_posts_the_difference(admin):
+    cash = next(a for a in admin.get("/api/accounts").json() if a["kind"] == "cash")
+    admin.put(f"/api/accounts/{cash['id']}", json={"name": cash["name"], "opening_balance": "10000", "opening_date": date.today().isoformat(), "version": cash["version"]})
+    entry(admin, kind="other_income", amount="2500")
+    st = next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")
+    assert D(str(st["expected"])) == 12500 and st["last_close"] is None and not st["closed_today"]
+
+    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "12300"}).status_code == 422  # short without a reason
+    done = admin.post("/api/cash-closes", json={"account": "cash", "counted": "12300", "reason": "Change given wrongly to a customer"})
+    assert done.status_code == 201, done.json()
+    c = done.json()
+    assert (D(str(c["expected"])), D(str(c["counted"])), D(str(c["difference"]))) == (12500, 12300, -200) and c["closed_by"] == "Administrator"
+    b = rows(admin)
+    assert b["1010"] == 12300 and b["6910"] == 200  # the books now say what was counted; the shortage is an expense
+    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "12300"}).status_code == 409  # once a day
+    assert next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")["closed_today"] is True
+    assert admin.get("/api/cash-closes", params={"account": "cash"}).json()[0]["difference"] == -200
+
+
+def test_a_surplus_is_income_and_an_exact_count_posts_nothing(admin):
+    entry(admin, kind="other_income", amount="1000", account="wallet", reference="JC-1")
+    done = admin.post("/api/cash-closes", json={"account": "wallet", "counted": "1000"})
+    assert done.status_code == 201 and D(str(done.json()["difference"])) == 0
+    assert not admin.get("/api/journal/entries", params={"source_type": "cash_close"}).json()
+    entry(admin, kind="other_income", amount="500")
+    over = admin.post("/api/cash-closes", json={"account": "cash", "counted": "560", "reason": "Customer left a tip"}).json()
+    assert D(str(over["difference"])) == 60 and rows(admin)["6910"] == -60 and rows(admin)["1010"] == 560
+
+
+def test_a_closed_day_is_locked_and_days_close_in_order(admin):
+    entry(admin, kind="other_income", amount="100")
+    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "100"}).status_code == 201
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    assert entry(admin, kind="other_income", amount="50", occurred_on=yesterday).status_code == 409  # backdating into a closed day
+    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "100", "close_date": yesterday}).status_code == 409  # out of order
+    future = (date.today() + timedelta(days=1)).isoformat()
+    assert admin.post("/api/cash-closes", json={"account": "bank", "counted": "0", "close_date": future}).status_code == 422
+    first = next(r for r in admin.get("/api/money-in").json()["rows"] if r["source"] == "other_income")
+    assert admin.post(f"/api/money-entries/{first['entry_id']}/void", json={"reason": "Mistake"}).status_code == 409  # voiding into a closed day
+
+
+def test_only_cash_close_users_sign_counts(admin):
+    roles = {r["name"]: r["id"] for r in admin.get("/api/roles").json()}
+    branch_id = admin.get("/api/auth/me").json()["branch"]["id"]
+    for name, role in (("inv", "Inventory manager"), ("acct", "Accountant")):
+        admin.post("/api/users", json={"username": name, "full_name": name, "password": f"{name}-pass-1234", "role_id": roles[role], "branch_ids": [branch_id]})
+    assert signed_in("inv", "inv-pass-1234").get("/api/cash-closes/status").status_code == 403
+    acct = signed_in("acct", "acct-pass-1234")
+    assert acct.post("/api/cash-closes", json={"account": "bank", "counted": "0"}).status_code == 201

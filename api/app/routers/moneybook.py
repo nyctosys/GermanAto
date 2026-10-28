@@ -17,6 +17,7 @@ from app.auth import Actor, current_actor
 from app.db import get_db
 from app.models import Customer, ExpenseCategory, Invoice, MoneyEntry, Payment, User, Vendor, VendorPayment
 from app.numbering import next_number
+from app.routers.cashclose import assert_day_open
 from app.routers.estimates import Proof
 from app.routers.workshop import _attach
 from app.validators import Text
@@ -74,6 +75,7 @@ def record_entry(body: EntryIn, actor: Actor = Depends(current_actor), db: Sessi
     when = body.occurred_on or date.today()
     if when > date.today():
         raise HTTPException(422, "The date is in the future")
+    assert_day_open(db, actor.branch.id, {body.account, body.to_account}, when)
     touched = {body.account, body.to_account} - {None, "cash"}
     if touched and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet movement")
@@ -107,6 +109,7 @@ def void_entry(entry_id: uuid.UUID, body: VoidIn, actor: Actor = Depends(current
         raise HTTPException(403, "You don't have permission to do this")
     if e.status != "posted":
         raise HTTPException(409, "Already voided")
+    assert_day_open(db, actor.branch.id, {e.account, e.to_account}, e.occurred_on)
     if e.payment_id:  # a voided refund means the advance is still held
         db.get(Payment, e.payment_id).refunded = False
     e.status, e.void_reason = "voided", body.reason

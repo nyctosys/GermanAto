@@ -87,6 +87,14 @@ def money_entry(db: Session, branch: Branch, e: MoneyEntry) -> None:
     journal.post(db, branch, f"{e.number}" + (f": {e.party}" if e.party else ""), lines, on=e.occurred_on, source=("money_entry", e.id))
 
 
+def cash_difference(db: Session, branch: Branch, kind: str, difference: Decimal, on: date, source_id) -> None:
+    """Brings the books to what was counted: a shortage is an expense, a surplus is income to this account."""
+    code = MONEY_CODE[kind]
+    journal.post(db, branch, f"Cash count difference ({kind})",
+                 [Line("6910", debit=-difference), Line(code, credit=-difference)] if difference < 0
+                 else [Line(code, debit=difference), Line("6910", credit=difference)], on=on, source=("cash_close", source_id))
+
+
 def void_source(db: Session, branch: Branch, source_type: str, source_id, memo: str, on: date | None = None) -> None:
     """Reverses the live entry for a document that was voided."""
     entry = journal.live_entry(db, source_type, source_id)

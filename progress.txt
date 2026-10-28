@@ -35,3 +35,5 @@
 - Alembic does not detect changed CHECK constraints: edit the migration by hand (see 0013) and name foreign keys so downgrades work.
 - Invoice balance = total - credit notes - (payments - refunds); negative means refundable. Refund MoneyEntry carries invoice_id or payment_id.
 - Held advances exclude refunded ones everywhere (_held_advances, quotation totals, visit cancel guard).
+## US-507 (daily cash close)
+- cashclose.assert_day_open(db, branch_id, {accounts}, date) is the lock check; call it from any new route that records or voids money on a past date.
