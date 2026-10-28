@@ -15,6 +15,7 @@ from app.db import get_db, utcnow
 from app.models import (
     AuditLog, Car, Customer, Inspection, Invoice, InvoiceLine, JobCard, Payment, Quotation, RepairOrder, User, Visit,
 )
+from app import posting
 from app.numbering import next_number
 from app.routers.estimates import (
     LineIn, Proof, _line_refs, _targets, job_card_out, money, payment_out, quotation_out, totals,
@@ -293,6 +294,7 @@ def _record_payment(db: Session, actor: Actor, inv: Invoice, body: PaymentIn) ->
     db.flush()
     if body.proof_id:
         _attach(db, actor, [body.proof_id], "payments", p.id)
+    posting.customer_payment(db, actor.branch, p)
     return p
 
 
@@ -325,7 +327,9 @@ def issue_invoice(invoice_id: uuid.UUID, body: IssueIn, actor: Actor = Depends(c
             raise HTTPException(409, "The advances are more than the invoice. The difference must be refunded (admin approval) first.")
         for p in held:
             p.invoice_id = inv.id
+        applied = held
     else:
+        applied = []
         if sum((p.amount for p in body.payments), Decimal(0)) != total:
             raise HTTPException(422, f"A counter sale is paid in full on the spot: the payments must add up to {total:,.2f}")
         for l in inv.lines:
@@ -334,6 +338,10 @@ def issue_invoice(invoice_id: uuid.UUID, body: IssueIn, actor: Actor = Depends(c
             except StockError as e:
                 raise HTTPException(409, str(e))
     inv.status, inv.issued_at, inv.issued_by = "issued", utcnow(), actor.user.id
+    db.flush()
+    posting.invoice_issued(db, actor.branch, inv)
+    if applied:
+        posting.advances_applied(db, actor.branch, inv, applied)
     for p in body.payments:  # counter sales only; checked above
         _record_payment(db, actor, inv, p)
     db.commit()

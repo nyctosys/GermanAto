@@ -62,6 +62,11 @@ def move(db: Session, item_id: uuid.UUID, kind: str, qty: Decimal, *, unit_cost:
     movement = StockMovement(item_id=item.id, branch_id=item.branch_id, kind=kind, qty=qty, unit_cost=cost,
                              reason=reason, source_type=source_type, source_id=source_id)
     db.add(movement)
+    db.flush()
+    # Every unit in or out is also an inventory entry in the books, so stock value and the journal can't disagree.
+    from app import posting  # late: posting builds on the models, which stock already imports
+    from app.models import Branch
+    posting.stock_movement(db, db.get(Branch, item.branch_id), movement, reason or f"Stock {kind}: {item.name}")
     return movement
 
 

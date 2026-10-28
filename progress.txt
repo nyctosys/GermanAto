@@ -22,3 +22,8 @@
 - app/journal.py: post(db, branch, memo, [Line(code, debit, credit)], on=, source=(type,id)); reverse(); live_entry(); balances(); sync_opening(). Ledger codes in CHART; money accounts map via MONEY_CODE.
 - journal_entries/journal_lines are append-only through a DB trigger (migration 0011); tests build tables with create_all so the trigger is not exercised there.
 - Post inside the same transaction as the event, right before db.commit().
+## US-503 (post journals for events)
+- app/posting.py holds one function per event; stock.move() posts every movement itself, so never post stock entries elsewhere.
+- Shared rounding/totals live in app/pricing.py (estimates re-exports them).
+- Add new money events by writing a posting.* function and calling it before db.commit() in the route; add a reconciliation test in test_phase5_money.py.
+- Dev DB backfill: uv run python -m app.backfill_journal

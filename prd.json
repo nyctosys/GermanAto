@@ -50,7 +50,7 @@
         "docs/SYSTEM_GUIDE.md updated in the same commit"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

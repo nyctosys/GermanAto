@@ -20,6 +20,7 @@ from app.db import get_db, utcnow
 from app.models import (
     GoodsReceipt, GoodsReceiptLine, Item, ItemCode, PurchaseOrder, PurchaseOrderLine, User, Vendor, VendorBill, VendorPayment,
 )
+from app import posting
 from app.numbering import next_number
 from app.routers.estimates import Proof
 from app.routers.workshop import _attach
@@ -479,6 +480,8 @@ def record_bill(grn_id: uuid.UUID, body: BillIn, actor: Actor = Depends(can_purc
                    vendor_invoice_no=body.vendor_invoice_no, bill_date=body.bill_date, due_on=due, goods_value=value,
                    adjustment=body.adjustment, adjustment_reason=body.adjustment_reason if body.adjustment else "")
     db.add(b)
+    db.flush()
+    posting.vendor_bill(db, actor.branch, b)
     db.commit()
     return bill_out(db, b)
 
@@ -532,6 +535,7 @@ def pay_bill(bill_id: uuid.UUID, body: VendorPaymentIn, actor: Actor = Depends(c
     db.flush()
     if body.proof_id:
         _attach(db, actor, [body.proof_id], "vendor_payments", p.id)
+    posting.vendor_payment(db, actor.branch, p)
     db.commit()
     return bill_out(db, b)
 
@@ -543,6 +547,7 @@ def void_payment(payment_id: uuid.UUID, body: ReasonIn, actor: Actor = Depends(c
     if p.status != "posted":
         raise HTTPException(409, "Already voided")
     p.status, p.void_reason = "voided", body.reason
+    posting.void_source(db, actor.branch, "vendor_payment", p.id, f"Vendor payment {p.number} voided")
     db.commit()
     return bill_out(db, db.get(VendorBill, p.bill_id))
 
@@ -556,5 +561,6 @@ def void_bill(bill_id: uuid.UUID, body: ReasonIn, actor: Actor = Depends(can_pur
     if bill_totals(db, b)["paid"] > 0:
         raise HTTPException(409, "Payments have been made on this bill. Void them first (with a reason).")
     b.status, b.void_reason = "void", body.reason
+    posting.void_source(db, actor.branch, "vendor_bill", b.id, f"Bill {b.number} voided")
     db.commit()
     return bill_out(db, b)

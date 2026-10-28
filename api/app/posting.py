@@ -1,0 +1,69 @@
+"""The journal entry each business event produces (spec D3). Called from the
+routes right before they commit, so a document and its books succeed or fail together."""
+
+from datetime import date
+from decimal import Decimal
+
+from sqlalchemy.orm import Session
+
+from app import journal
+from app.journal import MONEY_CODE, Line, q
+from app.models import Branch, Invoice, Payment, StockMovement, VendorBill, VendorPayment
+from app.pricing import totals
+
+Z = Decimal(0)
+
+
+def stock_movement(db: Session, branch: Branch, m: StockMovement, memo: str) -> None:
+    """Inventory against whatever caused the movement. Value is quantity x the cost it moved at."""
+    value = q(abs(m.qty) * m.unit_cost)
+    inward = m.qty > 0
+    other = {"opening": "3900", "grn": "2100", "return": "5000", "credit": "5000",
+             "issue": "5000", "sale": "5000", "adjustment": "6900"}[m.kind]
+    journal.post(db, branch, memo, [Line("1200", debit=value) if inward else Line("1200", credit=value),
+                                    Line(other, credit=value) if inward else Line(other, debit=value)],
+                 source=("stock_movement", m.id))
+
+
+def invoice_issued(db: Session, branch: Branch, inv: Invoice) -> None:
+    """Receivable for the total; revenue split into labour and parts with the discount shared out in proportion; tax payable."""
+    t = totals(inv)
+    discount_labour = q(t["discount"] * t["labour"] / t["subtotal"]) if t["subtotal"] else Z
+    labour, parts = t["labour"] - discount_labour, t["parts"] - (t["discount"] - discount_labour)
+    journal.post(db, branch, f"Invoice {inv.number} issued",
+                 [Line("1100", debit=t["total"]), Line("4000", credit=labour), Line("4100", credit=parts), Line("2300", credit=t["tax"])],
+                 on=inv.issued_at.date(), source=("invoice", inv.id))
+
+
+def advances_applied(db: Session, branch: Branch, inv: Invoice, advances: list[Payment]) -> None:
+    """The customer's advance stops being a liability and settles the receivable."""
+    total = sum((p.amount for p in advances), Z)
+    journal.post(db, branch, f"Advances applied to {inv.number}", [Line("2200", debit=total), Line("1100", credit=total)],
+                 source=("invoice_advances", inv.id))
+
+
+def customer_payment(db: Session, branch: Branch, p: Payment) -> None:
+    """Money in: an advance is held for the customer, an invoice payment settles the receivable."""
+    held = "2200" if p.kind == "advance" else "1100"
+    journal.post(db, branch, f"Payment {p.number}", [Line(MONEY_CODE[p.account], debit=p.amount), Line(held, credit=p.amount)],
+                 on=p.received_at.date(), source=("payment", p.id))
+
+
+def vendor_bill(db: Session, branch: Branch, b: VendorBill) -> None:
+    """What we owe: the goods received become a payable; freight (+) or a discount (-) goes to purchase adjustments."""
+    total = b.goods_value + b.adjustment
+    journal.post(db, branch, f"Bill {b.number}",
+                 [Line("2100", debit=b.goods_value), Line("6200", debit=b.adjustment) if b.adjustment > 0 else Line("6200", credit=-b.adjustment),
+                  Line("2000", credit=total)], on=b.bill_date, source=("vendor_bill", b.id))
+
+
+def vendor_payment(db: Session, branch: Branch, p: VendorPayment) -> None:
+    journal.post(db, branch, f"Vendor payment {p.number}", [Line("2000", debit=p.amount), Line(MONEY_CODE[p.account], credit=p.amount)],
+                 on=p.paid_at.date(), source=("vendor_payment", p.id))
+
+
+def void_source(db: Session, branch: Branch, source_type: str, source_id, memo: str, on: date | None = None) -> None:
+    """Reverses the live entry for a document that was voided."""
+    entry = journal.live_entry(db, source_type, source_id)
+    if entry:
+        journal.reverse(db, branch, entry, memo, on=on)

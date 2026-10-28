@@ -532,3 +532,24 @@ Every business event posts a **balanced journal entry** automatically, so the bo
 - **Opening balances.** Setting an account's opening balance posts an entry (money account against opening balance equity). Changing it later posts a reversal and a new entry, so the history of the correction is kept.
 - **What is in an account** is worked out from the journal: Money settings shows each account's balance now.
 - **Trial balance** (`GET /api/journal/trial-balance`, needs `reports-finance`) lists every account with debits and credits; the two totals are always equal. `GET /api/journal/entries` lists the entries behind it, filterable by the document that caused them.
+
+### What each event posts
+| Event | Debit | Credit |
+|---|---|---|
+| Opening stock, stock found | Inventory | Opening balance equity (opening) or Stock write-offs and corrections (a count adjustment) |
+| Stock lost or written off | Stock write-offs and corrections | Inventory |
+| Goods received | Inventory | Goods received not billed |
+| Vendor bill | Goods received not billed (and freight as Purchase adjustments) | Payables to vendors |
+| Vendor payment | Payables to vendors | Cash, bank or wallet |
+| Advance taken | Cash, bank or wallet | Customer advances |
+| Invoice issued | Receivables | Revenue: labour, Revenue: parts, Sales tax payable |
+| Advance applied to the invoice | Customer advances | Receivables |
+| Customer payment | Cash, bank or wallet | Receivables |
+| Part issued on a repair order, or sold at the counter | Cost of parts sold | Inventory |
+| Part returned from a repair order | Inventory | Cost of parts sold |
+
+- The **discount** on an invoice is shared between labour and parts revenue in proportion to each.
+- Voiding a vendor payment or a bill posts a **reversal** of its entry.
+- Stock entries are posted from the single place stock changes, so the inventory balance in the books always equals the stock ledger (quantity times the cost each unit moved at).
+- **Reconciliation checks** run in the tests: after a full workshop job and a purchase, the trial balance is zero; receivables, payables, advances held and inventory match the figures derived from the documents.
+- For a database that predates posting, `uv run python -m app.backfill_journal` posts what is missing; it is safe to run again.

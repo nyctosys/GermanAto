@@ -107,3 +107,90 @@ def test_the_journal_is_for_finance_users_only(admin):
     branch_id = admin.get("/api/auth/me").json()["branch"]["id"]
     admin.post("/api/users", json={"username": "inv", "full_name": "Inv", "password": "inv-pass-1234", "role_id": roles["Inventory manager"], "branch_ids": [branch_id]})
     assert signed_in("inv", "inv-pass-1234").get("/api/journal/trial-balance").status_code == 403
+
+
+# --- the journal follows the documents ---------------------------------------------------------------
+
+from sqlalchemy import func
+
+from app.models import StockMovement
+from test_phase3_billing import CASH, ready_repair
+from test_phase4_purchasing import receive, sent_po
+
+
+def rows(admin):
+    tb = admin.get("/api/journal/trial-balance").json()
+    assert tb["balanced"], tb
+    return {r["code"]: D(str(r["balance"])) for r in tb["rows"]}
+
+
+def stock_value():
+    with SessionLocal() as db:
+        return db.scalar(select(func.coalesce(func.sum(StockMovement.qty * StockMovement.unit_cost), 0)))
+
+
+def test_a_workshop_job_posts_revenue_receivable_and_cost(admin):
+    visit, item, ro = ready_repair(admin)  # 4000 advance already held
+    b = rows(admin)
+    assert b["2200"] == -4000 and b["1010"] == 4000 and b["1200"] == 6000 - 2000  # advance held; 2 of 6 filters issued
+    assert b["5000"] == 2000  # cost of the parts issued, at cost
+    inv = admin.post(f"/api/repair-orders/{ro['id']}/invoice").json()
+    inv = admin.post(f"/api/invoices/{inv['id']}/issue", json={"version": inv["version"]}).json()
+    b = rows(admin)
+    assert b["4000"] == -3000 and b["4100"] == -6000 and b["2300"] == -1530  # revenue and tax
+    assert b["1100"] == D("6530") and b["2200"] == 0  # the advance settled part of the receivable
+    admin.post(f"/api/invoices/{inv['id']}/payments", json={"amount": "6530", **CASH})
+    b = rows(admin)
+    assert b["1100"] == 0 and b["1010"] == D("10530")
+    assert b["1200"] == stock_value()  # the books' inventory equals the stock ledger
+
+
+def test_returning_a_part_and_the_discount_split(admin):
+    visit, item, ro = ready_repair(admin)
+    part = next(l for l in ro["lines"] if l["kind"] == "part")
+    admin.post(f"/api/repair-orders/{ro['id']}/lines/{part['id']}/return", json={"qty": "1"})
+    assert rows(admin)["5000"] == 1000  # one came back, so only one filter was consumed
+    inv = admin.post(f"/api/repair-orders/{ro['id']}/invoice").json()
+    inv = admin.put(f"/api/invoices/{inv['id']}", json={"prices": {}, "include_tax": False, "discount": "300", "version": inv["version"]}).json()
+    inv = admin.post(f"/api/invoices/{inv['id']}/issue", json={"version": inv["version"]}).json()
+    b = rows(admin)  # labour 3000 + one filter 3000, less 300 shared in proportion: 150 off each
+    assert b["4000"] == -2850 and b["4100"] == -2850 and b["2300"] == 0 and b["1100"] == D("5700") - 4000  # total 5700, less the advance already held
+
+
+def test_purchases_post_stock_payable_and_freight(admin):
+    vendor, item, po = sent_po(admin)  # 10 in stock at 100
+    grn = receive(admin, po, "10").json()["receipts"][0]  # 10 x 200
+    b = rows(admin)
+    assert b["1200"] == 1000 + 2000 and b["2100"] == -2000  # received but not billed yet
+    bill = admin.post(f"/api/goods-receipts/{grn['id']}/bill", json={"bill_date": date.today().isoformat(), "adjustment": "150", "adjustment_reason": "Freight"}).json()
+    b = rows(admin)
+    assert b["2100"] == 0 and b["2000"] == -2150 and b["6200"] == 150
+    pay = admin.post(f"/api/bills/{bill['id']}/payments", json={"amount": "1000", **CASH}).json()["payments"][0]
+    b = rows(admin)
+    assert b["2000"] == -1150 and b["1010"] == -1000
+    admin.post(f"/api/vendor-payments/{pay['id']}/void", json={"reason": "Entered twice"})
+    assert rows(admin)["2000"] == -2150 and rows(admin)["1010"] == 0  # the payment reversed
+    admin.post(f"/api/bills/{bill['id']}/void", json={"reason": "Wrong vendor"})
+    b = rows(admin)
+    assert b["2000"] == 0 and b["6200"] == 0 and b["2100"] == -2000  # unbilled again, and still in stock
+    assert b["1200"] == stock_value()
+
+
+def test_counter_sale_posts_revenue_cost_and_cash(admin):
+    from test_phase2 import new_item
+    item = new_item(admin, name="Headlight", codes=(("mpn", "63117440"),), opening_qty="3", opening_cost="20000")
+    line = {"kind": "part", "item_id": item["id"], "qty": "1", "unit_price": "30000"}
+    cs = admin.post("/api/counter-sales", json={"lines": [line], "include_tax": False}).json()
+    admin.post(f"/api/invoices/{cs['id']}/issue", json={"version": cs["version"], "payments": [{"amount": "30000", **CASH}]})
+    b = rows(admin)
+    assert b["4100"] == -30000 and b["1010"] == 30000 and b["1100"] == 0 and b["5000"] == 20000
+    assert b["1200"] == 40000 and b["1200"] == stock_value()
+
+
+def test_stock_adjustments_hit_the_books(admin):
+    from test_phase2 import new_item
+    item = new_item(admin, name="Wiper", codes=(("barcode", "9900001"),), opening_qty="10", opening_cost="100")
+    assert rows(admin)["1200"] == 1000 and rows(admin)["3900"] == -1000  # opening stock against opening equity
+    admin.post(f"/api/items/{item['id']}/adjust", json={"qty": "-2", "reason": "Damaged on the shelf"})
+    b = rows(admin)
+    assert b["1200"] == 800 and b["6900"] == 200

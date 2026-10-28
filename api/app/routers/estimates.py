@@ -16,7 +16,9 @@ from app.db import get_db, utcnow
 from app.models import (
     Car, Customer, Item, ItemCode, JobCard, JobCardLine, LabourCode, Payment, Quotation, QuotationLine, RepairOrder, User, Visit,
 )
+from app import posting
 from app.numbering import next_number
+from app.pricing import CENT, money, totals  # noqa: F401  (re-exported for the other routers)
 from app.routers.workshop import _attach, _get_visit, _require_open, snapshot_of
 from app.stock import on_hand_map
 from app.validators import Text, normalize_code
@@ -26,7 +28,6 @@ can_job = require("job-cards")
 can_quote = require("quotations")
 can_take = require("payments-in")
 
-CENT = Decimal("0.01")
 QUOTE_VALID_DAYS = 7
 
 
@@ -36,8 +37,6 @@ def can_estimate(actor: Actor = Depends(current_actor)) -> Actor:
     return actor
 
 
-def money(v: Decimal) -> Decimal:
-    return v.quantize(CENT, ROUND_HALF_UP)
 
 
 # --- shared line handling ---------------------------------------------------------------
@@ -181,18 +180,6 @@ def save_job_card(job_card_id: uuid.UUID, body: JobCardIn, actor: Actor = Depend
 def status_of(q: Quotation) -> str:
     """'Expired' is derived: a sent quote past its validity date."""
     return "expired" if q.status == "sent" and q.valid_until < date.today() else q.status
-
-
-def totals(q) -> dict:
-    """For a quotation or an invoice: lines (declined ones drop out), discount, tax."""
-    lines = [l for l in q.lines if not getattr(l, "declined", False)]
-    labour = sum((money(l.qty * l.unit_price) for l in lines if l.kind == "labour"), Decimal(0))
-    parts = sum((money(l.qty * l.unit_price) for l in lines if l.kind == "part"), Decimal(0))
-    subtotal = labour + parts
-    discount = min(q.discount, subtotal)
-    tax = money((subtotal - discount) * q.tax_rate / 100) if q.include_tax else Decimal(0)
-    return {"labour": labour, "parts": parts, "subtotal": subtotal, "discount": discount, "tax": tax,
-            "total": subtotal - discount + tax}
 
 
 def advances_on(db: Session, visit_id: uuid.UUID) -> list[Payment]:
@@ -455,5 +442,6 @@ def take_advance(quotation_id: uuid.UUID, body: AdvanceIn, actor: Actor = Depend
     db.flush()
     if body.proof_id:
         _attach(db, actor, [body.proof_id], "payments", p.id)
+    posting.customer_payment(db, actor.branch, p)
     db.commit()
     return payment_out(db, p)
