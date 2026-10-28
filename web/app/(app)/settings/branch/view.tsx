@@ -7,7 +7,7 @@ import { api, useApi } from "@/lib/api";
 
 type Branch = {
   id: string; code: string; name: string; address: string; phone: string; email: string;
-  tax_rate: string; timezone: string; currency: string; version: number;
+  tax_rate: string; timezone: string; currency: string; quotation_terms: string; terms: string[]; version: number;
 };
 
 export default function BranchSettingsPage() {
@@ -70,6 +70,12 @@ function BranchSettings() {
               </Field>
               <Field label="Currency"><Input name="currency" defaultValue={data.currency} pattern="[A-Z]{3}" required /></Field>
               <Field label="Timezone"><Input name="timezone" defaultValue={data.timezone} required /></Field>
+              <div className="sm:col-span-2">
+                <Field label="Terms and conditions on quotations" hint="One clause per line. They print on their own page after the quotation. Clear the box and save to go back to the standard terms.">
+                  <textarea name="quotation_terms" defaultValue={data.quotation_terms || data.terms.join("\n")} rows={12} maxLength={8000}
+                            className="min-h-40 w-full rounded-control border border-rule-strong bg-surface px-3 py-2 text-base hover:border-ink-2 focus-visible:border-ink" />
+                </Field>
+              </div>
               <div className="flex flex-col gap-3 sm:col-span-2">
                 <Notice>{saveError}</Notice>
                 {saved && <Notice tone="success">Settings saved.</Notice>}

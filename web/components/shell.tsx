@@ -109,6 +109,32 @@ function SearchButton({ onOpen, className = "" }: { onOpen: () => void; classNam
   );
 }
 
+// Screens that sit under a list: a record, a form. They get a Back button; the list pages themselves do not.
+const PARENT: Record<string, string> = {
+  visits: "/visits", customers: "/customers", cars: "/cars", quotations: "/quotations", "repair-orders": "/repair-orders",
+  invoices: "/invoices", "counter-sales": "/invoices", "job-cards": "/visits", inspections: "/visits", inventory: "/inventory",
+  vendors: "/vendors", "purchase-orders": "/purchase-orders", bills: "/bills", employees: "/employees", payroll: "/payroll", periods: "/periods",
+};
+
+/** Back goes to the screen the person came from; when they opened this one directly, to its list. */
+function BackButton() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const moved = useRef(false);
+  const seen = useRef(pathname);
+  useEffect(() => { if (seen.current !== pathname) { moved.current = true; seen.current = pathname; } }, [pathname]);
+  const parts = pathname.split("/").filter(Boolean);
+  const parent = parts.length >= 2 ? PARENT[parts[0]] : undefined;
+  if (!parent) return null;
+  return (
+    <button onClick={() => (moved.current ? router.back() : router.push(parent))}
+            className="no-print mb-4 inline-flex min-h-11 items-center gap-2 rounded-control border border-rule-strong bg-surface px-4 font-medium hover:bg-paper active:bg-paper-3 active:duration-0">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      Back
+    </button>
+  );
+}
+
 function Brand() {
   return (
     <Link href="/" className="flex min-h-11 items-center gap-2.5 rounded-control">
@@ -303,7 +329,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M13.5 13.5L17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
           </button>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 shell:px-10 shell:py-10">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 shell:px-10 shell:py-10"><BackButton />{children}</main>
       </div>
       <CommandMenu commands={commands} open={searching} setOpen={setSearching} />
     </div>

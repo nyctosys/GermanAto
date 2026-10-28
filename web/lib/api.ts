@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 
 export class ApiError extends Error {
   /** `detail` keeps structured errors, e.g. {code: "duplicate_phone", matches: [...]}. */
@@ -38,13 +39,32 @@ const keyFor = (fingerprint: string) => {
   return key;
 };
 
-export async function api<T = unknown>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
-  const { json, headers, ...rest } = init;
+// What to tell the person after a successful write, by what was done. First match wins; the fallback is by method.
+const DONE: [RegExp, string][] = [
+  [/\/payments$/, "Payment recorded"], [/\/advances$/, "Advance recorded"], [/\/refund$|\/refunds?$/, "Refund recorded"],
+  [/\/credit-notes$/, "Credit note issued"], [/\/invoices\/[^/]+\/issue$/, "Invoice issued"], [/\/lines\/[^/]+\/(issue|return)$/, "Stock updated"], [/\/gate-pass$/, "Car released"], [/\/send$/, "Sent"],
+  [/\/approve$/, "Approval recorded"], [/\/reject$/, "Marked as rejected"], [/\/revise$/, "New version made"], [/\/sign$/, "Signed"],
+  [/\/void$/, "Cancelled (voided). It stays on the list, crossed out."], [/\/cancel$/, "Cancelled"], [/\/status$/, "Status updated"],
+  [/\/receive$/, "Goods received"], [/\/bill$/, "Bill recorded"], [/\/close$/, "Closed"], [/\/reopen$/, "Reopened"],
+  [/^\/api\/visits$/, "Car checked in"], [/^\/api\/customers$/, "Customer saved"], [/^\/api\/cars$/, "Car saved"],
+  [/^\/api\/counter-sales/, "Counter sale saved"], [/\/repair-order$/, "Repair order made"], [/\/quotation$/, "Quotation made"],
+  [/\/invoice$/, "Invoice made"], [/\/job-card$/, "Job card started"], [/^\/api\/attachments$/, "File uploaded"],
+  [/\/activity$/, "Note added"], [/^\/api\/money-entries$|^\/api\/cash-closes$/, "Recorded"],
+];
+// Quiet by design: sign-in, autosave while typing, and calls whose screen already says what happened.
+const NO_TOAST = /^\/api\/(auth\/|inspections\/[^/]+$|messages\/(send|run-reminders)|sync\/run)/;
+const doneMessage = (method: string, path: string) =>
+  DONE.find(([re]) => re.test(path.split("?")[0]))?.[1] ?? (method === "DELETE" ? "Removed" : method === "POST" ? "Done" : "Saved");
+
+export async function api<T = unknown>(path: string, init: RequestInit & { json?: unknown; toast?: string | false } = {}): Promise<T> {
+  const { json, headers, toast: say, ...rest } = init;
   const method = (rest.method ?? "GET").toUpperCase();
   const payload = json !== undefined ? JSON.stringify(json) : rest.body;
   // Only JSON writes: a file upload has no body we can compare, and sign-in must always be a fresh attempt.
   const fingerprint = method !== "GET" && json !== undefined && !path.startsWith("/api/auth/") ? `${method} ${path} ${payload}` : null;
-  const res = await fetch(path, {
+  let res: Response;
+  try {
+    res = await fetch(path, {
     ...rest,
     headers: {
       ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
@@ -53,7 +73,11 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
     },
     body: payload,
     credentials: "same-origin",
-  });
+    });
+  } catch (e) {
+    if (method !== "GET") toast.error("Could not reach the server. Nothing was changed; check the connection and try again.");
+    throw e;
+  }
   if (fingerprint) pending.delete(fingerprint);  // answered (success or error): the next identical request is a new action
   const body = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
   if (res.status === 401 && typeof window !== "undefined" && !path.startsWith("/api/auth/login")) {
@@ -61,7 +85,11 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
   }
-  if (!res.ok) throw new ApiError(res.status, messageOf(body, res.status), (body as { detail?: unknown })?.detail);
+  if (!res.ok) {
+    if (res.status >= 500 && method !== "GET") toast.error("Something went wrong on the server. Nothing was changed. Try again, or tell your administrator if it keeps happening.");
+    throw new ApiError(res.status, messageOf(body, res.status), (body as { detail?: unknown })?.detail);
+  }
+  if (method !== "GET" && say !== false && !NO_TOAST.test(path.split("?")[0])) toast.success(say ?? doneMessage(method, path));
   return body as T;
 }
 

@@ -334,7 +334,7 @@ It also warns (without blocking) about an inspection left as an unsigned draft.
 | Inspection report | Inspection page → Print report | A4 |
 | Quotation | Quotation page → Print | A4 |
 | Invoice (workshop and counter sale) | Invoice page → Print | A4 |
-| Gate pass | Visit page (after release) → Print gate pass | A5 |
+| Gate pass | Visit page (after release) → Print gate pass | A4 |
 | **Visit record** | Visit page → Print visit record | A4 |
 
 **The visit record** is the whole visit on paper, entry to exit:
@@ -470,6 +470,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0020 | Customer messages, message wording, reminder days on the branch |
 | 0021 | Sync bookkeeping: credentials, state, inbox, conflicts |
 | 0022 | Idempotency keys (retry protection for writes) |
+| 0023 | Quotation terms and conditions on the branch |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).
@@ -868,3 +869,10 @@ A step-by-step manual with procedures (SOPs) for every area: start here, front d
 - **Clarity.** The Dashboard states the main finding under its title and has the most frequent job ("Check in a car") one click away; a visit shows its **Next step** in plain words at the top.
 - **Search on every working list.** Invoices, Quotations and Repair orders each have a search box (above the status filter) that finds by document number, customer name, customer phone, number plate or visit number; the search is kept in the address, so a search can be shared. Cars in the workshop, Customers and Cars have theirs too.
 - **No dev-time "instant navigation" warnings.** Every screen is a small server page (`page.tsx`, with `export const instant = false`) that renders the real screen from `view.tsx` beside it. New screens follow the same pair of files.
+- **Notices (toasts).** After every successful save the system shows a short notice at the bottom of the screen ("Payment recorded", "Invoice issued", "Saved"); it clears itself after 5 seconds and has a close button. A failure the person cannot fix (no connection, a server error) shows a red notice for 9 seconds. Mistakes they can fix (a missing field) stay on the form as before. Sign-in, autosave and the screens that already say what happened are quiet. Notices are announced to screen readers. Code: `web/lib/toast.ts`, `web/components/toaster.tsx`; the wording per action is the `DONE` list in `web/lib/api.ts` (pass `toast: "..."` or `toast: false` to `api()` to change one call).
+- **Back button.** Every record or form screen (a visit, a customer, an invoice, a purchase order, a month, a new check-in...) has a Back button at the top. It returns to the screen the person came from, or to the list when they opened the record directly. List screens do not have one.
+
+### Printed documents and Excel
+- **Every printed document is laid out for A4 portrait**, 12 mm margins, black on white, table headings repeated on each page, and no table row, list item or heading split across a page break. This is applied by the bar at the top of every document (`web/components/print.tsx`). The gate pass and the payslip, which were A5, are now A4 too.
+- **Quotation terms and conditions.** A quotation prints on one sheet, followed by a page headed **TERMS & CONDITIONS** with a signature line. The standard text is the 15 clauses of the legacy system's quotation, word for word (`api/app/terms.py`). Administration → Branch settings has a box to change them (one clause per line); clearing the box and saving returns to the standard text. Invoices do not carry terms (as in the legacy system).
+- **Download for Excel** is on every printed document (quotation, invoice, purchase order, visit record, inspection, gate pass, payslip, closing pack). It makes a real `.xlsx` of what is on the page: headings, lines of text, numbered clauses and every table, one row each, with amounts as real numbers so Excel can add them up, bold headings, and A4 page setup. Code: `web/lib/xlsx.ts` (no spreadsheet library; it writes the file format directly with `fflate`).

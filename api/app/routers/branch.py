@@ -6,16 +6,22 @@ from decimal import Decimal
 from zoneinfo import available_timezones
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import Actor, current_actor, require
 from app.db import get_db
 from app.models import AuditLog, Branch, User
+from app.terms import terms_of
 from app.validators import Email, Name, Phone, Text
 
 router = APIRouter(prefix="/api", tags=["branch"])
+
+# Several lines, one clause each: keep the line breaks, trim each line and drop empty ones.
+Clauses = Annotated[str, AfterValidator(lambda v: "\n".join(l.strip() for l in v.splitlines() if l.strip()))]
 
 
 class BranchOut(BaseModel):
@@ -28,6 +34,8 @@ class BranchOut(BaseModel):
     tax_rate: Decimal
     timezone: str
     currency: str
+    quotation_terms: str
+    terms: list[str]  # what is printed on a quotation: the branch's own clauses, or the standard ones
     version: int
 
 
@@ -39,6 +47,7 @@ class BranchUpdate(BaseModel):
     tax_rate: Decimal = Field(ge=0, le=100, decimal_places=2)
     timezone: str
     currency: str = Field(pattern=r"^[A-Z]{3}$")
+    quotation_terms: Clauses = Field(default="", max_length=8000)
     version: int  # the version the form was loaded with
 
     @field_validator("timezone")
@@ -49,9 +58,14 @@ class BranchUpdate(BaseModel):
         return v
 
 
+def _out(branch: Branch) -> BranchOut:
+    return BranchOut(**{k: getattr(branch, k) for k in ("id", "code", "name", "address", "phone", "email", "tax_rate", "timezone", "currency",
+                                                        "quotation_terms", "version")}, terms=terms_of(branch.quotation_terms))
+
+
 @router.get("/branch", response_model=BranchOut)
 def get_branch(actor: Actor = Depends(current_actor)):
-    return BranchOut.model_validate(actor.branch, from_attributes=True)
+    return _out(actor.branch)
 
 
 @router.put("/branch", response_model=BranchOut)
@@ -62,7 +76,7 @@ def update_branch(body: BranchUpdate, actor: Actor = Depends(require("settings")
     for key, value in body.model_dump(exclude={"version"}).items():
         setattr(branch, key, value if value is not None else "")
     db.commit()
-    return BranchOut.model_validate(branch, from_attributes=True)
+    return _out(branch)
 
 
 @router.get("/audit")

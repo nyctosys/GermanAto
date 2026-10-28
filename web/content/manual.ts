@@ -58,7 +58,9 @@ export const CHAPTERS: Chapter[] = [
           "A solid button does something. Underlined words open another page. A row with an arrow on the right opens that record.",
           "Red text means something is wrong or missing. Orange means be careful. Read it: it tells you what to do.",
           "Every list has a search box. On Invoices, Quotations and Repair orders you can type a document number, the customer's name or phone, the number plate, or the visit number. You can also scan a barcode into any part search.",
-          "Printed pages (invoice, quotation, inspection, gate pass, purchase order, payslip) have a bar at the top with Back, Print or save as PDF, Share as PDF, and Send on WhatsApp.",
+          "Printed pages (invoice, quotation, inspection, gate pass, purchase order, payslip) have a bar at the top with Back, Print or save as PDF, Share as PDF, Download for Excel, and Send on WhatsApp. They are laid out for A4 paper.",
+          "When you save something, a short notice appears at the bottom of the screen, for example \"Payment recorded\". It disappears by itself. A red notice means the save did not happen.",
+          "Every record page (a visit, a customer, an invoice and so on) has a Back button at the top.",
         ],
         right: ["You can always go back. Every printed page has a Back link."],
       },
@@ -146,7 +148,7 @@ export const CHAPTERS: Chapter[] = [
           "Open the quotation. Parts already have their sale price. Type a price on every labour line.",
           "Add a discount if you agreed one. Keep the sales tax switch on unless the customer is exempt. Check the last valid date (7 days by default).",
           "Press Send. Every line must have a price.",
-          "Print it, or press Send on WhatsApp on its print page. If WhatsApp is connected, the customer also gets an automatic message.",
+          "Print it, or press Send on WhatsApp on its print page. The quotation prints on one sheet, with the terms and conditions on a second page for the customer to sign. If WhatsApp is connected, the customer also gets an automatic message.",
         ],
         right: ["The status changes to Sent and the quotation is locked."],
         avoid: ["A sent quotation cannot be edited. Press Revise to make revision 2. It needs its own approval."],
@@ -497,7 +499,7 @@ export const CHAPTERS: Chapter[] = [
       {
         id: "settings", title: "Branch and money settings", who: "Administrator (settings permission)",
         steps: [
-          "Branch settings: the workshop's name, address, phone and sales tax rate.",
+          "Branch settings: the workshop's name, address, phone and sales tax rate, and the terms and conditions printed on every quotation (one clause per line; clear the box and save to go back to the standard terms).",
           "Money settings: the opening balance and date of the cash, bank and wallet accounts (what was there when you started), and the list of expense categories.",
         ],
         avoid: ["Set the opening balances once, at the start. Changing them later creates a reversal and a new entry."],

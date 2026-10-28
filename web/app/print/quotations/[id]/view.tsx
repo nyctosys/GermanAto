@@ -103,13 +103,25 @@ function Quote() {
 
       {q.notes && <p className="mb-4 whitespace-pre-line"><b>Notes.</b> {q.notes}</p>}
       <p className="mb-10 text-muted">
-        Prices are valid until {day(q.valid_until)}. Parts prices may change if the supplier&apos;s price changes. Work starts once the quotation is approved.
-        Extra work found during the repair is quoted separately before it is done.
+        Prices are valid until {day(q.valid_until)}. Work starts once the quotation is approved. The terms and conditions on the next page apply.
       </p>
       <div className="grid grid-cols-2 gap-10">
         <div><div className="h-12 border-b border-ink" /><p>Customer approval and date</p></div>
         <div><div className="h-12 border-b border-ink" /><p>For {b.name}</p></div>
       </div>
+
+      {/* The terms get their own page, as on the legacy quotation, so the quotation itself stays one clean sheet. */}
+      <section className="mt-8 break-before-page print:mt-0">
+        <h2 className="mb-3 border-b-2 border-ink pb-1 text-base font-bold">TERMS &amp; CONDITIONS</h2>
+        <ol className="list-decimal space-y-1.5 pl-5 text-[11px] leading-snug">
+          {(b.terms as string[]).map((t) => <li key={t} className="break-inside-avoid pl-1">{t}</li>)}
+        </ol>
+        <p className="mt-6">I have read and accept the terms and conditions above.</p>
+        <div className="mt-8 grid grid-cols-2 gap-10">
+          <div><div className="h-10 border-b border-ink" /><p>Customer signature, name and date</p></div>
+          <div />
+        </div>
+      </section>
     </div>
   );
 }

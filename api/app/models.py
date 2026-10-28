@@ -29,6 +29,7 @@ class Branch(Entity):
     tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("17.00"))
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Karachi")
     currency: Mapped[str] = mapped_column(String(3), default="PKR")
+    quotation_terms: Mapped[str] = mapped_column(Text, default="")  # one clause per line; blank = app.terms.DEFAULT_QUOTATION_TERMS
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     reminder_days: Mapped[str] = mapped_column(String(40), default="3,7,15")  # days after issue that an unpaid invoice is chased
     service_reminder_days: Mapped[int] = mapped_column(Integer, default=180)  # days after a visit that the next service is suggested

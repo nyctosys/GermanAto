@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode, useRef, useState } from "react";
 import { phone } from "@/lib/format";
+import { downloadXlsx, sheetFromDocument } from "@/lib/xlsx";
 
 /** A4 at 96 dpi: the width the document is laid out at when it is turned into a PDF, whatever the screen. */
 const A4_PX = 794;
@@ -33,6 +34,20 @@ async function makePdf(root: HTMLElement): Promise<Blob> {
 
 const slug = (v: string) => v.replace(/[^A-Za-z0-9._-]+/g, "-");
 const pill = "inline-flex min-h-11 items-center justify-center rounded-control border px-5 text-[0.9375rem] font-medium transition-colors duration-(--dur-micro) active:duration-0 disabled:cursor-not-allowed disabled:opacity-55";
+
+/** Every printed document: A4 portrait with 12 mm margins, black on white, table headings repeated on each page,
+ *  and no row, list item or heading left stranded across a page break. Applied by the bar, so no page can forget it. */
+const A4_CSS = `@page { size: A4 portrait; margin: 12mm; }
+@media print {
+  html, body { background: #fff !important; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  main { max-width: none !important; padding: 0 !important; }
+  table { width: 100%; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr, li, figure, img { break-inside: avoid; }
+  h1, h2, h3 { break-after: avoid; }
+  a { color: inherit !important; text-decoration: none !important; }
+}`;
 
 /**
  * The bar above every printed document: back to where it came from, print or save as PDF, share
@@ -93,6 +108,7 @@ export function PrintBar({ back, name, whatsapp, children }:
 
   return (
     <div ref={bar} className="no-print mb-4 space-y-2">
+      <style>{A4_CSS}</style>
       <div className="flex flex-wrap items-center gap-2">
         <Link href={back.href} className={`${pill} border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3`}>
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" className="mr-2"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -100,6 +116,7 @@ export function PrintBar({ back, name, whatsapp, children }:
         </Link>
         <button onClick={() => window.print()} className={`${pill} border-accent bg-accent text-accent-ink hover:bg-accent-2 active:bg-accent-3`}>Print or save as PDF</button>
         <button onClick={share} disabled={busy !== null} className={`${pill} border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3`}>{busy === "share" ? "Making the PDF" : "Share as PDF"}</button>
+        <button onClick={() => downloadXlsx(`${slug(name)}.xlsx`, [sheetFromDocument(bar.current!.parentElement as HTMLElement, name.slice(0, 31))])} className={`${pill} border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3`}>Download for Excel</button>
         {whatsapp && <button onClick={chat} disabled={busy !== null} className={`${pill} border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3`}>{busy === "whatsapp" ? "Opening" : "Send on WhatsApp"}</button>}
       </div>
       {children}

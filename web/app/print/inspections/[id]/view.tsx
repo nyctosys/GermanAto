@@ -136,7 +136,6 @@ function Report() {
         <p><b>Inspection time</b><br />{i.signed_at ? when(i.signed_at) : "Not signed"}<br /><b>Odometer</b> {d.assessment.odometer_km?.toLocaleString("en-PK") ?? "__"} km</p>
       </div>
       <p className="text-[10px] text-muted"><b>Inspection disclaimer:</b> {t.disclaimer}</p>
-      <style>{`@page { size: A4; margin: 10mm; } @media print { body { background: white; } }`}</style>
     </div>
   );
 }

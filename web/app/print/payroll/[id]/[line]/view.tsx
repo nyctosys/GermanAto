@@ -21,7 +21,7 @@ function Slip() {
   const { run, line: l } = d.data;
   const title = new Date(`${run.month}-01`).toLocaleDateString("en-PK", { month: "long", year: "numeric" });
   return (
-    <div className="mx-auto max-w-[148mm] px-4 py-4 text-[12px] leading-snug sm:px-[10mm] sm:py-[8mm] print:p-0">
+    <div className="mx-auto max-w-[210mm] px-4 py-4 text-[12px] leading-snug sm:px-[10mm] sm:py-[8mm] print:p-0">
       <PrintBar back={{ href: `/payroll/${id}`, label: "Back to payroll" }} name={`Payslip-${l.employee.full_name}-${run.month}`}>
         {run.status === "draft" && <p className="text-error">Draft: not approved yet.</p>}
       </PrintBar>

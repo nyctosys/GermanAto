@@ -117,3 +117,13 @@ def test_inspection_repairs_go_to_the_job_card_once_with_their_estimate(admin):
     send = admin.post(f"/api/quotations/{q['id']}/send", json={"version": q["version"]})
     assert send.status_code == 200  # no labour line left unpriced
     assert admin.post(f"/api/inspections/{ins['id']}/repairs/1/send", json=pick).status_code == 409  # the quotation exists now
+
+
+def test_quotation_terms_default_to_the_standard_clauses_and_can_be_replaced(admin):
+    b = admin.get("/api/branch").json()
+    assert len(b["terms"]) == 15 and b["terms"][0].startswith("A 60% DEPOSIT") and b["quotation_terms"] == ""
+    body = {k: b[k] for k in ("name", "address", "phone", "email", "tax_rate", "timezone", "currency", "version")}
+    mine = admin.put("/api/branch", json={**body, "email": None, "quotation_terms": "Payment on delivery.\n\n  Parts carry a 6 month warranty.  "}).json()
+    assert mine["terms"] == ["Payment on delivery.", "Parts carry a 6 month warranty."]
+    back = admin.put("/api/branch", json={**body, "email": None, "version": mine["version"], "quotation_terms": ""}).json()
+    assert len(back["terms"]) == 15  # blank goes back to the standard terms
