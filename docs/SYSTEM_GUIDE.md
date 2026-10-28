@@ -2,7 +2,7 @@
 
 This guide describes the software **as it is built today**, module by module: what each part is for, how to use it, the rules the system enforces, and where it lives. It is updated in the same commit as every change, so it always matches the code. The plan for what comes next is in [NEW_SYSTEM_SPEC.md](NEW_SYSTEM_SPEC.md).
 
-Last updated: 28 Oct 2026, Phase 4 (purchasing: vendors, purchase orders, goods received, bills, vendor payments).
+Last updated: 28 Oct 2026. Every phase (0 to 9) is built; see section 18 for what is deliberately left for later.
 
 ## Contents
 
@@ -415,6 +415,36 @@ cd api && TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:55432/germanato_test
 cd web && pnpm exec tsc --noEmit && pnpm lint
 ```
 
+### How the code is organised
+**API (`api/app`)**
+| File | Owns |
+|---|---|
+| `main.py` | App, router list, error handlers (database rule broken becomes a readable 409/422; `JournalError` becomes 409) |
+| `models.py`, `db.py` | All tables. `Entity` (id UUIDv7, created/updated by and at, `version`) and `BranchScoped` (adds `branch_id`, stamped automatically) |
+| `events.py` | One flush hook writes the audit log and the sync outbox for every ORM change |
+| `auth.py`, `permissions.py` | Sessions, `require("permission")`, the permission list and default roles |
+| `stock.py` | `move()`: the only way stock changes (locks the item, weighted average cost, posts the inventory journal entry) |
+| `journal.py`, `posting.py`, `pricing.py`, `money_setup.py` | Double-entry journal; one posting function per business event; shared totals and rounding; accounts created on first use |
+| `attendance.py`, `reports.py` | Attendance summary rules; every report figure (routers are thin wrappers) |
+| `messaging.py` | Templates, queue, Twilio provider, webhook signature check, reminders |
+| `sync.py`, `sync_worker.py` | Applying incoming changes with conflict detection; the push/pull worker |
+| `routers/*.py` | One file per area; each route checks a permission and commits once |
+
+**Web (`web`)**: `app/(app)/...` are the screens, `app/print/...` the printable documents, `components/` the shared pieces per area (`ui.tsx` primitives, `print.tsx` PrintBar), `lib/` holds `api.ts` (fetch and `useApi`), `schemas.ts` (zod, `parseForm`), `session.tsx` and `records.ts` (zustand), `format.ts`, `csv.ts`.
+
+### Rules the code depends on
+- **Stock** changes only through `stock.move()`. Never `db.refresh()` an item after it (that discards the unflushed average cost).
+- **Money** is posted to the journal in the same transaction as the event, right before `db.commit()`, using a `posting.*` function. Journal tables are append-only (database trigger); mistakes are reversed, not edited. `post()` refuses unbalanced entries and entries dated in a closed month.
+- **Money records** carry proof or a written reason (CHECK constraint). A new route that records or voids money on a past date calls `cashclose.assert_day_open`.
+- **Concurrency:** every table has `version`; editing routes take the client's version and return 409 if it is stale.
+- **Migrations:** Alembic autogenerate does not see changed CHECK constraints; edit those by hand and name foreign keys so downgrades work. Run `alembic check` after each.
+- **Sync:** pulled changes are applied with Core statements so they skip the outbox hook and never echo back. Tests build tables with `create_all`, so database triggers are not exercised by them.
+- **Messages and sync never block a sale:** failures are recorded and retried.
+- **Web:** a Next.js page file cannot export extra names (shared constants go in `components/`). Forms validate with a zod schema through `parseForm`. Every control is at least 44px, clickable things must look clickable (DESIGN.md section 6b), and every new screen is scanned at 320, 375, 768 and 1280px. After editing `globals.css` the dev server may serve stale CSS: stop it, delete `web/.next/dev`, restart.
+- **Print pages** pass `back`, `name` and (for customer documents) `whatsapp` to `PrintBar`.
+- **New numbered document:** add its prefix in `numbering.py` and call `next_number`. **New permission:** add it in `permissions.py`, in `DEFAULT_ROLES` where it fits, and in the guide's permission table.
+- **Every change updates this guide in the same commit.**
+
 ### Migrations
 | Revision | Adds |
 |---|---|
@@ -433,12 +463,12 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0013 | Credit notes and refunds |
 | 0014 | Daily cash closes |
 | 0015 | Evidence sign-offs |
+| 0016 | Inspection repairs sent to the job card, extra-work approval on repair order lines |
 | 0017 | Employees, attendance devices, punches, leave marks |
 | 0018 | Payroll runs and lines; salary and salary-advance money entries |
 | 0019 | Closed periods (month and year locks) |
 | 0020 | Customer messages, message wording, reminder days on the branch |
 | 0021 | Sync bookkeeping: credentials, state, inbox, conflicts |
-| 0016 | Inspection repairs sent to the job card, extra-work approval on repair order lines |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).

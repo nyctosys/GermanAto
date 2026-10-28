@@ -13,3 +13,6 @@ Rules the owner set:
 - VIN and chassis number are one field. Counter sales print A4 invoices.
 
 One story per commit: implement, run checks (API tests, tsc, lint, Hallmark), verify in the browser, set `passes: true` in prd.json, append learnings to progress.txt, commit, push.
+
+Where things are: the code map and the rules the code depends on (stock, journal, proof, migrations, sync, print pages) are in `docs/SYSTEM_GUIDE.md` section 19. Server install, backups and restore are in `docs/RUNBOOK.md`. All phases are built; the guide's section 18 lists what is left for later.
+

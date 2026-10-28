@@ -73,3 +73,5 @@
 - Scanned 55 screens (list, detail, print) at 320/375/768/1280 via same-origin iframes: no page overflow, no small controls, no error pages. Found and fixed: audit log table clipped its Details column at 768 (wrap-anywhere + scroll wrapper). A4 print tables scroll inside their paper container on phones by design.
 - API tests 120 pass; tsc, eslint clean; Hallmark 0 FAIL.
 - Not verified here: Docker image build (daemon not running on this Mac), real Twilio sends, a second server syncing over HTTP (worker and endpoints are tested separately with a fake transport and direct calls).
+## Docs
+- Guide section 19 now has the code map and the rules the code depends on; AGENTS.md points to it. Keep it current when adding modules.
