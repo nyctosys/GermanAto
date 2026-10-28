@@ -11,6 +11,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import Actor, require
+from app import messaging
+from app.models import Car, Customer, Visit  # noqa: F811
 from app.db import get_db
 from app.models import (
     RO_STAGES, Attachment, Car, Customer, Invoice, Quotation, RepairOrder, RepairOrderActivity, RepairOrderLine, StockMovement, User,
@@ -176,7 +178,14 @@ def change_status(ro_id: uuid.UUID, body: StatusIn, actor: Actor = Depends(can_r
     ro.held_from = current if body.to == "on_hold" else None
     _log(db, ro, "status", body.note, from_status=ro.status, to_status=body.to, customer_visible=body.customer_visible)
     ro.status = body.to
+    if body.to == "ready":
+        v = db.get(Visit, ro.visit_id)
+        car = db.get(Car, v.car_id)
+        messaging.queue(db, actor.branch, db.get(Customer, v.customer_id), "car_ready",
+                        {"car": f"{car.make} {car.model}".strip()}, f"ready:{ro.id}:{ro.version}")
     db.commit()
+    if body.to == "ready":
+        messaging.flush(db, actor.branch.id)
     return repair_order_out(db, ro)
 
 

@@ -45,6 +45,10 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
     ],
   },
   {
+    section: "Customers",
+    items: [{ href: "/messages", label: "Messages", permission: "messages" }],
+  },
+  {
     section: "People",
     items: [
       { href: "/employees", label: "Employees", permission: "hr" },
@@ -77,6 +81,7 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
       { href: "/admin/audit", label: "Audit log", permission: "audit" },
       { href: "/settings/branch", label: "Branch settings", permission: "settings" },
       { href: "/settings/money", label: "Money settings", permission: "settings" },
+      { href: "/settings/messages", label: "Message wording", permission: "messages" },
     ],
   },
 ];

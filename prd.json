@@ -315,7 +315,7 @@
         "docs/SYSTEM_GUIDE.md updated in the same commit"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -330,7 +330,7 @@
         "docs/SYSTEM_GUIDE.md updated in the same commit"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -345,7 +345,7 @@
         "docs/SYSTEM_GUIDE.md updated in the same commit"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -360,7 +360,7 @@
         "docs/SYSTEM_GUIDE.md updated in the same commit"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -26,7 +26,7 @@ Last updated: 28 Oct 2026, Phase 4 (purchasing: vendors, purchase orders, goods 
 18. [Not built yet](#18-not-built-yet)
 19. [For developers](#19-for-developers)
 
-Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end).
+Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end). Customer messages (WhatsApp) is [section 24](#24-customer-messages).
 
 ---
 
@@ -99,6 +99,7 @@ The visit page shows where the job stands in its **The job** panel: job card, qu
 | `goods-receipt` | Count stock in against a purchase order |
 | `payments-out` | Pay vendors (and void a vendor payment) |
 | `expenses` | Record daily and major expenses |
+| `messages` | See and retry customer messages, edit their wording and the reminder days |
 | `period-close` | Close a finished month, with its checklist |
 | `period-approve` | Reopen a closed month (admin) |
 | `reports-ops` | See operations reports |
@@ -381,7 +382,6 @@ It is an **internal** record and includes notes the customer doesn't see.
 |---|---|
 | A separate supplementary quotation document for extra work (today the customer's go-ahead is recorded on the repair order line instead) | Later, if wanted |
 | Below-cost price approval (`discount-approve`), selling below zero stock with an admin override | Phase 4 / 5 |
-| WhatsApp: quotation, ready, receipt, reminders | Phase 8 |
 | Purchasing: purchase orders, goods received, supplier bills | Phase 4 |
 | Offline branch server and sync | Phase 9 |
 | Returning goods to a vendor (purchase returns), correcting a wrong goods receipt | Later |
@@ -433,6 +433,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0017 | Employees, attendance devices, punches, leave marks |
 | 0018 | Payroll runs and lines; salary and salary-advance money entries |
 | 0019 | Closed periods (month and year locks) |
+| 0020 | Customer messages, message wording, reminder days on the branch |
 | 0016 | Inspection repairs sent to the job card, extra-work approval on repair order lines |
 
 ### API by module
@@ -491,7 +492,7 @@ Prices and stock change **only** through a goods receipt, so the cost of a part 
 - **Add everything below its reorder level** fills the list from the items under their reorder level, using each item's reorder quantity (needs the `inventory` permission).
 - **Create this item** (when a search finds nothing and you have `inventory`) opens the item form with the scanned code filled in, then adds the new item to the order.
 - Optional expected date and notes for the vendor.
-- **Send** locks the order. A sent order cannot be edited; to change one, cancel it and make a new one. Print it to hand or send (WhatsApp comes with the messaging stage).
+- **Send** locks the order. A sent order cannot be edited; to change one, cancel it and make a new one. Print it to hand over, or use **Send on WhatsApp** on its print page (section 15).
 
 | Status | Meaning |
 |---|---|
@@ -734,3 +735,43 @@ Each day is worked out from the punches: the **first punch is in, the last is ou
 - **Reopen** (needs `period-approve`, an admin permission) needs a reason, which is kept. Months reopen latest first, and a month inside a closed year can't be reopened until the year is.
 - **Closing pack:** a printable document with profit and loss, cash and bank by account with the signed counts, what customers owe and what vendors are owed, stock at cost, and **every payment with its proof status**, and the payroll summary. It prints and shares like any other document.
 - **Years:** once a year has ended and every month in it with activity is closed, the year can be closed, which locks the whole year. The yearly pack adds a month-by-month profit table.
+
+---
+
+## 24. Customer messages
+
+The system tells customers what is happening on WhatsApp, so the counter doesn't have to.
+
+### What is sent, and when
+| Message | Sent when |
+|---|---|
+| Quotation | A quotation is sent to the customer |
+| Car ready | A repair order moves to Ready |
+| Invoice | An invoice is issued (total and balance) |
+| Payment received | A payment is taken on an invoice (with the new balance) |
+| Payment reminder | An invoice is still unpaid **3, 7 and 15 days** after it was issued (the days can be changed). Only the latest step is sent, never three at once. |
+| Service reminder | **180 days** (changeable) after the customer's last visit, if the car is not in the workshop |
+| Welcome | After the customer's first finished visit |
+
+Nothing is sent to a **walk-in**, to a customer with no phone number, or to a customer marked **Don't send WhatsApp messages** (or who replied STOP). Those appear as **Not sent** with the reason, so there is a record.
+
+### Messages screen
+**Where:** Customers → Messages (needs `messages`). Every message with its customer, number, wording and status: **Waiting to send**, **Sent**, **Delivered**, **Read**, **Failed** (with the reason, and **Try again**) or **Not sent**. **Queue due reminders** adds the reminders that are due; each reminder is queued once, so pressing it twice does nothing new. A daily job can call the same action.
+
+### Wording and reminder days
+**Where:** Administration → Message wording. Each message has its text and a **Send this message** switch. Fill-in fields (`{name}`, `{number}`, `{total}`, `{balance}`, `{car}`, `{workshop}`, `{days}`) are replaced with the real details; a misspelt field shows as typed instead of stopping the sale. The reminder days and the service interval are set on the same page.
+
+### Connecting WhatsApp
+Messages are sent through **Twilio WhatsApp**. Without credentials the system runs in **dry-run**: every message is queued and none is sent, and the Messages screen says so. To connect, set these on the server (never in the app or the repository):
+| Setting | Meaning |
+|---|---|
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | The Twilio account |
+| `TWILIO_WHATSAPP_FROM` | The approved sender number, like +923001234567 |
+| `PUBLIC_URL` | The address Twilio reaches the server on (used to check the signature), no trailing slash |
+
+In Twilio, point the sender's **status callback** to `PUBLIC_URL/api/webhooks/twilio/status` and **incoming messages** to `PUBLIC_URL/api/webhooks/twilio/inbound`. Both check Twilio's signature and refuse anything else. Status updates move a message to Delivered or Read (a late "sent" never undoes "delivered"); a customer who replies **STOP** is opted out at once.
+
+### Rules
+- A failed send never stops a sale, invoice or payment: the message is kept as **Failed** and can be retried.
+- Phone numbers are turned into international form (03001234567 becomes +923001234567).
+- Customer-facing documents can still be shared by hand from their print page (section 15).

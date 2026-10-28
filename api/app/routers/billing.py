@@ -12,6 +12,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import Actor, require
+from app import messaging
+from app.models import Car, Customer, Visit  # noqa: F811
 from app.db import get_db, utcnow
 from app.models import (
     AuditLog, Car, CreditNote, CreditNoteLine, Customer, Inspection, Invoice, InvoiceLine, JobCard, MoneyEntry, Payment, Quotation,
@@ -331,6 +333,14 @@ class IssueIn(BaseModel):
     payments: list[PaymentIn] = Field(default_factory=list, max_length=5)  # counter sales are paid on the spot
 
 
+def _notify(db: Session, actor: Actor, inv: Invoice, key: str, dedupe: str) -> None:
+    """Queues the customer's WhatsApp message for an invoice event (nothing for a walk-in)."""
+    if inv.customer_id:
+        b = balance_of(db, inv)
+        messaging.queue(db, actor.branch, db.get(Customer, inv.customer_id), key,
+                        {"number": inv.number, "total": messaging.fmt_money(totals(inv)["total"]), "balance": messaging.fmt_money(b["balance"])}, dedupe)
+
+
 @router.post("/invoices/{invoice_id}/issue")
 def issue_invoice(invoice_id: uuid.UUID, body: IssueIn, actor: Actor = Depends(can_issue), db: Session = Depends(get_db)):
     """Locks the prices. A workshop invoice takes the visit's advances; a counter
@@ -372,7 +382,9 @@ def issue_invoice(invoice_id: uuid.UUID, body: IssueIn, actor: Actor = Depends(c
         posting.advances_applied(db, actor.branch, inv, applied)
     for p in body.payments:  # counter sales only; checked above
         _record_payment(db, actor, inv, p)
+    _notify(db, actor, inv, "invoice_issued", f"issued:{inv.id}")
     db.commit()
+    messaging.flush(db, actor.branch.id)
     return invoice_out(db, inv)
 
 
@@ -384,8 +396,10 @@ def take_payment(invoice_id: uuid.UUID, body: PaymentIn, actor: Actor = Depends(
     balance = balance_of(db, inv)["balance"]
     if body.amount > balance:
         raise HTTPException(422, f"That is more than the balance of {balance:,.2f}")
-    _record_payment(db, actor, inv, body)
+    pay = _record_payment(db, actor, inv, body)
+    _notify(db, actor, inv, "payment_received", f"paid:{pay.id}")
     db.commit()
+    messaging.flush(db, actor.branch.id)
     return invoice_out(db, inv)
 
 

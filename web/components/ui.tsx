@@ -33,8 +33,8 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={field} {...props} />;
 }
 
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={`${field} pr-8`} {...props} />;
+export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select className={`${field} pr-8 ${className}`} {...props} />;
 }
 
 /** A labelled control. `error` (from parseForm) replaces the hint and outlines the control in red. */

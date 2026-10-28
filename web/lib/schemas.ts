@@ -175,6 +175,13 @@ export const accountSchema = z.object({
   opening_date: z.string().min(1, "Required").refine((v) => v <= new Date().toLocaleDateString("en-CA"), "Can't be in the future"),
 });
 
+/** The wording of one customer message and the reminder days (mirrors api/app/routers/messages.py). */
+export const templateSchema = z.object({ body: text(600).min(5, "Write at least a few words"), enabled: z.boolean() });
+export const reminderSchema = z.object({
+  reminder_days: z.string().trim().regex(/^\d{1,3}(,\s*\d{1,3}){0,5}$/, "Days separated by commas, like 3, 7, 15").transform((v) => v.replace(/\s/g, "")),
+  service_reminder_days: z.coerce.number().int().min(30, "At least 30 days").max(730, "At most 730 days"),
+});
+
 export const categorySchema = z.object({ name: text(80).min(1, "Required") });
 
 /** A money entry that isn't a customer or vendor payment (mirrors api/app/routers/moneybook.py). */

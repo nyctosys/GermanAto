@@ -12,6 +12,8 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import Actor, current_actor, require
+from app import messaging
+from app.models import Car, Customer, Visit  # noqa: F811
 from app.db import get_db, utcnow
 from app.models import (
     InspectionRepairLink, Car, Customer, Item, ItemCode, JobCard, JobCardLine, LabourCode, Payment, Quotation, QuotationLine, RepairOrder, User, Visit,
@@ -325,7 +327,7 @@ class VersionIn(BaseModel):
 
 @router.post("/quotations/{quotation_id}/send")
 def send_quotation(quotation_id: uuid.UUID, body: VersionIn, actor: Actor = Depends(can_quote), db: Session = Depends(get_db)):
-    """Locks the draft. (WhatsApp delivery arrives with the messaging phase.)"""
+    """Locks the draft and queues the WhatsApp message to the customer."""
     q = _get_quote(db, actor, quotation_id, lock=True)
     if q.status != "draft":
         raise HTTPException(409, "Already sent")
@@ -336,7 +338,10 @@ def send_quotation(quotation_id: uuid.UUID, body: VersionIn, actor: Actor = Depe
     if q.valid_until < date.today():
         raise HTTPException(422, "The validity date has passed. Set a new one.")
     q.status, q.sent_at = "sent", utcnow()
+    messaging.queue(db, actor.branch, db.get(Customer, db.get(Visit, q.visit_id).customer_id), "quotation_sent",
+                    {"number": q.number, "total": messaging.fmt_money(totals(q)["total"])}, f"quote:{q.id}")
     db.commit()
+    messaging.flush(db, actor.branch.id)
     return quotation_out(db, q)
 
 

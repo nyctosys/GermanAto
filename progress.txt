@@ -54,3 +54,8 @@
 - Reconciliation tests (test_phase7_periods_reports.py) prove receivables, payables and stock value equal their ledger accounts.
 - Print pages: components/print.tsx PrintBar (Back, Print, Share as PDF via html2canvas-pro + jsPDF, Send on WhatsApp). Every new print page must pass back, name and (for customer documents) whatsapp.
 - Reports page ranges live in the query string (useRange) so links are shareable; CSV via lib/csv.ts.
+## US-801 to US-804 (messaging)
+- app/messaging.py: events and reminders only queue (messaging.queue), sending is dispatch(); no Twilio env = dry run, messages stay queued. Tests swap messaging._override for a fake provider.
+- Dedupe keys (messages.dedupe_key unique) make events and reminders idempotent; reminders send only the latest due step.
+- Webhooks verify X-Twilio-Signature (HMAC-SHA1 of PUBLIC_URL + path + sorted fields) and return 503 when TWILIO_AUTH_TOKEN is unset.
+- ui.Select used to drop its own classes when given a className; it now merges them.

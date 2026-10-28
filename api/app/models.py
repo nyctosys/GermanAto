@@ -30,6 +30,8 @@ class Branch(Entity):
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Karachi")
     currency: Mapped[str] = mapped_column(String(3), default="PKR")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    reminder_days: Mapped[str] = mapped_column(String(40), default="3,7,15")  # days after issue that an unpaid invoice is chased
+    service_reminder_days: Mapped[int] = mapped_column(Integer, default=180)  # days after a visit that the next service is suggested
 
 
 class Role(Entity):
@@ -1117,3 +1119,35 @@ class PeriodClose(BranchScoped):
     reopen_reason: Mapped[str] = mapped_column(Text, default="")
     reopened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reopened_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+
+
+class MessageTemplate(BranchScoped):
+    """The wording of one kind of customer message; {name}-style fields are filled in when it is queued."""
+
+    __tablename__ = "message_templates"
+    __table_args__ = (UniqueConstraint("branch_id", "key"),)
+
+    key: Mapped[str] = mapped_column(String(30))
+    body: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Message(BranchScoped):
+    """One outgoing customer message. 'skipped' means it was never sent (opted out, no phone)."""
+
+    __tablename__ = "messages"
+    __table_args__ = (
+        CheckConstraint("status IN ('queued', 'sent', 'delivered', 'read', 'failed', 'skipped')", name="message_status"),
+        Index("ix_messages_status", "branch_id", "status"),
+    )
+
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id"), index=True)
+    to_phone: Mapped[str] = mapped_column(String(20), default="")
+    template_key: Mapped[str] = mapped_column(String(30))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(10), default="queued")
+    error: Mapped[str] = mapped_column(String(300), default="")
+    provider_id: Mapped[str | None] = mapped_column(String(64), unique=True)  # Twilio's message SID
+    dedupe_key: Mapped[str | None] = mapped_column(String(100), unique=True)   # so a reminder is queued once
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
