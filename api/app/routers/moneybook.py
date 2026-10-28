@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app import posting
 from app.auth import Actor, current_actor, require
 from app.db import get_db
-from app.models import Customer, EvidenceSignoff, ExpenseCategory, Invoice, MoneyEntry, Payment, User, Vendor, VendorPayment
+from app.models import Customer, EvidenceSignoff, PayrollLine, PayrollRun, ExpenseCategory, Invoice, MoneyEntry, Payment, User, Vendor, VendorPayment
 from app.numbering import next_number
 from app.routers.cashclose import assert_day_open
 from app.routers.estimates import Proof
@@ -27,9 +27,9 @@ router = APIRouter(prefix="/api", tags=["money"])
 IN_KINDS = ("other_income", "owner_capital")
 # Who may record which kind: money in needs payments-in, spending needs expenses, and the owner's
 # own money movements (drawings, transfers) need payments-out.
-NEEDS = {"refund": "advance-refund", "other_income": "payments-in", "owner_capital": "payments-in", "expense": "expenses", "drawings": "payments-out", "transfer": "payments-out"}
+NEEDS = {"salary_advance": "payroll", "salary": "payroll", "refund": "advance-refund", "other_income": "payments-in", "owner_capital": "payments-in", "expense": "expenses", "drawings": "payments-out", "transfer": "payments-out"}
 IN_SOURCES = ("invoice_payment", "advance", "other_income", "owner_capital", "transfer")
-OUT_SOURCES = ("vendor_payment", "expense", "drawings", "transfer", "refund")
+OUT_SOURCES = ("vendor_payment", "expense", "drawings", "transfer", "refund", "salary_advance", "salary")
 
 
 def see_money(actor: Actor = Depends(current_actor)) -> Actor:
@@ -112,6 +112,10 @@ def void_entry(entry_id: uuid.UUID, body: VoidIn, actor: Actor = Depends(current
     assert_day_open(db, actor.branch.id, {e.account, e.to_account}, e.occurred_on)
     if e.payment_id:  # a voided refund means the advance is still held
         db.get(Payment, e.payment_id).refunded = False
+    if e.payroll_line_id:  # a voided salary payment reopens the run
+        run = db.get(PayrollRun, db.get(PayrollLine, e.payroll_line_id).payroll_run_id)
+        if run.status == "paid":
+            run.status = "approved"
     e.status, e.void_reason = "voided", body.reason
     posting.void_source(db, actor.branch, "money_entry", e.id, f"{e.number} voided")
     db.commit()
@@ -149,7 +153,7 @@ def _gather(db: Session, actor: Actor, direction: Literal["in", "out"]) -> list[
             rows.append(_row(id=p.id, number=p.number, date=p.paid_at.date(), source="vendor_payment", party=vendors.get(p.vendor_id, ""),
                              account=p.account, reference=p.reference, amount=p.amount, proof_url=proof(p.proof_id), no_proof_reason=p.no_proof_reason,
                              status="posted" if p.status == "posted" else "voided", link=f"/bills/{p.bill_id}", by=users.get(p.paid_by)))
-        entries = select(MoneyEntry).where(MoneyEntry.branch_id == branch, MoneyEntry.kind.in_(("expense", "drawings", "transfer", "refund")))
+        entries = select(MoneyEntry).where(MoneyEntry.branch_id == branch, MoneyEntry.kind.in_(("expense", "drawings", "transfer", "refund", "salary_advance", "salary")))
     cats = {c.id: c.name for c in db.scalars(select(ExpenseCategory))}
     for e in db.scalars(entries):
         account = e.to_account if (direction == "in" and e.kind == "transfer") else e.account

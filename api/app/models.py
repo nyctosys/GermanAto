@@ -1,10 +1,10 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text,
-    UniqueConstraint, func, text,
+    Time, UniqueConstraint, func, text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -852,7 +852,7 @@ class JournalLine(Entity):
     note: Mapped[str] = mapped_column(String(200), default="")
 
 
-MONEY_KINDS = ("other_income", "owner_capital", "transfer", "expense", "drawings", "refund")
+MONEY_KINDS = ("other_income", "owner_capital", "transfer", "expense", "drawings", "refund", "salary_advance", "salary")
 
 
 class MoneyEntry(BranchScoped):
@@ -871,6 +871,8 @@ class MoneyEntry(BranchScoped):
         CheckConstraint("(kind = 'expense') = (category_id IS NOT NULL)", name="money_expense_category"),
         CheckConstraint("amount > 0", name="money_amount"),
         CheckConstraint("(kind = 'refund') = (num_nonnulls(invoice_id, payment_id) = 1)", name="money_refund_target"),
+        CheckConstraint("(kind IN ('salary_advance', 'salary')) = (employee_id IS NOT NULL)", name="money_salary_employee"),
+        CheckConstraint("(kind = 'salary') = (payroll_line_id IS NOT NULL)", name="money_salary_line"),
         CheckConstraint("proof_id IS NOT NULL OR no_proof_reason <> ''", name="money_proof"),
         Index("ix_money_entries_date", "occurred_on"),
     )
@@ -885,6 +887,8 @@ class MoneyEntry(BranchScoped):
     category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("expense_categories.id"))
     invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id"), index=True)   # a refund of an overpaid invoice
     payment_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("payments.id"), index=True)   # a refund of a held advance
+    employee_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"), index=True)  # a salary or a salary advance
+    payroll_line_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("payroll_lines.id"), index=True)
     party: Mapped[str] = mapped_column(String(120), default="")    # who it was paid to or received from
     reference: Mapped[str] = mapped_column(String(60), default="")
     note: Mapped[str] = mapped_column(Text, default="")
@@ -967,3 +971,128 @@ class EvidenceSignoff(BranchScoped):
     source_type: Mapped[str] = mapped_column(String(16))
     source_id: Mapped[uuid.UUID] = mapped_column(index=True)
     reason: Mapped[str] = mapped_column(Text)
+
+
+# --- HR: employees, attendance devices and punches ---------------------------------------------------------
+
+class Employee(BranchScoped):
+    __tablename__ = "employees"
+    __table_args__ = (
+        CheckConstraint("monthly_salary >= 0", name="employee_salary"),
+        CheckConstraint("weekly_off BETWEEN 0 AND 6", name="employee_weekly_off"),
+        CheckConstraint("left_on IS NULL OR left_on >= joined_on", name="employee_dates"),
+        Index("uq_employee_cnic", "branch_id", "cnic", unique=True, postgresql_where=text("cnic <> ''")),
+        Index("uq_employee_pin", "branch_id", "device_pin", unique=True, postgresql_where=text("device_pin <> ''")),
+        Index("uq_employee_user", "user_id", unique=True, postgresql_where=text("user_id IS NOT NULL")),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    full_name: Mapped[str] = mapped_column(String(120))
+    title: Mapped[str] = mapped_column(String(80), default="")              # technician, front desk, ...
+    phone: Mapped[str] = mapped_column(String(16), default="")
+    cnic: Mapped[str] = mapped_column(String(15), default="")
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))  # their login, if they have one
+    device_pin: Mapped[str] = mapped_column(String(20), default="")          # their id on the attendance device
+    monthly_salary: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    shift_start: Mapped[time] = mapped_column(Time, default=time(9, 0))
+    shift_end: Mapped[time] = mapped_column(Time, default=time(18, 0))
+    weekly_off: Mapped[int] = mapped_column(Integer, default=6)              # Python weekday: 6 is Sunday
+    joined_on: Mapped[date] = mapped_column(Date)
+    left_on: Mapped[date | None] = mapped_column(Date)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class AttendanceDevice(BranchScoped):
+    """A fingerprint or face terminal that pushes punches. Only registered, active serials are accepted."""
+
+    __tablename__ = "attendance_devices"
+    __table_args__ = (UniqueConstraint("serial"),)
+
+    serial: Mapped[str] = mapped_column(String(40))
+    name: Mapped[str] = mapped_column(String(80))
+    secret_hash: Mapped[str] = mapped_column(String(64), default="")  # sha256 of the shared secret, if one is set
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Punch(BranchScoped):
+    """One clock-in or clock-out. From a device, or entered by hand with a reason."""
+
+    __tablename__ = "punches"
+    __table_args__ = (
+        CheckConstraint("source IN ('device', 'manual')", name="punch_source"),
+        CheckConstraint("source = 'device' OR reason <> ''", name="punch_manual_reason"),
+        Index("uq_punch_device", "device_id", "device_pin", "punched_at", unique=True, postgresql_where=text("device_id IS NOT NULL")),
+        Index("ix_punch_employee_time", "employee_id", "punched_at"),
+    )
+
+    employee_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))  # None until the pin is matched
+    device_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attendance_devices.id"))
+    device_pin: Mapped[str] = mapped_column(String(20), default="")
+    punched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    source: Mapped[str] = mapped_column(String(8), default="device")
+    reason: Mapped[str] = mapped_column(Text, default="")
+    voided: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class DayMark(BranchScoped):
+    """An approved absence: leave that is paid, or leave that is not."""
+
+    __tablename__ = "day_marks"
+    __table_args__ = (
+        CheckConstraint("kind IN ('paid_leave', 'unpaid_leave')", name="mark_kind"),
+        UniqueConstraint("employee_id", "day"),
+    )
+
+    employee_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employees.id"), index=True)
+    day: Mapped[date] = mapped_column(Date)
+    kind: Mapped[str] = mapped_column(String(14))
+    reason: Mapped[str] = mapped_column(Text)
+
+
+# --- payroll -----------------------------------------------------------------------------------------------
+
+class PayrollRun(BranchScoped):
+    """One month's pay for everyone. Draft until approved; approving fixes the figures and books the expense."""
+
+    __tablename__ = "payroll_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('draft', 'approved', 'paid', 'void')", name="payroll_status"),
+        CheckConstraint("month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'", name="payroll_month"),
+        Index("uq_payroll_month", "branch_id", "month", unique=True, postgresql_where=text("status <> 'void'")),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    month: Mapped[str] = mapped_column(String(7))
+    status: Mapped[str] = mapped_column(String(8), default="draft")
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+    lines: Mapped[list["PayrollLine"]] = relationship(cascade="all, delete-orphan", lazy="selectin", order_by="PayrollLine.created_at")
+
+
+class PayrollLine(Entity):
+    __tablename__ = "payroll_lines"
+    __table_args__ = (
+        CheckConstraint("net_pay >= 0", name="payroll_net"),
+        CheckConstraint("advance_recovery >= 0", name="payroll_recovery"),
+        CheckConstraint("adjustment = 0 OR adjustment_reason <> ''", name="payroll_adjustment_reason"),
+        UniqueConstraint("payroll_run_id", "employee_id"),
+    )
+
+    payroll_run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payroll_runs.id", ondelete="CASCADE"), index=True)
+    employee_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employees.id"), index=True)
+    monthly_salary: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    working_days: Mapped[int] = mapped_column(Integer)          # days they were expected in this month
+    month_working_days: Mapped[int] = mapped_column(Integer)    # working days in the whole month (the day rate's divisor)
+    absent_days: Mapped[int] = mapped_column(Integer, default=0)
+    unpaid_leave_days: Mapped[int] = mapped_column(Integer, default=0)
+    late_days: Mapped[int] = mapped_column(Integer, default=0)  # shown on the payslip; no deduction
+    base_pay: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    deduction: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    adjustment: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))  # a bonus (+) or another deduction (-)
+    adjustment_reason: Mapped[str] = mapped_column(String(200), default="")
+    advance_recovery: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    net_pay: Mapped[Decimal] = mapped_column(Numeric(14, 2))

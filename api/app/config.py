@@ -15,3 +15,5 @@ STORAGE_DIR = Path(os.environ.get("STORAGE_DIR", Path(__file__).resolve().parent
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() == "true"
 SESSION_DAYS = int(os.environ.get("SESSION_DAYS", "14"))
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+# Attendance devices send local wall-clock times; this is the workshop's zone.
+TIMEZONE = os.environ.get("TIMEZONE", "Asia/Karachi")

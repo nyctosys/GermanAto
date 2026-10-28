@@ -3,7 +3,7 @@ to an Entity, inside the same transaction. Routes can't forget to log, and
 nothing reaches the database without a matching outbox row."""
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import event, insert, inspect
@@ -18,7 +18,7 @@ _SKIP_IN_DIFF = {"updated_at", "updated_by", "version"}
 def jsonable(value):
     if isinstance(value, (uuid.UUID, Decimal)):
         return str(value)
-    if isinstance(value, (datetime, date)):
+    if isinstance(value, (datetime, date, time)):
         return value.isoformat()
     return value
 

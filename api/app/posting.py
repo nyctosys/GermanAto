@@ -83,6 +83,8 @@ def money_entry(db: Session, branch: Branch, e: MoneyEntry) -> None:
         "transfer": [Line(MONEY_CODE[e.to_account or "cash"], debit=e.amount), Line(here, credit=e.amount)],
         # A refund gives back money we held (an advance) or money the customer overpaid (after a credit note).
         "refund": [Line("2200" if e.payment_id else "1100", debit=e.amount), Line(here, credit=e.amount)],
+        "salary_advance": [Line("1300", debit=e.amount), Line(here, credit=e.amount)],   # money lent to an employee, to be recovered from pay
+        "salary": [Line("2400", debit=e.amount), Line(here, credit=e.amount)],            # paying off the salaries payable
     }[e.kind]
     journal.post(db, branch, f"{e.number}" + (f": {e.party}" if e.party else ""), lines, on=e.occurred_on, source=("money_entry", e.id))
 
@@ -93,6 +95,15 @@ def cash_difference(db: Session, branch: Branch, kind: str, difference: Decimal,
     journal.post(db, branch, f"Cash count difference ({kind})",
                  [Line("6910", debit=-difference), Line(code, credit=-difference)] if difference < 0
                  else [Line(code, debit=difference), Line("6910", credit=difference)], on=on, source=("cash_close", source_id))
+
+
+def payroll_approved(db: Session, branch: Branch, run, lines) -> None:
+    """The month's salary expense, with advances recovered out of it and the rest owed to staff until paid."""
+    gross = sum((l.net_pay + l.advance_recovery for l in lines), Z)
+    recovery = sum((l.advance_recovery for l in lines), Z)
+    net = sum((l.net_pay for l in lines), Z)
+    journal.post(db, branch, f"Payroll {run.number} for {run.month}",
+                 [Line("6100", debit=gross), Line("1300", credit=recovery), Line("2400", credit=net)], source=("payroll_run", run.id))
 
 
 def void_source(db: Session, branch: Branch, source_type: str, source_id, memo: str, on: date | None = None) -> None:

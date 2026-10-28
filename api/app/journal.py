@@ -17,7 +17,7 @@ CENT = Decimal("0.01")
 
 CHART: tuple[tuple[str, str, str], ...] = (
     ("1010", "Cash in hand", "asset"), ("1020", "Bank account", "asset"), ("1030", "Mobile wallet", "asset"),
-    ("1100", "Receivables", "asset"), ("1200", "Inventory", "asset"),
+    ("1100", "Receivables", "asset"), ("1200", "Inventory", "asset"), ("1300", "Employee advances", "asset"),
     ("2000", "Payables to vendors", "liability"), ("2100", "Goods received not billed", "liability"),
     ("2200", "Customer advances", "liability"), ("2300", "Sales tax payable", "liability"), ("2400", "Salaries payable", "liability"),
     ("3000", "Owner capital", "equity"), ("3100", "Owner drawings", "equity"), ("3900", "Opening balance equity", "equity"),

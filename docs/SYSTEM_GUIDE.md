@@ -26,7 +26,7 @@ Last updated: 28 Oct 2026, Phase 4 (purchasing: vendors, purchase orders, goods 
 18. [Not built yet](#18-not-built-yet)
 19. [For developers](#19-for-developers)
 
-Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money).
+Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll).
 
 ---
 
@@ -99,6 +99,8 @@ The visit page shows where the job stands in its **The job** panel: job card, qu
 | `goods-receipt` | Count stock in against a purchase order |
 | `payments-out` | Pay vendors (and void a vendor payment) |
 | `expenses` | Record daily and major expenses |
+| `hr` | Manage employees, attendance and attendance devices |
+| `payroll` | Run payroll and give salary advances |
 | `evidence-signoff` | Accept a money record that has no proof, with a reason (admin) |
 | `cash-close` | Count and sign off the cash, bank and wallet at the end of the day |
 | `credit-notes` | Issue credit notes for returns and corrections, and refund the customer |
@@ -371,7 +373,6 @@ It is an **internal** record and includes notes the customer doesn't see. Every 
 | Below-cost price approval (`discount-approve`), selling below zero stock with an admin override | Phase 4 / 5 |
 | WhatsApp: quotation, ready, receipt, reminders | Phase 8 |
 | Purchasing: purchase orders, goods received, supplier bills | Phase 4 |
-| HR, attendance (ZKTeco), payroll | Phase 6 |
 | Monthly and yearly closing, missing-proof sign-off | Phase 7 |
 | Reports with drill-down | Phase 7 |
 | Offline branch server and sync | Phase 9 |
@@ -422,6 +423,8 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0013 | Credit notes and refunds |
 | 0014 | Daily cash closes |
 | 0015 | Evidence sign-offs |
+| 0017 | Employees, attendance devices, punches, leave marks |
+| 0018 | Payroll runs and lines; salary and salary-advance money entries |
 | 0016 | Inspection repairs sent to the job card, extra-work approval on repair order lines |
 
 ### API by module
@@ -443,6 +446,8 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Gate and record | `GET visits/{id}/gate-check`, `POST visits/{id}/gate-pass`, `GET visits/{id}/dossier` |
 | Money | `GET/PUT accounts`, `GET/POST expense-categories`, `PUT expense-categories/{id}`, `GET money-in`, `GET money-out`, `POST money-entries`, `POST money-entries/{id}/void`, `GET journal/trial-balance`, `GET journal/entries` |
 | Missing proof | `GET missing-evidence`, `POST missing-evidence/sign` |
+| People | `GET/POST employees`, `GET/PUT employees/{id}`, `GET employee-logins`, `GET/POST attendance-devices`, `PUT attendance-devices/{id}`, `POST attendance-devices/{id}/secret`, `GET attendance`, `GET attendance/{employee}`, `GET attendance/unmatched`, `POST attendance/punches`, `POST attendance/punches/{id}/void`, `POST/DELETE attendance/marks`, `GET/POST salary-advances`, `GET/POST payroll-runs`, `GET payroll-runs/{id}`, `PUT payroll-runs/{id}/lines/{line}`, `POST payroll-runs/{id}/refresh`, `…/approve`, `…/void`, `POST payroll-runs/{id}/lines/{line}/pay`, `GET payroll-runs/{id}/lines/{line}` |
+| Device push (no login) | `GET/POST /iclock/cdata`, `GET /iclock/getrequest` |
 | Cash close | `GET cash-closes/status`, `GET cash-closes`, `POST cash-closes` |
 | Credit notes | `POST invoices/{id}/credit-notes`, `POST invoices/{id}/refund`, `POST advances/{id}/refund` |
 | Purchasing | `GET/POST vendors`, `GET/PUT vendors/{id}`, `GET purchase-catalog`, `GET/POST purchase-orders`, `GET/PUT purchase-orders/{id}`, `POST purchase-orders/{id}/send`, `…/cancel`, `…/close`, `…/receive`, `POST goods-receipts/{id}/bill`, `GET bills`, `GET bills/{id}`, `POST bills/{id}/payments`, `POST bills/{id}/void`, `POST vendor-payments/{id}/void` |
@@ -625,3 +630,54 @@ At the end of the day, count what is really in the **cash drawer**, the **bank**
 - It shows how many are **waiting for an admin** and their total value.
 - An admin (needs `evidence-signoff`) can **Accept** a record with a reason. Their name and the reason are kept. The record still shows as having no proof, but it no longer counts as waiting: the alert on the Money in and Money out pages goes down, and month-end closing will not be blocked by it.
 - **Waiting and accepted** shows both, so nothing that was accepted is hidden.
+
+---
+
+## 22. People and payroll
+
+### Employees
+**Where:** People → Employees (needs `hr`).
+- Name, job title, phone, CNIC, **monthly salary**, the **shift** (start and end time), the **weekly day off** (Sunday unless changed), the day they joined and (if they left) the day they left, notes.
+- **Device number:** the person's number on the fingerprint or face terminal. Giving an employee a device number **claims any punches** already received for that number.
+- **Login:** an employee can be linked to a user account; a login can belong to one employee only.
+- A CNIC or a device number can't belong to two employees. Numbers: `EMP-A1F3-000001`. An employee who leaves is marked inactive with a leaving date; their history stays.
+
+### Attendance devices
+**Where:** People → Attendance → Devices (needs `hr`).
+- Register each terminal by its **serial number**. A terminal that is **not registered, or is switched off, is refused** when it tries to send punches.
+- Optionally give a device a **shared secret**. It is shown **once** when created or replaced; the device must send it (as `?token=` on its server address, or an `X-Device-Secret` header). Replacing the secret stops the old one working at once.
+- **Setting up a ZKTeco terminal:** in its cloud/ADMS server settings, set the server address to the branch server (for example `http://<the PC's address>:8000`) and the port to match. The terminal pushes to `/iclock/cdata`. Times are read as the workshop's local time (`TIMEZONE`, Asia/Karachi by default).
+- A terminal that sends the same punch again is ignored. Punches for a device number nobody owns yet are kept and listed under **Unmatched**, so nothing is lost.
+
+### Attendance
+**Where:** People → Attendance.
+Each day is worked out from the punches: the **first punch is in, the last is out**.
+| Status | Meaning |
+|---|---|
+| Present | First punch within 15 minutes of the shift start |
+| Late | First punch more than 15 minutes after the shift start |
+| Incomplete | Only one punch that day (forgot to punch out); counts as attended, with no hours |
+| Absent | A working day with no punch and no leave |
+| Off | The employee's weekly day off |
+| Paid leave / Unpaid leave | A day marked as approved leave, with a reason |
+- The month view shows present, late, absent, leave and off days and hours for everyone; open a person for the day-by-day list and their punches.
+- **Manual punch** (with a reason of at least five characters) covers a forgotten or failed scan. A manual punch can be voided with a reason; **a punch from the device can never be removed**, only corrected with a manual punch or a leave mark.
+- Days before a person joined, after they left, or in the future are not counted.
+
+### Salary advances
+**Where:** People → Payroll → Advances (needs `payroll`).
+- Money lent against salary is **paid out now** (cash, bank or wallet, with proof or a reason) and shows on **Money out** as a *Salary advance*. In the books it is an asset (Employee advances).
+- **No more than one month's salary** can be outstanding for a person.
+- It is taken back through payroll. Each person's **advanced, recovered and outstanding** amounts are worked out from the records.
+
+### Payroll
+**Where:** People → Payroll (needs `payroll`).
+1. **Start a run** for a month that has ended. Everyone employed that month gets a line worked out from attendance.
+2. **Pay for the month:** the monthly salary for the working days they were employed (a part month is prorated). **A day's pay is the salary divided by the month's working days**, and one day's pay is deducted for each **absent day and each unpaid-leave day**. Late days are shown on the payslip but cost nothing.
+3. **Adjust** a line before approving: a bonus (+) or another deduction (-) with a reason, and the **advance recovery** (by default the outstanding advance, as far as the pay covers it).
+4. **Refresh** re-reads attendance after a correction and keeps the adjustments. A draft can also be **thrown away** and started again.
+5. **Approve** fixes the figures and books the month's salary expense. The advances recovered stop being outstanding.
+6. **Pay** each person their net pay (cash, bank or wallet, with proof or a reason). It shows on **Money out** as *Salary*. When everyone is paid the run is marked **Paid**. Voiding a salary payment reopens the run.
+7. **Payslip:** every line prints as a payslip.
+- One payroll run per month. Numbers: `PR-A1F3-000001`, `SAL-…` for salary payments, `ADV-…` for advances.
+- **Books:** approving posts salary expense against salaries payable (and employee advances for what was recovered); paying clears salaries payable against the account the money came from.
