@@ -20,7 +20,10 @@ function Doc() {
   const p = po.data;
   return (
     <div className="mx-auto max-w-[210mm] px-4 py-4 sm:px-[12mm] sm:py-[10mm] text-[12px] leading-snug print:p-0">
-      <PrintBar>{p.status === "draft" && <p className="text-error">Draft: not sent yet.</p>}</PrintBar>
+      <PrintBar back={{ href: `/purchase-orders/${p.id}`, label: "Back to the order" }} name={`Purchase-order-${p.number}`}
+                whatsapp={{ phone: p.vendor.phone, text: `Hello ${p.vendor.contact_person || p.vendor.name}, please find purchase order ${p.number} from ${branch.data.name}. Total ${money(p.total)}. Please confirm.` }}>
+        {p.status === "draft" && <p className="text-error">Draft: not sent yet.</p>}
+      </PrintBar>
       <Letterhead branch={branch.data} title="PURCHASE ORDER" right={<><p>No. <b>{p.number}</b></p><p>Date {day(p.sent_at ?? p.created_at)}</p>{p.expected_on && <p>Needed by {day(p.expected_on)}</p>}</>} />
       <section className="mb-4">
         <p className="font-bold">To</p>

@@ -22,7 +22,7 @@ function Doc() {
   if (!g) return <p className="p-8">This car hasn&apos;t been released yet.</p>;
   return (
     <div className="mx-auto max-w-[148mm] px-4 py-4 sm:px-[10mm] sm:py-[8mm] text-[12px] leading-snug print:p-0">
-      <PrintBar />
+      <PrintBar back={{ href: `/visits/${v.id}`, label: "Back to the visit" }} name={`Gate-pass-${v.number}`} />
       <Letterhead branch={branch.data} title="GATE PASS" right={<><p>Visit <b>{v.number}</b></p><p>{when(g.at)}</p></>} />
       <table className="mb-6 w-full border-collapse"><tbody>
         {[["Vehicle", `${v.car.plate || "No plate"}, ${[v.car.year, v.car.make, v.car.model].filter(Boolean).join(" ")}`],

@@ -49,3 +49,8 @@
 - A day's pay = salary / working days in the month; deduction = (absent + unpaid leave) days; late days cost nothing. Salary advances are MoneyEntry kind salary_advance (Dr 1300 Employee advances); payroll approval posts Dr 6100 / Cr 1300 recovery / Cr 2400 net; paying posts Dr 2400 / Cr money.
 - Next.js pages cannot export extra names: shared constants belong in components/.
 - Layout checker (touching cards/controls, overflow) lives in this session's notes: scan sibling section.rounded-card gaps < 8px and controls < 6px apart; section pills on the inspection page were the only offender.
+## US-701 to US-706 (month end, reports, dashboard)
+- app/reports.py holds every figure; routers/reporting.py, periods.py and the dashboard are thin wrappers, and the closing pack reuses them. Journal lock: journal.post() refuses entries dated in a closed month or year (JournalError -> HTTP 409 via a handler in main.py).
+- Reconciliation tests (test_phase7_periods_reports.py) prove receivables, payables and stock value equal their ledger accounts.
+- Print pages: components/print.tsx PrintBar (Back, Print, Share as PDF via html2canvas-pro + jsPDF, Send on WhatsApp). Every new print page must pass back, name and (for customer documents) whatsapp.
+- Reports page ranges live in the query string (useRange) so links are shareable; CSV via lib/csv.ts.

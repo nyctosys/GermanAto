@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { FUELS } from "@/components/cars";
+import { PrintBar } from "@/components/print";
 import { useApi } from "@/lib/api";
 import { day, money, phone, when } from "@/lib/format";
 
@@ -31,10 +32,10 @@ function Report() {
 
   return (
     <div className="mx-auto max-w-[210mm] px-4 py-4 sm:px-[10mm] sm:py-[8mm] text-[11px] leading-snug print:p-0">
-      <div className="no-print mb-4 flex gap-2">
-        <button onClick={() => window.print()} className="min-h-11 rounded-control bg-accent px-4 font-medium text-accent-ink">Print or save as PDF</button>
-        {i.status !== "signed" && <p className="self-center text-error">Draft: this report is not signed yet.</p>}
-      </div>
+      <PrintBar back={{ href: `/inspections/${i.id}`, label: "Back to the inspection" }} name={`Inspection-${i.number}`}
+                whatsapp={{ phone: (by ?? o).phone, text: `Hello ${(by ?? o).name}, here is the vehicle inspection report ${i.number} for ${[c.make, c.model].filter(Boolean).join(" ")} ${c.plate} from ${b.name}.` }}>
+        {i.status !== "signed" && <p className="text-error">Draft: this report is not signed yet.</p>}
+      </PrintBar>
 
       <header className="mb-3 flex items-start justify-between gap-4 border-b-2 border-ink pb-2">
         <div className="flex items-center gap-3">

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Suspense } from "react";
 import { FUELS } from "@/components/cars";
+import { PrintBar } from "@/components/print";
 import { useApi } from "@/lib/api";
 import { day, money, phone, qty } from "@/lib/format";
 
@@ -25,10 +26,10 @@ function Quote() {
 
   return (
     <div className="mx-auto max-w-[210mm] px-4 py-4 sm:px-[12mm] sm:py-[10mm] text-[12px] leading-snug print:p-0">
-      <div className="no-print mb-4 flex gap-2">
-        <button onClick={() => window.print()} className="min-h-11 rounded-control bg-accent px-4 font-medium text-accent-ink">Print or save as PDF</button>
-        {q.status === "draft" && <p className="self-center text-error">Draft: prices may still change.</p>}
-      </div>
+      <PrintBar back={{ href: `/quotations/${q.id}`, label: "Back to the quotation" }} name={`Quotation-${q.number}${q.revision > 1 ? `-rev${q.revision}` : ""}`}
+                whatsapp={{ phone: billTo.phone, text: `Hello ${billTo.name}, here is quotation ${q.number} from ${b.name}. Total ${money(t.total)}, valid until ${day(q.valid_until)}. Please reply to approve.` }}>
+        {q.status === "draft" && <p className="text-error">Draft: prices may still change.</p>}
+      </PrintBar>
 
       <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-ink pb-3">
         <div className="flex items-center gap-3">

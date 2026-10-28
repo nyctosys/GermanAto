@@ -36,6 +36,15 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
     ],
   },
   {
+    section: "Reports",
+    items: [
+      { href: "/reports/finance", label: "Finance reports", permission: "reports-finance" },
+      { href: "/reports/operations", label: "Workshop report", permission: "reports-ops" },
+      { href: "/reports/hr", label: "People report", permission: "hr" },
+      { href: "/periods", label: "Month end", permission: ["period-close", "reports-finance"] },
+    ],
+  },
+  {
     section: "People",
     items: [
       { href: "/employees", label: "Employees", permission: "hr" },

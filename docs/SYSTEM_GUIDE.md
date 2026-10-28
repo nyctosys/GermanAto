@@ -26,7 +26,7 @@ Last updated: 28 Oct 2026, Phase 4 (purchasing: vendors, purchase orders, goods 
 18. [Not built yet](#18-not-built-yet)
 19. [For developers](#19-for-developers)
 
-Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll).
+Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end).
 
 ---
 
@@ -99,6 +99,9 @@ The visit page shows where the job stands in its **The job** panel: job card, qu
 | `goods-receipt` | Count stock in against a purchase order |
 | `payments-out` | Pay vendors (and void a vendor payment) |
 | `expenses` | Record daily and major expenses |
+| `period-close` | Close a finished month, with its checklist |
+| `period-approve` | Reopen a closed month (admin) |
+| `reports-ops` | See operations reports |
 | `hr` | Manage employees, attendance and attendance devices |
 | `payroll` | Run payroll and give salary advances |
 | `evidence-signoff` | Accept a money record that has no proof, with a reason (admin) |
@@ -340,7 +343,14 @@ It also warns (without blocking) about an inspection left as an unsigned draft.
 9. the audit trail: who did what, and when;
 10. the proofs themselves (approval and payment images).
 
-It is an **internal** record and includes notes the customer doesn't see. Every page prints with **Print or save as PDF**.
+It is an **internal** record and includes notes the customer doesn't see.
+
+**On every printed document (the bar at the top):**
+- **Back** returns to the screen the document came from (the invoice, the visit, the quotation, ...), so you are never stranded on a printout.
+- **Print or save as PDF** uses the browser's print.
+- **Share as PDF** makes a real A4 PDF of the document and opens the phone's or computer's **share sheet**, so it can be sent on **WhatsApp**, email, Drive or any other app, as a file (not a link that needs a login). A browser that can't share files saves the PDF to the downloads instead.
+- **Send on WhatsApp** (on documents meant for a customer or vendor: invoices, quotations, inspection reports, purchase orders) opens a WhatsApp chat with that person's number and a ready message, and saves the PDF so you can attach it. Without a number (a walk-in) WhatsApp asks whom to send it to.
+- The PDF is laid out at A4 width whatever the screen, and never includes the bar itself.
 
 ---
 
@@ -373,10 +383,7 @@ It is an **internal** record and includes notes the customer doesn't see. Every 
 | Below-cost price approval (`discount-approve`), selling below zero stock with an admin override | Phase 4 / 5 |
 | WhatsApp: quotation, ready, receipt, reminders | Phase 8 |
 | Purchasing: purchase orders, goods received, supplier bills | Phase 4 |
-| Monthly and yearly closing, missing-proof sign-off | Phase 7 |
-| Reports with drill-down | Phase 7 |
 | Offline branch server and sync | Phase 9 |
-| Dashboard figures | With reports |
 | Returning goods to a vendor (purchase returns), correcting a wrong goods receipt | Later |
 | Purchase order sent to the vendor on WhatsApp | Phase 8 |
 
@@ -425,6 +432,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0015 | Evidence sign-offs |
 | 0017 | Employees, attendance devices, punches, leave marks |
 | 0018 | Payroll runs and lines; salary and salary-advance money entries |
+| 0019 | Closed periods (month and year locks) |
 | 0016 | Inspection repairs sent to the job card, extra-work approval on repair order lines |
 
 ### API by module
@@ -446,6 +454,7 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Gate and record | `GET visits/{id}/gate-check`, `POST visits/{id}/gate-pass`, `GET visits/{id}/dossier` |
 | Money | `GET/PUT accounts`, `GET/POST expense-categories`, `PUT expense-categories/{id}`, `GET money-in`, `GET money-out`, `POST money-entries`, `POST money-entries/{id}/void`, `GET journal/trial-balance`, `GET journal/entries` |
 | Missing proof | `GET missing-evidence`, `POST missing-evidence/sign` |
+| Reports and month end | `GET dashboard`, `GET reports/pnl`, `…/cashflow`, `…/receivables`, `…/payables`, `…/stock-value`, `…/discounts`, `…/operations`, `…/hr`, `GET periods`, `GET periods/{p}/checklist`, `POST periods/{p}/close`, `…/reopen`, `GET periods/{p}/pack` |
 | People | `GET/POST employees`, `GET/PUT employees/{id}`, `GET employee-logins`, `GET/POST attendance-devices`, `PUT attendance-devices/{id}`, `POST attendance-devices/{id}/secret`, `GET attendance`, `GET attendance/{employee}`, `GET attendance/unmatched`, `POST attendance/punches`, `POST attendance/punches/{id}/void`, `POST/DELETE attendance/marks`, `GET/POST salary-advances`, `GET/POST payroll-runs`, `GET payroll-runs/{id}`, `PUT payroll-runs/{id}/lines/{line}`, `POST payroll-runs/{id}/refresh`, `…/approve`, `…/void`, `POST payroll-runs/{id}/lines/{line}/pay`, `GET payroll-runs/{id}/lines/{line}` |
 | Device push (no login) | `GET/POST /iclock/cdata`, `GET /iclock/getrequest` |
 | Cash close | `GET cash-closes/status`, `GET cash-closes`, `POST cash-closes` |
@@ -681,3 +690,47 @@ Each day is worked out from the punches: the **first punch is in, the last is ou
 7. **Payslip:** every line prints as a payslip.
 - One payroll run per month. Numbers: `PR-A1F3-000001`, `SAL-…` for salary payments, `ADV-…` for advances.
 - **Books:** approving posts salary expense against salaries payable (and employee advances for what was recovered); paying clears salaries payable against the account the money came from.
+
+---
+
+## 23. Dashboard, reports and month end
+
+### Dashboard
+**Where:** Dashboard (the first page).
+- **Needs attention:** payments with no proof waiting for an admin, invoices unpaid for over 30 days, vendor bills past due, items at or below their reorder level, and months not yet closed. Each line opens the screen that fixes it. "Nothing needs attention" when all is well.
+- **In the workshop:** cars in the workshop, open quotations (and how many wait for the customer), repair orders under way (ready, on hold), items low on stock.
+- **Money this month** and **Where the money is** (for people who may see finance): revenue, profit, money in and out, cash by account, what customers owe, what vendors are owed, stock at cost. Every tile opens the report behind it.
+- People without finance permission see only the workshop and stock tiles.
+
+### Finance reports
+**Where:** Reports → Finance reports (needs `reports-finance`). Choose **This month**, **Last month**, **This year** or a custom range; the range is in the address, so a report can be shared as a link. Each report has **Download for Excel**.
+| Report | What it shows |
+|---|---|
+| Profit and loss | Revenue (labour, parts, other), cost of parts sold, gross profit and margin, expenses by category, salaries, purchase adjustments, cash differences, net profit. Sales tax is shown separately: it belongs to the government, not to the business. Lines link to the records behind them. |
+| Cash flow | For the cash drawer, the bank and the wallet: at the start, what came in (by source), what went out (by source), at the end. The totals agree with each account's balance. |
+| Customers owe us | Every unpaid invoice, aged from the day it was issued (0-30, 31-60, 61-90, over 90 days). A customer who has overpaid shows as owed back. Totals equal the Receivables account. |
+| We owe vendors | Every unpaid bill, aged by how late it is (not yet due, then 1-30, 31-60, 61-90, over 90 days). Totals equal the Payables account. |
+| Stock value | Each item's quantity, average cost and value; the total equals the Inventory account. |
+| Discounts and voids | Discounts given, by invoice and by the person who issued it; and every voided record with its reason. |
+
+### Workshop report
+**Where:** Reports → Workshop report (needs `reports-ops`).
+- Cars checked in (by status) and the **average time in the workshop**.
+- Workshop revenue, **revenue per invoiced visit**, and counter-sale revenue (the two channels kept apart).
+- **Quotations:** made, sent, approved and the **conversion rate**.
+- **Average time in each stage** of a repair order (time on hold is not counted).
+- **Top labour codes** and **top parts** by revenue.
+- **Comebacks:** cars that returned within 30 days of leaving, linked to the visits.
+- Repair orders still open, by age.
+
+### People report
+**Where:** Reports → People report (needs `hr`). Attendance for a month, payroll cost by month, advances owed, and what each technician billed (labour lines marked done and assigned to them).
+
+### Month end
+**Where:** Reports → Month end (needs `period-close`; the accountant has it).
+- Open a finished month to see its **checklist**: the month has ended; earlier months with activity are closed; every payment has proof or has been accepted by an admin; the books balance; the cash, bank and wallet were **counted and signed on the last day** (an account with no activity needs no count); payroll is not left as a draft. Two further items are shown but don't stop the close: payroll was run, and no draft invoices are left over.
+- **Each item that isn't done has a Fix it link** to the screen that fixes it. **Close this month** is available only when every required item is done.
+- **Closing locks the month.** Nothing can be recorded dated inside it: the system refuses, with the month's name in the message. Corrections are made in the current month.
+- **Reopen** (needs `period-approve`, an admin permission) needs a reason, which is kept. Months reopen latest first, and a month inside a closed year can't be reopened until the year is.
+- **Closing pack:** a printable document with profit and loss, cash and bank by account with the signed counts, what customers owe and what vendors are owed, stock at cost, and **every payment with its proof status**, and the payroll summary. It prints and shares like any other document.
+- **Years:** once a year has ended and every month in it with activity is closed, the year can be closed, which locks the whole year. The yearly pack adds a month-by-month profit table.

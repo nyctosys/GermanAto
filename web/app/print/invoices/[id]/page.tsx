@@ -31,7 +31,10 @@ function A4({ inv, b }: { inv: Invoice; b: Branch }) {
   const title = "INVOICE";
   return (
     <div className="mx-auto max-w-[210mm] px-4 py-4 sm:px-[12mm] sm:py-[10mm] text-[12px] leading-snug print:p-0">
-      <PrintBar>{inv.status !== "issued" && <p className="text-error">Draft: not issued yet.</p>}</PrintBar>
+      <PrintBar back={{ href: `/invoices/${inv.id}`, label: "Back to the invoice" }} name={`Invoice-${inv.number}`}
+                whatsapp={{ phone: who.phone, text: `Hello ${who.name}, here is invoice ${inv.number} from ${b.name}. Total ${money(t.total)}${Number(t.balance) > 0 ? `, balance ${money(t.balance)}` : ", paid in full"}. Thank you.` }}>
+        {inv.status !== "issued" && <p className="text-error">Draft: not issued yet.</p>}
+      </PrintBar>
       <Letterhead branch={b} title={title} right={<><p>No. <b>{inv.number}</b></p>{inv.kind === "counter_sale" && <p>Counter sale</p>}<p>Date {day(inv.issued_at ?? inv.created_at)}</p>{inv.visit && <p>Visit {inv.visit.number}</p>}</>} />
       <section className="mb-4 grid grid-cols-2 gap-6">
         <div><p className="font-bold">Bill to</p><p>{who.name}</p>{who.phone && <p>{phone(who.phone)}</p>}{who.number && <p className="text-muted">{who.number}</p>}</div>

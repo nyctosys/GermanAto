@@ -33,7 +33,7 @@ function Dossier() {
 
   return (
     <div className="mx-auto max-w-[210mm] px-4 py-4 sm:px-[12mm] sm:py-[10mm] text-[11px] leading-snug print:p-0">
-      <PrintBar><p className="text-muted">Internal record: includes notes the customer doesn&apos;t see.</p></PrintBar>
+      <PrintBar back={{ href: `/visits/${v.id}`, label: "Back to the visit" }} name={`Visit-record-${v.number}`}><p className="text-muted">Internal record: includes notes the customer doesn&apos;t see.</p></PrintBar>
       <Letterhead branch={branch.data} title="VISIT RECORD" right={<><p>Visit <b>{v.number}</b></p><p>In {when(v.checked_in_at)}</p>{g && <p>Out {when(g.at)}</p>}</>} />
 
       <section className="mb-4 grid grid-cols-2 gap-6">

@@ -22,7 +22,9 @@ function Slip() {
   const title = new Date(`${run.month}-01`).toLocaleDateString("en-PK", { month: "long", year: "numeric" });
   return (
     <div className="mx-auto max-w-[148mm] px-4 py-4 text-[12px] leading-snug sm:px-[10mm] sm:py-[8mm] print:p-0">
-      <PrintBar>{run.status === "draft" && <p className="text-error">Draft: not approved yet.</p>}</PrintBar>
+      <PrintBar back={{ href: `/payroll/${id}`, label: "Back to payroll" }} name={`Payslip-${l.employee.full_name}-${run.month}`}>
+        {run.status === "draft" && <p className="text-error">Draft: not approved yet.</p>}
+      </PrintBar>
       <Letterhead branch={branch.data} title="PAYSLIP" right={<><p>{title}</p><p>{run.number}</p></>} />
       <section className="mb-4 grid grid-cols-2 gap-4">
         <div><p className="font-bold">Employee</p><p>{l.employee.full_name}</p><p className="text-muted">{l.employee.number}{l.employee.title ? `, ${l.employee.title}` : ""}</p></div>
