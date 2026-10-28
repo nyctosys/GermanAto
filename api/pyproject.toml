@@ -1,0 +1,23 @@
+[project]
+name = "germanato-api"
+version = "0.1.0"
+description = "GermanATO workshop management API"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.13",
+    "fastapi>=0.115",
+    "psycopg[binary]>=3.2",
+    "python-multipart>=0.0.12",
+    "sqlalchemy>=2.0.40",
+    "uvicorn[standard]>=0.32",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28",
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "tests"]
+testpaths = ["tests"]

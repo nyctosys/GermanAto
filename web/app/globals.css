@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-brand: #8b1538;
+  --color-brand-dark: #6d1029;
+  --color-brand-light: #f8e9ee;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

@@ -73,3 +73,7 @@ backend/.axon/
 # documents and must not go into version control.
 backend/static/uploads/
 static/uploads/
+
+# New stack
+api/storage/
+.pytest_cache/
