@@ -69,12 +69,12 @@ function PanelBody({ car, owner, buyer, carId, note, onEdit }:
       <p className="font-medium">
         {carId ? <Link href={`/cars/${carId}`} className="underline">{carTitle(car)}</Link> : carTitle(car)}
       </p>
-      <dl className="mt-4 grid gap-4 sm:grid-cols-2 shell:grid-cols-3">
+      <dl className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-4">
         {facts.map(([l, v]) => (
           <div key={l}><dt className="text-sm text-muted">{l}</dt><dd className={v ? "num break-all" : "text-muted"}>{v || "Not recorded"}</dd></div>
         ))}
       </dl>
-      <div className="mt-5 grid gap-4 border-t border-rule pt-4 sm:grid-cols-2">
+      <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-4 border-t border-rule pt-4">
         <PersonRow label={buyer ? "Owner (seller)" : "Owner"} p={owner} onEdit={onEdit && (() => onEdit("owner"))} />
         {buyer && <PersonRow label="Buyer" p={buyer} onEdit={onEdit && (() => onEdit("buyer"))} />}
       </div>

@@ -111,3 +111,16 @@ export function parseForm<S extends z.ZodType>(schema: S, form: HTMLFormElement 
   }
   return { data: null, errors };
 }
+
+/** A line quantity on a job card or quotation. */
+export const lineQty = z.string().trim().refine((v) => Number(v) > 0 && Number(v) <= 10000, "More than 0");
+
+/** A price typed on a quotation line: whole rupees or paisa, more than zero to send. */
+export const linePrice = z.string().trim().refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(v) && Number(v) > 0, "Enter the price");
+
+export const advanceSchema = z.object({
+  amount: z.string().trim().refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(v) && Number(v) > 0, "Enter the amount received"),
+  account: z.enum(["cash", "bank", "wallet"]),
+  reference: text(60),
+  note: text(500),
+});

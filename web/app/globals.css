@@ -137,6 +137,11 @@
       padding-block: 0.2rem;
       border: 0;
     }
+    /* A cell with no label is the row's heading: it keeps its own layout. */
+    .table-stack td:not([data-label]) {
+      display: block;
+      padding-bottom: 0.4rem;
+    }
     .table-stack td[data-label]::before {
       content: attr(data-label);
       color: var(--color-muted);

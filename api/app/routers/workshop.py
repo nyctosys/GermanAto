@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app import inspection_template as tpl
 from app.auth import Actor, require
 from app.db import get_db, utcnow
-from app.models import Attachment, Car, CarOwnership, Customer, Inspection, User, Visit
+from app.models import Attachment, Car, CarOwnership, Customer, Inspection, JobCard, Payment, Quotation, User, Visit
 from app.numbering import next_number
 from app.validators import Text
 
@@ -265,6 +265,9 @@ def get_visit(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Sessio
     buyer = db.get(Customer, v.buyer_id) if v.buyer_id else None
     inspections = db.scalars(select(Inspection).where(Inspection.visit_id == v.id).order_by(Inspection.created_at)).all()
     files = _files(db, "visits", v.id)
+    job_card = db.scalar(select(JobCard).where(JobCard.visit_id == v.id))
+    quotes = db.scalars(select(Quotation).where(Quotation.visit_id == v.id).order_by(Quotation.revision)).all()
+    payments = db.scalars(select(Payment).where(Payment.visit_id == v.id).order_by(Payment.received_at)).all()
     return {
         **visit_summary(v, car, customer, buyer),
         "fuel_eighths": v.fuel_eighths, "items_left": v.items_left, "condition_notes": v.condition_notes,
@@ -273,6 +276,11 @@ def get_visit(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Sessio
         "signature": next((f for f in files if f["id"] == v.signature_id), None),
         "inspections": [{"id": i.id, "number": i.number, "kind": i.kind, "status": i.status, "signed_at": i.signed_at,
                          "supersedes_id": i.supersedes_id} for i in inspections],
+        "job_card": job_card and {"id": job_card.id, "number": job_card.number, "lines": len(job_card.lines)},
+        "quotations": [{"id": q.id, "number": q.number, "revision": q.revision, "status": q.status,
+                        "expired": q.status == "sent" and q.valid_until < date.today()} for q in quotes],
+        "payments": [{"id": p.id, "number": p.number, "kind": p.kind, "status": p.status, "amount": p.amount,
+                      "account": p.account, "received_at": p.received_at} for p in payments],
     }
 
 
@@ -297,7 +305,8 @@ class CancelIn(BaseModel):
 def cancel_visit(visit_id: uuid.UUID, body: CancelIn, actor: Actor = Depends(can_visit), db: Session = Depends(get_db)):
     v = _get_visit(db, actor, visit_id, lock=True)
     _require_open(v)
-    # Later stages refuse this once an invoice is issued or money has been taken.
+    if db.scalar(select(Payment.id).where(Payment.visit_id == v.id, Payment.status == "posted")):
+        raise HTTPException(409, "Money has been taken on this visit. Refund or void it (admin approval) before cancelling.")
     v.status, v.closed_at, v.close_note = "cancelled", utcnow(), body.reason
     db.commit()
     return get_visit(v.id, actor, db)

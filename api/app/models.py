@@ -357,3 +357,129 @@ class Inspection(BranchScoped):
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     inspector_signature_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
     customer_signature_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
+
+
+# --- estimates: job card, quotation, advance (spec §2, §2.2) --------------------------------
+
+LINE_TARGET = ("(kind = 'labour' AND labour_code_id IS NOT NULL AND item_id IS NULL) OR "
+               "(kind = 'part' AND item_id IS NOT NULL AND labour_code_id IS NULL)")
+
+
+class JobCard(BranchScoped):
+    """The rough work list for a visit: labour codes and stock items only, no prices."""
+
+    __tablename__ = "job_cards"
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    visit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("visits.id"), unique=True)  # one per visit
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+    lines: Mapped[list["JobCardLine"]] = relationship(cascade="all, delete-orphan", lazy="selectin",
+                                                      order_by="JobCardLine.position")
+
+
+class JobCardLine(Entity):
+    __tablename__ = "job_card_lines"
+    __table_args__ = (
+        CheckConstraint("kind IN ('labour', 'part')", name="job_line_kind"),
+        CheckConstraint(LINE_TARGET, name="job_line_target"),
+        CheckConstraint("qty > 0", name="job_line_qty"),
+    )
+
+    job_card_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("job_cards.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(8))
+    labour_code_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("labour_codes.id"))
+    item_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("items.id"))
+    qty: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("1"))
+    note: Mapped[str] = mapped_column(String(300), default="")
+
+
+class Quotation(BranchScoped):
+    """What the customer agrees to. Each revision is a new row with the same
+    number; only one revision per visit is current (not 'revised')."""
+
+    __tablename__ = "quotations"
+    __table_args__ = (
+        CheckConstraint("status IN ('draft', 'sent', 'approved', 'rejected', 'revised', 'converted')", name="quotation_status"),
+        CheckConstraint("approval_method IS NULL OR approval_method IN ('in_person', 'whatsapp', 'phone')", name="quotation_method"),
+        CheckConstraint("status <> 'approved' OR (approved_at IS NOT NULL AND (approval_proof_id IS NOT NULL OR no_proof_reason <> ''))",
+                        name="quotation_approval_proof"),
+        CheckConstraint("discount >= 0", name="quotation_discount"),
+        CheckConstraint("tax_rate >= 0 AND tax_rate <= 100", name="quotation_tax_rate"),
+        UniqueConstraint("number", "revision"),
+        Index("uq_quotation_current", "visit_id", unique=True, postgresql_where=text("status <> 'revised'")),
+    )
+
+    number: Mapped[str] = mapped_column(String(24))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    supersedes_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("quotations.id"))
+    visit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("visits.id"), index=True)
+    job_card_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("job_cards.id"))
+    status: Mapped[str] = mapped_column(String(10), default="draft")
+    include_tax: Mapped[bool] = mapped_column(Boolean, default=True)
+    tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    discount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    valid_until: Mapped[date] = mapped_column(Date)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    approval_method: Mapped[str | None] = mapped_column(String(10))
+    approval_note: Mapped[str] = mapped_column(Text, default="")
+    approval_proof_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
+    no_proof_reason: Mapped[str] = mapped_column(Text, default="")
+    rejected_reason: Mapped[str] = mapped_column(Text, default="")
+
+    lines: Mapped[list["QuotationLine"]] = relationship(cascade="all, delete-orphan", lazy="selectin",
+                                                        order_by="QuotationLine.position")
+
+
+class QuotationLine(Entity):
+    __tablename__ = "quotation_lines"
+    __table_args__ = (
+        CheckConstraint("kind IN ('labour', 'part')", name="quote_line_kind"),
+        CheckConstraint(LINE_TARGET, name="quote_line_target"),
+        CheckConstraint("qty > 0", name="quote_line_qty"),
+        CheckConstraint("unit_price >= 0", name="quote_line_price"),
+    )
+
+    quotation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("quotations.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(8))
+    labour_code_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("labour_codes.id"))
+    item_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("items.id"))
+    description: Mapped[str] = mapped_column(String(200))  # the code's or item's name when quoted
+    qty: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("1"))
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    declined: Mapped[bool] = mapped_column(Boolean, default=False)  # partial approval
+
+
+class Payment(BranchScoped):
+    """Money in. An advance is held for the customer (a liability) until an
+    invoice uses it. Never edited: a mistake is voided with a reason."""
+
+    __tablename__ = "payments"
+    __table_args__ = (
+        CheckConstraint("kind IN ('advance', 'invoice', 'other')", name="payment_kind"),
+        CheckConstraint("status IN ('posted', 'voided')", name="payment_status"),
+        CheckConstraint("account IN ('cash', 'bank', 'wallet')", name="payment_account"),
+        CheckConstraint("amount > 0", name="payment_amount"),
+        CheckConstraint("proof_id IS NOT NULL OR no_proof_reason <> ''", name="payment_proof"),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    kind: Mapped[str] = mapped_column(String(8))
+    status: Mapped[str] = mapped_column(String(8), default="posted")
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    visit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("visits.id"), index=True)
+    quotation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("quotations.id"))
+    account: Mapped[str] = mapped_column(String(8))
+    reference: Mapped[str] = mapped_column(String(60), default="")  # cheque no., transaction id
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    proof_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
+    no_proof_reason: Mapped[str] = mapped_column(Text, default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    received_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    void_reason: Mapped[str] = mapped_column(Text, default="")

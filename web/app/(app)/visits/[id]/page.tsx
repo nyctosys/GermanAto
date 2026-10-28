@@ -4,18 +4,23 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { carTitle, Plate } from "@/components/cars";
+import { QuoteBadge, type QuoteStatus } from "@/components/estimates";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { type VisitSummary, elapsed } from "@/components/visits";
 import { api, useApi } from "@/lib/api";
-import { phone, when } from "@/lib/format";
+import { money, phone, when } from "@/lib/format";
+import { useSession } from "@/lib/session";
 
 type File = { id: string; name: string; url: string; mime: string };
 type InspectionRef = { id: string; number: string; kind: string; status: string; signed_at: string | null; supersedes_id: string | null };
 type Visit = VisitSummary & {
   fuel_eighths: number | null; items_left: string; condition_notes: string; odometer_out: number | null; close_note: string;
   photos: File[]; signature: File | null; inspections: InspectionRef[];
+  job_card: { id: string; number: string; lines: number } | null;
+  quotations: { id: string; number: string; revision: number; status: QuoteStatus | "revised"; expired: boolean }[];
+  payments: { id: string; number: string; kind: string; status: string; amount: string }[];
 };
 
 const KIND = { workshop: "Workshop inspection", delivery: "Delivery inspection", pre_purchase: "Pre-purchase inspection" } as Record<string, string>;
@@ -102,15 +107,7 @@ function VisitDetail() {
             {actionError && <div className="px-4 pb-4"><Notice>{actionError}</Notice></div>}
           </Card>
 
-          <Card title="Next steps">
-            <ol className="space-y-2 text-ink-2">
-              {["Job card", "Quotation and approval", "Repair order", "Invoice and payment", "Gate pass"].map((s) => (
-                <li key={s} className="flex items-center justify-between gap-3">
-                  <span>{s}</span><span className="text-sm text-muted">Being built</span>
-                </li>
-              ))}
-            </ol>
-          </Card>
+          <Estimate v={v} onError={setActionError} />
         </div>
 
         <div className="space-y-4">
@@ -177,6 +174,61 @@ function CancelVisit({ id, onDone, onCancel }: { id: string; onDone: () => void;
           <Button type="button" variant="secondary" onClick={onCancel}>Keep it open</Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => void }) {
+  const router = useRouter();
+  const { can } = useSession();
+  const [busy, setBusy] = useState(false);
+  const quote = v.quotations.findLast((q) => q.status !== "revised");
+  const advance = v.payments.filter((p) => p.kind === "advance" && p.status === "posted").reduce((s, p) => s + Number(p.amount), 0);
+
+  async function openJobCard() {
+    setBusy(true);
+    onError(null);
+    try {
+      router.push(`/job-cards/${(await api<{ id: string }>(`/api/visits/${v.id}/job-card`, { method: "POST" })).id}`);
+    } catch (err) {
+      onError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  const row = "flex min-h-14 flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5";
+  return (
+    <Card title="Estimate and approval" flush>
+      <ul>
+        <li>
+          {v.job_card ? (
+            <Link href={`/job-cards/${v.job_card.id}`} className={`${row} hover:bg-paper-2`}>
+              <span><span className="block font-medium">Job card</span><span className="block text-sm text-muted">{v.job_card.number}, {v.job_card.lines} {v.job_card.lines === 1 ? "line" : "lines"}</span></span>
+            </Link>
+          ) : (
+            <div className={row}>
+              <span><span className="block font-medium">Job card</span><span className="block text-sm text-muted">The work to quote: labour codes and parts.</span></span>
+              {v.status === "open" && can("job-cards") && <Button variant="secondary" disabled={busy} onClick={openJobCard}>Start the job card</Button>}
+            </div>
+          )}
+        </li>
+        <li>
+          {quote ? (
+            <Link href={`/quotations/${quote.id}`} className={`${row} hover:bg-paper-2`}>
+              <span><span className="block font-medium">Quotation</span><span className="block text-sm text-muted">{quote.number}{quote.revision > 1 ? `, revision ${quote.revision}` : ""}</span></span>
+              <QuoteBadge status={quote.expired ? "expired" : quote.status as QuoteStatus} />
+            </Link>
+          ) : (
+            <div className={row}><span><span className="block font-medium">Quotation</span><span className="block text-sm text-muted">Made from the job card.</span></span></div>
+          )}
+        </li>
+        {advance > 0 && (
+          <li className={row}><span className="font-medium">Advance received</span><span className="num">{money(advance)}</span></li>
+        )}
+        {["Repair order", "Invoice and payment", "Gate pass"].map((s) => (
+          <li key={s} className={`${row} text-ink-2`}><span>{s}</span><span className="text-sm text-muted">Being built</span></li>
+        ))}
+      </ul>
     </Card>
   );
 }
