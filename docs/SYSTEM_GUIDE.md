@@ -26,7 +26,7 @@ Last updated: 28 Oct 2026. Every phase (0 to 9) is built; see section 18 for wha
 18. [Not built yet](#18-not-built-yet)
 19. [For developers](#19-for-developers)
 
-Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end). Customer messages (WhatsApp) is [section 24](#24-customer-messages). Running the server and syncing is [section 25](#25-server-backups-and-sync).
+Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end). Customer messages (WhatsApp) is [section 24](#24-customer-messages). Running the server and syncing is [section 25](#25-server-backups-and-sync). The in-app user manual is [section 26](#26-the-help-page-user-manual).
 
 ---
 
@@ -843,3 +843,14 @@ The workshop never depends on the internet. With sync switched on, a worker on t
 3. Use **HTTPS** for the cloud address: the token travels with every request.
 
 **Known limit:** conflicts are found when both sides reach the same version number with different content. If one side edits a record twice while the other edits it once, the higher version wins without a conflict (every change is still kept in the audit log). Proof files are not sent by sync yet; they are covered by the nightly backup.
+
+---
+
+## 26. The Help page (user manual)
+
+**Where:** Help → User manual (everyone who is signed in; no permission needed).
+
+A step-by-step manual with procedures (SOPs) for every area: start here, front desk, workshop, billing and releasing the car, stock and purchasing, money and the daily close, people and payroll, owner and accountant (reports, month end), customer messages, administration, troubleshooting, and daily, weekly and monthly checklists. Each procedure says **who** does it, the **steps**, **how to tell it was done right** and **what to avoid**. The golden rules are at the top.
+
+- **Search** filters the procedures as you type (try "refund" or "payroll"). **Print this manual** prints it (the search box and contents are left out).
+- **For developers:** the text is data in `web/content/manual.ts` (chapters of procedures); the page is `web/app/(app)/help/page.tsx`. **When a screen, button name or rule changes, update the manual in the same commit**, together with this guide.

@@ -85,6 +85,7 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
       { href: "/settings/sync", label: "Cloud sync", permission: "sync" },
     ],
   },
+  { section: "Help", items: [{ href: "/help", label: "User manual", permission: [] }] },  // for everyone
 ];
 
 function Brand() {
@@ -138,7 +139,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {NAV.map(({ section, items }) => {
-        const visible = items.filter((i) => [i.permission].flat().some((p) => session.can(p)));
+        const visible = items.filter((i) => [i.permission].flat().length === 0 || [i.permission].flat().some((p) => session.can(p)));
         if (!visible.length) return null;
         return (
           <div key={section}>
