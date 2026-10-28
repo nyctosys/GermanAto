@@ -78,3 +78,6 @@
 - Next 16 dev overlay "Could not validate that a segment has instant navigation": `export const instant = false` works only in a Server Component page. visits/[id]/page.tsx is a server wrapper around the client screen visit-page.tsx; copy that pattern if another page shows the same warning.
 ## Help page
 - /help renders web/content/manual.ts (chapters of SOPs, search, print). Nav item has permission [] meaning everyone. Button names in the manual were checked against the UI; recheck when labels change.
+## UX batch
+- Idempotency: api/app/idempotency.py ASGI middleware (claims key row first, replays 2xx answers); web api() reuses one key per identical in-flight/retried write and drops it once answered.
+- useApi(path, {swr:true}) only for non-financial lists. Command menu keys live on NAV items. Dev warning 'instant navigation' on client pages is Next 16 dev-only; visits/[id] has a server wrapper with instant=false.

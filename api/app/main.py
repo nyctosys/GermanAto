@@ -6,10 +6,12 @@ from sqlalchemy.orm.exc import StaleDataError
 
 import app.events  # noqa: F401  registers the audit/outbox flush hook
 from app.db import engine
+from app.idempotency import IdempotencyMiddleware
 from app.journal import JournalError
 from app.routers import admin, auth, billing, branch, cashclose, catalog, customers, estimates, files, hr, iclock, payroll, periods, reporting, ledger, money, messages, moneybook, purchasing, repairs, sync, workshop
 
 app = FastAPI(title="GermanATO API", version="0.1.0")
+app.add_middleware(IdempotencyMiddleware)
 
 
 @app.exception_handler(JournalError)

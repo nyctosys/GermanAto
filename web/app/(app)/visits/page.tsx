@@ -25,7 +25,7 @@ export default function VisitsPage() {
 function Board() {
   const [status, setStatus] = useQueryParam("status");
   const [q] = useQueryParam("q");
-  const list = useApi<VisitSummary[]>(`/api/visits?${new URLSearchParams({ status: status || "open", q })}`);
+  const list = useApi<VisitSummary[]>(`/api/visits?${new URLSearchParams({ status: status || "open", q })}`, { swr: true });
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">

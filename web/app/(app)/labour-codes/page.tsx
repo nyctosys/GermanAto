@@ -22,7 +22,7 @@ export default function LabourCodesPage() {
 function LabourCodes() {
   const { can } = useSession();
   const editable = can("labour-codes");
-  const list = useApi<Code[]>("/api/labour-codes?include_inactive=true");
+  const list = useApi<Code[]>("/api/labour-codes?include_inactive=true", { swr: true });
   const [editing, setEditing] = useState<Code | "new" | null>(null);
   const groups = Object.entries(
     (list.data ?? []).reduce<Record<string, Code[]>>((acc, c) => ((acc[c.category] ??= []).push(c), acc), {}),

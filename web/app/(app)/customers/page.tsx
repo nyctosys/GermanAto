@@ -23,7 +23,7 @@ export default function CustomersPage() {
 function Customers() {
   const router = useRouter();
   const [q] = useQueryParam("q");
-  const list = useApi<Customer[]>(`/api/customers?${new URLSearchParams({ q, limit: "100" })}`);
+  const list = useApi<Customer[]>(`/api/customers?${new URLSearchParams({ q, limit: "100" })}`, { swr: true });
   const [adding, setAdding] = useState(false);
 
   return (

@@ -24,7 +24,7 @@ function List() {
   const router = useRouter();
   const [q] = useQueryParam("q");
   const [adding, setAdding] = useState(false);
-  const list = useApi<Employee[]>(`/api/employees?${new URLSearchParams({ q })}`);
+  const list = useApi<Employee[]>(`/api/employees?${new URLSearchParams({ q })}`, { swr: true });
   return (
     <>
       <PageHeader title="Employees" description="Everyone who works here: their pay, their shift and their number on the attendance device."

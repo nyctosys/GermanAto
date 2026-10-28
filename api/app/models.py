@@ -1217,3 +1217,20 @@ class SyncConflict(Base):
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now())
+
+
+class IdempotencyKey(Base):
+    """A request that creates or changes something, remembered by the key the client sent, so a retry
+    (double click, dropped connection) gets the first answer back instead of doing it twice."""
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (UniqueConstraint("scope", "key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    scope: Mapped[str] = mapped_column(String(64))         # hash of the signed-in session, so keys never cross people
+    key: Mapped[str] = mapped_column(String(80))
+    request_hash: Mapped[str] = mapped_column(String(64))  # method + path + body: the same key may not mean a different request
+    status_code: Mapped[int | None] = mapped_column(Integer)  # empty while the first request is still running
+    content_type: Mapped[str] = mapped_column(String(100), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now())

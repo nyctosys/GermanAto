@@ -63,6 +63,16 @@ export const CHAPTERS: Chapter[] = [
         right: ["You can always go back. Every printed page has a Back link."],
       },
       {
+        id: "find-fast", title: "Find anything fast (search and keyboard shortcuts)", who: "Everyone",
+        steps: [
+          "Press Ctrl and K together (Command and K on a Mac). On a phone, tap the magnifying glass at the top. A search box opens.",
+          "Type a few letters of the page or action you want, for example \"repair\" or \"check\". Use the up and down arrow keys, then press Enter. Press Esc to close.",
+          "Shortcuts: press G, then a letter. G D is the Dashboard, G V cars in the workshop, G Q quotations, G R repair orders, G I invoices, G C customers, G A cars, G S inventory, G M messages, G H this manual, G N check in a car, G P a new counter sale. Each shortcut is shown beside its name in the search box.",
+        ],
+        right: ["The search box lists only what your role is allowed to open."],
+        avoid: ["Shortcuts do nothing while you are typing in a box, so they never change what you write."],
+      },
+      {
         id: "no-access", title: "\"You don't have access to this page\"", who: "Everyone",
         steps: ["Your role does not allow this page. Ask an administrator to add the permission named on the screen to your role."],
       },

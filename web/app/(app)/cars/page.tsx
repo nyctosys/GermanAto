@@ -21,7 +21,7 @@ export default function CarsPage() {
 
 function Cars() {
   const [q] = useQueryParam("q");
-  const list = useApi<Car[]>(`/api/cars?${new URLSearchParams({ q, limit: "100" })}`);
+  const list = useApi<Car[]>(`/api/cars?${new URLSearchParams({ q, limit: "100" })}`, { swr: true });
   return (
     <>
       <div className="mb-4 flex"><SearchBox placeholder="Plate, VIN, make or owner" autoFocus /></div>

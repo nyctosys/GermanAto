@@ -207,6 +207,29 @@ export function Shell({ children }: { children: ReactNode }) {
   const session = useSession();
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
+  // Swipe the menu left to close it: it follows the finger, and closes on distance or a quick flick.
+  const [dx, setDx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const swipe = useRef<{ x: number; at: number } | null>(null);
+  const onSwipe = {
+    onPointerDown: (e: React.PointerEvent) => { if (e.pointerType !== "mouse") swipe.current = { x: e.clientX, at: e.timeStamp }; },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (!swipe.current) return;
+      const d = e.clientX - swipe.current.x;
+      if (d < -8) { setDragging(true); setDx(d); }
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      const s = swipe.current;
+      swipe.current = null;
+      setDragging(false);
+      if (!s) return;
+      const d = e.clientX - s.x;
+      const speed = d / Math.max(e.timeStamp - s.at, 1);  // px per ms, negative = leftwards
+      if (d < -(drawer.current?.offsetWidth ?? 320) * 0.35 || (d < -40 && speed < -0.5)) { setOpen(false); setDx(0); }
+      else setDx(0);
+    },
+    onPointerCancel: () => { swipe.current = null; setDragging(false); setDx(0); },
+  };
   const commands = useMemo<Command[]>(() => [
     ...NAV.flatMap(({ section, items }) => items.filter((i) => allowed(i.permission, session.can)).map((i) => ({ label: i.label, group: section, href: i.href, keys: i.keys }))),
     ...ACTIONS.filter((a) => allowed(a.permission, session.can)).map((a) => ({ label: a.label, group: "Start", href: a.href, keys: a.keys })),
@@ -245,7 +268,9 @@ export function Shell({ children }: { children: ReactNode }) {
             role="dialog"
             aria-modal="true"
             aria-label="Menu"
-            className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col bg-surface pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]"
+            style={{ transform: `translateX(${Math.min(dx, 0)}px)`, transition: dragging ? "none" : "transform var(--dur-micro) ease-out" }}
+            {...onSwipe}
+            className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] touch-pan-y flex-col bg-surface pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]"
           >
             <div className="flex items-center justify-between px-4 py-2">
               <Brand />

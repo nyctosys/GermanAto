@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, startTransition, useOptimistic, useState, type FormEvent } from "react";
 import { type Uploaded, PhotoCapture } from "@/components/capture";
 import { CatalogPicker, lineCode, linkButton, type Pick } from "@/components/estimates";
 import { ProofInput } from "@/components/payments";
@@ -197,8 +197,7 @@ function LineRow({ l, techs, working, busy, call }:
           )}
         </div>
         {working ? (
-          <Segments value={l.state} onChange={(s) => call(url, "PATCH", { state: s })}
-                    options={[{ value: "pending", label: "To do" }, { value: "done", label: "Done" }, { value: "not_done", label: "Not done" }]} />
+          <LineState state={l.state} save={(s) => call(url, "PATCH", { state: s })} />
         ) : <Badge tone={l.state === "done" ? "success" : "neutral"}>{l.state === "done" ? "Done" : l.state === "not_done" ? "Not done" : "To do"}</Badge>}
       </div>
 
@@ -376,5 +375,15 @@ function InvoiceStep({ ro }: { ro: RepairOrder }) {
       }}>Make the invoice</Button>
       <Notice>{error}</Notice>
     </div>
+  );
+}
+
+/** To do / Done / Not done. Shows the new choice at once; if the server refuses (for example the part was not issued yet),
+ *  the screen goes back to the saved state and the error is shown. Only a job's progress: nothing that moves money or stock. */
+function LineState({ state, save }: { state: RoLine["state"]; save: (s: RoLine["state"]) => Promise<boolean> }) {
+  const [shown, setShown] = useOptimistic(state);
+  return (
+    <Segments value={shown} onChange={(s) => startTransition(async () => { setShown(s as RoLine["state"]); await save(s as RoLine["state"]); })}
+              options={[{ value: "pending", label: "To do" }, { value: "done", label: "Done" }, { value: "not_done", label: "Not done" }]} />
   );
 }

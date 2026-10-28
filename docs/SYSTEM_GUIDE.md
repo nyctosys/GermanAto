@@ -26,7 +26,7 @@ Last updated: 28 Oct 2026. Every phase (0 to 9) is built; see section 18 for wha
 18. [Not built yet](#18-not-built-yet)
 19. [For developers](#19-for-developers)
 
-Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end). Customer messages (WhatsApp) is [section 24](#24-customer-messages). Running the server and syncing is [section 25](#25-server-backups-and-sync). The in-app user manual is [section 26](#26-the-help-page-user-manual).
+Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, journal, cash close) is [section 21](#21-money). People (employees, attendance, salary advances, payroll) is [section 22](#22-people-and-payroll). Dashboard, reports and month end is [section 23](#23-dashboard-reports-and-month-end). Customer messages (WhatsApp) is [section 24](#24-customer-messages). Running the server and syncing is [section 25](#25-server-backups-and-sync). The in-app user manual is [section 26](#26-the-help-page-user-manual). Interface behaviour (search, shortcuts, loading, duplicate protection) is [section 27](#27-interface-behaviour).
 
 ---
 
@@ -469,6 +469,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0019 | Closed periods (month and year locks) |
 | 0020 | Customer messages, message wording, reminder days on the branch |
 | 0021 | Sync bookkeeping: credentials, state, inbox, conflicts |
+| 0022 | Idempotency keys (retry protection for writes) |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).
@@ -854,3 +855,14 @@ A step-by-step manual with procedures (SOPs) for every area: start here, front d
 
 - **Search** filters the procedures as you type (try "refund" or "payroll"). **Print this manual** prints it (the search box and contents are left out).
 - **For developers:** the text is data in `web/content/manual.ts` (chapters of procedures); the page is `web/app/(app)/help/page.tsx`. **When a screen, button name or rule changes, update the manual in the same commit**, together with this guide.
+
+---
+
+## 27. Interface behaviour
+
+- **Search and shortcuts.** Ctrl+K (Cmd+K on a Mac), or the magnifying glass on a phone, opens a search of every page and action the person is allowed to use; arrow keys and Enter work without a mouse. "G" then a letter jumps to a page (G D dashboard, G V cars in the workshop, G Q quotations, G R repair orders, G I invoices, G C customers, G A cars, G S inventory, G M messages, G H manual, G N check in a car, G P counter sale). Shortcuts never fire while typing in a field. Code: `web/components/command-menu.tsx`; shortcut letters sit on the `NAV` entries in `web/components/shell.tsx`.
+- **Loading.** A skeleton appears only if loading takes longer than 300 ms, so quick loads never flash. Lists of customers, cars, visits, employees and labour codes show the last answer instantly and refresh in the background, again when the window regains focus or the network returns (`useApi(path, { swr: true })`). Money, stock, invoices and balances are never shown from the cache.
+- **No duplicate records.** Every create or change the browser sends carries an `Idempotency-Key`. The same request sent again (a double click, a retry after a dropped connection) is answered with the first result and done once; the server remembers keys for 24 hours, per signed-in session. A key reused for a different request is refused (422); a request still running answers 409 "already being processed". Failed requests do not use up the key. Code: `api/app/idempotency.py` (middleware), `web/lib/api.ts`.
+- **Instant feedback.** Marking a repair job To do / Done / Not done updates the screen at once and goes back with the error if the server refuses. Nothing that moves money or stock is ever done optimistically.
+- **Phones.** The page extends to the screen edges on notched phones, with padding so nothing sits under the notch or the home bar. The menu can be swiped left to close. Corners are continuous (squircle) in browsers that draw them. Numbers in tables and amount fields use tabular figures so columns line up.
+- **Clarity.** The Dashboard states the main finding under its title and has the most frequent job ("Check in a car") one click away; a visit shows its **Next step** in plain words at the top.
