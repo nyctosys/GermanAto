@@ -52,7 +52,7 @@ function ItemDetail() {
       {mode === "edit" && <div className="mb-6"><Card title="Edit item"><ItemForm item={data} onCancel={() => setMode("view")} onSaved={() => { setMode("view"); reload(); }} /></Card></div>}
       {mode === "adjust" && <div className="mb-6"><Adjust item={data} onDone={() => { setMode("view"); reload(); }} /></div>}
 
-      <dl className="mb-4 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-rule bg-rule shell:grid-cols-4">
+      <dl className="mb-4 grid grid-cols-2 gap-px overflow-hidden rounded-card bg-rule shell:grid-cols-4">
         {[
           ["In stock", <>{qty(data.on_hand)} {data.unit} {Number(data.on_hand) <= 0 ? <Badge tone="error">Out</Badge> : data.low_stock && <Badge tone="warning">Low</Badge>}</>],
           ["Sale price", money(data.sale_price)],

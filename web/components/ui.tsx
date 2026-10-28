@@ -7,8 +7,8 @@ const control =
   "disabled:cursor-not-allowed disabled:opacity-55";
 
 const buttonVariants = {
-  primary: "border-accent bg-accent text-accent-ink hover:bg-accent-2 hover:border-accent-2 active:bg-accent-2",
-  secondary: "border-rule-strong bg-surface text-ink hover:bg-paper-2 active:bg-paper-3",
+  primary: "border-accent bg-accent text-accent-ink hover:bg-accent-2 hover:border-accent-2 active:bg-accent-3 active:border-accent-3",
+  secondary: "border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3",
   danger: "border-error bg-surface text-error hover:bg-error-soft active:bg-error-soft",
   ghost: "border-transparent bg-transparent text-ink-2 hover:bg-paper-3 active:bg-paper-3",
 };
@@ -17,8 +17,8 @@ export function Button({ variant = "primary", className = "", ...props }:
   ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof buttonVariants }) {
   return (
     <button
-      // Feedback on press, not on release (Apple's "response" principle): a 2% dip while held.
-      className={`${control} inline-flex shrink-0 items-center justify-center gap-2 px-4 font-medium transition-[color,background-color,border-color,scale] active:scale-[0.98] disabled:active:scale-100 ${buttonVariants[variant]} ${className}`}
+      // Colour-only transitions (DESIGN.md); the pressed colour lands instantly so a tap feels immediate.
+      className={`${control} inline-flex shrink-0 items-center justify-center gap-2 px-5 text-[0.9375rem] font-medium active:duration-0 ${buttonVariants[variant]} ${className}`}
       {...props}
     />
   );
@@ -26,7 +26,7 @@ export function Button({ variant = "primary", className = "", ...props }:
 
 const field =
   `${control} w-full border-rule-strong bg-surface text-ink placeholder:text-muted ` +
-  "hover:border-muted focus-visible:border-accent aria-invalid:border-error";
+  "hover:border-ink-2 focus-visible:border-ink aria-invalid:border-error";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={field} {...props} />;
@@ -39,7 +39,7 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="flex min-w-0 flex-col gap-1.5">
-      <span className="text-sm font-medium text-ink-2">{label}</span>
+      <span className="text-[0.9375rem] font-medium text-ink-2">{label}</span>
       {children}
       {hint && <span className="text-sm text-muted">{hint}</span>}
     </label>
@@ -62,7 +62,7 @@ export function Checkbox({ label, hint, ...props }: InputHTMLAttributes<HTMLInpu
 const tones = {
   error: "bg-error-soft text-error border-error/25",
   success: "bg-success-soft text-success border-success/25",
-  warning: "bg-warning-soft text-warning border-warning/25",
+  warning: "bg-warning-soft text-warning border-transparent border-l-[3px] border-l-amber",
 };
 
 export function Notice({ tone = "error", children }: { tone?: keyof typeof tones; children: ReactNode }) {
@@ -77,7 +77,7 @@ export function Notice({ tone = "error", children }: { tone?: keyof typeof tones
 export function Card({ title, actions, children, flush = false }:
   { title?: string; actions?: ReactNode; children: ReactNode; flush?: boolean }) {
   return (
-    <section className="min-w-0 rounded-card border border-rule bg-surface">
+    <section className="min-w-0 rounded-card bg-surface">
       {(title || actions) && (
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-rule px-4 py-3 shell:px-5">
           {title && <h2>{title}</h2>}
@@ -142,7 +142,7 @@ export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "succ
     success: "bg-success-soft text-success",
     warning: "bg-warning-soft text-warning",
     error: "bg-error-soft text-error",
-    accent: "bg-accent-soft text-accent",
+    accent: "bg-error-soft text-accent",
   }[tone];
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${styles}`}>{children}</span>;
+  return <span className={`inline-flex items-center rounded-control px-2 py-0.5 text-sm font-medium ${styles}`}>{children}</span>;
 }

@@ -14,6 +14,7 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
     section: "Workshop",
     items: [
       { href: "/", label: "Dashboard", permission: "dashboard" },
+      { href: "/visits", label: "Cars in the workshop", permission: "visits" },
       { href: "/customers", label: "Customers", permission: "customers" },
       { href: "/cars", label: "Cars", permission: "customers" },
     ],
@@ -41,7 +42,7 @@ function Brand() {
     <Link href="/" className="flex min-h-11 items-center gap-2.5 rounded-control">
       <Image src="/logo.png" alt="" width={36} height={36} priority />
       <span className="text-lg font-semibold">
-        <span className="text-accent">German</span>ATO
+        <span className="text-oxblood">German</span><span className="text-logo-black">ATO</span>
       </span>
     </Link>
   );
@@ -64,7 +65,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav aria-label="Main" className="flex h-full flex-col gap-5 overflow-y-auto p-4">
-      <div className="rounded-control border border-rule bg-surface px-3 py-2.5">
+      <div className="rounded-control bg-paper px-3 py-2.5">
         {session.branches.length > 1 ? (
           <label className="flex flex-col gap-1">
             <span className="text-sm text-muted">Branch</span>
@@ -101,8 +102,9 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
                       href={i.href}
                       onClick={onNavigate}
                       aria-current={active ? "page" : undefined}
-                      className={`flex min-h-11 items-center rounded-control px-3 transition-colors duration-(--dur-micro) ${
-                        active ? "bg-accent-soft font-medium text-accent" : "text-ink-2 hover:bg-paper-3 hover:text-ink"
+                      className={`relative flex min-h-11 items-center rounded-control px-3 transition-colors duration-(--dur-micro) active:duration-0 ${
+                        active ? "bg-paper font-medium text-ink before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-accent"
+                          : "text-ink-2 hover:bg-paper hover:text-ink active:bg-paper-3"
                       }`}
                     >
                       {i.label}
@@ -151,8 +153,8 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-dvh">
-      <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-rule bg-paper-2 shell:flex">
-        <div className="border-b border-rule px-4 py-3"><Brand /></div>
+      <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-surface shell:flex">
+        <div className="px-4 py-3"><Brand /></div>
         <Navigation />
       </aside>
 
@@ -164,9 +166,9 @@ export function Shell({ children }: { children: ReactNode }) {
             role="dialog"
             aria-modal="true"
             aria-label="Menu"
-            className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col bg-paper-2 shadow-xl"
+            className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col bg-surface"
           >
-            <div className="flex items-center justify-between border-b border-rule px-4 py-2">
+            <div className="flex items-center justify-between px-4 py-2">
               <Brand />
               <button
                 aria-label="Close menu"
@@ -182,7 +184,7 @@ export function Shell({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="no-print sticky top-0 z-30 flex items-center gap-2 border-b border-rule bg-paper/95 px-2 py-1.5 backdrop-blur shell:hidden">
+        <header className="no-print sticky top-0 z-30 flex items-center gap-2 bg-surface/85 px-2 py-1.5 backdrop-blur shell:hidden">
           <button
             ref={menuButton}
             aria-label="Open menu"
@@ -205,7 +207,7 @@ export function RequirePermission({ permission, children }: { permission: string
   const session = useSession();
   if (!session.can(permission)) {
     return (
-      <div className="rounded-card border border-rule bg-surface p-6">
+      <div className="rounded-card bg-surface p-6">
         <p className="font-medium">You don&apos;t have access to this page</p>
         <p className="mt-1 text-muted">Ask an administrator to add the “{permission}” permission to your role.</p>
       </div>

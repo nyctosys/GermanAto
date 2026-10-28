@@ -55,8 +55,8 @@ export function Segments({ value, onChange, options }:
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`min-h-10 rounded-[6px] px-3.5 text-sm font-medium transition-colors duration-(--dur-micro) ${
-            value === o.value ? "bg-accent text-accent-ink" : "text-ink-2 hover:bg-paper-2"
+          className={`min-h-10 rounded-[3px] px-3.5 text-sm font-medium transition-colors duration-(--dur-micro) active:duration-0 ${
+            value === o.value ? "bg-ink text-surface" : "text-ink-2 hover:bg-paper"
           }`}
         >
           {o.label}

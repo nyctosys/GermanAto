@@ -68,7 +68,7 @@ export function CustomerPicker({ value, onChange, exclude }:
         className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted focus-visible:border-accent"
       />
       {open && (
-        <ul id={listId} role="listbox" className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-control border border-rule bg-surface py-1 shadow-lg">
+        <ul id={listId} role="listbox" className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-control border border-rule-strong bg-surface py-1">
           {results.length ? results.map((c, i) => (
             <li key={c.id} role="option" aria-selected={i === active}
                 onMouseDown={(e) => { e.preventDefault(); pick(c); }}

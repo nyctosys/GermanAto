@@ -175,7 +175,7 @@ function TransferForm({ car, onCancel, onDone }: { car: Detail; onCancel: () => 
         <div className="sm:col-span-2">
           <Field label="Proof (optional)" hint="Photo or PDF of the transfer letter or registration book. Up to 10 MB each.">
             <input name="proof" type="file" multiple accept="image/*,application/pdf" capture="environment"
-                   className="min-h-11 w-full rounded-control border border-dashed border-rule-strong bg-surface p-2 text-base file:mr-3 file:min-h-10 file:rounded-[6px] file:border-0 file:bg-paper-3 file:px-3" />
+                   className="min-h-11 w-full rounded-control border border-dashed border-rule-strong bg-surface p-2 text-base file:mr-3 file:min-h-10 file:rounded-[3px] file:border-0 file:bg-paper-3 file:px-3" />
           </Field>
         </div>
         <div className="flex flex-col gap-3 sm:col-span-2">

@@ -75,7 +75,7 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
 /** The number plate, set like the real thing: the way staff recognise a car. */
 export function Plate({ plate, small = false }: { plate: string; small?: boolean }) {
   return (
-    <span className={`num inline-flex shrink-0 items-center rounded-[6px] border-2 border-ink bg-surface font-semibold tracking-wide text-ink ${small ? "min-w-28 justify-center px-2 py-0.5 text-sm" : "px-4 py-1.5 text-2xl"}`}>
+    <span className={`num inline-flex shrink-0 items-center rounded-control border-2 border-ink bg-surface font-semibold tracking-wide text-ink ${small ? "min-w-28 justify-center px-2 py-0.5 text-sm" : "px-4 py-1.5 text-2xl"}`}>
       {plate || "No plate"}
     </span>
   );

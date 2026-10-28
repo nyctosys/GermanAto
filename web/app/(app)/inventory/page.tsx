@@ -109,7 +109,7 @@ function Scan({ onUnknown }: { onUnknown: (code: string) => void }) {
   }
 
   return (
-    <form onSubmit={submit} className="mb-4 rounded-card border border-rule bg-surface p-4">
+    <form onSubmit={submit} className="mb-4 rounded-card bg-surface p-4">
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-ink-2">Scan a barcode</span>
         <input name="code" autoFocus autoComplete="off" spellCheck={false} enterKeyHint="search" placeholder="Scan, or type a code and press Enter"

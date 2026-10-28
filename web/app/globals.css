@@ -1,48 +1,58 @@
 /* Hallmark · shape: app screen · genre: modern-minimal · theme: brand (GermanATO logo) · redesign: restyle
- * paper: oklch(98.6% 0.004 60) · accent: oklch(40% 0.15 18) · display: Geist · body: Geist
+ * paper: #F4F4F4 · accent: #D10A01 (logo red, AA-deepened) · display: Geist · body: Geist · system: DESIGN.md
  * nav: sidebar (the spec's 15+ destinations), a drawer under 60rem · signature: the audit trail, every change shown old → new · states: loading, empty, error, full
  * axes: warm-paper/sans/oxblood · posture: dense tool · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P2 H- E2 S2 R2 V2 · weakest: E, the dashboard has no real figures yet (Phase 1), so it shows the branch record and what is ready instead of invented stats */
 /* waive 26b: :active and :disabled live in components/ui.tsx (Button, Input, Select, Checkbox), which every page uses */
+/* waive 7b: #000000 is the logo's own black ("ATO"), used only in the wordmark */
+/* waive 29: translucent sticky bars are DESIGN.md depth level 1 (the owner's locked system) */
 @import "tailwindcss";
 
 /* Tokens: the only place a colour, font, radius or duration is written.
    Tailwind's default palette is switched off so nothing can reach past them. */
 @theme {
   --color-*: initial;
-  --color-paper: oklch(98.6% 0.004 60);
-  --color-paper-2: oklch(96.4% 0.007 60);
-  --color-paper-3: oklch(93.2% 0.009 60);
-  --color-surface: oklch(100% 0 0);
-  --color-ink: oklch(21% 0.012 30);
-  --color-ink-2: oklch(38% 0.012 30);
-  --color-muted: oklch(48% 0.012 30);
-  --color-rule: oklch(89.5% 0.008 60);
-  --color-rule-strong: oklch(80% 0.01 60);
-  --color-accent: oklch(40% 0.15 18);
-  --color-accent-2: oklch(33% 0.13 18);
-  --color-accent-soft: oklch(95.5% 0.022 18);
-  --color-accent-ink: oklch(99% 0 0);
-  --color-focus: oklch(58% 0.16 55);
-  --color-error: oklch(50% 0.19 27);
-  --color-error-soft: oklch(96.5% 0.025 27);
-  --color-success: oklch(46% 0.11 150);
-  --color-success-soft: oklch(96.5% 0.03 150);
-  --color-warning: oklch(48% 0.1 65);
-  --color-warning-soft: oklch(96.5% 0.045 85);
-  --color-scrim: oklch(21% 0.012 30 / 0.4);
+  /* Neutrals (DESIGN.md §2) */
+  --color-paper: #F4F4F4;        /* Light Ash: the page floor, hover fill */
+  --color-paper-2: #F4F4F4;
+  --color-paper-3: #EEEEEE;      /* Cloud Gray: pressed fill, row rules */
+  --color-surface: #FFFFFF;      /* panels, inputs, sidebar */
+  --color-ink: #171717;          /* Carbon */
+  --color-ink-2: #393939;        /* Graphite */
+  --color-muted: #5C5C5C;        /* Pewter */
+  --color-rule: #EEEEEE;         /* Cloud Gray */
+  --color-rule-strong: #8E8E8E;  /* Silver Fog: input and secondary-button borders (3.3:1) */
+  --color-silver: #D0D0D0;       /* Car Silver: decorative dividers */
+  /* Brand, sampled from the logo */
+  --color-accent: #D10A01;       /* GermanATO Red: primary action only (white 5.6:1) */
+  --color-accent-2: #B80800;     /* hover */
+  --color-accent-3: #6D0000;     /* Hexagon Oxblood: pressed */
+  --color-accent-soft: #F4F4F4;
+  --color-accent-ink: #FFFFFF;
+  --color-oxblood: #6D0000;
+  --color-logo-black: #000000;
+  --color-amber: #F98B00;        /* Tagline Amber: warning accent rules only */
+  --color-focus: #171717;
+  /* Status */
+  --color-error: #B80800;
+  --color-error-soft: #FDECEC;
+  --color-success: #1E7B34;
+  --color-success-soft: #E8F5EC;
+  --color-warning: #8A4B00;
+  --color-warning-soft: #FFF3E0;
+  --color-scrim: rgb(23 23 23 / 0.4);
 
-  --radius-control: 8px;
+  --radius-control: 4px;
   --radius-card: 12px;
 
-  --text-display: 1.728rem;
-  --text-section: 1.2rem;
+  --text-display: 1.75rem;
+  --text-section: 1.125rem;
 
   --breakpoint-shell: 60rem;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --dur-micro: 120ms;
-  --dur-short: 220ms;
+  --dur-micro: 330ms;  /* DESIGN.md: 0.33s colour transitions; pressed states are instant (active:duration-0) */
+  --dur-short: 330ms;
 }
 
 @theme inline {
@@ -72,16 +82,16 @@
     background: color-mix(in oklab, var(--color-accent) 22%, transparent);
   }
   :focus-visible {
-    outline: 2px solid var(--color-focus);
+    outline: 2px solid var(--color-focus);  /* Carbon: visible on white and on red */
     outline-offset: 2px;
   }
   h1,
   h2,
   h3 {
     margin: 0;
-    font-weight: 650;
-    letter-spacing: -0.015em;
-    line-height: 1.15;
+    font-weight: 500;
+    letter-spacing: normal;
+    line-height: 1.2;
     overflow-wrap: break-word;
     min-width: 0;
     text-wrap: balance;
