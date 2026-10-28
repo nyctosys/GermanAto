@@ -6,11 +6,11 @@ from sqlalchemy.orm.exc import StaleDataError
 
 import app.events  # noqa: F401  registers the audit/outbox flush hook
 from app.db import engine
-from app.routers import admin, auth, branch, files
+from app.routers import admin, auth, branch, catalog, customers, files
 
 app = FastAPI(title="GermanATO API", version="0.1.0")
 
-for r in (auth.router, admin.router, branch.router, files.router):
+for r in (auth.router, admin.router, branch.router, files.router, customers.router, catalog.router):
     app.include_router(r)
 
 
@@ -21,6 +21,11 @@ _CONSTRAINT_MESSAGES = {
     "users_email_key": "Another user already has that email",
     "roles_name_key": "A role with that name already exists",
     "branches_code_key": "Another branch already uses that code",
+    "uq_cars_plate": "Another car already has this plate",
+    "uq_cars_vin": "Another car already has this VIN",
+    "uq_car_current_owner": "This car already has a current owner",
+    "item_codes_branch_id_code_norm_key": "That barcode or part number already belongs to another item",
+    "labour_codes_branch_id_code_key": "That labour code is already used",
 }
 
 

@@ -1,0 +1,21 @@
+"""Human document numbers: <PREFIX>-<branch code>-<000001>, one series per
+branch and kind, gap-free under concurrency (the upsert takes a row lock)."""
+
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session
+
+from app.models import Branch, NumberSequence
+
+PREFIXES = {"customer": "CUS", "item": "ITM"}  # later: INS, JC, QT, RO, INV, CS, PO, GRN, PAY ...
+
+
+def next_number(db: Session, branch: Branch, kind: str) -> str:
+    stmt = (
+        insert(NumberSequence)
+        .values(branch_id=branch.id, kind=kind, last_value=1)
+        .on_conflict_do_update(index_elements=["branch_id", "kind"],
+                               set_={"last_value": NumberSequence.last_value + 1})
+        .returning(NumberSequence.last_value)
+    )
+    n = db.execute(stmt).scalar_one()
+    return f"{PREFIXES[kind]}-{branch.code}-{n:06d}"

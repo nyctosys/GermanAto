@@ -7,11 +7,17 @@ PERMISSIONS: dict[str, str] = {
     "users": "Manage users and roles",
     "audit": "Read the audit log",
     "attachments": "Upload and view proof files",
+    "customers": "See and edit customers and cars",
+    "car-transfer": "Transfer a car to another owner",
+    "labour-codes": "Add and edit labour codes",
+    "inventory": "See stock and add or edit items",
+    "stock-adjust": "Correct stock levels (opening stock, counts, write-offs)",
     # Later phases add their own here (visits, quotations, payments-in, ...).
 }
 
 DEFAULT_ROLES: dict[str, dict] = {
     "Admin": {"is_admin": True, "permissions": []},
-    "Accountant": {"is_admin": False, "permissions": ["dashboard", "attachments", "audit"]},
-    "Inventory manager": {"is_admin": False, "permissions": ["dashboard", "attachments"]},
+    "Accountant": {"is_admin": False, "permissions": ["dashboard", "attachments", "audit", "customers"]},
+    "Inventory manager": {"is_admin": False, "permissions": ["dashboard", "attachments", "inventory", "stock-adjust",
+                                                            "labour-codes"]},
 }

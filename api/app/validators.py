@@ -25,6 +25,32 @@ def normalize_pk_phone(value: str) -> str:
     return "+92" + digits
 
 
+def normalize_plate(value: str) -> str:
+    """'lea 21-1234' -> 'LEA211234'. The plate as written is kept separately."""
+    return re.sub(r"[^A-Z0-9]", "", value.upper())
+
+
+def normalize_code(value: str) -> str:
+    """Barcodes and part numbers match without spaces, dashes or dots."""
+    return re.sub(r"[^A-Z0-9]", "", value.upper())
+
+
+def normalize_vin(value: str) -> str:
+    vin = re.sub(r"[\s-]", "", value.upper())
+    if vin and not re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", vin):
+        raise ValueError("A VIN is 17 letters and digits (never I, O or Q)")
+    return vin
+
+
+def normalize_cnic(value: str) -> str:
+    digits = re.sub(r"\D", "", value)
+    if not digits:
+        return ""
+    if len(digits) != 13:
+        raise ValueError("A CNIC has 13 digits, e.g. 35202-1234567-1")
+    return f"{digits[:5]}-{digits[5:12]}-{digits[12]}"
+
+
 def _strip(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
@@ -37,6 +63,9 @@ Username = Annotated[str, AfterValidator(lambda v: v.strip().lower()),
 Email = Annotated[str, AfterValidator(lambda v: v.strip().lower()),
                   StringConstraints(pattern=r"^(|[^@\s]+@[^@\s]+\.[^@\s]+)$", max_length=120)]  # "" = no email
 Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
+Vin = Annotated[str, AfterValidator(normalize_vin)]
+Cnic = Annotated[str, AfterValidator(normalize_cnic)]
+Upper = Annotated[str, AfterValidator(lambda v: re.sub(r"\s+", " ", v).strip().upper())]
 
 
 if __name__ == "__main__":
@@ -47,6 +76,16 @@ if __name__ == "__main__":
     for bad in ("12345", "0300 12345678901"):
         try:
             normalize_pk_phone(bad)
+            raise AssertionError(bad)
+        except ValueError:
+            pass
+    assert normalize_plate("lea 21-1234") == "LEA211234"
+    assert normalize_code(" 11-42 7.583 ") == "11427583"
+    assert normalize_vin("wba 3a5c5 xdf123456") == "WBA3A5C5XDF123456"
+    assert normalize_cnic("3520212345671") == "35202-1234567-1"
+    for bad, fn in (("WBAO3A5C5XDF12345", normalize_vin), ("123", normalize_cnic)):
+        try:
+            fn(bad)
             raise AssertionError(bad)
         except ValueError:
             pass
