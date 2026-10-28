@@ -1,5 +1,7 @@
 # GermanATO → Next.js + FastAPI migration plan
 
+> **Superseded in scope (2026-10-28).** The app is being built new with the owner's 17 requirements: the visit document chain, purchase orders driving stock, labour codes, the central money ledger, closing, offline sync and branch ids. The phases and data model are now in [docs/NEW_SYSTEM_SPEC.md](docs/NEW_SYSTEM_SPEC.md). Current behaviour to keep, minus known bugs, is in [docs/feature-inventory/](docs/feature-inventory/README.md). Phase 0 below (Alembic, Postgres, contract tests) is done and still applies. The strangler-style Phases 1–3 are replaced by the spec's phases.
+
 ## 1. What exists today
 
 | Layer | Current | Size |
