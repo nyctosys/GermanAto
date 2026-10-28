@@ -268,12 +268,16 @@ def start_quotation(job_card_id: uuid.UUID, actor: Actor = Depends(can_quote), d
 
 
 @router.get("/quotations")
-def list_quotations(status: Literal["draft", "sent", "approved", "rejected", "expired", "converted", "all"] = "all",
+def list_quotations(status: Literal["draft", "sent", "approved", "rejected", "expired", "converted", "all"] = "all", q: str = "",
                     actor: Actor = Depends(can_quote), db: Session = Depends(get_db)):
     stmt = (select(Quotation, Visit, Customer).join(Visit, Visit.id == Quotation.visit_id)
-            .join(Customer, Customer.id == Visit.customer_id)
+            .join(Customer, Customer.id == Visit.customer_id).join(Car, Car.id == Visit.car_id)
             .where(Quotation.branch_id == actor.branch.id, Quotation.status != "revised")
             .order_by(Quotation.created_at.desc()).limit(300))
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Quotation.number.ilike(like), Visit.number.ilike(like), Customer.name.ilike(like),
+                              Customer.phone.ilike(like), Car.plate.ilike(like)))
     if status in ("sent", "expired"):
         stmt = stmt.where(Quotation.status == "sent",
                           Quotation.valid_until < date.today() if status == "expired" else Quotation.valid_until >= date.today())

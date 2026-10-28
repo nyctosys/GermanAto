@@ -81,3 +81,5 @@
 ## UX batch
 - Idempotency: api/app/idempotency.py ASGI middleware (claims key row first, replays 2xx answers); web api() reuses one key per identical in-flight/retried write and drops it once answered.
 - useApi(path, {swr:true}) only for non-financial lists. Command menu keys live on NAV items. Dev warning 'instant navigation' on client pages is Next 16 dev-only; visits/[id] has a server wrapper with instant=false.
+## Pages split
+- All 58 client pages are now page.tsx (server wrapper, instant=false) + view.tsx. Lists search q on number/customer/phone/plate/visit number (invoices, quotations, repair orders).

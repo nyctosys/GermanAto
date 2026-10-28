@@ -57,7 +57,7 @@ export const CHAPTERS: Chapter[] = [
           "The menu is on the left. On a phone, press the three-line button to open it.",
           "A solid button does something. Underlined words open another page. A row with an arrow on the right opens that record.",
           "Red text means something is wrong or missing. Orange means be careful. Read it: it tells you what to do.",
-          "Every list has a search box. You can also scan a barcode into any part search.",
+          "Every list has a search box. On Invoices, Quotations and Repair orders you can type a document number, the customer's name or phone, the number plate, or the visit number. You can also scan a barcode into any part search.",
           "Printed pages (invoice, quotation, inspection, gate pass, purchase order, payslip) have a bar at the top with Back, Print or save as PDF, Share as PDF, and Send on WhatsApp.",
         ],
         right: ["You can always go back. Every printed page has a Back link."],

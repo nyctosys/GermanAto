@@ -1,16 +1,8 @@
-"use client";
+import View from "./view";
 
-import { Suspense } from "react";
-import { MoneyBook } from "@/components/moneybook";
-import { MONEY, RequirePermission } from "@/components/shell";
-import { Card, SkeletonRows } from "@/components/ui";
+// Every screen renders after the session and its data load, so there is no static shell for Next to check for instant navigation.
+export const instant = false;
 
-export default function MoneyOutPage() {
-  return (
-    <RequirePermission permission={MONEY}>
-      <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
-        <MoneyBook direction="out" />
-      </Suspense>
-    </RequirePermission>
-  );
+export default function Page() {
+  return <View />;
 }

@@ -16,3 +16,4 @@ One story per commit: implement, run checks (API tests, tsc, lint, Hallmark), ve
 
 Where things are: the code map and the rules the code depends on (stock, journal, proof, migrations, sync, print pages) are in `docs/SYSTEM_GUIDE.md` section 19. Server install, backups and restore are in `docs/RUNBOOK.md`. All phases are built; the guide's section 18 lists what is left for later.
 - The in-app user manual is `web/content/manual.ts` (shown at /help). When a screen, button name or rule changes, update it in the same commit as the guide.
+- Every screen is a pair: `page.tsx` (server wrapper with `export const instant = false`) and `view.tsx` (the client screen). Copy an existing pair for a new screen.

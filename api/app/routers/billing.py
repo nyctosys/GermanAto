@@ -233,6 +233,7 @@ def list_invoices(kind: Literal["workshop", "counter_sale", "all"] = "all",
                   status: Literal["draft", "unpaid", "paid", "all"] = "all", q: str = "",
                   actor: Actor = Depends(can_bill), db: Session = Depends(get_db)):
     stmt = (select(Invoice, Customer).outerjoin(Customer, Customer.id == Invoice.customer_id)
+            .outerjoin(Car, Car.id == Invoice.car_id)
             .where(Invoice.branch_id == actor.branch.id, Invoice.status != "void")
             .order_by(Invoice.created_at.desc()).limit(300))
     if kind != "all":
@@ -243,7 +244,8 @@ def list_invoices(kind: Literal["workshop", "counter_sale", "all"] = "all",
         stmt = stmt.where(Invoice.status == "issued")
     if q.strip():
         like = f"%{q.strip()}%"
-        stmt = stmt.where(or_(Invoice.number.ilike(like), Customer.name.ilike(like), Invoice.walk_in_name.ilike(like)))
+        stmt = stmt.where(or_(Invoice.number.ilike(like), Customer.name.ilike(like), Invoice.walk_in_name.ilike(like),
+                              Customer.phone.ilike(like), Invoice.walk_in_phone.ilike(like), Car.plate.ilike(like)))
     out = []
     for inv, c in db.execute(stmt):
         b = balance_of(db, inv)

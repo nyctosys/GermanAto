@@ -106,3 +106,15 @@ def test_gate_pass_refuses_while_an_advance_is_held_without_an_invoice(admin):
     admin.post(f"/api/quotations/{q['id']}/advances", json={"amount": "1000", **CASH})
     r = admin.post(f"/api/visits/{visit['id']}/gate-pass", json={})
     assert r.status_code == 409 and "Refund" in r.json()["detail"]
+
+
+def test_lists_can_be_searched_by_number_customer_phone_and_plate(admin):
+    visit, _, ro = ready_repair(admin)
+    visit = admin.get(f"/api/visits/{visit['id']}").json()  # the one from setup predates the quotation
+    inv = admin.post(f"/api/repair-orders/{ro['id']}/invoice").json()
+    plate = visit["car"]["plate"]
+    for path, number in (("quotations", visit["quotations"][0]["number"]), ("repair-orders?status=all", ro["number"]), ("invoices", inv["number"])):
+        sep = "&" if "?" in path else "?"
+        for term in (number, plate.lower(), visit["customer"]["name"].split()[0], visit["number"] if path != "invoices" else number):
+            assert len(admin.get(f"/api/{path}{sep}q={term}").json()) == 1, (path, term)
+        assert admin.get(f"/api/{path}{sep}q=zzzz-nothing").json() == [], path

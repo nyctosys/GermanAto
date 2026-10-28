@@ -7,7 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import Actor, require
@@ -118,11 +118,15 @@ def start_repair_order(quotation_id: uuid.UUID, actor: Actor = Depends(can_repai
 
 
 @router.get("/repair-orders")
-def list_repair_orders(status: Literal["active", "ready", "on_hold", "delivered", "all"] = "active",
+def list_repair_orders(status: Literal["active", "ready", "on_hold", "delivered", "all"] = "active", q: str = "",
                        actor: Actor = Depends(can_repair), db: Session = Depends(get_db)):
     stmt = (select(RepairOrder, Visit, Customer).join(Visit, Visit.id == RepairOrder.visit_id)
-            .join(Customer, Customer.id == Visit.customer_id)
+            .join(Customer, Customer.id == Visit.customer_id).join(Car, Car.id == Visit.car_id)
             .where(RepairOrder.branch_id == actor.branch.id).order_by(RepairOrder.created_at.desc()).limit(300))
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(RepairOrder.number.ilike(like), Visit.number.ilike(like), Customer.name.ilike(like),
+                              Customer.phone.ilike(like), Car.plate.ilike(like)))
     if status == "active":
         stmt = stmt.where(RepairOrder.status.not_in(("ready", "delivered")))
     elif status != "all":
