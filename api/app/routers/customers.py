@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import Actor, require
 from app.db import get_db
-from app.models import Attachment, AuditLog, Car, CarOwnership, Customer, User
+from app.models import Attachment, AuditLog, Car, CarOwnership, Customer, Inspection, User, Visit
 from app.numbering import next_number
 from app.validators import Cnic, Email, Name, Phone, Text, Upper, Vin, normalize_plate
 
@@ -45,7 +45,6 @@ class CustomerUpdate(CustomerIn):
 class CarIn(BaseModel):
     plate: Upper = Field(default="", max_length=20)
     vin: Vin = ""
-    chassis_no: Upper = Field(default="", max_length=40)
     engine_no: Upper = Field(default="", max_length=40)
     make: Name
     model: Text = Field(default="", max_length=60)
@@ -78,7 +77,7 @@ def customer_out(c: Customer) -> dict:
 
 
 def car_out(c: Car, owner: Customer | None = None) -> dict:
-    data = {k: getattr(c, k) for k in ("id", "plate", "vin", "chassis_no", "engine_no", "make", "model", "year",
+    data = {k: getattr(c, k) for k in ("id", "plate", "vin", "engine_no", "make", "model", "year",
                                        "color", "fuel", "odometer_km", "notes", "version", "created_at")}
     data["owner"] = {"id": owner.id, "name": owner.name, "number": owner.number, "phone": owner.phone} if owner else None
     return data
@@ -98,7 +97,7 @@ def _get(db: Session, model, obj_id: uuid.UUID, what: str):
 
 def _check_car_unique(db: Session, body: CarIn, exclude: uuid.UUID | None = None) -> str:
     plate_norm = normalize_plate(body.plate)
-    for column, value, label in ((Car.plate_norm, plate_norm, "plate"), (Car.vin, body.vin, "VIN")):
+    for column, value, label in ((Car.plate_norm, plate_norm, "plate"), (Car.vin, body.vin, "VIN / chassis number")):
         if not value:
             continue
         q = select(Car).where(column == value)
@@ -176,7 +175,7 @@ def list_cars(q: str = "", limit: int = Query(50, ge=1, le=200), _: Actor = Depe
             .outerjoin(Customer, Customer.id == CarOwnership.customer_id).order_by(Car.make, Car.model).limit(limit))
     if q.strip():
         like, plate = f"%{q.strip()}%", normalize_plate(q)
-        conds = [Car.make.ilike(like), Car.model.ilike(like), Customer.name.ilike(like), Car.chassis_no.ilike(like)]
+        conds = [Car.make.ilike(like), Car.model.ilike(like), Customer.name.ilike(like), Car.vin.ilike(like)]
         if plate:
             conds += [Car.plate_norm.contains(plate), Car.vin.contains(plate)]
         stmt = stmt.where(or_(*conds))
@@ -262,8 +261,8 @@ def transfer_car(car_id: uuid.UUID, body: TransferIn, actor: Actor = Depends(req
 
 @router.get("/cars/{car_id}/history")
 def car_history(car_id: uuid.UUID, _: Actor = Depends(can_view), db: Session = Depends(get_db)):
-    """Everything that happened to the car, newest first. Visits, inspections
-    and invoices join this timeline in Phase 3."""
+    """Everything that happened to the car, newest first: owners, visits,
+    signed inspections and edits. Documents join as they are built."""
     car = _get(db, Car, car_id, "Car")
     events: list[dict] = []
     for o, c in db.execute(select(CarOwnership, Customer).join(Customer, Customer.id == CarOwnership.customer_id)
@@ -280,5 +279,17 @@ def car_history(car_id: uuid.UUID, _: Actor = Depends(can_view), db: Session = D
             events.append({"at": a.at.isoformat(), "on": None, "kind": "edit", "title": "Details changed",
                            "detail": ", ".join(f.replace("_", " ") for f in fields) + (f" by {username}" if username else ""),
                            "odometer_km": None, "link": None})
+    for v, owner in db.execute(select(Visit, Customer).join(Customer, Customer.id == Visit.customer_id)
+                               .where(Visit.car_id == car.id)):
+        status = {"open": "in the workshop", "closed": "delivered", "cancelled": "cancelled"}[v.status]
+        events.append({"at": v.checked_in_at.isoformat(), "on": None, "kind": "visit",
+                       "title": f"Visit {v.number}, {status}", "detail": v.complaint, "odometer_km": v.odometer_in,
+                       "link": f"/visits/{v.id}"})
+    for i in db.scalars(select(Inspection).where(Inspection.car_id == car.id, Inspection.status == "signed")):
+        overall = (i.data.get("assessment") or {}).get("overall")
+        kind = {"workshop": "Workshop", "delivery": "Delivery", "pre_purchase": "Pre-purchase"}[i.kind]
+        events.append({"at": i.signed_at.isoformat(), "on": None, "kind": "inspection",
+                       "title": f"{kind} inspection {i.number}", "detail": f"Overall: {overall}" if overall else "",
+                       "odometer_km": (i.data.get("assessment") or {}).get("odometer_km"), "link": f"/inspections/{i.id}"})
     events.sort(key=lambda e: e["at"], reverse=True)
     return events

@@ -6,7 +6,8 @@ from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -35,16 +36,6 @@ class ItemAnswer(Strict):
     rating: Rating = "not_checked"
     note: str = Field(default="", max_length=500)
     photo_ids: list[uuid.UUID] = Field(default_factory=list, max_length=6)
-
-
-class Details(Strict):
-    year: int | None = Field(default=None, ge=1950, le=2100)
-    engine_no: str = Short
-    fuel: Literal["petrol", "diesel", "hybrid", "ev", "cng", "other"] | None = None
-    buyer_name: str = Short
-    buyer_phone: str = Short
-    seller_name: str = Short
-    seller_phone: str = Short
 
 
 class Paint(Strict):
@@ -120,7 +111,10 @@ class Assessment(Strict):
 
 
 class InspectionData(Strict):
-    details: Details = Field(default_factory=Details)
+    """The inspector's findings only. Vehicle and customer details are never
+    stored here: they come from the central car and customer records, and
+    are copied into `snapshot` by the server when the report is signed."""
+
     items: dict[str, ItemAnswer] = Field(default_factory=dict)
     bulk_marked: list[str] = Field(default_factory=list)  # sections filled with "Mark section Good"
     paint: Paint = Field(default_factory=Paint)
@@ -130,6 +124,15 @@ class InspectionData(Strict):
     repairs: list[Repair] = Field(default_factory=list, max_length=40)
     assessment: Assessment = Field(default_factory=Assessment)
     customer_ack_name: str = Short
+
+    @model_validator(mode="before")
+    @classmethod
+    def drop_server_fields(cls, v):
+        # "snapshot" is written by the server at signing; "details" was the old
+        # per-inspection copy of the vehicle. Neither is accepted from a client.
+        if isinstance(v, dict):
+            v = {k: val for k, val in v.items() if k not in ("snapshot", "details")}
+        return v
 
     @field_validator("items")
     @classmethod
@@ -145,6 +148,7 @@ class InspectionData(Strict):
 class VisitIn(BaseModel):
     car_id: uuid.UUID
     kind: Literal["workshop", "pre_purchase"] = "workshop"
+    buyer_id: uuid.UUID | None = None  # required for pre-purchase
     odometer_in: int | None = Field(default=None, ge=0, le=3_000_000)
     fuel_eighths: int | None = Field(default=None, ge=0, le=8)
     complaint: Text = Field(default="", max_length=3000)
@@ -194,11 +198,15 @@ def _require_open(visit: Visit) -> None:
         raise HTTPException(409, f"This visit is {visit.status}; nothing more can be added to it")
 
 
-def visit_summary(v: Visit, car: Car, customer: Customer) -> dict:
+def person(c: Customer | None) -> dict | None:
+    return c and {"id": c.id, "name": c.name, "phone": c.phone, "number": c.number}
+
+
+def visit_summary(v: Visit, car: Car, customer: Customer, buyer: Customer | None = None) -> dict:
     return {"id": v.id, "number": v.number, "kind": v.kind, "status": v.status, "checked_in_at": v.checked_in_at,
             "closed_at": v.closed_at, "odometer_in": v.odometer_in, "complaint": v.complaint,
             "car": {"id": car.id, "plate": car.plate, "make": car.make, "model": car.model, "year": car.year},
-            "customer": {"id": customer.id, "name": customer.name, "phone": customer.phone, "number": customer.number}}
+            "customer": person(customer), "buyer": person(buyer)}
 
 
 @router.post("/visits", status_code=201)
@@ -213,6 +221,15 @@ def check_in(body: VisitIn, actor: Actor = Depends(can_visit), db: Session = Dep
     owner = db.scalar(select(CarOwnership.customer_id).where(CarOwnership.car_id == car.id, CarOwnership.until.is_(None)))
     if not owner:
         raise HTTPException(422, "This car has no owner on file. Add or transfer it to a customer first.")
+    if body.kind == "pre_purchase":
+        if not body.buyer_id:
+            raise HTTPException(422, "Choose the buyer for a pre-purchase inspection")
+        if body.buyer_id == owner:
+            raise HTTPException(422, "The buyer can't be the car's current owner (the seller)")
+        if not db.get(Customer, body.buyer_id):
+            raise HTTPException(404, "Buyer not found")
+    elif body.buyer_id:
+        raise HTTPException(422, "Only pre-purchase visits have a buyer")
     if body.odometer_in is not None and car.odometer_km and body.odometer_in < car.odometer_km:
         raise HTTPException(422, f"The odometer reads less than last time ({car.odometer_km:,} km). Check the reading.")
 
@@ -238,20 +255,20 @@ def list_visits(status: Literal["open", "closed", "cancelled", "all"] = "open", 
         like = f"%{q.strip()}%"
         stmt = stmt.where(or_(Visit.number.ilike(like), Car.plate.ilike(like), Customer.name.ilike(like),
                               Car.make.ilike(like), Car.model.ilike(like)))
-    return [visit_summary(v, car, c) for v, car, c in db.execute(stmt)]
+    return [visit_summary(v, car, c, db.get(Customer, v.buyer_id) if v.buyer_id else None) for v, car, c in db.execute(stmt)]
 
 
 @router.get("/visits/{visit_id}")
 def get_visit(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Session = Depends(get_db)):
     v = _get_visit(db, actor, visit_id)
     car, customer = db.get(Car, v.car_id), db.get(Customer, v.customer_id)
+    buyer = db.get(Customer, v.buyer_id) if v.buyer_id else None
     inspections = db.scalars(select(Inspection).where(Inspection.visit_id == v.id).order_by(Inspection.created_at)).all()
     files = _files(db, "visits", v.id)
     return {
-        **visit_summary(v, car, customer),
+        **visit_summary(v, car, customer, buyer),
         "fuel_eighths": v.fuel_eighths, "items_left": v.items_left, "condition_notes": v.condition_notes,
         "odometer_out": v.odometer_out, "close_note": v.close_note, "version": v.version,
-        "car": {**visit_summary(v, car, customer)["car"], "vin": car.vin, "color": car.color, "fuel": car.fuel},
         "photos": [f for f in files if f["id"] != v.signature_id],
         "signature": next((f for f in files if f["id"] == v.signature_id), None),
         "inspections": [{"id": i.id, "number": i.number, "kind": i.kind, "status": i.status, "signed_at": i.signed_at,
@@ -297,9 +314,20 @@ class StartInspection(BaseModel):
     kind: Literal["workshop", "delivery", "pre_purchase"]
 
 
+CAR_FIELDS = ("plate", "vin", "engine_no", "make", "model", "year", "color", "fuel")
+
+
+def snapshot_of(db: Session, v: Visit, car: Car) -> dict:
+    """Vehicle and people as they were at signing, so a signed report never
+    changes when the central records are edited later."""
+    owner, buyer = db.get(Customer, v.customer_id), db.get(Customer, v.buyer_id) if v.buyer_id else None
+    return {"car": {k: getattr(car, k) for k in CAR_FIELDS},
+            "owner": {"name": owner.name, "phone": owner.phone, "number": owner.number},
+            "buyer": buyer and {"name": buyer.name, "phone": buyer.phone, "number": buyer.number}}
+
+
 def inspection_out(db: Session, i: Inspection) -> dict:
     v, car = db.get(Visit, i.visit_id), db.get(Car, i.car_id)
-    customer = db.get(Customer, v.customer_id)
     inspector = db.get(User, i.inspector_id) if i.inspector_id else None
     sig = {s: (f"/api/attachments/{getattr(i, s)}/file" if getattr(i, s) else None)
            for s in ("inspector_signature_id", "customer_signature_id")}
@@ -307,10 +335,11 @@ def inspection_out(db: Session, i: Inspection) -> dict:
             "supersedes_id": i.supersedes_id, "data": i.data, "signed_at": i.signed_at, "version": i.version,
             "created_at": i.created_at, "inspector": inspector.full_name if inspector else None,
             "inspector_signature_url": sig["inspector_signature_id"], "customer_signature_url": sig["customer_signature_id"],
-            "visit": {"id": v.id, "number": v.number, "odometer_in": v.odometer_in},
-            "car": {"id": car.id, "plate": car.plate, "make": car.make, "model": car.model, "year": car.year,
-                    "vin": car.vin, "chassis_no": car.chassis_no, "engine_no": car.engine_no, "color": car.color, "fuel": car.fuel},
-            "customer": {"id": customer.id, "name": customer.name, "phone": customer.phone}}
+            "visit": {"id": v.id, "number": v.number, "kind": v.kind, "odometer_in": v.odometer_in,
+                      "car_id": v.car_id, "customer_id": v.customer_id, "buyer_id": v.buyer_id},
+            "car": {"id": car.id, **{k: getattr(car, k) for k in CAR_FIELDS}},
+            # Live details while drafting; the frozen copy once signed.
+            "snapshot": i.data.get("snapshot") or snapshot_of(db, v, car)}
 
 
 def _get_inspection(db: Session, actor: Actor, inspection_id: uuid.UUID) -> Inspection:
@@ -327,8 +356,7 @@ def start_inspection(visit_id: uuid.UUID, body: StartInspection, actor: Actor = 
     if (body.kind == "pre_purchase") != (v.kind == "pre_purchase"):
         raise HTTPException(422, "Pre-purchase inspections belong to pre-purchase visits, and the other kinds to workshop visits")
     car = db.get(Car, v.car_id)
-    data = InspectionData(details=Details(year=car.year, engine_no=car.engine_no, fuel=car.fuel if car.fuel != "cng" else "other"),
-                          assessment=Assessment(odometer_km=v.odometer_in))
+    data = InspectionData(assessment=Assessment(odometer_km=v.odometer_in))
     i = Inspection(number=next_number(db, actor.branch, "inspection"), kind=body.kind, visit_id=v.id, car_id=car.id,
                    template_version=tpl.VERSION, data=data.model_dump(mode="json"), inspector_id=actor.user.id)
     db.add(i)
@@ -380,7 +408,8 @@ def sign_inspection(inspection_id: uuid.UUID, body: SignIn, actor: Actor = Depen
         data.items.setdefault(key, ItemAnswer())
     _attach(db, actor, [body.inspector_signature_id] + ([body.customer_signature_id] if body.customer_signature_id else []),
             "inspections", i.id)
-    i.data = data.model_dump(mode="json")
+    i.data = {**data.model_dump(mode="json"),
+              "snapshot": jsonable_encoder(snapshot_of(db, db.get(Visit, i.visit_id), db.get(Car, i.car_id)))}
     i.status, i.signed_at, i.inspector_id = "signed", utcnow(), actor.user.id
     i.inspector_signature_id, i.customer_signature_id = body.inspector_signature_id, body.customer_signature_id
     db.commit()
@@ -395,8 +424,9 @@ def revise_inspection(inspection_id: uuid.UUID, actor: Actor = Depends(can_visit
         raise HTTPException(409, "Only a signed inspection needs a revision; edit the draft instead")
     if db.scalar(select(Inspection.id).where(Inspection.supersedes_id == old.id)):
         raise HTTPException(409, "This inspection already has a revision")
+    findings = {k: v for k, v in old.data.items() if k != "snapshot"}  # a revision re-reads the current records
     new = Inspection(number=next_number(db, actor.branch, "inspection"), kind=old.kind, visit_id=old.visit_id,
-                     car_id=old.car_id, template_version=tpl.VERSION, supersedes_id=old.id, data=old.data,
+                     car_id=old.car_id, template_version=tpl.VERSION, supersedes_id=old.id, data=findings,
                      inspector_id=actor.user.id)
     db.add(new)
     db.commit()

@@ -5,7 +5,7 @@ import { Button, Field, Input, Notice, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 
 export type Car = {
-  id: string; plate: string; vin: string; chassis_no: string; engine_no: string; make: string; model: string;
+  id: string; plate: string; vin: string; engine_no: string; make: string; model: string;
   year: number | null; color: string; fuel: string; odometer_km: number | null; notes: string; version: number;
   owner: { id: string; name: string; number: string; phone: string } | null;
 };
@@ -28,7 +28,7 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
     const f = new FormData(form.current!);
     const num = (k: string) => (f.get(k) ? Number(f.get(k)) : null);
     const body = {
-      plate: f.get("plate"), vin: f.get("vin"), chassis_no: f.get("chassis_no"), engine_no: f.get("engine_no"),
+      plate: f.get("plate"), vin: f.get("vin"), engine_no: f.get("engine_no"),
       make: f.get("make"), model: f.get("model"), year: num("year"), color: f.get("color"), fuel: f.get("fuel"),
       odometer_km: num("odometer_km"), notes: f.get("notes"),
     };
@@ -56,8 +56,7 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
         </Select>
       </Field>
       <Field label="Colour"><Input name="color" defaultValue={car?.color} /></Field>
-      <Field label="VIN" hint="17 characters. Optional."><Input name="vin" defaultValue={car?.vin} maxLength={20} autoCapitalize="characters" spellCheck={false} /></Field>
-      <Field label="Chassis number"><Input name="chassis_no" defaultValue={car?.chassis_no} autoCapitalize="characters" spellCheck={false} /></Field>
+      <Field label="VIN / chassis number" hint="As stamped on the car, e.g. NZE141-6012345. Optional."><Input name="vin" defaultValue={car?.vin} maxLength={30} autoCapitalize="characters" spellCheck={false} /></Field>
       <Field label="Engine number"><Input name="engine_no" defaultValue={car?.engine_no} autoCapitalize="characters" spellCheck={false} /></Field>
       <Field label="Odometer (km)"><Input name="odometer_km" type="number" inputMode="numeric" min={0} defaultValue={car?.odometer_km ?? ""} /></Field>
       <div className="sm:col-span-2"><Field label="Notes"><Input name="notes" defaultValue={car?.notes} /></Field></div>

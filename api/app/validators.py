@@ -36,9 +36,13 @@ def normalize_code(value: str) -> str:
 
 
 def normalize_vin(value: str) -> str:
-    vin = re.sub(r"[\s-]", "", value.upper())
-    if vin and not re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", vin):
-        raise ValueError("A VIN is 17 letters and digits (never I, O or Q)")
+    """One identity number: a 17-character VIN or a local chassis number
+    (Japanese imports carry ones like NZE141-6012345)."""
+    vin = re.sub(r"\s", "", value.upper())
+    if vin and not re.fullmatch(r"[A-Z0-9-]{5,30}", vin):
+        raise ValueError("Use the VIN or chassis number: 5 to 30 letters, digits or dashes")
+    if len(vin) == 17 and "-" not in vin and re.search(r"[IOQ]", vin):
+        raise ValueError("A 17-character VIN never contains I, O or Q")
     return vin
 
 

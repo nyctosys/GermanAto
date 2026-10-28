@@ -181,7 +181,7 @@ class Car(Entity):
     __tablename__ = "cars"
     __table_args__ = (
         CheckConstraint("fuel IN ('petrol', 'diesel', 'hybrid', 'ev', 'cng', 'other')", name="car_fuel"),
-        CheckConstraint("vin = '' OR vin ~ '^[A-HJ-NPR-Z0-9]{17}$'", name="car_vin_format"),
+        CheckConstraint("vin = '' OR vin ~ '^[A-Z0-9-]{5,30}$'", name="car_vin_format"),
         # One car per plate and per VIN; blank values don't count.
         Index("uq_cars_plate", "plate_norm", unique=True, postgresql_where=text("plate_norm <> ''")),
         Index("uq_cars_vin", "vin", unique=True, postgresql_where=text("vin <> ''")),
@@ -189,8 +189,7 @@ class Car(Entity):
 
     plate: Mapped[str] = mapped_column(String(20), default="")      # as written: LEA-21-1234
     plate_norm: Mapped[str] = mapped_column(String(20), default="")  # for matching: LEA211234
-    vin: Mapped[str] = mapped_column(String(17), default="")
-    chassis_no: Mapped[str] = mapped_column(String(40), default="")
+    vin: Mapped[str] = mapped_column(String(30), default="")  # VIN or chassis number: the same thing
     engine_no: Mapped[str] = mapped_column(String(40), default="")
     make: Mapped[str] = mapped_column(String(60))
     model: Mapped[str] = mapped_column(String(60), default="")
@@ -312,6 +311,7 @@ class Visit(BranchScoped):
         CheckConstraint("kind IN ('workshop', 'pre_purchase')", name="visit_kind"),
         CheckConstraint("fuel_eighths IS NULL OR fuel_eighths BETWEEN 0 AND 8", name="visit_fuel"),
         CheckConstraint("odometer_out IS NULL OR odometer_in IS NULL OR odometer_out >= odometer_in", name="visit_odometer"),
+        CheckConstraint("kind = 'workshop' OR buyer_id IS NOT NULL", name="visit_pre_purchase_buyer"),
         # A car can be in the workshop only once at a time.
         Index("uq_visit_open_car", "car_id", unique=True, postgresql_where=text("status = 'open'")),
     )
@@ -321,6 +321,8 @@ class Visit(BranchScoped):
     status: Mapped[str] = mapped_column(String(10), default="open")
     car_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cars.id"), index=True)
     customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)  # owner at check-in
+    # Pre-purchase: the person thinking of buying. The seller is the car's owner (customer_id).
+    buyer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id"), index=True)
     checked_in_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     odometer_in: Mapped[int | None] = mapped_column(Integer)
     fuel_eighths: Mapped[int | None] = mapped_column(Integer)

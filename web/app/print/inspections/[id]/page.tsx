@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
+import { FUELS } from "@/components/cars";
 import { useApi } from "@/lib/api";
 import { day, money, phone, when } from "@/lib/format";
 
@@ -23,6 +24,7 @@ function Report() {
   if (ins.error || tpl.error) return <p className="p-8 text-error">{ins.error ?? tpl.error}</p>;
   if (!ins.data || !tpl.data || !branch.data) return <p className="p-8">Loading</p>;
   const i = ins.data, t = tpl.data, d = i.data, b = branch.data;
+  const { car: c, owner: o, buyer: by } = i.snapshot; // live on a draft, frozen once signed
   const rating = (k: string) => d.items[k]?.rating ?? "not_checked";
   const notes = Object.entries(d.items as Any).filter(([, a]) => a.note);
   const labelOf = Object.fromEntries(t.sections.flatMap((s: Any) => s.items.map((it: Any) => [it.key, it.label])));
@@ -53,11 +55,11 @@ function Report() {
       <Band n={1} title="Vehicle and customer details" />
       <table className="mb-2 w-full border-collapse">
         <tbody>
-          <Row cells={[["Make", i.car.make], ["Model", i.car.model], ["Year", d.details.year], ["Mileage", d.assessment.odometer_km != null ? `${d.assessment.odometer_km.toLocaleString("en-PK")} km` : ""]]} />
-          <Row cells={[["VIN / chassis", i.car.vin || i.car.chassis_no], ["Registration", i.car.plate], ["Engine no.", d.details.engine_no], ["Colour", i.car.color]]} />
-          <Row cells={i.kind === "pre_purchase"
-            ? [["Buyer", d.details.buyer_name], ["Buyer phone", d.details.buyer_phone], ["Seller", d.details.seller_name], ["Fuel", d.details.fuel]]
-            : [["Customer", i.customer.name], ["Phone", phone(i.customer.phone)], ["Visit", i.visit.number], ["Fuel", d.details.fuel]]} />
+          <Row cells={[["Make", c.make], ["Model", c.model], ["Year", c.year], ["Mileage", d.assessment.odometer_km != null ? `${d.assessment.odometer_km.toLocaleString("en-PK")} km` : ""]]} />
+          <Row cells={[["VIN / chassis", c.vin], ["Registration", c.plate], ["Engine no.", c.engine_no], ["Colour", c.color]]} />
+          <Row cells={by
+            ? [["Buyer", by.name], ["Buyer phone", phone(by.phone)], ["Seller", o.name], ["Fuel", FUELS[c.fuel]]]
+            : [["Customer", o.name], ["Phone", phone(o.phone)], ["Visit", i.visit.number], ["Fuel", FUELS[c.fuel]]]} />
         </tbody>
       </table>
       <p className="mb-2 rounded border border-rule bg-paper-2 px-2 py-1"><b>Rating:</b> G = Good, A = Average, <b>NA = Needs attention</b>, NC = Not checked</p>
@@ -96,7 +98,7 @@ function Report() {
       </table>
       <Table head={["Module", "DTC / fault code", "Description / status", "Priority"]} rows={d.scan.dtcs.map((x: Any) => [x.module, x.code, x.description, x.priority])} />
 
-      {(d.details.fuel === "hybrid" || d.details.fuel === "ev") && (
+      {(c.fuel === "hybrid" || c.fuel === "ev") && (
         <>
           <Band n={9} title="Hybrid / EV checks" />
           <table className="mb-2 w-full border-collapse"><tbody>

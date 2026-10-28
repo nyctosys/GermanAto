@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { type Uploaded, PhotoCapture, SignaturePad, upload } from "@/components/capture";
 import { type Car, carTitle, Plate } from "@/components/cars";
+import { type Customer, CustomerPicker } from "@/components/customers";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { Button, Card, Field, Input, Notice, PageHeader } from "@/components/ui";
+import { VehiclePanel } from "@/components/vehicle-panel";
 import { FuelGauge } from "@/components/visits";
 import { api, ApiError } from "@/lib/api";
 
@@ -33,7 +35,7 @@ function FindCar({ onPick }: { onPick: (c: Car) => void }) {
 
   return (
     <Card title="Which car?">
-      <Field label="Plate, VIN, chassis or owner's name">
+      <Field label="Plate, VIN / chassis number or owner's name">
         <Input value={q} onChange={(e) => setQ(e.target.value)} autoFocus autoCapitalize="characters" spellCheck={false} enterKeyHint="search" />
       </Field>
       {results && q.trim().length >= 2 && (
@@ -62,6 +64,7 @@ function FindCar({ onPick }: { onPick: (c: Car) => void }) {
 function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }) {
   const router = useRouter();
   const [kind, setKind] = useState<"workshop" | "pre_purchase">("workshop");
+  const [buyer, setBuyer] = useState<Customer | null>(null);
   const [fuel, setFuel] = useState<number | null>(null);
   const [photos, setPhotos] = useState<Uploaded[]>([]);
   const [signature, setSignature] = useState<Blob | null>(null);
@@ -76,7 +79,7 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
     try {
       const sig = signature ? await upload(signature, "check-in-signature.png", "Customer signature at check-in") : null;
       const visit = await api<{ id: string }>("/api/visits", { method: "POST", json: {
-        car_id: car.id, kind, odometer_in: f.get("odometer_in") ? Number(f.get("odometer_in")) : null, fuel_eighths: fuel,
+        car_id: car.id, kind, buyer_id: kind === "pre_purchase" ? buyer?.id ?? null : null, odometer_in: f.get("odometer_in") ? Number(f.get("odometer_in")) : null, fuel_eighths: fuel,
         complaint: f.get("complaint"), items_left: f.get("items_left"), condition_notes: f.get("condition_notes"),
         photo_ids: photos.map((p) => p.id), signature_id: sig?.id ?? null,
       } });
@@ -91,18 +94,9 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <Plate plate={car.plate} />
-            <div>
-              <p className="font-medium">{carTitle(car)}</p>
-              <p className="text-muted">{car.owner?.name}</p>
-            </div>
-          </div>
-          <Button type="button" variant="ghost" onClick={onChangeCar}>Different car</Button>
-        </div>
-      </Card>
+      {car.owner ? <VehiclePanel carId={car.id} ownerId={car.owner.id} />
+        : <Notice>This car has no owner on file. Add or transfer it to a customer first.</Notice>}
+      <Button type="button" variant="ghost" onClick={onChangeCar}>Different car</Button>
 
       <Card title="Why it's here">
         <div className="grid gap-5 sm:grid-cols-2">
@@ -111,6 +105,13 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
             <Segments value={kind} onChange={(v) => setKind(v as typeof kind)}
                       options={[{ value: "workshop", label: "Repair or service" }, { value: "pre_purchase", label: "Pre-purchase inspection" }]} />
           </div>
+          {kind === "pre_purchase" && (
+            <div className="sm:col-span-2">
+              <p className="mb-1.5 text-sm font-medium text-ink-2">Buyer</p>
+              <CustomerPicker value={buyer} onChange={setBuyer} exclude={car.owner?.id} />
+              <p className="mt-1 text-sm text-muted">The person buying the car. The current owner is the seller. A new buyer? Add them under <Link href="/customers" className="underline">Customers</Link> first.</p>
+            </div>
+          )}
           <div className="sm:col-span-2">
             <Field label="What the customer says" hint="In their words: noises, warning lights, what they want done.">
               <textarea name="complaint" rows={3} maxLength={3000}

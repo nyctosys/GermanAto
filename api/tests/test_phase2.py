@@ -57,6 +57,8 @@ def test_car_identity_rules(admin):
     assert car["vin"] == "WBA3A5C55DF123456" and car["owner"]["id"] == c["id"]
     assert admin.post("/api/cars", json={"owner_id": c["id"], "make": "Audi", "plate": "lea 21 1234"}).status_code == 409
     assert admin.post("/api/cars", json={"owner_id": c["id"], "make": "Audi", "vin": "WBAO3A5C55DF12345"}).status_code == 422
+    jp = new_car(admin, c["id"], plate="KHI-9876", make="Toyota", vin="nze141-6012345")  # a chassis number is the same field
+    assert jp["vin"] == "NZE141-6012345"
 
 
 def test_transfer_keeps_history_and_checks_rules(admin):

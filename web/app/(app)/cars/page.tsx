@@ -11,7 +11,7 @@ import { useApi } from "@/lib/api";
 export default function CarsPage() {
   return (
     <RequirePermission permission="customers">
-      <PageHeader title="Cars" description="Search by plate, VIN, chassis number, make or owner. New cars are added from the owner's page." />
+      <PageHeader title="Cars" description="Search by plate, VIN / chassis number, make or owner. New cars are added from the owner's page." />
       <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
         <Cars />
       </Suspense>

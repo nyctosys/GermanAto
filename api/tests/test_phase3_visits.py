@@ -80,3 +80,48 @@ def test_closed_visit_takes_nothing_more(admin):
     visit, _, _ = checked_in(admin)
     admin.post(f"/api/visits/{visit['id']}/cancel", json={"reason": "Duplicate"})
     assert admin.post(f"/api/visits/{visit['id']}/inspections", json={"kind": "workshop"}).status_code == 409
+
+
+def test_pre_purchase_needs_a_real_buyer(admin):
+    seller = new_customer(admin, name="Seller")
+    buyer = new_customer(admin, name="Buyer", phone="0333 9998887")
+    car = new_car(admin, seller["id"])
+    base = {"car_id": car["id"], "kind": "pre_purchase"}
+    assert admin.post("/api/visits", json=base).status_code == 422
+    assert admin.post("/api/visits", json={**base, "buyer_id": seller["id"]}).status_code == 422
+    assert admin.post("/api/visits", json={"car_id": car["id"], "buyer_id": buyer["id"]}).status_code == 422  # workshop visit
+    v = admin.post("/api/visits", json={**base, "buyer_id": buyer["id"]}).json()
+    assert v["buyer"]["id"] == buyer["id"] and v["customer"]["id"] == seller["id"]
+
+
+def test_details_come_from_central_records_and_freeze_at_signing(admin):
+    visit, car, owner = checked_in(admin)
+    ins = admin.post(f"/api/visits/{visit['id']}/inspections", json={"kind": "workshop"}).json()
+    assert "details" not in ins["data"] and ins["snapshot"]["car"]["plate"] == car["plate"]
+
+    # A client can't write the snapshot (or the old per-inspection vehicle copy).
+    data = {**ins["data"], "snapshot": {"car": {"plate": "FAKE"}}, "details": {"year": 1999},
+            "assessment": {**ins["data"]["assessment"], "overall": "good", "recommendation": "recommended"}}
+    version = admin.put(f"/api/inspections/{ins['id']}", json={"data": data, "version": ins["version"]}).json()["version"]
+
+    # Editing the car centrally shows up on the draft...
+    full = admin.get(f"/api/cars/{car['id']}").json()
+    admin.put(f"/api/cars/{car['id']}", json={**{k: full[k] for k in ("plate", "vin", "make", "model", "year",
+                                                                       "color", "fuel", "odometer_km", "notes", "version")},
+                                              "engine_no": "N20B20A"})
+    assert admin.get(f"/api/inspections/{ins['id']}").json()["snapshot"]["car"]["engine_no"] == "N20B20A"
+
+    signed = admin.post(f"/api/inspections/{ins['id']}/sign",
+                        json={"inspector_signature_id": upload(admin, PNG + b"s"), "version": version}).json()
+    assert signed["snapshot"]["car"]["engine_no"] == "N20B20A" and signed["snapshot"]["owner"]["name"] == owner["name"]
+
+    # ...but once signed, later edits to the car no longer change the report.
+    full = admin.get(f"/api/cars/{car['id']}").json()
+    admin.put(f"/api/cars/{car['id']}", json={**{k: full[k] for k in ("plate", "vin", "make", "model", "year",
+                                                                       "color", "fuel", "odometer_km", "notes", "version")},
+                                              "engine_no": "CHANGED"})
+    assert admin.get(f"/api/inspections/{ins['id']}").json()["snapshot"]["car"]["engine_no"] == "N20B20A"
+
+    titles = [e["title"] for e in admin.get(f"/api/cars/{car['id']}/history").json()]
+    assert any(t.startswith("Workshop inspection INS-") for t in titles)
+    assert any(t.startswith(f"Visit {visit['number']}") for t in titles)

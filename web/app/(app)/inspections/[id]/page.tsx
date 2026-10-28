@@ -7,6 +7,7 @@ import { type Uploaded, PhotoCapture, SignaturePad, upload } from "@/components/
 import { carTitle, Plate } from "@/components/cars";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
+import { type Snapshot, VehiclePanel } from "@/components/vehicle-panel";
 import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
 import { api, ApiError, useApi } from "@/lib/api";
 import { when } from "@/lib/format";
@@ -15,7 +16,6 @@ import { when } from "@/lib/format";
 type Rating = "good" | "average" | "attention" | "not_checked";
 type ItemAnswer = { rating: Rating; note: string; photo_ids: string[] };
 type Data = {
-  details: { year: number | null; engine_no: string; fuel: string | null; buyer_name: string; buyer_phone: string; seller_name: string; seller_phone: string };
   items: Record<string, ItemAnswer>;
   bulk_marked: string[];
   paint: { findings: Record<string, string>; notes: string; accident: "none" | "repair_signs" | null; structural_notes: string };
@@ -36,8 +36,9 @@ type Template = {
 type Inspection = {
   id: string; number: string; kind: string; status: "draft" | "signed"; data: Data; version: number; signed_at: string | null;
   supersedes_id: string | null; inspector: string | null; customer_signature_url: string | null; inspector_signature_url: string | null;
-  visit: { id: string; number: string }; car: { plate: string; make: string; model: string; year: number | null; fuel: string };
-  customer: { name: string };
+  visit: { id: string; number: string; car_id: string; customer_id: string; buyer_id: string | null };
+  car: { plate: string; make: string; model: string; year: number | null; fuel: string };
+  snapshot: Snapshot;
 };
 
 const RATING_STYLE: Record<Rating, string> = {
@@ -75,7 +76,8 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
   const [save, setSave] = useState<{ state: "saved" | "saving" | "dirty" | "error" | "conflict"; at?: string; message?: string }>({ state: "saved" });
   const version = useRef(initial.version);
   const readOnly = initial.status === "signed";
-  const showEv = data.details.fuel === "hybrid" || data.details.fuel === "ev";
+  const fuel = (readOnly ? initial.snapshot.car : initial.car).fuel;
+  const showEv = fuel === "hybrid" || fuel === "ev";
 
   // Autosave: 1.2s after the last change; one request at a time.
   useEffect(() => {
@@ -150,25 +152,12 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
         </ul>
       </nav>
 
-      <fieldset disabled={readOnly} className="space-y-4">
-        <Section id="details" title="Vehicle and customer">
-          <div className="grid gap-5 sm:grid-cols-3">
-            <Field label="Year"><Input type="number" inputMode="numeric" value={data.details.year ?? ""} onChange={(e) => update((d) => { d.details.year = e.target.value ? Number(e.target.value) : null; })} /></Field>
-            <Field label="Engine number"><Input value={data.details.engine_no} onChange={(e) => update((d) => { d.details.engine_no = e.target.value; })} /></Field>
-            <Field label="Fuel">
-              <Select value={data.details.fuel ?? ""} onChange={(e) => update((d) => { d.details.fuel = e.target.value || null; })}>
-                <option value="">Not recorded</option>
-                {["petrol", "diesel", "hybrid", "ev", "other"].map((f) => <option key={f} value={f}>{f === "ev" ? "Electric" : f[0].toUpperCase() + f.slice(1)}</option>)}
-              </Select>
-            </Field>
-            {initial.kind === "pre_purchase" && (["buyer_name", "buyer_phone", "seller_name", "seller_phone"] as const).map((k) => (
-              <Field key={k} label={k.replace("_", " ").replace(/^./, (c) => c.toUpperCase())}>
-                <Input value={data.details[k]} inputMode={k.endsWith("phone") ? "tel" : undefined} onChange={(e) => update((d) => { d.details[k] = e.target.value; })} />
-              </Field>
-            ))}
-          </div>
-        </Section>
+      <div id="details" className="mb-4 scroll-mt-32">
+        <VehiclePanel carId={initial.visit.car_id} ownerId={initial.visit.customer_id} buyerId={initial.visit.buyer_id}
+                      frozen={readOnly ? initial.snapshot : null} onChange={reload} />
+      </div>
 
+      <fieldset disabled={readOnly} className="space-y-4">
         <RatedSection section={tpl.sections[0]} tpl={tpl} data={data} update={update} readOnly={readOnly} />
 
         <Section id="paint" title="Paint, accident check and tyres">

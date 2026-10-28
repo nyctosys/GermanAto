@@ -74,9 +74,9 @@ function CarDetail() {
           </Card>
           <Card title="Identity">
             <dl className="grid gap-4 sm:grid-cols-2">
-              {[["VIN", c.vin], ["Chassis", c.chassis_no], ["Engine", c.engine_no],
+              {[["VIN / chassis", c.vin], ["Engine", c.engine_no],
                 ["Odometer", c.odometer_km != null ? `${c.odometer_km.toLocaleString("en-PK")} km` : ""]].map(([l, v]) => (
-                <div key={l} className={`min-w-0 ${l === "VIN" ? "sm:col-span-2" : ""}`}>
+                <div key={l} className={`min-w-0 ${l === "VIN / chassis" ? "sm:col-span-2" : ""}`}>
                   <dt className="text-sm text-muted">{l}</dt>
                   <dd className={`num break-all ${v ? "" : "text-muted"}`}>{v || "Not recorded"}</dd>
                 </div>
@@ -102,7 +102,7 @@ function CarDetail() {
                 ))}
               </ol>
             )}
-          <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Visits, inspections, repairs and invoices will appear here as the workshop starts using them.</p>
+          <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Repairs and invoices will appear here too once those screens are in use.</p>
         </Card>
       </div>
 

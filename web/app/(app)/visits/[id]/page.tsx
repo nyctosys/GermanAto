@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
-import { carTitle, FUELS, Plate } from "@/components/cars";
+import { carTitle, Plate } from "@/components/cars";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
+import { VehiclePanel } from "@/components/vehicle-panel";
 import { type VisitSummary, elapsed } from "@/components/visits";
 import { api, useApi } from "@/lib/api";
 import { phone, when } from "@/lib/format";
@@ -14,7 +15,6 @@ type File = { id: string; name: string; url: string; mime: string };
 type InspectionRef = { id: string; number: string; kind: string; status: string; signed_at: string | null; supersedes_id: string | null };
 type Visit = VisitSummary & {
   fuel_eighths: number | null; items_left: string; condition_notes: string; odometer_out: number | null; close_note: string;
-  car: VisitSummary["car"] & { vin: string; color: string; fuel: string };
   photos: File[]; signature: File | null; inspections: InspectionRef[];
 };
 
@@ -114,12 +114,12 @@ function VisitDetail() {
         </div>
 
         <div className="space-y-4">
+          <VehiclePanel carId={v.car.id} ownerId={v.customer.id} buyerId={v.buyer?.id} onChange={reload} />
           <Card title="Check-in">
             <dl className="grid gap-4 sm:grid-cols-2">
               <div><dt className="text-sm text-muted">Checked in</dt><dd>{when(v.checked_in_at)}</dd></div>
               <div><dt className="text-sm text-muted">Odometer</dt><dd className="num">{v.odometer_in != null ? `${v.odometer_in.toLocaleString("en-PK")} km` : "Not recorded"}</dd></div>
               <div><dt className="text-sm text-muted">Fuel</dt><dd>{v.fuel_eighths == null ? "Not recorded" : v.fuel_eighths === 8 ? "Full" : v.fuel_eighths === 0 ? "Empty" : `${v.fuel_eighths}/8`}</dd></div>
-              <div><dt className="text-sm text-muted">Car</dt><dd>{[FUELS[v.car.fuel], v.car.color].filter(Boolean).join(", ") || "Not recorded"}</dd></div>
               {[["Complaint", v.complaint], ["Existing damage", v.condition_notes], ["Valuables in the car", v.items_left]].map(([l, t]) => (
                 <div key={l} className="sm:col-span-2"><dt className="text-sm text-muted">{l}</dt><dd className={t ? "whitespace-pre-line" : "text-muted"}>{t || "None"}</dd></div>
               ))}
