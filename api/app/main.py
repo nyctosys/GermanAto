@@ -7,7 +7,7 @@ from sqlalchemy.orm.exc import StaleDataError
 import app.events  # noqa: F401  registers the audit/outbox flush hook
 from app.db import engine
 from app.journal import JournalError
-from app.routers import admin, auth, billing, branch, cashclose, catalog, customers, estimates, files, hr, iclock, payroll, periods, reporting, ledger, money, messages, moneybook, purchasing, repairs, workshop
+from app.routers import admin, auth, billing, branch, cashclose, catalog, customers, estimates, files, hr, iclock, payroll, periods, reporting, ledger, money, messages, moneybook, purchasing, repairs, sync, workshop
 
 app = FastAPI(title="GermanATO API", version="0.1.0")
 
@@ -17,7 +17,7 @@ async def journal_error(_: Request, exc: JournalError):
     # A refused posting (unbalanced, or into a closed month) is a conflict the person can act on, not a crash.
     return JSONResponse(status_code=409, content={"detail": str(exc)})
 
-for r in (auth.router, admin.router, branch.router, files.router, customers.router, catalog.router, workshop.router, estimates.router, repairs.router, billing.router, purchasing.router, money.router, ledger.router, moneybook.router, cashclose.router, hr.router, iclock.router, payroll.router, periods.router, reporting.router, messages.router):
+for r in (auth.router, admin.router, branch.router, files.router, customers.router, catalog.router, workshop.router, estimates.router, repairs.router, billing.router, purchasing.router, money.router, ledger.router, moneybook.router, cashclose.router, hr.router, iclock.router, payroll.router, periods.router, reporting.router, messages.router, sync.router):
     app.include_router(r)
 
 

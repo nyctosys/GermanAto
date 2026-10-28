@@ -29,6 +29,7 @@ PERMISSIONS: dict[str, str] = {
     "period-approve": "Reopen a closed month (admin)",
     "reports-ops": "See operations reports",
     "messages": "See and retry customer messages, edit their wording and reminder days",
+    "sync": "See sync status, run a sync, and settle sync conflicts (admin)",
     "hr": "Manage employees, attendance and attendance devices",
     "payroll": "Run payroll and give salary advances",
     "evidence-signoff": "Accept a money record that has no proof, with a reason (admin)",

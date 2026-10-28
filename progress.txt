@@ -63,3 +63,9 @@
 - docker-compose.yml (db, api, web, optional sync profile), api/Dockerfile (migrates on start), web/Dockerfile (API_URL is a build arg: Next bakes the /api rewrite in). Docker daemon was not running on the dev Mac, so images were NOT built here; `docker compose config` passes.
 - deploy/backup.sh and restore.sh tested with BACKUP_LOCAL=1 against a scratch Postgres: dump, files, checksums, pruning (KEEP), restore, damaged backup refused. Scripts avoid GNU-only flags so they run on macOS and Linux.
 - Env sample is workshop.env.example because .gitignore ignores .env.* and *.env.
+## US-902 to US-904 (sync)
+- app/sync.py applies events with Core statements (skips the audit/outbox hook so nothing echoes back); (origin_branch_id, origin_seq) in sync_inbox is the idempotency key; apply_events stops at the first failure so order is kept and returns the last safe seq (acked).
+- Conflict = same version, different content (ignoring updated_at/by). Known limit written in the guide: unequal edit counts resolve silently to the higher version.
+- Worker is sync_worker.run_once(db, branch, transport) so tests use a fake transport; HttpTransport is stdlib urllib. Pull cursor skips rows it filters out so it never stalls.
+- Tokens live in sync_credentials (hash only), not on branches, because branch rows themselves are synced.
+- Conflict list is stacked rows, not a table: tables scrolled sideways at 320px.

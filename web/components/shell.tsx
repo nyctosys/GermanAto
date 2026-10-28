@@ -82,6 +82,7 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
       { href: "/settings/branch", label: "Branch settings", permission: "settings" },
       { href: "/settings/money", label: "Money settings", permission: "settings" },
       { href: "/settings/messages", label: "Message wording", permission: "messages" },
+      { href: "/settings/sync", label: "Cloud sync", permission: "sync" },
     ],
   },
 ];

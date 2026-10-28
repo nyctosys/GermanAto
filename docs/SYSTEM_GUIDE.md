@@ -50,7 +50,11 @@ Purchasing is [section 20](#20-purchasing). Money (accounts, money in and out, j
 | Gate pass, with release on credit | Built | Visit page, printed gate pass |
 | Visit record (the whole visit on paper) | Built | Printed visit record |
 | Vendors, purchase orders, goods received, vendor bills, vendor payments, vendor account | Built | Vendors, Purchase orders, Bills and payments, printed purchase order |
-| Money out pages, expenses, accounts, closing, reports, HR, WhatsApp, offline sync | Not yet | See [section 18](#18-not-built-yet) |
+| Money in and out, accounts, cash close, missing proof, credit notes, refunds, journal | Built | Money menu, section 21 |
+| Employees, attendance devices, salary advances, payroll | Built | People menu, section 22 |
+| Dashboard, finance, workshop and people reports, month and year end, closing pack | Built | Dashboard, Reports menu, section 23 |
+| WhatsApp messages, reminders, Twilio status and STOP | Built | Customers menu, section 24 |
+| Docker server, backups, cloud sync, conflict review | Built | Cloud sync, runbook, section 25 |
 
 ---
 
@@ -99,6 +103,7 @@ The visit page shows where the job stands in its **The job** panel: job card, qu
 | `goods-receipt` | Count stock in against a purchase order |
 | `payments-out` | Pay vendors (and void a vendor payment) |
 | `expenses` | Record daily and major expenses |
+| `sync` | See sync status, run a sync, and settle sync conflicts (admin) |
 | `messages` | See and retry customer messages, edit their wording and the reminder days |
 | `period-close` | Close a finished month, with its checklist |
 | `period-approve` | Reopen a closed month (admin) |
@@ -381,11 +386,9 @@ It is an **internal** record and includes notes the customer doesn't see.
 | Item | Where it comes |
 |---|---|
 | A separate supplementary quotation document for extra work (today the customer's go-ahead is recorded on the repair order line instead) | Later, if wanted |
-| Below-cost price approval (`discount-approve`), selling below zero stock with an admin override | Phase 4 / 5 |
-| Purchasing: purchase orders, goods received, supplier bills | Phase 4 |
-| Offline branch server and sync | Phase 9 |
+| Below-cost price approval (`discount-approve`), selling below zero stock with an admin override | Later, if wanted |
+| The cloud server and its owner panel, inter-branch stock transfers, syncing proof files | When the second branch opens |
 | Returning goods to a vendor (purchase returns), correcting a wrong goods receipt | Later |
-| Purchase order sent to the vendor on WhatsApp | Phase 8 |
 
 ---
 
@@ -434,6 +437,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0018 | Payroll runs and lines; salary and salary-advance money entries |
 | 0019 | Closed periods (month and year locks) |
 | 0020 | Customer messages, message wording, reminder days on the branch |
+| 0021 | Sync bookkeeping: credentials, state, inbox, conflicts |
 | 0016 | Inspection repairs sent to the job card, extra-work approval on repair order lines |
 
 ### API by module
@@ -455,6 +459,8 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Gate and record | `GET visits/{id}/gate-check`, `POST visits/{id}/gate-pass`, `GET visits/{id}/dossier` |
 | Money | `GET/PUT accounts`, `GET/POST expense-categories`, `PUT expense-categories/{id}`, `GET money-in`, `GET money-out`, `POST money-entries`, `POST money-entries/{id}/void`, `GET journal/trial-balance`, `GET journal/entries` |
 | Missing proof | `GET missing-evidence`, `POST missing-evidence/sign` |
+| Sync | `GET sync/status`, `POST sync/run`, `GET sync/conflicts`, `POST sync/conflicts/{id}/resolve`, `POST sync/tokens`; branch servers call `POST sync/push` and `GET sync/pull` with a token |
+| Messages | `GET messages`, `POST messages/send`, `POST messages/{id}/retry`, `POST messages/run-reminders`, `GET/PUT message-templates`, `PUT message-settings`; Twilio calls `POST webhooks/twilio/status` and `/inbound` |
 | Reports and month end | `GET dashboard`, `GET reports/pnl`, `…/cashflow`, `…/receivables`, `…/payables`, `…/stock-value`, `…/discounts`, `…/operations`, `…/hr`, `GET periods`, `GET periods/{p}/checklist`, `POST periods/{p}/close`, `…/reopen`, `GET periods/{p}/pack` |
 | People | `GET/POST employees`, `GET/PUT employees/{id}`, `GET employee-logins`, `GET/POST attendance-devices`, `PUT attendance-devices/{id}`, `POST attendance-devices/{id}/secret`, `GET attendance`, `GET attendance/{employee}`, `GET attendance/unmatched`, `POST attendance/punches`, `POST attendance/punches/{id}/void`, `POST/DELETE attendance/marks`, `GET/POST salary-advances`, `GET/POST payroll-runs`, `GET payroll-runs/{id}`, `PUT payroll-runs/{id}/lines/{line}`, `POST payroll-runs/{id}/refresh`, `…/approve`, `…/void`, `POST payroll-runs/{id}/lines/{line}/pay`, `GET payroll-runs/{id}/lines/{line}` |
 | Device push (no login) | `GET/POST /iclock/cdata`, `GET /iclock/getrequest` |
@@ -785,3 +791,25 @@ One PC in the workshop runs everything (database, API, web app) in Docker; every
 
 - `docker-compose.yml` starts **db**, **api** and **web** (and **sync**, only when asked for). `workshop.env.example` lists the settings; copy it to `.env`.
 - **Backups:** `deploy/backup.sh` writes the database and all proof files to a dated folder with checksums and keeps the last 14. Run it nightly and copy the folder off the PC. `deploy/restore.sh` puts a backup back after checking its checksums and asking for confirmation. A damaged backup is refused before anything changes.
+
+### Cloud sync
+The workshop never depends on the internet. With sync switched on, a worker on the workshop PC does two things every minute (and when someone presses **Sync now**):
+1. **Sends** every change made since last time, oldest first, to the cloud.
+2. **Brings in** what other branches did, using a bookmark ("cursor") so each change is received once.
+
+- **Safe to repeat.** Every change has a number from its branch; the receiver remembers the numbers it has applied, so a resend after a dropped connection changes nothing.
+- **Never out of order.** If one change can't be applied, the batch stops there, everything before it is confirmed, and the rest waits and is retried. Nothing after a failure is skipped.
+- **Outages.** Without internet the changes simply wait. After a failed attempt the worker waits longer each time (up to 15 minutes) so a dead link isn't hammered.
+- **Newer wins.** A change with a higher version replaces ours; a lower one is ignored. **The same version with different content** means two places edited the same record independently: ours is kept, and a **conflict** is recorded with both versions.
+- A change brought in from the cloud is not sent back out.
+
+**Where:** Administration → **Cloud sync** (admins, permission `sync`).
+- **Status:** changes waiting to be sent (and how old the oldest is), last sent, last received, the last error if the latest attempt failed, and how many conflicts need a decision. **Sync now** runs it immediately.
+- **Conflicts:** each one shows only the fields that differ, **This server** against **Other server**. Choose **Keep this server's** (our version is raised so it wins everywhere) or **Take the other server's**. A settled conflict stays on the **Settled** list. Whoever settles it and when is recorded.
+
+**Connecting a branch (once the cloud server exists):**
+1. On the cloud, an admin creates the branch's token (`POST /api/sync/tokens` with the branch id shown on the Cloud sync page). The token is shown once; only its fingerprint is stored.
+2. On the workshop PC set `SYNC_CLOUD_URL` and `SYNC_TOKEN` in `.env`, then `docker compose --profile sync up -d`.
+3. Use **HTTPS** for the cloud address: the token travels with every request.
+
+**Known limit:** conflicts are found when both sides reach the same version number with different content. If one side edits a record twice while the other edits it once, the higher version wins without a conflict (every change is still kept in the audit log). Proof files are not sent by sync yet; they are covered by the nightly backup.

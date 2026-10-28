@@ -1151,3 +1151,69 @@ class Message(BranchScoped):
     dedupe_key: Mapped[str | None] = mapped_column(String(100), unique=True)   # so a reminder is queued once
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# --- Sync (not synced themselves: each server keeps its own bookkeeping) ------------------------
+
+class SyncCredential(Base):
+    """The cloud's record of a branch server's sync token (only its hash)."""
+
+    __tablename__ = "sync_credentials"
+
+    branch_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now())
+
+
+class SyncState(Base):
+    """Where this branch server's sync stands: how far it has pulled and how the last attempts went."""
+
+    __tablename__ = "sync_state"
+
+    branch_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    pull_cursor: Mapped[int] = mapped_column(BigInteger, default=0)
+    last_push_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_pull_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str] = mapped_column(String(500), default="")
+    last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SyncInbox(Base):
+    """Every change received from a branch, in the order received. The (origin, seq) pair is the
+    idempotency key; on the cloud this log is also what other branches pull from."""
+
+    __tablename__ = "sync_inbox"
+    __table_args__ = (UniqueConstraint("origin_branch_id", "origin_seq"),)
+
+    seq: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    origin_branch_id: Mapped[uuid.UUID]
+    origin_seq: Mapped[int] = mapped_column(BigInteger)
+    table_name: Mapped[str] = mapped_column(String(60))
+    row_id: Mapped[uuid.UUID]
+    op: Mapped[str] = mapped_column(String(10))
+    payload: Mapped[dict] = mapped_column(JSONB)
+    outcome: Mapped[str] = mapped_column(String(10))  # applied / stale / conflict
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now())
+
+
+class SyncConflict(Base):
+    """The same row was changed on two servers to the same version with different content. Both sides are kept."""
+
+    __tablename__ = "sync_conflicts"
+    __table_args__ = (
+        CheckConstraint("status IN ('open', 'resolved')", name="sync_conflict_status"),
+        CheckConstraint("resolution IS NULL OR resolution IN ('keep_local', 'keep_remote')", name="sync_conflict_resolution"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    origin_branch_id: Mapped[uuid.UUID]
+    table_name: Mapped[str] = mapped_column(String(60))
+    row_id: Mapped[uuid.UUID]
+    local: Mapped[dict] = mapped_column(JSONB)
+    remote: Mapped[dict] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(8), default="open")
+    resolution: Mapped[str | None] = mapped_column(String(12))
+    note: Mapped[str] = mapped_column(Text, default="")
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now())
