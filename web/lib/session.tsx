@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { create } from "zustand";
 import { ErrorState } from "@/components/ui";
-import { useApi } from "./api";
+import { api } from "./api";
 
 export type Branch = { id: string; code: string; name: string };
 export type Me = {
@@ -13,18 +14,30 @@ export type Me = {
   branches: Branch[];
 };
 
-const SessionContext = createContext<(Me & { can: (p: string) => boolean; reload: () => void }) | null>(null);
+/** The signed-in user, their role and branch: one store any component can read. */
+export const useSessionStore = create<{ me: Me | null; error: string | null; load: () => Promise<void> }>()((set) => ({
+  me: null,
+  error: null,
+  load: async () => {
+    try {
+      set({ me: await api<Me>("/api/auth/me"), error: null });
+    } catch (e) {
+      set({ error: (e as Error).message });
+    }
+  },
+}));
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const { data, error, reload } = useApi<Me>("/api/auth/me");
-  if (error) {
+  const { me, error, load } = useSessionStore();
+  useEffect(() => { load(); }, [load]);
+  if (error && !me) {
     return (
       <div className="mx-auto mt-16 max-w-md px-4">
-        <ErrorState message={`Your account couldn't be loaded: ${error}`} onRetry={reload} />
+        <ErrorState message={`Your account couldn't be loaded: ${error}`} onRetry={load} />
       </div>
     );
   }
-  if (!data) {
+  if (!me) {
     return (
       <div aria-busy="true" aria-label="Loading" className="flex min-h-dvh">
         <div className="hidden w-64 shrink-0 border-r border-rule bg-paper-2 shell:block" />
@@ -35,12 +48,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  const can = (p: string) => data.permissions.includes(p);
-  return <SessionContext.Provider value={{ ...data, can, reload }}>{children}</SessionContext.Provider>;
+  return children;
 }
 
+/** Only valid inside <SessionProvider>, which renders children once `me` has loaded. */
 export function useSession() {
-  const ctx = useContext(SessionContext);
-  if (!ctx) throw new Error("useSession must be used inside <SessionProvider>");
-  return ctx;
+  const me = useSessionStore((s) => s.me);
+  const reload = useSessionStore((s) => s.load);
+  if (!me) throw new Error("useSession must be used inside <SessionProvider>");
+  return { ...me, can: (p: string) => me.permissions.includes(p), reload };
 }

@@ -5,6 +5,7 @@ import { RequirePermission } from "@/components/shell";
 import {
   Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows,
 } from "@/components/ui";
+import { type FieldErrors, parseForm, userSchema } from "@/lib/schemas";
 import { api, useApi } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -101,28 +102,29 @@ function UserForm({ user, roles, onCancel, onSaved }:
   // On a phone the form opens above a long list; bring it into view.
   useEffect(() => { ref.current?.scrollIntoView({ block: "start", behavior: "smooth" }); }, []);
 
+  const [errors, setErrors] = useState<FieldErrors>({});
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const branchIds = f.getAll("branch_ids");
+    const { data, errors } = parseForm(userSchema.extend({ password: user ? userSchema.shape.password : userSchema.shape.password.refine(Boolean, "Required") }), e.currentTarget);
+    setErrors(errors ?? {});
+    if (!data) return;
     if (!branchIds.length) {
       setError("Pick at least one branch.");
       return;
     }
-    const body: Record<string, unknown> = {
-      full_name: f.get("full_name"), email: f.get("email"), phone: f.get("phone"), branch_ids: branchIds,
-    };
+    const body: Record<string, unknown> = { full_name: data.full_name, email: data.email, phone: data.phone, branch_ids: branchIds };
     if (!isSelf) {
       body.role_id = f.get("role_id");
       body.is_active = f.get("is_active") === "on";
     }
-    const password = String(f.get("password") || "");
-    if (password) body.password = password;
+    if (data.password) body.password = data.password;
     setError(null);
     setBusy(true);
     try {
       if (user) await api(`/api/users/${user.id}`, { method: "PATCH", json: body });
-      else await api("/api/users", { method: "POST", json: { ...body, username: f.get("username") } });
+      else await api("/api/users", { method: "POST", json: { ...body, username: data.username } });
       onSaved();
     } catch (err) {
       setError((err as Error).message);
@@ -133,23 +135,23 @@ function UserForm({ user, roles, onCancel, onSaved }:
   return (
     <div ref={ref} className="mb-6 scroll-mt-20">
       <Card title={user ? `Edit ${user.full_name}` : "New user"}>
-        <form onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
+        <form onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2">
           {user ? (
             <Field label="Username" hint="Usernames can't be changed."><Input value={user.username} disabled readOnly /></Field>
           ) : (
-            <Field label="Username" hint="3 to 32 letters, digits, dots, dashes or underscores.">
+            <Field error={errors.username} label="Username" hint="3 to 32 letters, digits, dots, dashes or underscores.">
               <Input name="username" required pattern="[A-Za-z0-9._\-]{3,32}" autoCapitalize="none" spellCheck={false} />
             </Field>
           )}
-          <Field label="Full name"><Input name="full_name" defaultValue={user?.full_name} required autoComplete="off" /></Field>
-          <Field label="Phone"><Input name="phone" defaultValue={user?.phone} inputMode="tel" /></Field>
-          <Field label="Email (optional)"><Input name="email" type="email" defaultValue={user?.email ?? ""} /></Field>
+          <Field error={errors.full_name} label="Full name"><Input name="full_name" defaultValue={user?.full_name} required autoComplete="off" /></Field>
+          <Field error={errors.phone} label="Phone"><Input name="phone" defaultValue={user?.phone} inputMode="tel" /></Field>
+          <Field error={errors.email} label="Email (optional)"><Input name="email" type="email" defaultValue={user?.email ?? ""} /></Field>
           <Field label="Role" hint={isSelf ? "You can't change your own role." : undefined}>
             <Select name="role_id" defaultValue={user?.role_id} required disabled={isSelf}>
               {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </Select>
           </Field>
-          <Field label={user ? "New password" : "Password"} hint={user ? "Leave blank to keep the current one. At least 8 characters." : "At least 8 characters."}>
+          <Field error={errors.password} label={user ? "New password" : "Password"} hint={user ? "Leave blank to keep the current one. At least 8 characters." : "At least 8 characters."}>
             <Input name="password" type="password" minLength={8} required={!user} autoComplete="new-password" />
           </Field>
           <fieldset className="sm:col-span-2">

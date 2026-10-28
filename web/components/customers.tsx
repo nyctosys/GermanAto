@@ -5,6 +5,8 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Button, Checkbox, Field, Input, Notice, Select } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { phone } from "@/lib/format";
+import { useRecords } from "@/lib/records";
+import { type FieldErrors, customerSchema, parseForm } from "@/lib/schemas";
 
 export type Customer = {
   id: string; number: string; kind: "individual" | "company"; name: string; phone: string; phone_alt: string;
@@ -87,24 +89,24 @@ export function CustomerPicker({ value, onChange, exclude }:
 export function CustomerForm({ customer, onSaved, onCancel }:
   { customer?: Customer; onSaved: (c: Customer) => void; onCancel: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [matches, setMatches] = useState<Customer[] | null>(null);
   const [busy, setBusy] = useState(false);
   const form = useRef<HTMLFormElement>(null);
 
   async function save(allowDuplicate = false) {
-    if (!form.current?.reportValidity()) return;
-    const f = new FormData(form.current);
-    const body = {
-      kind: f.get("kind"), name: f.get("name"), phone: f.get("phone"), phone_alt: f.get("phone_alt"),
-      email: f.get("email"), cnic: f.get("cnic"), address: f.get("address"), notes: f.get("notes"),
-      whatsapp_opt_out: f.get("whatsapp_opt_out") === "on", allow_duplicate_phone: allowDuplicate,
-    };
+    const { data, errors } = parseForm(customerSchema, form.current!);
+    setErrors(errors ?? {});
+    if (!data) return;
+    const { is_active, ...fields } = data;
+    const body = { ...fields, allow_duplicate_phone: allowDuplicate };
     setBusy(true);
     setError(null);
     try {
       const saved = customer
-        ? await api<Customer>(`/api/customers/${customer.id}`, { method: "PUT", json: { ...body, version: customer.version, is_active: f.get("is_active") === "on" } })
+        ? await api<Customer>(`/api/customers/${customer.id}`, { method: "PUT", json: { ...body, version: customer.version, is_active } })
         : await api<Customer>("/api/customers", { method: "POST", json: body });
+      useRecords.getState().put("customers", saved);
       onSaved(saved);
     } catch (err) {
       const detail = err instanceof ApiError ? (err.detail as { code?: string; matches?: Customer[] }) : undefined;
@@ -115,20 +117,20 @@ export function CustomerForm({ customer, onSaved, onCancel }:
   }
 
   return (
-    <form ref={form} onSubmit={(e: FormEvent) => { e.preventDefault(); save(); }} className="grid gap-5 sm:grid-cols-2">
-      <Field label="Name"><Input name="name" defaultValue={customer?.name} required maxLength={120} autoComplete="off" /></Field>
-      <Field label="Type">
+    <form ref={form} noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); save(); }} className="grid gap-5 sm:grid-cols-2">
+      <Field error={errors.name} label="Name"><Input name="name" defaultValue={customer?.name} required maxLength={120} autoComplete="off" /></Field>
+      <Field error={errors.kind} label="Type">
         <Select name="kind" defaultValue={customer?.kind ?? "individual"}>
           <option value="individual">Individual</option>
           <option value="company">Company or fleet</option>
         </Select>
       </Field>
-      <Field label="Mobile" hint="Used for WhatsApp updates."><Input name="phone" defaultValue={customer ? phone(customer.phone) : ""} required inputMode="tel" autoComplete="off" /></Field>
-      <Field label="Other phone (optional)"><Input name="phone_alt" defaultValue={customer ? phone(customer.phone_alt) : ""} inputMode="tel" /></Field>
-      <Field label="Email (optional)"><Input name="email" type="email" defaultValue={customer?.email} /></Field>
-      <Field label="CNIC (optional)" hint="13 digits, e.g. 35202-1234567-1"><Input name="cnic" defaultValue={customer?.cnic} inputMode="numeric" /></Field>
-      <div className="sm:col-span-2"><Field label="Address (optional)"><Input name="address" defaultValue={customer?.address} maxLength={300} /></Field></div>
-      <div className="sm:col-span-2"><Field label="Notes (optional)"><Input name="notes" defaultValue={customer?.notes} /></Field></div>
+      <Field error={errors.phone} label="Mobile" hint="Used for WhatsApp updates."><Input name="phone" defaultValue={customer ? phone(customer.phone) : ""} required inputMode="tel" autoComplete="off" /></Field>
+      <Field error={errors.phone_alt} label="Other phone (optional)"><Input name="phone_alt" defaultValue={customer ? phone(customer.phone_alt) : ""} inputMode="tel" /></Field>
+      <Field error={errors.email} label="Email (optional)"><Input name="email" type="email" defaultValue={customer?.email} /></Field>
+      <Field error={errors.cnic} label="CNIC (optional)" hint="13 digits, e.g. 35202-1234567-1"><Input name="cnic" defaultValue={customer?.cnic} inputMode="numeric" /></Field>
+      <div className="sm:col-span-2"><Field error={errors.address} label="Address (optional)"><Input name="address" defaultValue={customer?.address} maxLength={300} /></Field></div>
+      <div className="sm:col-span-2"><Field error={errors.notes} label="Notes (optional)"><Input name="notes" defaultValue={customer?.notes} /></Field></div>
       <div className="sm:col-span-2">
         <Checkbox name="whatsapp_opt_out" defaultChecked={customer?.whatsapp_opt_out} label="Don't send WhatsApp messages" hint="The customer asked not to be messaged." />
         {customer && <Checkbox name="is_active" defaultChecked={customer.is_active} label="Active" hint="Inactive customers are hidden from searches but keep their history." />}

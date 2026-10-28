@@ -12,6 +12,7 @@ import { Button, Card, Field, Input, Notice, PageHeader } from "@/components/ui"
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { FuelGauge } from "@/components/visits";
 import { api, ApiError } from "@/lib/api";
+import { type FieldErrors, checkInSchema, parseForm } from "@/lib/schemas";
 
 export default function CheckInPage() {
   const [car, setCar] = useState<Car | null>(null);
@@ -69,18 +70,25 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
   const [photos, setPhotos] = useState<Uploaded[]>([]);
   const [signature, setSignature] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
+    const { data: f, errors } = parseForm(checkInSchema, e.currentTarget);
+    const buyerMissing = kind === "pre_purchase" && !buyer;
+    setErrors({ ...errors, ...(buyerMissing ? { buyer: "Choose the buyer" } : {}) });
+    if (!f || buyerMissing) return;
+    if (car.odometer_km != null && f.odometer_in! < car.odometer_km) {
+      setErrors({ odometer_in: `Lower than the last reading (${car.odometer_km.toLocaleString("en-PK")} km)` });
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const sig = signature ? await upload(signature, "check-in-signature.png", "Customer signature at check-in") : null;
       const visit = await api<{ id: string }>("/api/visits", { method: "POST", json: {
-        car_id: car.id, kind, buyer_id: kind === "pre_purchase" ? buyer?.id ?? null : null, odometer_in: f.get("odometer_in") ? Number(f.get("odometer_in")) : null, fuel_eighths: fuel,
-        complaint: f.get("complaint"), items_left: f.get("items_left"), condition_notes: f.get("condition_notes"),
+        car_id: car.id, kind, buyer_id: kind === "pre_purchase" ? buyer?.id ?? null : null, ...f, fuel_eighths: fuel,
         photo_ids: photos.map((p) => p.id), signature_id: sig?.id ?? null,
       } });
       router.push(`/visits/${visit.id}`);
@@ -93,7 +101,7 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form onSubmit={submit} noValidate className="space-y-4">
       {car.owner ? <VehiclePanel carId={car.id} ownerId={car.owner.id} />
         : <Notice>This car has no owner on file. Add or transfer it to a customer first.</Notice>}
       <Button type="button" variant="ghost" onClick={onChangeCar}>Different car</Button>
@@ -109,16 +117,17 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
             <div className="sm:col-span-2">
               <p className="mb-1.5 text-sm font-medium text-ink-2">Buyer</p>
               <CustomerPicker value={buyer} onChange={setBuyer} exclude={car.owner?.id} />
+              {errors.buyer && <p role="alert" className="mt-1 text-sm text-error">{errors.buyer}</p>}
               <p className="mt-1 text-sm text-muted">The person buying the car. The current owner is the seller. A new buyer? Add them under <Link href="/customers" className="underline">Customers</Link> first.</p>
             </div>
           )}
           <div className="sm:col-span-2">
-            <Field label="What the customer says" hint="In their words: noises, warning lights, what they want done.">
+            <Field error={errors.complaint} label="What the customer says" hint="In their words: noises, warning lights, what they want done.">
               <textarea name="complaint" rows={3} maxLength={3000}
                         className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-accent" />
             </Field>
           </div>
-          <Field label="Odometer (km)" hint={car.odometer_km ? `Last reading ${car.odometer_km.toLocaleString("en-PK")} km` : undefined}>
+          <Field error={errors.odometer_in} label="Odometer (km)" hint={car.odometer_km ? `Last reading ${car.odometer_km.toLocaleString("en-PK")} km` : undefined}>
             <Input name="odometer_in" type="number" inputMode="numeric" min={car.odometer_km ?? 0} required />
           </Field>
           <div>
@@ -131,10 +140,10 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
       <Card title="Condition">
         <div className="space-y-5">
           <PhotoCapture value={photos} onChange={setPhotos} note="Check-in photo" label="Take photos of all four sides" />
-          <Field label="Existing damage" hint="Dents, scratches, cracked glass: anything the customer should agree was already there.">
+          <Field error={errors.condition_notes} label="Existing damage" hint="Dents, scratches, cracked glass: anything the customer should agree was already there.">
             <Input name="condition_notes" maxLength={3000} />
           </Field>
-          <Field label="Valuables left in the car"><Input name="items_left" maxLength={1000} placeholder="e.g. sunglasses in the glovebox" /></Field>
+          <Field error={errors.items_left} label="Valuables left in the car"><Input name="items_left" maxLength={1000} placeholder="e.g. sunglasses in the glovebox" /></Field>
         </div>
       </Card>
 

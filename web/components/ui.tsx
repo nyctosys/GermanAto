@@ -36,12 +36,14 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select className={`${field} pr-8`} {...props} />;
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+/** A labelled control. `error` (from parseForm) replaces the hint and outlines the control in red. */
+export function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
   return (
-    <label className="flex min-w-0 flex-col gap-1.5">
+    <label className={`flex min-w-0 flex-col gap-1.5 ${error ? "[&_:is(input,select,textarea)]:border-error" : ""}`}>
       <span className="text-[0.9375rem] font-medium text-ink-2">{label}</span>
       {children}
-      {hint && <span className="text-sm text-muted">{hint}</span>}
+      {error ? <span role="alert" className="text-sm text-error">{error}</span>
+        : hint && <span className="text-sm text-muted">{hint}</span>}
     </label>
   );
 }

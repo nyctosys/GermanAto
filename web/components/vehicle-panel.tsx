@@ -5,7 +5,7 @@ import { useState } from "react";
 import { type Car, CarForm, carTitle, FUELS } from "@/components/cars";
 import { type Customer, CustomerForm } from "@/components/customers";
 import { Button, Card, ErrorState, SkeletonRows } from "@/components/ui";
-import { useApi } from "@/lib/api";
+import { useRecord } from "@/lib/records";
 import { phone } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
@@ -28,29 +28,30 @@ export function VehiclePanel({ carId, ownerId, buyerId, frozen, onChange }:
 
 function LivePanel({ carId, ownerId, buyerId, onChange }: { carId: string; ownerId: string; buyerId?: string | null; onChange?: () => void }) {
   const { can } = useSession();
-  const car = useApi<Car>(`/api/cars/${carId}`);
-  const owner = useApi<Customer>(`/api/customers/${ownerId}`);
-  const buyer = useApi<Customer>(buyerId ? `/api/customers/${buyerId}` : null);
+  const car = useRecord<Car>("cars", carId);
+  const owner = useRecord<Customer>("customers", ownerId);
+  const buyer = useRecord<Customer>("customers", buyerId);
   const [editing, setEditing] = useState<"car" | "owner" | "buyer" | null>(null);
 
   const error = car.error ?? owner.error ?? buyer.error;
   if (error) return <Card flush><ErrorState message={error} onRetry={() => { car.reload(); owner.reload(); buyer.reload(); }} /></Card>;
   if (!car.data || !owner.data || (buyerId && !buyer.data)) return <Card flush><SkeletonRows rows={3} /></Card>;
 
-  const saved = (reload: () => void) => () => { setEditing(null); reload(); onChange?.(); };
+  // The forms put the saved record into the shared store; this only closes the editor.
+  const saved = () => { setEditing(null); onChange?.(); };
   if (editing === "car") {
-    return <Card title="Edit car"><CarForm car={car.data} onSaved={saved(car.reload)} onCancel={() => setEditing(null)} /></Card>;
+    return <Card title="Edit car"><CarForm car={car.data} onSaved={saved} onCancel={() => setEditing(null)} /></Card>;
   }
   if (editing) {
     const who = editing === "owner" ? owner : buyer;
     return (
       <Card title={`Edit ${editing}`}>
-        <CustomerForm customer={who.data!} onSaved={saved(who.reload)} onCancel={() => setEditing(null)} />
+        <CustomerForm customer={who.data!} onSaved={saved} onCancel={() => setEditing(null)} />
       </Card>
     );
   }
   return (
-    <PanelBody car={car.data} owner={owner.data} buyer={buyer.data} carId={carId}
+    <PanelBody car={car.data} owner={owner.data} buyer={buyer.data ?? null} carId={carId}
                note="Edits change the car and customer records everywhere."
                onEdit={can("customers") ? setEditing : undefined} />
   );
