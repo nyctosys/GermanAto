@@ -376,10 +376,10 @@ function ItemRow({ item, tpl, answer, update, readOnly }:
     <li className="py-3 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <span className="min-w-40 flex-1 font-medium">{item.label}</span>
-        <div role="radiogroup" aria-label={item.label} className="grid flex-[2_1_22rem] grid-cols-4 gap-1">
+        <div role="radiogroup" aria-label={item.label} className="grid min-w-0 flex-[2_1_17rem] grid-cols-4 gap-1">
           {(Object.keys(tpl.ratings) as Rating[]).map((r) => (
             <button key={r} type="button" role="radio" aria-checked={rating === r} onClick={() => set({ rating: r })}
-                    className={`min-h-11 rounded-control border px-1 text-sm font-medium transition-colors duration-(--dur-micro) active:duration-0 ${
+                    className={`min-h-11 rounded-control border px-0.5 text-[0.8125rem] leading-tight font-medium transition-colors sm:px-1 sm:text-sm duration-(--dur-micro) active:duration-0 ${
                       rating === r ? RATING_STYLE[r] : "border-rule-strong bg-surface text-ink-2 hover:bg-paper active:bg-paper-3"}`}>
               {tpl.ratings[r]}
             </button>

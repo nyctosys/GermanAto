@@ -333,6 +333,10 @@ class Visit(BranchScoped):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     odometer_out: Mapped[int | None] = mapped_column(Integer)
     close_note: Mapped[str] = mapped_column(Text, default="")       # cancel reason, or credit release reason
+    released_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))  # gate pass
+    handed_to: Mapped[str] = mapped_column(String(120), default="")                # who collected the car
+    credit_released_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    credit_reason: Mapped[str] = mapped_column(Text, default="")
 
 
 class Inspection(BranchScoped):
@@ -471,9 +475,10 @@ class Payment(BranchScoped):
     number: Mapped[str] = mapped_column(String(24), unique=True)
     kind: Mapped[str] = mapped_column(String(8))
     status: Mapped[str] = mapped_column(String(8), default="posted")
-    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id"), index=True)  # None: walk-in sale
     visit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("visits.id"), index=True)
     quotation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("quotations.id"))
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id"), index=True)  # set when applied
     account: Mapped[str] = mapped_column(String(8))
     reference: Mapped[str] = mapped_column(String(60), default="")  # cheque no., transaction id
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
@@ -550,3 +555,62 @@ class RepairOrderActivity(BranchScoped):
     to_status: Mapped[str | None] = mapped_column(String(18))
     line_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("repair_order_lines.id", ondelete="SET NULL"))
     customer_visible: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+# --- invoices (spec §2, §2.1) -----------------------------------------------------------------
+
+class Invoice(BranchScoped):
+    """The final bill. Workshop invoices bill what the repair order did; counter
+    sales sell parts over the counter. Issued invoices are locked."""
+
+    __tablename__ = "invoices"
+    __table_args__ = (
+        CheckConstraint("kind IN ('workshop', 'counter_sale')", name="invoice_kind"),
+        CheckConstraint("status IN ('draft', 'issued', 'void')", name="invoice_status"),
+        CheckConstraint("kind = 'counter_sale' OR (visit_id IS NOT NULL AND repair_order_id IS NOT NULL)", name="invoice_workshop_links"),
+        CheckConstraint("status <> 'issued' OR issued_at IS NOT NULL", name="invoice_issued_at"),
+        CheckConstraint("discount >= 0", name="invoice_discount"),
+        CheckConstraint("tax_rate >= 0 AND tax_rate <= 100", name="invoice_tax_rate"),
+        # One live workshop invoice per visit (spec §2 rules).
+        Index("uq_invoice_visit", "visit_id", unique=True, postgresql_where=text("kind = 'workshop' AND status <> 'void'")),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    kind: Mapped[str] = mapped_column(String(14))
+    status: Mapped[str] = mapped_column(String(8), default="draft")
+    visit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("visits.id"), index=True)
+    repair_order_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("repair_orders.id"))
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id"), index=True)  # None: walk-in
+    car_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cars.id"), index=True)
+    walk_in_name: Mapped[str] = mapped_column(String(120), default="")
+    walk_in_phone: Mapped[str] = mapped_column(String(16), default="")
+    include_tax: Mapped[bool] = mapped_column(Boolean, default=True)
+    tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    discount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    issued_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+
+    lines: Mapped[list["InvoiceLine"]] = relationship(cascade="all, delete-orphan", lazy="selectin",
+                                                      order_by="InvoiceLine.position")
+
+
+class InvoiceLine(Entity):
+    __tablename__ = "invoice_lines"
+    __table_args__ = (
+        CheckConstraint("kind IN ('labour', 'part')", name="invoice_line_kind"),
+        CheckConstraint(LINE_TARGET, name="invoice_line_target"),
+        CheckConstraint("qty > 0", name="invoice_line_qty"),
+        CheckConstraint("unit_price >= 0", name="invoice_line_price"),
+    )
+
+    invoice_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("invoices.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(8))
+    labour_code_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("labour_codes.id"))
+    item_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("items.id"))
+    repair_order_line_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("repair_order_lines.id"))
+    description: Mapped[str] = mapped_column(String(200))
+    qty: Mapped[Decimal] = mapped_column(Numeric(12, 3))
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    in_quote: Mapped[bool] = mapped_column(Boolean, default=True)

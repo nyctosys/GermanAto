@@ -2,6 +2,7 @@
 
 Workshop management for GermanATO. The new system lives in `api/` (FastAPI + PostgreSQL) and `web/` (Next.js 16). The old Flask app in `backend/` is kept for reference only.
 
+- How the system works today, module by module (kept current with every change): [docs/SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md)
 - What the new system must do: [docs/NEW_SYSTEM_SPEC.md](docs/NEW_SYSTEM_SPEC.md)
 - What the old app did, page by page (the parity checklist): [docs/feature-inventory/](docs/feature-inventory/README.md)
 

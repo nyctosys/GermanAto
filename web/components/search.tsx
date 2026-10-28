@@ -48,14 +48,15 @@ export function SearchBox({ placeholder, label = "Search", autoFocus }: { placeh
 export function Segments({ value, onChange, options }:
   { value: string; onChange: (v: string) => void; options: { value: string; label: ReactNode }[] }) {
   return (
-    <div role="radiogroup" className="inline-flex rounded-control border border-rule-strong bg-surface p-0.5">
+    <div role="radiogroup" className="inline-flex max-w-full flex-wrap rounded-control border border-rule-strong bg-surface p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
+          type="button"
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`min-h-10 rounded-[3px] px-3.5 text-sm font-medium transition-colors duration-(--dur-micro) active:duration-0 ${
+          className={`min-h-11 rounded-[3px] px-3.5 text-sm font-medium transition-colors duration-(--dur-micro) active:duration-0 ${
             value === o.value ? "bg-ink text-surface" : "text-ink-2 hover:bg-paper"
           }`}
         >

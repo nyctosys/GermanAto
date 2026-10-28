@@ -3,19 +3,18 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { type Uploaded, PhotoCapture } from "@/components/capture";
+import { type Uploaded } from "@/components/capture";
 import { CatalogPicker, lineCode, lineName, linkButton, type Pick, QuoteBadge, type QuoteLine, type QuoteStatus } from "@/components/estimates";
+import { type Payment, type PaymentBody, PaymentForm, PaymentList, ProofInput } from "@/components/payments";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, useApi } from "@/lib/api";
 import { day, money, qty, when } from "@/lib/format";
-import { advanceSchema, type FieldErrors, linePrice, lineQty, parseForm } from "@/lib/schemas";
+import { linePrice, lineQty } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
-type Payment = { id: string; number: string; status: string; account: string; reference: string; amount: string; received_at: string;
-  received_by: string | null; proof_url: string | null; no_proof_reason: string };
 type Quotation = {
   id: string; number: string; revision: number; status: QuoteStatus; version: number; include_tax: boolean; tax_rate: string;
   discount: string; valid_until: string; notes: string; sent_at: string | null; created_at: string; job_card_id: string;
@@ -30,7 +29,6 @@ type Quotation = {
 };
 
 const METHOD: Record<string, string> = { in_person: "In person", whatsapp: "WhatsApp reply", phone: "Phone call" };
-const ACCOUNT: Record<string, string> = { cash: "Cash", bank: "Bank transfer", wallet: "Mobile wallet" };
 
 export default function QuotationPage() {
   return (
@@ -144,7 +142,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
 
         <div className="space-y-4">
           <Totals q={q} />
-          {q.advances.length > 0 && <Advances advances={q.advances} />}
+          {q.advances.length > 0 && <PaymentList title="Advances" payments={q.advances} />}
           <VehiclePanel carId={q.visit.car_id} ownerId={q.visit.customer_id} buyerId={q.visit.buyer_id} />
         </div>
       </div>
@@ -312,41 +310,6 @@ function Totals({ q }: { q: Quotation }) {
   );
 }
 
-function Advances({ advances }: { advances: Payment[] }) {
-  return (
-    <Card title="Advances" flush>
-      <ul>
-        {advances.map((p) => (
-          <li key={p.id} className="flex items-start justify-between gap-3 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5">
-            <span className="min-w-0">
-              <span className="block font-medium">{p.number}</span>
-              <span className="block text-sm text-muted">{ACCOUNT[p.account]}{p.reference ? `, ref ${p.reference}` : ""}, {when(p.received_at)}</span>
-              {p.proof_url ? <a href={p.proof_url} target="_blank" rel="noreferrer" className="text-sm underline">Proof</a>
-                : <span className="block text-sm text-muted">No proof: {p.no_proof_reason}</span>}
-            </span>
-            <span className={`num shrink-0 ${p.status === "voided" ? "text-muted line-through" : ""}`}>{money(p.amount)}</span>
-          </li>
-        ))}
-      </ul>
-    </Card>
-  );
-}
-
-/** Proof is always asked for; with none, the person must say why (owner decision). */
-function ProofInput({ proof, setProof, reason, setReason, error }:
-  { proof: Uploaded[]; setProof: (v: Uploaded[]) => void; reason: string; setReason: (v: string) => void; error?: string }) {
-  return (
-    <div className="space-y-3">
-      <PhotoCapture value={proof} onChange={(v) => setProof(v.slice(-1))} label="Add proof: photo, screenshot or PDF" accept="image/*,application/pdf" note="Proof" />
-      {!proof.length && (
-        <Field label="No proof? Say why" hint="For example: approved on a phone call." error={error}>
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
-        </Field>
-      )}
-    </div>
-  );
-}
-
 function ApproveForm({ q, busy, onSubmit, onCancel }:
   { q: Quotation; busy: boolean; onSubmit: (b: object) => void; onCancel: () => void }) {
   const [method, setMethod] = useState("in_person");
@@ -406,25 +369,13 @@ function RejectForm({ busy, onSubmit, onCancel }: { busy: boolean; onSubmit: (re
 }
 
 function AdvanceForm({ q, onDone, onCancel }: { q: Quotation; onDone: () => void; onCancel: () => void }) {
-  const [account, setAccount] = useState("cash");
-  const [proof, setProof] = useState<Uploaded[]>([]);
-  const [reason, setReason] = useState("");
-  const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const { data, errors } = parseForm(advanceSchema, e.currentTarget);
-    const more: FieldErrors = {};
-    if (!proof.length && reason.trim().length < 5) more.no_proof_reason = "Attach proof, or explain why there is none";
-    if (data && data.account !== "cash" && !data.reference && !proof.length) more.reference = "Add the transaction reference or a screenshot";
-    setErrors({ ...errors, ...more });
-    if (!data || Object.keys(more).length) return;
+  async function submit(body: PaymentBody) {
     setBusy(true);
     setError(null);
     try {
-      await api(`/api/quotations/${q.id}/advances`, { method: "POST", json: { ...data, proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : reason } });
+      await api(`/api/quotations/${q.id}/advances`, { method: "POST", json: body });
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -432,28 +383,7 @@ function AdvanceForm({ q, onDone, onCancel }: { q: Quotation; onDone: () => void
     }
   }
   return (
-    <Card title="Take an advance">
-      <form onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2">
-        <Field label="Amount (Rs)" error={errors.amount} hint={`Quotation total ${money(q.totals.total)}`}><Input name="amount" type="number" inputMode="decimal" min="0" step="any" autoFocus /></Field>
-        <Field label="Received into" error={errors.account}>
-          <Select name="account" value={account} onChange={(e) => setAccount(e.target.value)}>
-            {Object.entries(ACCOUNT).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </Select>
-        </Field>
-        {account !== "cash" && <Field label="Transaction reference" error={errors.reference}><Input name="reference" maxLength={60} /></Field>}
-        <Field label="Note (optional)" error={errors.note}><Input name="note" maxLength={500} /></Field>
-        <div className="sm:col-span-2">
-          <ProofInput proof={proof} setProof={setProof} reason={reason} setReason={setReason} error={errors.no_proof_reason} />
-        </div>
-        <p className="text-sm text-muted sm:col-span-2">An advance is the customer&apos;s money until the invoice uses it. A refund needs an admin&apos;s approval.</p>
-        <div className="flex flex-col gap-3 sm:col-span-2">
-          <Notice>{error}</Notice>
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={busy}>{busy ? "Recording" : "Record the advance"}</Button>
-            <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-          </div>
-        </div>
-      </form>
-    </Card>
+    <PaymentForm title="Take an advance" hint={`Quotation total ${money(q.totals.total)}.`} busy={busy} onSubmit={submit} onCancel={onCancel}
+                 note={<><p className="text-sm text-muted">An advance is the customer&apos;s money until the invoice uses it. A refund needs an admin&apos;s approval.</p><Notice>{error}</Notice></>} />
   );
 }

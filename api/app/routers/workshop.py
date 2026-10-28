@@ -15,7 +15,7 @@ from app import inspection_template as tpl
 from app.auth import Actor, require
 from app.db import get_db, utcnow
 from app.models import (
-    Attachment, Car, CarOwnership, Customer, Inspection, JobCard, Payment, Quotation, RepairOrder, RepairOrderLine, User, Visit,
+    Attachment, Car, CarOwnership, Customer, Inspection, Invoice, JobCard, Payment, Quotation, RepairOrder, RepairOrderLine, User, Visit,
 )
 from app.numbering import next_number
 from app.validators import Text
@@ -283,6 +283,9 @@ def get_visit(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Sessio
         "quotations": [{"id": q.id, "number": q.number, "revision": q.revision, "status": q.status,
                         "expired": q.status == "sent" and q.valid_until < date.today()} for q in quotes],
         "repair_order": ro and {"id": ro.id, "number": ro.number, "status": ro.status},
+        "invoice": (inv := db.scalar(select(Invoice).where(Invoice.visit_id == v.id, Invoice.kind == "workshop", Invoice.status != "void")))
+                   and {"id": inv.id, "number": inv.number, "status": inv.status},
+        "handed_to": v.handed_to, "credit_reason": v.credit_reason,
         "payments": [{"id": p.id, "number": p.number, "kind": p.kind, "status": p.status, "amount": p.amount,
                       "account": p.account, "received_at": p.received_at} for p in payments],
     }
@@ -311,6 +314,8 @@ def cancel_visit(visit_id: uuid.UUID, body: CancelIn, actor: Actor = Depends(can
     _require_open(v)
     if db.scalar(select(Payment.id).where(Payment.visit_id == v.id, Payment.status == "posted")):
         raise HTTPException(409, "Money has been taken on this visit. Refund or void it (admin approval) before cancelling.")
+    if db.scalar(select(Invoice.id).where(Invoice.visit_id == v.id, Invoice.status == "issued")):
+        raise HTTPException(409, "An invoice has been issued on this visit; it can only be corrected with a credit note.")
     if db.scalar(select(RepairOrderLine.id).join(RepairOrder).where(RepairOrder.visit_id == v.id, RepairOrderLine.issued_qty > 0)):
         raise HTTPException(409, "Parts have been issued on this visit. Return them to stock before cancelling.")
     v.status, v.closed_at, v.close_note = "cancelled", utcnow(), body.reason

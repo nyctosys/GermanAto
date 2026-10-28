@@ -118,9 +118,21 @@ export const lineQty = z.string().trim().refine((v) => Number(v) > 0 && Number(v
 /** A price typed on a quotation line: whole rupees or paisa, more than zero to send. */
 export const linePrice = z.string().trim().refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(v) && Number(v) > 0, "Enter the price");
 
-export const advanceSchema = z.object({
+/** One payment being recorded: proof or a reason; a transfer needs its reference or a screenshot (mirrors the API). */
+export const paymentRowSchema = z.object({
   amount: z.string().trim().refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(v) && Number(v) > 0, "Enter the amount received"),
   account: z.enum(["cash", "bank", "wallet"]),
   reference: text(60),
+  proof: z.array(z.object({ id: z.string() })),
+  reason: z.string().trim(),
+}).superRefine((r, ctx) => {
+  if (!r.proof.length && r.reason.length < 5) ctx.addIssue({ code: "custom", path: ["reason"], message: "Attach proof, or explain why there is none" });
+  if (r.account !== "cash" && !r.reference && !r.proof.length) ctx.addIssue({ code: "custom", path: ["reference"], message: "Add the transaction reference or a screenshot" });
+});
+
+export const gatePassSchema = z.object({
+  odometer_out: optionalInt(0, 2_000_000, "Odometer"),
+  handed_to: text(120),
   note: text(500),
+  credit_reason: z.string().trim().max(500).optional().transform((v) => v ?? ""),
 });

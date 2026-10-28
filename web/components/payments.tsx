@@ -1,0 +1,149 @@
+"use client";
+
+import { useState, type FormEvent, type ReactNode } from "react";
+import { type Uploaded, PhotoCapture } from "@/components/capture";
+import { Button, Card, Field, Input, Select } from "@/components/ui";
+import { money, when } from "@/lib/format";
+import { paymentRowSchema } from "@/lib/schemas";
+
+export type Payment = { id: string; number: string; kind?: string; status: string; account: string; reference: string; amount: string;
+  received_at: string; received_by: string | null; proof_url: string | null; no_proof_reason: string };
+
+export const ACCOUNT: Record<string, string> = { cash: "Cash", bank: "Bank transfer", wallet: "Mobile wallet" };
+
+/** Proof is always asked for; with none, the person must say why (owner decision 4). */
+export function ProofInput({ proof, setProof, reason, setReason, error }:
+  { proof: Uploaded[]; setProof: (v: Uploaded[]) => void; reason: string; setReason: (v: string) => void; error?: string }) {
+  return (
+    <div className="space-y-3">
+      <PhotoCapture value={proof} onChange={(v) => setProof(v.slice(-1))} label="Add proof: photo, screenshot or PDF" accept="image/*,application/pdf" note="Proof" />
+      {!proof.length && (
+        <Field label="No proof? Say why" hint="For example: cash at the counter, no slip." error={error}>
+          <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
+        </Field>
+      )}
+    </div>
+  );
+}
+
+export function PaymentList({ title, payments, footer }: { title: string; payments: Payment[]; footer?: ReactNode }) {
+  return (
+    <Card title={title} flush>
+      <ul>
+        {payments.map((p) => (
+          <li key={p.id} className="flex items-start justify-between gap-3 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5">
+            <span className="min-w-0">
+              <span className="block font-medium">{p.number}{p.kind === "advance" ? ", advance" : ""}</span>
+              <span className="block text-sm text-muted">{ACCOUNT[p.account]}{p.reference ? `, ref ${p.reference}` : ""}, {when(p.received_at)}{p.received_by ? `, ${p.received_by}` : ""}</span>
+              {p.proof_url ? <a href={p.proof_url} target="_blank" rel="noreferrer" className="text-sm underline">Proof</a>
+                : <span className="block text-sm text-warning">No proof: {p.no_proof_reason}</span>}
+            </span>
+            <span className={`num shrink-0 ${p.status === "voided" ? "text-muted line-through" : ""}`}>{money(p.amount)}</span>
+          </li>
+        ))}
+      </ul>
+      {footer}
+    </Card>
+  );
+}
+
+// --- taking money ----------------------------------------------------------------------------
+
+export type PaymentBody = { amount: string; account: string; reference: string; note: string; proof_id: string | null; no_proof_reason: string };
+type Row = { key: string; amount: string; account: string; reference: string; proof: Uploaded[]; reason: string };
+
+const newRow = (amount = ""): Row => ({ key: crypto.randomUUID(), amount, account: "cash", reference: "", proof: [], reason: "" });
+
+/** One row's problems, by field (lib/schemas paymentRowSchema). */
+function rowErrors(r: Row): Record<string, string> {
+  const res = paymentRowSchema.safeParse(r);
+  const e: Record<string, string> = {};
+  if (!res.success) for (const i of res.error.issues) e[String(i.path[0])] ??= i.message;
+  return e;
+}
+
+const toBody = (r: Row, note = ""): PaymentBody => ({
+  amount: r.amount.trim(), account: r.account, reference: r.reference.trim(), note,
+  proof_id: r.proof[0]?.id ?? null, no_proof_reason: r.proof.length ? "" : r.reason.trim(),
+});
+
+function RowFields({ r, set, errors }: { r: Row; set: (p: Partial<Row>) => void; errors: Record<string, string> }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field label="Amount (Rs)" error={errors.amount}>
+        <Input type="number" inputMode="decimal" min="0" step="any" value={r.amount} onChange={(e) => set({ amount: e.target.value })} />
+      </Field>
+      <Field label="Received into">
+        <Select value={r.account} onChange={(e) => set({ account: e.target.value })}>
+          {Object.entries(ACCOUNT).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </Select>
+      </Field>
+      {r.account !== "cash" && (
+        <Field label="Transaction reference" error={errors.reference}>
+          <Input value={r.reference} onChange={(e) => set({ reference: e.target.value })} maxLength={60} />
+        </Field>
+      )}
+      <div className="sm:col-span-2">
+        <ProofInput proof={r.proof} setProof={(proof) => set({ proof })} reason={r.reason} setReason={(reason) => set({ reason })} error={errors.reason} />
+      </div>
+    </div>
+  );
+}
+
+/** Record one payment (an advance, or a payment on an invoice). */
+export function PaymentForm({ title, hint, suggested, busy, onSubmit, onCancel, note }:
+  { title: string; hint?: string; suggested?: string; busy: boolean; note?: ReactNode;
+    onSubmit: (b: PaymentBody) => void; onCancel: () => void }) {
+  const [row, setRow] = useState<Row>(() => newRow(suggested ?? ""));
+  const [tried, setTried] = useState(false);
+  const errors = tried ? rowErrors(row) : {};
+  return (
+    <Card title={title}>
+      <form noValidate className="space-y-4" onSubmit={(e: FormEvent) => {
+        e.preventDefault();
+        setTried(true);
+        if (!Object.keys(rowErrors(row)).length) onSubmit(toBody(row));
+      }}>
+        {hint && <p className="text-sm text-muted">{hint}</p>}
+        <RowFields r={row} set={(p) => setRow((r) => ({ ...r, ...p }))} errors={errors} />
+        {note}
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={busy}>{busy ? "Recording" : "Record the payment"}</Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+/** Payments taken at a counter sale: one or more rows (split cash and transfer) that must add up to the total. */
+export function SplitPayments({ total, rows, setRows, tried }:
+  { total: number; rows: Row[]; setRows: (fn: (rs: Row[]) => Row[]) => void; tried: boolean }) {
+  const sum = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  return (
+    <div className="space-y-5">
+      {rows.map((r, i) => (
+        <div key={r.key} className={i ? "border-t border-rule pt-5" : ""}>
+          {rows.length > 1 && (
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-medium text-ink-2">Payment {i + 1}</p>
+              <Button type="button" variant="ghost" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>Remove</Button>
+            </div>
+          )}
+          <RowFields r={r} set={(p) => setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, ...p } : x)))} errors={tried ? rowErrors(r) : {}} />
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button type="button" variant="ghost" onClick={() => setRows((rs) => [...rs, newRow(String(Math.max(total - sum, 0) || ""))])}>Split the payment</Button>
+        <p className={`num text-sm ${Math.abs(sum - total) < 0.005 ? "text-success" : "text-error"}`}>
+          {money(sum)} of {money(total)}{Math.abs(sum - total) < 0.005 ? ", paid in full" : ""}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export const splitValid = (rows: Row[], total: number) =>
+  rows.every((r) => !Object.keys(rowErrors(r)).length) && Math.abs(rows.reduce((s, r) => s + Number(r.amount), 0) - total) < 0.005;
+export const splitBodies = (rows: Row[]) => rows.map((r) => toBody(r));
+export { newRow, type Row as PaymentRow };

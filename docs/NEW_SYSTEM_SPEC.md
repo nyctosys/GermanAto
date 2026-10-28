@@ -83,7 +83,7 @@ Example: a walk-in customer buys a headlight and nothing else.
   - takes the stock out (a movement for each line, at cost);
   - posts the revenue and cost of goods sold;
   - takes payment straight away: cash, card, transfer or split, each recorded on Money In with its proof;
-  - prints an 80mm thermal receipt or A4.
+  - prints an A4 invoice (owner decision, 28 Oct 2026: counter sales use A4 invoices, no 80mm thermal receipt).
 - **Returns:** a credit note against the counter sale puts the stock back and refunds through Money Out with proof. The original invoice is never edited.
 - **Numbering:** counter sales have their own series, e.g. `CS-A1F3-000045`.
 - **Reports:** they show up in reports as their own channel ("Counter sales" vs "Workshop") in revenue, margin and top-selling items.
@@ -485,7 +485,7 @@ Total ≈ **23–29 weeks** for one developer, or about half that with two worki
 | Inventory laptop | ✅ have | Browser only (Chrome/Edge) pointed at the server | — |
 | Barcode scanner | **buy 1–2** | USB or Bluetooth **keyboard-mode (HID)** 1D/2D scanner that sends the code + Enter (e.g. Zebra DS2208, Honeywell 1470g, or a budget 2D scanner) | Scanning drives stock in (GRN), parts issue and counter sales. HID mode needs no driver |
 | Printer | ✅ have 1 | Used for A4 documents: quotations, repair orders, invoices, the visit record, closing reports | — |
-| 80mm thermal printer | **optional, recommended** | Epson TM-T82/T20 class (USB/LAN) | Fast counter-sale receipts and payment slips; A4 still works without it |
+| 80mm thermal printer | **not needed** | — | Owner decision (28 Oct 2026): counter sales print A4 invoices on the existing printer |
 | Phone or tablet for check-in | **use a staff phone now; tablet later** | Any Android phone/tablet with a camera, using the app in the browser (installable as a PWA) | Check-in photos, damage marks, customer signature on screen |
 | Label printer | later | 2-inch thermal label printer | Only needed for items without a manufacturer barcode (print an internal barcode) |
 | Cloud | — | Small VPS or managed Postgres + object storage for proof files; daily encrypted backups | Off-site copy, owner access from outside, multi-branch later |

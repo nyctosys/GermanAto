@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.auth import Actor, require
 from app.db import get_db
 from app.models import (
-    RO_STAGES, Attachment, Car, Customer, Quotation, RepairOrder, RepairOrderActivity, RepairOrderLine, StockMovement, User,
+    RO_STAGES, Attachment, Car, Customer, Invoice, Quotation, RepairOrder, RepairOrderActivity, RepairOrderLine, StockMovement, User,
     UserBranch, Visit,
 )
 from app.numbering import next_number
@@ -79,6 +79,8 @@ def repair_order_out(db: Session, ro: RepairOrder) -> dict:
                   "buyer_id": v.buyer_id, "complaint": v.complaint, "odometer_in": v.odometer_in,
                   "fuel_eighths": v.fuel_eighths, "condition_notes": v.condition_notes, "items_left": v.items_left},
         "people": snapshot_of(db, v, db.get(Car, v.car_id)),
+        "invoice": (inv := db.scalar(select(Invoice).where(Invoice.repair_order_id == ro.id, Invoice.status != "void")))
+                   and {"id": inv.id, "number": inv.number, "status": inv.status},
         "lines": lines,
         "activity": [{"id": e.id, "kind": e.kind, "body": e.body, "from_status": e.from_status, "to_status": e.to_status,
                       "line_id": e.line_id, "customer_visible": e.customer_visible, "at": e.created_at, "by": by,

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { type Uploaded, PhotoCapture } from "@/components/capture";
 import { CatalogPicker, lineCode, linkButton, type Pick } from "@/components/estimates";
@@ -13,6 +13,7 @@ import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, useApi } from "@/lib/api";
 import { money, qty, when } from "@/lib/format";
 import { linePrice, lineQty } from "@/lib/schemas";
+import { useSession } from "@/lib/session";
 
 type Activity = { id: string; kind: string; body: string; from_status: RoStatus | null; to_status: RoStatus | null; line_id: string | null;
   customer_visible: boolean; at: string; by: string | null; photos: { id: string; name: string; url: string }[] };
@@ -22,6 +23,7 @@ type RepairOrder = {
   visit: { id: string; number: string; status: string; car_id: string; customer_id: string; buyer_id: string | null; complaint: string;
     odometer_in: number | null; fuel_eighths: number | null; condition_notes: string; items_left: string };
   lines: RoLine[]; activity: Activity[];
+  invoice: { id: string; number: string; status: string } | null;
 };
 
 export default function RepairOrderPage() {
@@ -162,7 +164,7 @@ function StatusCard({ ro, working, busy, onMove }:
           </div>
         )
       ) : <p className="text-muted">{ro.status === "delivered" ? "Delivered. This repair order is closed." : "The visit is closed."}</p>}
-      {ro.status === "ready" && <p className="mt-3 text-sm text-muted">Next: the invoice and gate pass (being built).</p>}
+      {ro.status === "ready" && <InvoiceStep ro={ro} />}
     </Card>
   );
 }
@@ -340,5 +342,25 @@ function ActivityCard({ ro, working, onAdd }: { ro: RepairOrder; working: boolea
       </ol>
       {!working && <Link href={`/visits/${ro.visit.id}`} className={`${linkButton} mt-4 w-fit`}>Back to the visit</Link>}
     </Card>
+  );
+}
+
+function InvoiceStep({ ro }: { ro: RepairOrder }) {
+  const router = useRouter();
+  const { can } = useSession();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (ro.invoice) return <Link href={`/invoices/${ro.invoice.id}`} className={`${linkButton} mt-4 w-fit`}>Open invoice {ro.invoice.number}</Link>;
+  if (!can("invoices")) return <p className="mt-3 text-sm text-muted">Ready for the invoice.</p>;
+  return (
+    <div className="mt-4 space-y-2">
+      <Button disabled={busy} onClick={async () => {
+        setBusy(true);
+        setError(null);
+        try { router.push(`/invoices/${(await api<{ id: string }>(`/api/repair-orders/${ro.id}/invoice`, { method: "POST" })).id}`); }
+        catch (err) { setError((err as Error).message); setBusy(false); }
+      }}>Make the invoice</Button>
+      <Notice>{error}</Notice>
+    </div>
   );
 }

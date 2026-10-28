@@ -41,7 +41,7 @@ function Cars() {
                       <Plate plate={c.plate} small />
                       <span className="min-w-0">
                         <span className="block font-medium">{carTitle(c)}</span>
-                        {c.vin && <span className="num block text-sm text-muted">{c.vin}</span>}
+                        {c.vin && <span className="num block break-all text-sm text-muted">{c.vin}</span>}
                       </span>
                     </span>
                     <span className="text-ink-2">{c.owner?.name ?? "No owner"}</span>

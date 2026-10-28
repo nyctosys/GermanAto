@@ -5,6 +5,7 @@ import { Suspense, useState } from "react";
 import { RequirePermission } from "@/components/shell";
 import { Button, Card, EmptyState, ErrorState, Field, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
+import { when } from "@/lib/format";
 
 type Entry = {
   id: string; at: string; action: string; entity_type: string; entity_id: string | null;
@@ -18,8 +19,14 @@ const ACTIONS: Record<string, string> = {
 };
 const RECORDS: Record<string, string> = {
   users: "User", user_branches: "User's branch access", roles: "Role", role_permissions: "Role permission",
-  branches: "Branch", attachments: "Attachment",
+  branches: "Branch", attachments: "Attachment", customers: "Customer", cars: "Car", car_ownerships: "Car owner",
+  labour_codes: "Labour code", items: "Item", item_codes: "Item code", stock_movements: "Stock movement", visits: "Visit",
+  inspections: "Inspection", job_cards: "Job card", job_card_lines: "Job card line", quotations: "Quotation",
+  quotation_lines: "Quotation line", payments: "Payment", repair_orders: "Repair order", repair_order_lines: "Repair order line",
+  repair_order_activity: "Repair order activity", invoices: "Invoice", invoice_lines: "Invoice line",
 };
+// Any table added later still reads as words, and can wrap on a phone.
+const recordName = (t: string) => RECORDS[t] ?? t.replace(/_/g, " ");
 const HIDDEN_FIELDS = new Set(["id", "created_at", "updated_at", "version", "created_by", "updated_by"]);
 
 export default function AuditPage() {
@@ -103,11 +110,11 @@ function AuditList({ action }: { action: string }) {
               <tbody>
                 {entries.map((e) => (
                   <tr key={e.id} className="border-t border-rule align-top first:border-t-0">
-                    <td data-label="When" className="num whitespace-nowrap px-5 py-3 max-sm:px-0">{new Date(e.at).toLocaleString()}</td>
+                    <td data-label="When" className="num px-5 py-3 max-sm:px-0 sm:whitespace-nowrap">{when(e.at)}</td>
                     <td data-label="Who" className="px-3 py-3 max-sm:px-0">{e.user ?? "System"}</td>
                     <td data-label="What" className="px-3 py-3 max-sm:px-0">
                       <span className="font-medium">{ACTIONS[e.action] ?? e.action}</span>{" "}
-                      <span className="text-muted">{RECORDS[e.entity_type] ?? e.entity_type}</span>
+                      <span className="text-muted">{recordName(e.entity_type)}</span>
                     </td>
                     <td className="px-5 py-3 max-sm:px-0"><Changes changes={e.changes} /></td>
                   </tr>

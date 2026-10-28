@@ -17,6 +17,7 @@ const NAV: { section: string; items: { href: string; label: string; permission: 
       { href: "/visits", label: "Cars in the workshop", permission: "visits" },
       { href: "/quotations", label: "Quotations", permission: "quotations" },
       { href: "/repair-orders", label: "Repair orders", permission: "repair-orders" },
+      { href: "/invoices", label: "Invoices and counter sales", permission: "invoices" },
       { href: "/customers", label: "Customers", permission: "customers" },
       { href: "/cars", label: "Cars", permission: "customers" },
     ],

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import Actor, require
 from app.db import get_db
-from app.models import Attachment, AuditLog, Car, CarOwnership, Customer, Inspection, User, Visit
+from app.models import Attachment, AuditLog, Car, CarOwnership, Customer, Inspection, Invoice, User, Visit
 from app.numbering import next_number
 from app.validators import Cnic, Email, Name, Phone, Text, Upper, Vin, normalize_plate
 
@@ -291,5 +291,11 @@ def car_history(car_id: uuid.UUID, _: Actor = Depends(can_view), db: Session = D
         events.append({"at": i.signed_at.isoformat(), "on": None, "kind": "inspection",
                        "title": f"{kind} inspection {i.number}", "detail": f"Overall: {overall}" if overall else "",
                        "odometer_km": (i.data.get("assessment") or {}).get("odometer_km"), "link": f"/inspections/{i.id}"})
+    from app.routers.estimates import totals  # late: estimates builds on the workshop router
+    for inv in db.scalars(select(Invoice).where(Invoice.car_id == car.id, Invoice.status == "issued")):
+        work = ", ".join(l.description for l in inv.lines[:6]) + ("…" if len(inv.lines) > 6 else "")
+        events.append({"at": inv.issued_at.isoformat(), "on": None, "kind": "invoice",
+                       "title": f"{'Counter sale' if inv.kind == 'counter_sale' else 'Invoice'} {inv.number}, Rs {totals(inv)['total']:,.0f}",
+                       "detail": work, "odometer_km": None, "link": f"/invoices/{inv.id}"})
     events.sort(key=lambda e: e["at"], reverse=True)
     return events

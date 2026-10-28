@@ -183,8 +183,9 @@ def status_of(q: Quotation) -> str:
     return "expired" if q.status == "sent" and q.valid_until < date.today() else q.status
 
 
-def totals(q: Quotation) -> dict:
-    lines = [l for l in q.lines if not l.declined]
+def totals(q) -> dict:
+    """For a quotation or an invoice: lines (declined ones drop out), discount, tax."""
+    lines = [l for l in q.lines if not getattr(l, "declined", False)]
     labour = sum((money(l.qty * l.unit_price) for l in lines if l.kind == "labour"), Decimal(0))
     parts = sum((money(l.qty * l.unit_price) for l in lines if l.kind == "part"), Decimal(0))
     subtotal = labour + parts

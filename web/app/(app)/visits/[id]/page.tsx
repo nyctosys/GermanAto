@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { carTitle, Plate } from "@/components/cars";
-import { QuoteBadge, type QuoteStatus } from "@/components/estimates";
+import { linkButton, QuoteBadge, type QuoteStatus } from "@/components/estimates";
 import { RoBadge, type RoStatus } from "@/components/repairs";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
@@ -12,6 +12,7 @@ import { VehiclePanel } from "@/components/vehicle-panel";
 import { type VisitSummary, elapsed } from "@/components/visits";
 import { api, useApi } from "@/lib/api";
 import { money, phone, when } from "@/lib/format";
+import { type FieldErrors, gatePassSchema, parseForm } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 type File = { id: string; name: string; url: string; mime: string };
@@ -22,6 +23,8 @@ type Visit = VisitSummary & {
   job_card: { id: string; number: string; lines: number } | null;
   quotations: { id: string; number: string; revision: number; status: QuoteStatus | "revised"; expired: boolean }[];
   repair_order: { id: string; number: string; status: RoStatus } | null;
+  invoice: { id: string; number: string; status: string } | null;
+  handed_to: string; credit_reason: string;
   payments: { id: string; number: string; kind: string; status: string; amount: string }[];
 };
 
@@ -76,6 +79,7 @@ function VisitDetail() {
         </div>
         <div className="text-right">
           <p className="font-medium">{v.number}</p>
+          <Link href={`/print/visits/${v.id}`} target="_blank" className="mb-1 block text-sm underline">Print visit record</Link>
           {open ? <Badge tone="accent">In the workshop {elapsed(v.checked_in_at)}</Badge>
             : v.status === "cancelled" ? <Badge>Cancelled</Badge> : <Badge tone="success">Delivered</Badge>}
         </div>
@@ -144,6 +148,7 @@ function VisitDetail() {
             )}
           </Card>
 
+          {open ? <GatePass v={v} onDone={reload} /> : v.status === "closed" && <GatePassDone v={v} />}
           {open && (
             cancelling ? <CancelVisit id={v.id} onDone={() => { setCancelling(false); reload(); }} onCancel={() => setCancelling(false)} />
               : <Button variant="ghost" onClick={() => setCancelling(true)}>Cancel this visit</Button>
@@ -237,10 +242,101 @@ function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => voi
             <div className={row}><span><span className="block font-medium">Repair order</span><span className="block text-sm text-muted">Made from the approved quotation.</span></span></div>
           )}
         </li>
-        {["Invoice and payment", "Gate pass"].map((s) => (
-          <li key={s} className={`${row} text-ink-2`}><span>{s}</span><span className="text-sm text-muted">Being built</span></li>
-        ))}
+        <li>
+          {v.invoice ? (
+            <Link href={`/invoices/${v.invoice.id}`} className={`${row} hover:bg-paper-2`}>
+              <span><span className="block font-medium">Invoice</span><span className="block text-sm text-muted">{v.invoice.number}</span></span>
+              <Badge tone={v.invoice.status === "issued" ? "success" : "warning"}>{v.invoice.status === "issued" ? "Issued" : "Draft"}</Badge>
+            </Link>
+          ) : (
+            <div className={row}><span><span className="block font-medium">Invoice</span><span className="block text-sm text-muted">Made from the repair order once it is Ready.</span></span></div>
+          )}
+        </li>
       </ul>
+    </Card>
+  );
+}
+
+type GateCheck = { blockers: string[]; warnings: string[]; balance: string; invoice_id: string | null };
+
+function GatePass({ v, onDone }: { v: Visit; onDone: () => void }) {
+  const { can } = useSession();
+  const check = useApi<GateCheck>(`/api/visits/${v.id}/gate-check`);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  if (!can("visits") || !check.data) return null;
+  const balance = Number(check.data.balance);
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const { data, errors } = parseForm(gatePassSchema, e.currentTarget);
+    const more: FieldErrors = {};
+    if (data && v.odometer_in != null && data.odometer_out != null && data.odometer_out < v.odometer_in) more.odometer_out = "Less than at check-in";
+    if (data && balance > 0 && data.credit_reason.length < 5) more.credit_reason = "Give the reason";
+    setErrors({ ...errors, ...more });
+    if (!data || Object.keys(more).length) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/visits/${v.id}/gate-pass`, { method: "POST", json: data });
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="Gate pass">
+      {check.data.blockers.length > 0 ? (
+        <>
+          <p className="mb-2 text-ink-2">Before the car can leave:</p>
+          <ul className="list-disc space-y-1 pl-5 text-ink-2">{check.data.blockers.map((b) => <li key={b}>{b}</li>)}</ul>
+        </>
+      ) : !open ? (
+        <div className="space-y-3">
+          {balance > 0 && <Notice tone="warning">{`Balance of ${money(balance)} on the invoice. Take the payment first, or an admin can release the car on credit.`}</Notice>}
+          {check.data.warnings.map((w) => <Notice key={w} tone="warning">{w}</Notice>)}
+          <Button onClick={() => setOpen(true)} disabled={balance > 0 && !can("release-on-credit")}>Release the car</Button>
+        </div>
+      ) : (
+        <form onSubmit={submit} noValidate className="space-y-4">
+          <Field error={errors.odometer_out} label="Odometer at exit (km)" hint={v.odometer_in != null ? `At check-in: ${v.odometer_in.toLocaleString("en-PK")} km` : undefined}>
+            <Input name="odometer_out" type="number" inputMode="numeric" min={v.odometer_in ?? 0} />
+          </Field>
+          <Field label="Handed over to" hint="Who collected the car, if not the owner."><Input name="handed_to" maxLength={120} /></Field>
+          <Field label="Note (optional)"><Input name="note" maxLength={500} /></Field>
+          {balance > 0 && (
+            <Field error={errors.credit_reason} label={`Reason for releasing with ${money(balance)} unpaid`} hint="Recorded with your name on the invoice and in the audit log.">
+              <Input name="credit_reason" required minLength={5} maxLength={500} />
+            </Field>
+          )}
+          <Notice>{error}</Notice>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy}>{busy ? "Releasing" : balance > 0 ? "Release on credit" : "Release the car"}</Button>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+          </div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+function GatePassDone({ v }: { v: Visit }) {
+  return (
+    <Card title="Gate pass">
+      <dl className="grid gap-4 sm:grid-cols-2">
+        <div><dt className="text-sm text-muted">Left</dt><dd>{v.closed_at ? when(v.closed_at) : ""}</dd></div>
+        <div><dt className="text-sm text-muted">Odometer at exit</dt><dd className="num">{v.odometer_out != null ? `${v.odometer_out.toLocaleString("en-PK")} km` : "Not recorded"}</dd></div>
+        {v.handed_to && <div className="sm:col-span-2"><dt className="text-sm text-muted">Handed over to</dt><dd>{v.handed_to}</dd></div>}
+        {v.credit_reason && <div className="sm:col-span-2"><dt className="text-sm text-muted">Released on credit</dt><dd>{v.credit_reason}</dd></div>}
+      </dl>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link href={`/print/gate-pass/${v.id}`} target="_blank" className={linkButton}>Print gate pass</Link>
+        <Link href={`/print/visits/${v.id}`} target="_blank" className={linkButton}>Print visit record</Link>
+      </div>
     </Card>
   );
 }

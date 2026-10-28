@@ -65,6 +65,11 @@
   body {
     overflow-x: clip;
   }
+  /* A fieldset defaults to min-width: min-content, so on a phone it grows past
+     the screen instead of letting its rows wrap (and body clips the excess). */
+  fieldset {
+    min-width: 0;
+  }
   html {
     scrollbar-color: var(--color-rule-strong) var(--color-paper);
     accent-color: var(--color-accent);
