@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
-import { type Invoice, PayBadge, previewTotals } from "@/components/billing";
+import { type CreditNote, type Invoice, PayBadge, previewTotals } from "@/components/billing";
 import { lineCode, linkButton } from "@/components/estimates";
-import { type PaymentBody, PaymentForm, PaymentList } from "@/components/payments";
+import { type PaymentBody, PaymentForm, PaymentList, RefundForm } from "@/components/payments";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
@@ -39,6 +39,8 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
   const [busy, setBusy] = useState(false);
   const [paying, setPaying] = useState(false);
   const [voiding, setVoiding] = useState(false);
+  const [returning, setReturning] = useState(false);
+  const [refunding, setRefunding] = useState(false);
   const draft = inv.status === "draft";
   const counter = inv.kind === "counter_sale";
 
@@ -86,10 +88,18 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
             <PaymentForm title="Take a payment" hint={`Balance ${money(inv.totals.balance)}.`} suggested={String(Number(inv.totals.balance))} busy={busy}
                          onCancel={() => setPaying(false)} onSubmit={async (b: PaymentBody) => { if (await call("/payments", b)) setPaying(false); }} />
           )}
+          {returning && <ReturnForm inv={inv} busy={busy} onCancel={() => setReturning(false)}
+                                   onSubmit={async (b) => { if (await call("/credit-notes", b)) setReturning(false); }} />}
+          {refunding && (
+            <RefundForm title="Give money back" hint={`Owed back to the customer: ${money(inv.totals.refundable)}.`} amount={String(Number(inv.totals.refundable))} busy={busy}
+                        onCancel={() => setRefunding(false)} onSubmit={async (b) => { if (await call("/refund", { ...b, reason: undefined })) setRefunding(false); }} />
+          )}
           {voiding && <VoidForm busy={busy} onCancel={() => setVoiding(false)} onSubmit={async (reason) => { if (await call("/void", { reason })) router.push("/invoices"); }} />}
           <Notice>{error}</Notice>
-          {!paying && !voiding && (
+          {!paying && !voiding && !returning && !refunding && (
             <div className="flex flex-wrap gap-2">
+              {inv.status === "issued" && can("credit-notes") && <Button variant="secondary" onClick={() => setReturning(true)}>Return or correct</Button>}
+              {Number(inv.totals.refundable) > 0 && can("credit-notes") && <Button onClick={() => setRefunding(true)}>Give money back</Button>}
               {inv.status === "issued" && Number(inv.totals.balance) > 0 && can("payments-in") && <Button onClick={() => setPaying(true)}>Take a payment</Button>}
               {draft && !counter && can("invoice-issue") && (
                 <Button disabled={busy} onClick={() => call("/issue", { version: inv.version })}>Issue the invoice</Button>
@@ -104,6 +114,7 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
         <div className="space-y-4">
           <Totals inv={inv} />
           {inv.payments.length > 0 && <PaymentList title="Payments" payments={inv.payments} />}
+          {inv.credit_notes.length > 0 && <CreditNotes notes={inv.credit_notes} />}
           {inv.visit ? <VehiclePanel carId={inv.visit.car_id} ownerId={inv.visit.customer_id} buyerId={inv.visit.buyer_id} />
             : inv.car && <Card title="Car"><p>{[inv.car.year, inv.car.make, inv.car.model].filter(Boolean).join(" ")}</p><p className="text-muted">{inv.car.plate}</p></Card>}
         </div>
@@ -211,7 +222,8 @@ function Totals({ inv }: { inv: Invoice }) {
         {inv.include_tax && row(`Sales tax ${Number(inv.tax_rate)}%`, t.tax)}
         <div className="mt-1 border-t border-rule pt-1">{row("Total", t.total, true)}</div>
         {inv.status === "draft" && Number(t.advance_held) > 0 && row("Advance to apply", `-${t.advance_held}`)}
-        {inv.status === "issued" && <>{row("Paid", `-${t.paid}`)}{row("Balance", t.balance, true)}</>}
+        {inv.status === "issued" && Number(t.credited) > 0 && row("Credited (returns)", `-${t.credited}`)}
+        {inv.status === "issued" && <>{row("Paid", `-${t.paid}`)}{Number(t.balance) < 0 ? row("Owed back to the customer", `${-Number(t.balance)}`, true) : row("Balance", t.balance, true)}</>}
       </dl>
     </Card>
   );
@@ -226,6 +238,71 @@ function VoidForm({ busy, onSubmit, onCancel }: { busy: boolean; onSubmit: (reas
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="danger" disabled={busy}>Void</Button>
           <Button type="button" variant="secondary" onClick={onCancel}>Keep it</Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+function CreditNotes({ notes }: { notes: CreditNote[] }) {
+  return (
+    <Card title="Credit notes" flush>
+      <ul>
+        {notes.map((n) => (
+          <li key={n.id} className="space-y-1 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5">
+            <div className="flex justify-between gap-3"><span className="font-medium">{n.number}</span><span className="num">-{money(n.total)}</span></div>
+            <p className="text-sm text-muted">{when(n.created_at)}. {n.reason}</p>
+            <ul className="text-sm text-ink-2">{n.lines.map((l) => <li key={l.invoice_line_id}>{qty(l.qty)} x {l.description}{l.restocked ? ", back in stock" : ""}</li>)}</ul>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+/** Pick what came back, and how much of each line. Parts can go back on the shelf at the cost they left at. */
+function ReturnForm({ inv, busy, onSubmit, onCancel }: { inv: Invoice; busy: boolean; onSubmit: (b: object) => void; onCancel: () => void }) {
+  const credited: Record<string, number> = {};
+  inv.credit_notes.forEach((n) => n.lines.forEach((l) => { credited[l.invoice_line_id] = (credited[l.invoice_line_id] ?? 0) + Number(l.qty); }));
+  const left = (id: string, total: string) => Math.max(Number(total) - (credited[id] ?? 0), 0);
+  const [qtys, setQtys] = useState<Record<string, string>>({});
+  const [restock, setRestock] = useState<Record<string, boolean>>({});
+  const [reason, setReason] = useState("");
+  const [tried, setTried] = useState(false);
+  const picked = inv.lines.filter((l) => Number(qtys[l.id]) > 0);
+  const badQty = (id: string, total: string) => Number(qtys[id]) > left(id, total);
+
+  return (
+    <Card title="Return or correct">
+      <form noValidate className="space-y-5" onSubmit={(e) => {
+        e.preventDefault();
+        setTried(true);
+        if (!picked.length || reason.trim().length < 3 || picked.some((l) => badQty(l.id, l.qty))) return;
+        onSubmit({ reason: reason.trim(), lines: picked.map((l) => ({ invoice_line_id: l.id, qty: qtys[l.id], restock: l.kind === "part" && !!restock[l.id] })) });
+      }}>
+        <p className="text-sm text-muted">The invoice stays as it was. A credit note reverses the part you choose, and the customer&apos;s balance changes with it.</p>
+        <ul className="space-y-4">
+          {inv.lines.map((l) => {
+            const max = left(l.id, l.qty);
+            return (
+              <li key={l.id} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem] sm:items-end">
+                <div className="min-w-0">
+                  <p className="font-medium">{l.description}</p>
+                  <p className="text-sm text-muted">{l.kind === "labour" ? "Labour" : "Part"}, {qty(l.qty)} at {money(l.unit_price)}{max < Number(l.qty) ? `, ${qty(max)} left to credit` : ""}</p>
+                  {l.kind === "part" && max > 0 && <Checkbox checked={!!restock[l.id]} onChange={(e) => setRestock((r) => ({ ...r, [l.id]: e.target.checked }))} label="Put it back in stock" />}
+                </div>
+                <Field label="Credit qty" error={tried && badQty(l.id, l.qty) ? `At most ${qty(max)}` : undefined}>
+                  <Input type="number" inputMode="decimal" min="0" max={max} step="any" disabled={max <= 0} value={qtys[l.id] ?? ""} onChange={(e) => setQtys((q) => ({ ...q, [l.id]: e.target.value }))} />
+                </Field>
+              </li>
+            );
+          })}
+        </ul>
+        <Field label="Reason" error={tried && reason.trim().length < 3 ? "Say why" : undefined}><Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} /></Field>
+        {tried && !picked.length && <p role="alert" className="text-sm text-error">Enter a quantity on at least one line.</p>}
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={busy}>{busy ? "Recording" : "Issue the credit note"}</Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         </div>
       </form>
     </Card>

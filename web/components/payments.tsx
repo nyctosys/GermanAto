@@ -6,7 +6,7 @@ import { Button, Card, Field, Input, Select } from "@/components/ui";
 import { money, when } from "@/lib/format";
 import { paymentRowSchema } from "@/lib/schemas";
 
-export type Payment = { id: string; number: string; kind?: string; status: string; account: string; reference: string; amount: string;
+export type Payment = { id: string; number: string; kind?: string; refunded?: boolean; invoice_id?: string | null; status: string; account: string; reference: string; amount: string;
   received_at: string; received_by: string | null; proof_url: string | null; no_proof_reason: string };
 
 export const ACCOUNT: Record<string, string> = { cash: "Cash", bank: "Bank transfer", wallet: "Mobile wallet" };
@@ -37,6 +37,7 @@ export function PaymentList({ title, payments, footer, action }:
               <span className="block font-medium">{p.number}{p.kind === "advance" ? ", advance" : ""}</span>
               <span className="block text-sm text-muted">{ACCOUNT[p.account]}{p.reference ? `, ref ${p.reference}` : ""}, {when(p.received_at)}{p.received_by ? `, ${p.received_by}` : ""}</span>
               {p.status === "voided" && <span className="block text-sm text-error">Voided</span>}
+              {p.refunded && <span className="block text-sm text-warning">Refunded to the customer</span>}
               {p.proof_url ? <a href={p.proof_url} target="_blank" rel="noreferrer" className="text-sm underline">Proof</a>
                 : <span className="block text-sm text-warning">No proof: {p.no_proof_reason}</span>}
             </span>
@@ -152,3 +153,34 @@ export const splitValid = (rows: Row[], total: number) =>
   rows.every((r) => !Object.keys(rowErrors(r)).length) && Math.abs(rows.reduce((s, r) => s + Number(r.amount), 0) - total) < 0.005;
 export const splitBodies = (rows: Row[]) => rows.map((r) => toBody(r));
 export { newRow, type Row as PaymentRow };
+
+/**
+ * Give money back: an advance (the whole amount, with the admin's reason) or an overpayment.
+ * Same proof rule as every other money record.
+ */
+export function RefundForm({ title, hint, amount, fixedAmount, needsReason, busy, onSubmit, onCancel }:
+  { title: string; hint?: string; amount: string; fixedAmount?: boolean; needsReason?: boolean; busy: boolean;
+    onSubmit: (b: PaymentBody & { reason: string }) => void; onCancel: () => void }) {
+  const [row, setRow] = useState<Row>(() => newRow(amount));
+  const [why, setWhy] = useState("");
+  const [tried, setTried] = useState(false);
+  const errors = tried ? rowErrors(row) : {};
+  const whyBad = needsReason && why.trim().length < 3;
+  return (
+    <Card title={title}>
+      <form noValidate className="space-y-4" onSubmit={(e: FormEvent) => {
+        e.preventDefault();
+        setTried(true);
+        if (!Object.keys(rowErrors(row)).length && !whyBad) onSubmit({ ...toBody(row), reason: why.trim() });
+      }}>
+        {hint && <p className="text-sm text-muted">{hint}</p>}
+        {needsReason && <Field label="Why is it being refunded?" error={tried && whyBad ? "Say why" : undefined}><Input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={500} /></Field>}
+        <RowFields r={row} set={(p) => setRow((r) => ({ ...r, ...(fixedAmount ? { ...p, amount: r.amount } : p) }))} errors={errors} />
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" variant="danger" disabled={busy}>{busy ? "Recording" : "Give the money back"}</Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+        </div>
+      </form>
+    </Card>
+  );
+}

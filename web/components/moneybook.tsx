@@ -22,10 +22,10 @@ type Category = { id: string; name: string };
 
 export const SOURCE: Record<string, string> = {
   invoice_payment: "Invoice payment", advance: "Advance", other_income: "Other income", owner_capital: "Owner capital", transfer: "Transfer",
-  vendor_payment: "Vendor payment", expense: "Expense", drawings: "Owner drawings",
+  vendor_payment: "Vendor payment", expense: "Expense", drawings: "Owner drawings", refund: "Refund to customer",
 };
 const IN_SOURCES = ["invoice_payment", "advance", "other_income", "owner_capital", "transfer"];
-const OUT_SOURCES = ["vendor_payment", "expense", "drawings", "transfer"];
+const OUT_SOURCES = ["vendor_payment", "expense", "drawings", "transfer", "refund"];
 const IN_KINDS = ["other_income", "owner_capital", "transfer"];
 const OUT_KINDS = ["expense", "drawings", "transfer"];
 

@@ -312,7 +312,7 @@ class CancelIn(BaseModel):
 def cancel_visit(visit_id: uuid.UUID, body: CancelIn, actor: Actor = Depends(can_visit), db: Session = Depends(get_db)):
     v = _get_visit(db, actor, visit_id, lock=True)
     _require_open(v)
-    if db.scalar(select(Payment.id).where(Payment.visit_id == v.id, Payment.status == "posted")):
+    if db.scalar(select(Payment.id).where(Payment.visit_id == v.id, Payment.status == "posted", Payment.refunded.is_(False))):
         raise HTTPException(409, "Money has been taken on this visit. Refund or void it (admin approval) before cancelling.")
     if db.scalar(select(Invoice.id).where(Invoice.visit_id == v.id, Invoice.status == "issued")):
         raise HTTPException(409, "An invoice has been issued on this visit; it can only be corrected with a credit note.")

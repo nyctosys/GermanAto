@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { type Uploaded } from "@/components/capture";
 import { CatalogPicker, lineCode, lineName, linkButton, type Pick, QuoteBadge, type QuoteLine, type QuoteStatus } from "@/components/estimates";
-import { type Payment, type PaymentBody, PaymentForm, PaymentList, ProofInput } from "@/components/payments";
+import { type Payment, type PaymentBody, PaymentForm, PaymentList, ProofInput, RefundForm } from "@/components/payments";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
@@ -54,6 +54,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState<"approve" | "reject" | "advance" | null>(null);
+  const [refunding, setRefunding] = useState<Payment | null>(null);
   const open = q.visit.status === "open";
   const draft = q.status === "draft" && open;
 
@@ -142,7 +143,20 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
 
         <div className="space-y-4">
           <Totals q={q} />
-          {q.advances.length > 0 && <PaymentList title="Advances" payments={q.advances} />}
+          {q.advances.length > 0 && (
+            <PaymentList title="Advances" payments={q.advances}
+                         action={(p) => (!p.refunded && !p.invoice_id && p.status === "posted" && can("advance-refund") ? <Button variant="ghost" onClick={() => setRefunding(p)}>Give back</Button> : null)} />
+          )}
+          {refunding && (
+            <RefundForm title={`Give back ${refunding.number}`} hint="Only an admin can do this. The whole advance goes back, and it stays on record." amount={String(Number(refunding.amount))}
+                        fixedAmount needsReason busy={busy} onCancel={() => setRefunding(null)}
+                        onSubmit={async (b) => {
+                          setBusy(true);
+                          setError(null);
+                          try { await api(`/api/advances/${refunding.id}/refund`, { method: "POST", json: b }); setRefunding(null); reload(); }
+                          catch (err) { setError((err as Error).message); setBusy(false); }
+                        }} />
+          )}
           <VehiclePanel carId={q.visit.car_id} ownerId={q.visit.customer_id} buyerId={q.visit.buyer_id} />
         </div>
       </div>

@@ -26,9 +26,9 @@ router = APIRouter(prefix="/api", tags=["money"])
 IN_KINDS = ("other_income", "owner_capital")
 # Who may record which kind: money in needs payments-in, spending needs expenses, and the owner's
 # own money movements (drawings, transfers) need payments-out.
-NEEDS = {"other_income": "payments-in", "owner_capital": "payments-in", "expense": "expenses", "drawings": "payments-out", "transfer": "payments-out"}
+NEEDS = {"refund": "advance-refund", "other_income": "payments-in", "owner_capital": "payments-in", "expense": "expenses", "drawings": "payments-out", "transfer": "payments-out"}
 IN_SOURCES = ("invoice_payment", "advance", "other_income", "owner_capital", "transfer")
-OUT_SOURCES = ("vendor_payment", "expense", "drawings", "transfer")
+OUT_SOURCES = ("vendor_payment", "expense", "drawings", "transfer", "refund")
 
 
 def see_money(actor: Actor = Depends(current_actor)) -> Actor:
@@ -103,10 +103,12 @@ def void_entry(entry_id: uuid.UUID, body: VoidIn, actor: Actor = Depends(current
     e = db.scalar(select(MoneyEntry).where(MoneyEntry.id == entry_id).with_for_update())
     if not e or e.branch_id != actor.branch.id:
         raise HTTPException(404, "Entry not found")
-    if not actor.can(NEEDS[e.kind]):
+    if not actor.can(NEEDS[e.kind]) and not (e.kind == "refund" and actor.can("credit-notes")):
         raise HTTPException(403, "You don't have permission to do this")
     if e.status != "posted":
         raise HTTPException(409, "Already voided")
+    if e.payment_id:  # a voided refund means the advance is still held
+        db.get(Payment, e.payment_id).refunded = False
     e.status, e.void_reason = "voided", body.reason
     posting.void_source(db, actor.branch, "money_entry", e.id, f"{e.number} voided")
     db.commit()
@@ -140,14 +142,19 @@ def _gather(db: Session, actor: Actor, direction: Literal["in", "out"]) -> list[
             rows.append(_row(id=p.id, number=p.number, date=p.paid_at.date(), source="vendor_payment", party=vendors.get(p.vendor_id, ""),
                              account=p.account, reference=p.reference, amount=p.amount, proof_url=proof(p.proof_id), no_proof_reason=p.no_proof_reason,
                              status="posted" if p.status == "posted" else "voided", link=f"/bills/{p.bill_id}", by=users.get(p.paid_by)))
-        entries = select(MoneyEntry).where(MoneyEntry.branch_id == branch, MoneyEntry.kind.in_(("expense", "drawings", "transfer")))
+        entries = select(MoneyEntry).where(MoneyEntry.branch_id == branch, MoneyEntry.kind.in_(("expense", "drawings", "transfer", "refund")))
     cats = {c.id: c.name for c in db.scalars(select(ExpenseCategory))}
     for e in db.scalars(entries):
         account = e.to_account if (direction == "in" and e.kind == "transfer") else e.account
         detail = cats.get(e.category_id) or (f"From {e.account} to {e.to_account}" if e.kind == "transfer" else "")
+        link = None
+        if e.kind == "refund":
+            detail = "Advance given back" if e.payment_id else "Overpayment on an invoice"
+            pay = db.get(Payment, e.payment_id) if e.payment_id else None
+            link = f"/invoices/{e.invoice_id}" if e.invoice_id else f"/quotations/{pay.quotation_id}" if pay and pay.quotation_id else None
         rows.append(_row(id=e.id, number=e.number, date=e.occurred_on, source=e.kind, party=e.party, detail=detail, account=account,
                          reference=e.reference, amount=e.amount, proof_url=proof(e.proof_id), no_proof_reason=e.no_proof_reason,
-                         status=e.status, entry_id=e.id, by=users.get(e.created_by), note=e.note))
+                         status=e.status, entry_id=e.id, by=users.get(e.created_by), note=e.note, link=link))
     return rows
 
 

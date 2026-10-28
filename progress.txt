@@ -31,3 +31,7 @@
 - MoneyEntry (migration 0012) holds other income, owner capital, expense, drawings, transfer; customer payments (Payment) and vendor payments stay in their own tables and are merged by routers/moneybook.py into /money-in and /money-out.
 - Web: components/moneybook.tsx is shared by both pages; entrySchema in lib/schemas.ts mirrors the API rules.
 - zsh: do not use ${var^} in shell heredocs; write files from python instead.
+## US-506 (credit notes and refunds)
+- Alembic does not detect changed CHECK constraints: edit the migration by hand (see 0013) and name foreign keys so downgrades work.
+- Invoice balance = total - credit notes - (payments - refunds); negative means refundable. Refund MoneyEntry carries invoice_id or payment_id.
+- Held advances exclude refunded ones everywhere (_held_advances, quotation totals, visit cancel guard).

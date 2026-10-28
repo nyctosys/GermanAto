@@ -2,18 +2,20 @@
 visit dossier (spec §2, §2.1)."""
 
 import uuid
+from datetime import date
 from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import Actor, require
 from app.db import get_db, utcnow
 from app.models import (
-    AuditLog, Car, Customer, Inspection, Invoice, InvoiceLine, JobCard, Payment, Quotation, RepairOrder, User, Visit,
+    AuditLog, Car, CreditNote, CreditNoteLine, Customer, Inspection, Invoice, InvoiceLine, JobCard, MoneyEntry, Payment, Quotation,
+    RepairOrder, StockMovement, User, Visit,
 )
 from app import posting
 from app.numbering import next_number
@@ -47,19 +49,41 @@ def _payments(db: Session, inv: Invoice) -> list[Payment]:
 def _held_advances(db: Session, visit_id: uuid.UUID) -> list[Payment]:
     """Advances on the visit not yet applied to an invoice: the customer's money we hold."""
     return list(db.scalars(select(Payment).where(Payment.visit_id == visit_id, Payment.kind == "advance",
-                                                 Payment.status == "posted", Payment.invoice_id.is_(None))))
+                                                 Payment.status == "posted", Payment.invoice_id.is_(None),
+                                                 Payment.refunded.is_(False))))
+
+
+def _credit_notes(db: Session, inv: Invoice) -> list[CreditNote]:
+    return list(db.scalars(select(CreditNote).where(CreditNote.invoice_id == inv.id).order_by(CreditNote.created_at)))
+
+
+def _refunded(db: Session, inv: Invoice) -> Decimal:
+    return db.scalar(select(func.coalesce(func.sum(MoneyEntry.amount), 0)).where(
+        MoneyEntry.invoice_id == inv.id, MoneyEntry.kind == "refund", MoneyEntry.status == "posted"))
 
 
 def balance_of(db: Session, inv: Invoice) -> dict:
+    """What is still owed: the invoice, less credit notes, less what was paid (and not given back).
+    A negative balance means the customer overpaid and is owed a refund."""
     t = totals(inv)
-    paid = sum((p.amount for p in _payments(db, inv) if p.status == "posted"), Decimal(0))
-    return {**t, "paid": paid, "balance": t["total"] - paid}
+    credited = sum((totals(cn)["total"] for cn in _credit_notes(db, inv)), Decimal(0))
+    paid = sum((p.amount for p in _payments(db, inv) if p.status == "posted"), Decimal(0)) - _refunded(db, inv)
+    balance = t["total"] - credited - paid
+    return {**t, "credited": credited, "paid": paid, "balance": balance, "refundable": max(-balance, Decimal(0))}
 
 
 def pay_status(inv: Invoice, b: dict) -> str:
     if inv.status != "issued":
         return inv.status
     return "paid" if b["balance"] <= 0 else "partly_paid" if b["paid"] > 0 else "unpaid"
+
+
+def credit_note_out(db: Session, cn: CreditNote) -> dict:
+    t = totals(cn)
+    return {"id": cn.id, "number": cn.number, "reason": cn.reason, "created_at": cn.created_at, "total": t["total"], "tax": t["tax"],
+            "discount": t["discount"],
+            "lines": [{"invoice_line_id": l.invoice_line_id, "description": l.description, "qty": l.qty, "unit_price": l.unit_price,
+                       "amount": money(l.qty * l.unit_price), "restocked": l.restocked} for l in cn.lines]}
 
 
 def invoice_out(db: Session, inv: Invoice) -> dict:
@@ -85,6 +109,7 @@ def invoice_out(db: Session, inv: Invoice) -> dict:
         "car": car and {"id": car.id, "plate": car.plate, "make": car.make, "model": car.model, "year": car.year, "vin": car.vin},
         "lines": lines, "totals": {**b, "advance_held": held},
         "payments": [payment_out(db, p) for p in _payments(db, inv)],
+        "credit_notes": [credit_note_out(db, cn) for cn in _credit_notes(db, inv)],
         "credit_release": credit and {"by": credit.full_name, "reason": v.credit_reason},
     }
 
@@ -470,3 +495,131 @@ def dossier(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Session 
         "audit": [{"at": a.at, "by": by, "action": a.action, "entity_type": a.entity_type, "fields": sorted(a.changes)}
                   for a, by in audit],
     }
+
+
+# --- credit notes and refunds -------------------------------------------------------------------------
+
+can_credit = require("credit-notes")
+can_refund_advance = require("advance-refund")
+
+
+def _return_cost(db: Session, line: InvoiceLine) -> Decimal:
+    """What the part cost when it left stock for this invoice line, so a return puts it back at that cost."""
+    src = ("repair_order_line", line.repair_order_line_id) if line.repair_order_line_id else ("invoice_line", line.id)
+    qty, value = db.execute(select(func.sum(-StockMovement.qty), func.sum(-StockMovement.qty * StockMovement.unit_cost)).where(
+        StockMovement.source_type == src[0], StockMovement.source_id == src[1], StockMovement.kind.in_(("sale", "issue", "return")))).one()
+    if not qty:
+        from app.models import Item
+        return db.get(Item, line.item_id).avg_cost
+    return (value / qty).quantize(Decimal("0.0001"))
+
+
+class CreditLineIn(BaseModel):
+    invoice_line_id: uuid.UUID
+    qty: Decimal = Field(gt=0, le=10000, decimal_places=3)
+    restock: bool = False  # the part came back and goes on the shelf
+
+
+class CreditNoteIn(BaseModel):
+    reason: Text = Field(min_length=3, max_length=500)
+    lines: list[CreditLineIn] = Field(min_length=1, max_length=100)
+
+
+@router.post("/invoices/{invoice_id}/credit-notes", status_code=201)
+def issue_credit_note(invoice_id: uuid.UUID, body: CreditNoteIn, actor: Actor = Depends(can_credit), db: Session = Depends(get_db)):
+    """A return or a correction. The invoice stays as it was; this reverses the credited share of it,
+    and puts returned parts back in stock at the cost they left at."""
+    inv = _get_invoice(db, actor, invoice_id, lock=True)
+    if inv.status != "issued":
+        raise HTTPException(409, "Only an issued invoice has credit notes; a draft is simply changed or voided")
+    by_id = {l.id: l for l in inv.lines}
+    already = dict(db.execute(select(CreditNoteLine.invoice_line_id, func.sum(CreditNoteLine.qty)).join(CreditNote, CreditNote.id == CreditNoteLine.credit_note_id)
+                              .where(CreditNote.invoice_id == inv.id).group_by(CreditNoteLine.invoice_line_id)).all())
+    if len({l.invoice_line_id for l in body.lines}) != len(body.lines):
+        raise HTTPException(422, "A line is listed twice")
+    lines = []
+    for n, l in enumerate(body.lines):
+        src = by_id.get(l.invoice_line_id)
+        if not src:
+            raise HTTPException(422, "A line isn't on this invoice")
+        left = src.qty - already.get(src.id, Decimal(0))
+        if l.qty > left:
+            raise HTTPException(422, f"{src.description}: only {left.normalize():f} can still be credited")
+        if l.restock and src.kind != "part":
+            raise HTTPException(422, f"{src.description} is labour, so nothing goes back in stock")
+        lines.append(CreditNoteLine(position=n, invoice_line_id=src.id, kind=src.kind, labour_code_id=src.labour_code_id, item_id=src.item_id,
+                                    description=src.description, qty=l.qty, unit_price=src.unit_price, restocked=l.restock))
+    inv_t = totals(inv)
+    subtotal = sum((money(l.qty * l.unit_price) for l in lines), Decimal(0))
+    used = sum((cn.discount for cn in _credit_notes(db, inv)), Decimal(0))
+    share = min(money(inv.discount * subtotal / inv_t["subtotal"]) if inv_t["subtotal"] else Decimal(0), max(inv_t["discount"] - used, Decimal(0)), subtotal)
+    cn = CreditNote(number=next_number(db, actor.branch, "credit_note"), invoice_id=inv.id, reason=body.reason, include_tax=inv.include_tax,
+                    tax_rate=inv.tax_rate, discount=share, lines=lines)
+    db.add(cn)
+    db.flush()
+    for l in lines:
+        if l.restocked:
+            move(db, l.item_id, "credit", l.qty, unit_cost=_return_cost(db, by_id[l.invoice_line_id]),
+                 reason=f"{cn.number}: {l.description} returned", source_type="credit_note_line", source_id=l.id)
+    posting.credit_note(db, actor.branch, cn)
+    db.commit()
+    return invoice_out(db, inv)
+
+
+class RefundIn(Proof):
+    amount: Decimal = Field(gt=0, le=100_000_000, decimal_places=2)
+    account: Literal["cash", "bank", "wallet"]
+    reference: Text = Field(default="", max_length=60)
+    note: Text = Field(default="", max_length=500)
+
+
+def _refund_entry(db: Session, actor: Actor, body: RefundIn, *, party: str, invoice_id=None, payment_id=None) -> MoneyEntry:
+    if body.account != "cash" and not body.reference and not body.proof_id:
+        raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet refund")
+    e = MoneyEntry(number=next_number(db, actor.branch, "refund"), kind="refund", occurred_on=date.today(), account=body.account, amount=body.amount,
+                   party=party, reference=body.reference, note=body.note, proof_id=body.proof_id, no_proof_reason=body.no_proof_reason,
+                   invoice_id=invoice_id, payment_id=payment_id)
+    db.add(e)
+    db.flush()
+    if body.proof_id:
+        _attach(db, actor, [body.proof_id], "money_entries", e.id)
+    posting.money_entry(db, actor.branch, e)
+    return e
+
+
+@router.post("/invoices/{invoice_id}/refund", status_code=201)
+def refund_overpayment(invoice_id: uuid.UUID, body: RefundIn, actor: Actor = Depends(can_credit), db: Session = Depends(get_db)):
+    """Gives money back when a credit note leaves the customer having paid more than they now owe."""
+    inv = _get_invoice(db, actor, invoice_id, lock=True)
+    due = balance_of(db, inv)["refundable"]
+    if due <= 0:
+        raise HTTPException(409, "Nothing is owed back to the customer on this invoice")
+    if body.amount > due:
+        raise HTTPException(422, f"At most {due:,.2f} is owed back on this invoice")
+    customer = db.get(Customer, inv.customer_id) if inv.customer_id else None
+    _refund_entry(db, actor, body, party=customer.name if customer else inv.walk_in_name or "Walk-in customer", invoice_id=inv.id)
+    db.commit()
+    return invoice_out(db, inv)
+
+
+class AdvanceRefundIn(RefundIn):
+    reason: Text = Field(min_length=3, max_length=500)
+
+
+@router.post("/advances/{payment_id}/refund", status_code=201)
+def refund_advance(payment_id: uuid.UUID, body: AdvanceRefundIn, actor: Actor = Depends(can_refund_advance), db: Session = Depends(get_db)):
+    """Gives a held advance back (admin approval: only people with advance-refund can). The whole advance goes back."""
+    p = db.scalar(select(Payment).where(Payment.id == payment_id).with_for_update())
+    if not p or p.branch_id != actor.branch.id or p.kind != "advance":
+        raise HTTPException(404, "Advance not found")
+    if p.status != "posted" or p.refunded:
+        raise HTTPException(409, "This advance has already been refunded or voided")
+    if p.invoice_id:
+        raise HTTPException(409, "This advance was used on an invoice. Use a credit note and refund instead.")
+    if body.amount != p.amount:
+        raise HTTPException(422, f"An advance is refunded in full: {p.amount:,.2f}")
+    customer = db.get(Customer, p.customer_id) if p.customer_id else None
+    _refund_entry(db, actor, body, party=customer.name if customer else "", payment_id=p.id)
+    p.refunded = True
+    db.commit()
+    return payment_out(db, p)

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import journal
 from app.journal import MONEY_CODE, Line, q
-from app.models import Branch, Invoice, MoneyEntry, Payment, StockMovement, VendorBill, VendorPayment
+from app.models import Branch, CreditNote, Invoice, MoneyEntry, Payment, StockMovement, VendorBill, VendorPayment
 from app.pricing import totals
 
 Z = Decimal(0)
@@ -33,6 +33,16 @@ def invoice_issued(db: Session, branch: Branch, inv: Invoice) -> None:
     journal.post(db, branch, f"Invoice {inv.number} issued",
                  [Line("1100", debit=t["total"]), Line("4000", credit=labour), Line("4100", credit=parts), Line("2300", credit=t["tax"])],
                  on=inv.issued_at.date(), source=("invoice", inv.id))
+
+
+def credit_note(db: Session, branch: Branch, cn: CreditNote) -> None:
+    """Reverses the credited share of the invoice: revenue and tax out, receivable down."""
+    t = totals(cn)
+    discount_labour = q(t["discount"] * t["labour"] / t["subtotal"]) if t["subtotal"] else Z
+    labour, parts = t["labour"] - discount_labour, t["parts"] - (t["discount"] - discount_labour)
+    journal.post(db, branch, f"Credit note {cn.number}",
+                 [Line("4000", debit=labour), Line("4100", debit=parts), Line("2300", debit=t["tax"]), Line("1100", credit=t["total"])],
+                 source=("credit_note", cn.id))
 
 
 def advances_applied(db: Session, branch: Branch, inv: Invoice, advances: list[Payment]) -> None:
@@ -71,6 +81,8 @@ def money_entry(db: Session, branch: Branch, e: MoneyEntry) -> None:
         "expense": [Line("6000", debit=e.amount, category_id=e.category_id), Line(here, credit=e.amount)],
         "drawings": [Line("3100", debit=e.amount), Line(here, credit=e.amount)],
         "transfer": [Line(MONEY_CODE[e.to_account or "cash"], debit=e.amount), Line(here, credit=e.amount)],
+        # A refund gives back money we held (an advance) or money the customer overpaid (after a credit note).
+        "refund": [Line("2200" if e.payment_id else "1100", debit=e.amount), Line(here, credit=e.amount)],
     }[e.kind]
     journal.post(db, branch, f"{e.number}" + (f": {e.party}" if e.party else ""), lines, on=e.occurred_on, source=("money_entry", e.id))
 

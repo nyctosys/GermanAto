@@ -17,9 +17,15 @@ export type Invoice = {
   customer: { id: string; name: string; phone: string; number: string } | null; walk_in_name: string; walk_in_phone: string;
   car: { id: string; plate: string; make: string; model: string; year: number | null; vin: string } | null;
   lines: InvoiceLine[];
-  totals: Record<"labour" | "parts" | "subtotal" | "discount" | "tax" | "total" | "paid" | "balance" | "advance_held", string>;
+  totals: Record<"labour" | "parts" | "subtotal" | "discount" | "tax" | "total" | "paid" | "balance" | "advance_held" | "credited" | "refundable", string>;
   payments: Payment[];
+  credit_notes: CreditNote[];
   credit_release: { by: string; reason: string } | null;
+};
+
+export type CreditNote = {
+  id: string; number: string; reason: string; created_at: string; total: string; tax: string; discount: string;
+  lines: { invoice_line_id: string; description: string; qty: string; unit_price: string; amount: string; restocked: boolean }[];
 };
 
 const PAY: Record<PayStatus, [string, "neutral" | "success" | "warning" | "error" | "accent"]> = {

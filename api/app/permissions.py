@@ -25,6 +25,8 @@ PERMISSIONS: dict[str, str] = {
     "goods-receipt": "Receive stock against a purchase order",
     "payments-out": "Pay vendors (money out)",
     "expenses": "Record daily and major expenses",
+    "credit-notes": "Issue credit notes for returns and corrections, and refund the customer",
+    "advance-refund": "Give a held advance back to the customer (admin approval)",
     "reports-finance": "See the journal, trial balance and finance reports",
     # Later phases add their own here (expenses, hr, payroll, ...).
 }

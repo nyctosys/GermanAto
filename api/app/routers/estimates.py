@@ -192,7 +192,7 @@ def payment_out(db: Session, p: Payment) -> dict:
     return {"id": p.id, "number": p.number, "kind": p.kind, "status": p.status, "account": p.account, "reference": p.reference,
             "amount": p.amount, "received_at": p.received_at, "received_by": by.full_name if by else None, "note": p.note,
             "proof_url": f"/api/attachments/{p.proof_id}/file" if p.proof_id else None, "no_proof_reason": p.no_proof_reason,
-            "quotation_id": p.quotation_id}
+            "quotation_id": p.quotation_id, "refunded": p.refunded, "invoice_id": p.invoice_id}
 
 
 def quotation_out(db: Session, q: Quotation) -> dict:
@@ -203,7 +203,7 @@ def quotation_out(db: Session, q: Quotation) -> dict:
         out.update(description=l.description, unit_price=l.unit_price, amount=money(l.qty * l.unit_price), declined=l.declined)
     t = totals(q)
     advances = advances_on(db, v.id)
-    advance = sum((p.amount for p in advances if p.status == "posted"), Decimal(0))
+    advance = sum((p.amount for p in advances if p.status == "posted" and not p.refunded), Decimal(0))
     history = db.scalars(select(Quotation).where(Quotation.number == q.number).order_by(Quotation.revision)).all()
     return {
         "id": q.id, "number": q.number, "revision": q.revision, "status": status_of(q), "version": q.version,

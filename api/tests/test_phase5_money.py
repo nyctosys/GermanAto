@@ -115,6 +115,7 @@ from sqlalchemy import func
 
 from app.models import StockMovement
 from test_phase3_billing import CASH, ready_repair
+from test_phase3_repairs import approved_quote
 from test_phase4_purchasing import receive, sent_po
 
 
@@ -293,3 +294,95 @@ def test_who_may_record_what(admin):
     assert entry(acct, kind="expense", category_id=tea).status_code == 201  # the accountant records expenses
     assert entry(acct, kind="other_income").status_code == 403  # but money in needs payments-in
     assert acct.get("/api/money-in").status_code == 200
+
+
+# --- credit notes and refunds -----------------------------------------------------------------------------
+
+def issued_invoice(admin):
+    visit, item, ro = ready_repair(admin)  # labour 3000 + 2 filters at 3000, 17% tax = 10530; 4000 advance
+    inv = admin.post(f"/api/repair-orders/{ro['id']}/invoice").json()
+    return item, admin.post(f"/api/invoices/{inv['id']}/issue", json={"version": inv["version"]}).json()
+
+
+def test_a_credit_note_reverses_revenue_tax_and_receivable_and_restocks_at_cost(admin):
+    item, inv = issued_invoice(admin)  # receivable 6530 after the advance
+    part = next(l for l in inv["lines"] if l["kind"] == "part")
+    stock_before = D(str(admin.get(f"/api/items/{item['id']}").json()["on_hand"]))
+    r = admin.post(f"/api/invoices/{inv['id']}/credit-notes", json={"reason": "One filter was wrong", "lines": [{"invoice_line_id": part["id"], "qty": "1", "restock": True}]})
+    assert r.status_code == 201, r.json()
+    cn = r.json()["credit_notes"][0]
+    assert cn["number"].startswith("CN-") and D(str(cn["total"])) == D("3510.00")  # 3000 + 17%
+    assert D(str(admin.get(f"/api/items/{item['id']}").json()["on_hand"])) == stock_before + 1  # back on the shelf
+    b = rows(admin)
+    assert b["4100"] == -3000 and b["2300"] == D("-1020") and b["1100"] == D("6530") - D("3510")  # half the parts revenue reversed
+    assert b["5000"] == 1000 and b["1200"] == stock_value()  # one filter's cost came back at its original cost
+    now = admin.get(f"/api/invoices/{inv['id']}").json()
+    assert D(str(now["totals"]["credited"])) == D("3510.00") and D(str(now["totals"]["balance"])) == D("3020.00")
+
+
+def test_credit_note_limits_and_the_one_time_return_of_a_line(admin):
+    item, inv = issued_invoice(admin)
+    part = next(l for l in inv["lines"] if l["kind"] == "part")
+    labour = next(l for l in inv["lines"] if l["kind"] == "labour")
+    url = f"/api/invoices/{inv['id']}/credit-notes"
+    assert admin.post(url, json={"reason": "x", "lines": [{"invoice_line_id": part["id"], "qty": "1"}]}).status_code == 422  # a reason
+    assert admin.post(url, json={"reason": "Too many", "lines": [{"invoice_line_id": part["id"], "qty": "3"}]}).status_code == 422
+    assert admin.post(url, json={"reason": "Labour back", "lines": [{"invoice_line_id": labour["id"], "qty": "1", "restock": True}]}).status_code == 422
+    assert admin.post(url, json={"reason": "Both", "lines": [{"invoice_line_id": part["id"], "qty": "2"}]}).status_code == 201
+    assert admin.post(url, json={"reason": "Again", "lines": [{"invoice_line_id": part["id"], "qty": "1"}]}).status_code == 422  # nothing left to credit
+
+
+def test_overpayment_after_a_credit_note_is_refunded_through_money_out(admin):
+    item, inv = issued_invoice(admin)
+    admin.post(f"/api/invoices/{inv['id']}/payments", json={"amount": "6530", **CASH})  # paid in full
+    part = next(l for l in inv["lines"] if l["kind"] == "part")
+    after = admin.post(f"/api/invoices/{inv['id']}/credit-notes", json={"reason": "Both filters back", "lines": [{"invoice_line_id": part["id"], "qty": "2", "restock": True}]}).json()
+    assert D(str(after["totals"]["balance"])) == -D("7020.00")  # overpaid by exactly what was credited
+    due = D(str(after["totals"]["refundable"]))
+    assert due == D("7020.00")  # credited 2 x 3000 + 17%, all of it already paid
+    assert admin.post(f"/api/invoices/{inv['id']}/refund", json={"amount": str(due + 1), **CASH}).status_code == 422
+    assert admin.post(f"/api/invoices/{inv['id']}/refund", json={"amount": "7020", "account": "cash"}).status_code == 422  # proof or reason
+    done = admin.post(f"/api/invoices/{inv['id']}/refund", json={"amount": "7020", **CASH})
+    assert done.status_code == 201, done.json()
+    assert D(str(done.json()["totals"]["refundable"])) == 0 and D(str(done.json()["totals"]["balance"])) == 0
+    out = admin.get("/api/money-out").json()
+    assert [r["source"] for r in out["rows"]] == ["refund"] and D(str(out["total"])) == 7020
+    b = rows(admin)
+    assert b["1100"] == 0 and b["1010"] == 4000 + 6530 - 7020  # cash in, less the refund
+
+
+def test_a_held_advance_is_refunded_in_full_by_an_admin_only(admin):
+    visit, item, _, q = approved_quote(admin)
+    advance = admin.post(f"/api/quotations/{q['id']}/advances", json={"amount": "2500", **CASH}).json()
+    adv_id = advance["id"]
+    assert admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "1000", "reason": "Job cancelled", **CASH}).status_code == 422  # in full
+    assert admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "2500", "reason": "x", **CASH}).status_code == 422  # a reason
+    assert admin.post(f"/api/visits/{visit['id']}/cancel", json={"reason": "Customer left"}).status_code == 409  # money is held
+    done = admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "2500", "reason": "Job cancelled", **CASH})
+    assert done.status_code == 201 and done.json()["refunded"] is True
+    assert admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "2500", "reason": "Again", **CASH}).status_code == 409
+    b = rows(admin)
+    assert b["2200"] == 0 and b["1010"] == 0  # the liability is cleared and the cash is back out
+    assert admin.post(f"/api/visits/{visit['id']}/cancel", json={"reason": "Customer left"}).status_code == 200  # nothing held any more
+    refund_entry = next(r for r in admin.get("/api/money-out").json()["rows"] if r["source"] == "refund")
+    voided = admin.post(f"/api/money-entries/{refund_entry['entry_id']}/void", json={"reason": "Wrong amount recorded"}).json()
+    assert voided["status"] == "voided"
+    assert rows(admin)["2200"] == -2500  # the advance is held again
+
+    roles = {r["name"]: r["id"] for r in admin.get("/api/roles").json()}
+    branch_id = admin.get("/api/auth/me").json()["branch"]["id"]
+    admin.post("/api/users", json={"username": "acct", "full_name": "Acct", "password": "acct-pass-1234", "role_id": roles["Accountant"], "branch_ids": [branch_id]})
+    assert signed_in("acct", "acct-pass-1234").post(f"/api/advances/{adv_id}/refund", json={"amount": "2500", "reason": "x" * 5, **CASH}).status_code == 403
+
+
+def test_a_counter_sale_return_puts_the_part_back_at_its_cost(admin):
+    from test_phase2 import new_item
+    item = new_item(admin, name="Headlight", codes=(("mpn", "63117440"),), opening_qty="3", opening_cost="20000")
+    cs = admin.post("/api/counter-sales", json={"lines": [{"kind": "part", "item_id": item["id"], "qty": "1", "unit_price": "30000"}], "include_tax": False}).json()
+    cs = admin.post(f"/api/invoices/{cs['id']}/issue", json={"version": cs["version"], "payments": [{"amount": "30000", **CASH}]}).json()
+    back = admin.post(f"/api/invoices/{cs['id']}/credit-notes", json={"reason": "Wrong model", "lines": [{"invoice_line_id": cs["lines"][0]["id"], "qty": "1", "restock": True}]}).json()
+    assert D(str(back["totals"]["refundable"])) == 30000
+    b = rows(admin)
+    assert b["5000"] == 0 and b["4100"] == 0 and b["1200"] == 60000 == stock_value()  # 3 headlights at 20000 again
+    admin.post(f"/api/invoices/{cs['id']}/refund", json={"amount": "30000", **CASH})
+    assert rows(admin)["1010"] == 0

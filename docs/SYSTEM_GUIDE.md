@@ -99,6 +99,8 @@ The visit page shows where the job stands in its **The job** panel: job card, qu
 | `goods-receipt` | Count stock in against a purchase order |
 | `payments-out` | Pay vendors (and void a vendor payment) |
 | `expenses` | Record daily and major expenses |
+| `credit-notes` | Issue credit notes for returns and corrections, and refund the customer |
+| `advance-refund` | Give a held advance back to the customer (admin approval) |
 | `reports-finance` | See the journal, trial balance and finance reports |
 
 Roles set up at the start: **Admin** (everything), **Accountant** (including vendors and paying them), **Inventory manager** (including vendors, purchase orders and receiving stock). More roles (front desk, technician, cashier) are made under Roles and permissions. A role that already exists keeps the permissions it had: tick the four purchasing permissions on it under Roles and permissions to use purchasing.
@@ -232,7 +234,7 @@ A4 quotation with the customer, car, lines (declined lines left out), totals, an
 - Every record has the amount, where it went (**Cash**, **Bank transfer**, **Mobile wallet**), a reference, and **proof** (photo, screenshot or PDF) or a reason why there is none. Records without proof are shown with "No proof: …".
 - A bank transfer or wallet payment needs its **transaction reference** or a screenshot.
 - Receipts are numbered `PAY-A1F3-000001`. Nothing is edited after it is recorded.
-- A visit holding money can't be cancelled. A refund of an advance needs admin approval and comes with the Money Out stage.
+- A visit holding money can't be cancelled. A held advance can be given back with admin approval (see Credit notes and refunds in section 21).
 
 ---
 
@@ -270,7 +272,7 @@ One timeline of everything that happened, newest first, with who and when:
 - Lines come from the repair order: **labour marked Done**, and **parts at the quantity issued** (not the quantity quoted). Prices start at the agreed prices. Lines added after approval are labelled.
 - **Draft:** prices, discount, tax switch and notes can be changed. If the repair order changes after the draft was made (a part returned, a line marked differently), issuing is refused until you press **Refresh from the repair order**; edited prices are kept.
 - **Issue** (permission `invoice-issue`): locks the prices and **applies the advances held on the visit**. If the advances are more than the invoice, issuing is refused until the difference is refunded.
-- After issuing: **Unpaid**, **Partly paid** or **Paid**; take payments up to the balance. An issued invoice is never edited; corrections will be made with a credit note.
+- After issuing: **Unpaid**, **Partly paid** or **Paid**; take payments up to the balance. An issued invoice is never edited; returns and corrections are made with a credit note (section 21).
 - A draft can be **voided** with a reason (its number stays on record). One live workshop invoice per visit.
 - Numbers: `INV-A1F3-000001`.
 
@@ -364,20 +366,17 @@ It is an **internal** record and includes notes the customer doesn't see. Every 
 |---|---|
 | Inspection repair rows sent straight to the job card | Next workshop round |
 | Supplementary quotation for extra work found during the repair | Next workshop round |
-| Credit notes (returns, corrections to issued invoices) | Phase 5 (money out) |
-| Advance refunds with admin approval | Phase 5 |
 | Below-cost price approval (`discount-approve`), selling below zero stock with an admin override | Phase 4 / 5 |
 | WhatsApp: quotation, ready, receipt, reminders | Phase 8 |
 | Purchasing: purchase orders, goods received, supplier bills | Phase 4 |
-| Money In / Money Out pages, accounts, journal, daily cash close | Phase 5 |
+| Daily cash close, missing-evidence sign-off | Phase 5 |
 | HR, attendance (ZKTeco), payroll | Phase 6 |
 | Monthly and yearly closing, missing-proof sign-off | Phase 7 |
 | Reports with drill-down | Phase 7 |
 | Offline branch server and sync | Phase 9 |
 | Dashboard figures | With reports |
-| Returning goods to a vendor (purchase returns), correcting a wrong goods receipt | Phase 5 (with credit notes) |
+| Returning goods to a vendor (purchase returns), correcting a wrong goods receipt | Later |
 | Purchase order sent to the vendor on WhatsApp | Phase 8 |
-| Vendor payments on the Money Out page, with the other money out | Phase 5 |
 
 ---
 
@@ -419,6 +418,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0010 | Accounts and expense categories |
 | 0011 | Journal: chart of accounts, entries and lines (append-only, enforced by the database) |
 | 0012 | Money entries (other income, owner capital, expenses, drawings, transfers) |
+| 0013 | Credit notes and refunds |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).
@@ -438,6 +438,7 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Billing | `POST repair-orders/{id}/invoice`, `POST counter-sales`, `PUT counter-sales/{id}`, `GET invoices`, `GET/PUT invoices/{id}`, `POST invoices/{id}/refresh`, `…/issue`, `…/payments`, `…/void` |
 | Gate and record | `GET visits/{id}/gate-check`, `POST visits/{id}/gate-pass`, `GET visits/{id}/dossier` |
 | Money | `GET/PUT accounts`, `GET/POST expense-categories`, `PUT expense-categories/{id}`, `GET money-in`, `GET money-out`, `POST money-entries`, `POST money-entries/{id}/void`, `GET journal/trial-balance`, `GET journal/entries` |
+| Credit notes | `POST invoices/{id}/credit-notes`, `POST invoices/{id}/refund`, `POST advances/{id}/refund` |
 | Purchasing | `GET/POST vendors`, `GET/PUT vendors/{id}`, `GET purchase-catalog`, `GET/POST purchase-orders`, `GET/PUT purchase-orders/{id}`, `POST purchase-orders/{id}/send`, `…/cancel`, `…/close`, `…/receive`, `POST goods-receipts/{id}/bill`, `GET bills`, `GET bills/{id}`, `POST bills/{id}/payments`, `POST bills/{id}/void`, `POST vendor-payments/{id}/void` |
 
 ### Quality checks run on every stage
@@ -513,7 +514,7 @@ Numbers: `PO-A1F3-000001`.
 - Stock only goes up through a goods receipt, and only against a sent order.
 - A purchase order, receipt and bill each keep their number; nothing is deleted.
 - Money paid to vendors is recorded the same way as money received: with proof or a reason.
-- Vendor payments will also appear on the Money Out page when it is built.
+- Vendor payments appear on the Money out page (section 21).
 
 ---
 
@@ -587,3 +588,17 @@ One page for **every payment received**, whatever its source:
 - An expense needs a category, an amount, the account it was paid from, the date and proof or a reason. A bank or wallet payment needs its reference or a screenshot.
 - Same filters, totals and voiding as Money in.
 - **Who can record what:** money in needs `payments-in`; expenses need `expenses`; owner drawings and transfers need `payments-out`. The accountant role can record expenses and pay vendors but not receive money.
+
+### Credit notes and refunds
+**Where:** an issued invoice → **Return or correct** (needs `credit-notes`).
+- An issued invoice is never edited. A **credit note** reverses the part you choose: pick the lines and how many of each came back, and give a reason. Works for workshop invoices and counter sales.
+- You can credit **part of a line**; a line can't be credited for more than was invoiced (counting earlier credit notes). Labour can be credited but never goes "back in stock".
+- **Put it back in stock** returns a part to the shelf **at the cost it left at**, so the stock value stays right.
+- The invoice's discount and tax are shared in proportion, so the credit is exactly the share the customer paid for.
+- The invoice then shows **Credited (returns)** and the new balance. If the customer had already paid, the balance goes negative and the page shows **Owed back to the customer**.
+- **Give money back** records the refund: it appears on **Money out** as a *Refund to customer*, with proof or a reason, and clears what is owed. It can't be more than what is owed back.
+- Credit notes are numbered `CN-A1F3-000001`; refunds `RFD-A1F3-000001`.
+
+**Giving back a held advance** (needs `advance-refund`, an admin permission): on a quotation, **Give back** next to an advance that hasn't been used on an invoice. The whole advance goes back, with the admin's reason and proof. It shows on Money out as a refund, the advance is marked *Refunded to the customer*, and the visit no longer counts as holding money (so it can be cancelled). Voiding the refund restores the advance.
+
+**Books:** a credit note reverses revenue (labour and parts), sales tax and the receivable, and a returned part goes back to Inventory against Cost of parts sold. A refund of an overpayment clears the receivable; a refund of an advance clears Customer advances.

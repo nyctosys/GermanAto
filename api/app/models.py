@@ -479,6 +479,7 @@ class Payment(BranchScoped):
     visit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("visits.id"), index=True)
     quotation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("quotations.id"))
     invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id"), index=True)  # set when applied
+    refunded: Mapped[bool] = mapped_column(Boolean, default=False)  # a held advance given back to the customer
     account: Mapped[str] = mapped_column(String(8))
     reference: Mapped[str] = mapped_column(String(60), default="")  # cheque no., transaction id
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
@@ -833,7 +834,7 @@ class JournalLine(Entity):
     note: Mapped[str] = mapped_column(String(200), default="")
 
 
-MONEY_KINDS = ("other_income", "owner_capital", "transfer", "expense", "drawings")
+MONEY_KINDS = ("other_income", "owner_capital", "transfer", "expense", "drawings", "refund")
 
 
 class MoneyEntry(BranchScoped):
@@ -851,6 +852,7 @@ class MoneyEntry(BranchScoped):
         CheckConstraint("to_account IS NULL OR to_account <> account", name="money_transfer_differs"),
         CheckConstraint("(kind = 'expense') = (category_id IS NOT NULL)", name="money_expense_category"),
         CheckConstraint("amount > 0", name="money_amount"),
+        CheckConstraint("(kind = 'refund') = (num_nonnulls(invoice_id, payment_id) = 1)", name="money_refund_target"),
         CheckConstraint("proof_id IS NOT NULL OR no_proof_reason <> ''", name="money_proof"),
         Index("ix_money_entries_date", "occurred_on"),
     )
@@ -863,9 +865,51 @@ class MoneyEntry(BranchScoped):
     to_account: Mapped[str | None] = mapped_column(String(8))      # transfers: where it went
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("expense_categories.id"))
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id"), index=True)   # a refund of an overpaid invoice
+    payment_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("payments.id"), index=True)   # a refund of a held advance
     party: Mapped[str] = mapped_column(String(120), default="")    # who it was paid to or received from
     reference: Mapped[str] = mapped_column(String(60), default="")
     note: Mapped[str] = mapped_column(Text, default="")
     proof_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
     no_proof_reason: Mapped[str] = mapped_column(Text, default="")
     void_reason: Mapped[str] = mapped_column(Text, default="")
+
+
+class CreditNote(BranchScoped):
+    """A return or a correction against an issued invoice. The invoice is never edited:
+    the credit note reverses part of it (revenue, tax, receivable, and stock if the parts came back)."""
+
+    __tablename__ = "credit_notes"
+    __table_args__ = (
+        CheckConstraint("discount >= 0", name="credit_discount"),
+        CheckConstraint("tax_rate >= 0 AND tax_rate <= 100", name="credit_tax_rate"),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    invoice_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("invoices.id"), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    include_tax: Mapped[bool] = mapped_column(Boolean)
+    tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    discount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))  # the invoice's discount, shared in proportion
+
+    lines: Mapped[list["CreditNoteLine"]] = relationship(cascade="all, delete-orphan", lazy="selectin", order_by="CreditNoteLine.position")
+
+
+class CreditNoteLine(Entity):
+    __tablename__ = "credit_note_lines"
+    __table_args__ = (
+        CheckConstraint("kind IN ('labour', 'part')", name="credit_line_kind"),
+        CheckConstraint(LINE_TARGET, name="credit_line_target"),
+        CheckConstraint("qty > 0", name="credit_line_qty"),
+    )
+
+    credit_note_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("credit_notes.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    invoice_line_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("invoice_lines.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(8))
+    labour_code_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("labour_codes.id"))
+    item_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("items.id"))
+    description: Mapped[str] = mapped_column(String(200))
+    qty: Mapped[Decimal] = mapped_column(Numeric(12, 3))
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    restocked: Mapped[bool] = mapped_column(Boolean, default=False)  # the part went back on the shelf
