@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 from app import inspection_template as tpl
 from app.auth import Actor, require
 from app.db import get_db, utcnow
-from app.models import Attachment, Car, CarOwnership, Customer, Inspection, JobCard, Payment, Quotation, User, Visit
+from app.models import (
+    Attachment, Car, CarOwnership, Customer, Inspection, JobCard, Payment, Quotation, RepairOrder, RepairOrderLine, User, Visit,
+)
 from app.numbering import next_number
 from app.validators import Text
 
@@ -268,6 +270,7 @@ def get_visit(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Sessio
     job_card = db.scalar(select(JobCard).where(JobCard.visit_id == v.id))
     quotes = db.scalars(select(Quotation).where(Quotation.visit_id == v.id).order_by(Quotation.revision)).all()
     payments = db.scalars(select(Payment).where(Payment.visit_id == v.id).order_by(Payment.received_at)).all()
+    ro = db.scalar(select(RepairOrder).where(RepairOrder.visit_id == v.id))
     return {
         **visit_summary(v, car, customer, buyer),
         "fuel_eighths": v.fuel_eighths, "items_left": v.items_left, "condition_notes": v.condition_notes,
@@ -279,6 +282,7 @@ def get_visit(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Sessio
         "job_card": job_card and {"id": job_card.id, "number": job_card.number, "lines": len(job_card.lines)},
         "quotations": [{"id": q.id, "number": q.number, "revision": q.revision, "status": q.status,
                         "expired": q.status == "sent" and q.valid_until < date.today()} for q in quotes],
+        "repair_order": ro and {"id": ro.id, "number": ro.number, "status": ro.status},
         "payments": [{"id": p.id, "number": p.number, "kind": p.kind, "status": p.status, "amount": p.amount,
                       "account": p.account, "received_at": p.received_at} for p in payments],
     }
@@ -307,6 +311,8 @@ def cancel_visit(visit_id: uuid.UUID, body: CancelIn, actor: Actor = Depends(can
     _require_open(v)
     if db.scalar(select(Payment.id).where(Payment.visit_id == v.id, Payment.status == "posted")):
         raise HTTPException(409, "Money has been taken on this visit. Refund or void it (admin approval) before cancelling.")
+    if db.scalar(select(RepairOrderLine.id).join(RepairOrder).where(RepairOrder.visit_id == v.id, RepairOrderLine.issued_qty > 0)):
+        raise HTTPException(409, "Parts have been issued on this visit. Return them to stock before cancelling.")
     v.status, v.closed_at, v.close_note = "cancelled", utcnow(), body.reason
     db.commit()
     return get_visit(v.id, actor, db)

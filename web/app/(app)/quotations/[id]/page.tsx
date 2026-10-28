@@ -26,6 +26,7 @@ type Quotation = {
   totals: Record<"labour" | "parts" | "subtotal" | "discount" | "tax" | "total" | "advance" | "balance", string>;
   revisions: { id: string; revision: number; status: QuoteStatus }[];
   advances: Payment[];
+  repair_order: { id: string; number: string } | null;
 };
 
 const METHOD: Record<string, string> = { in_person: "In person", whatsapp: "WhatsApp reply", phone: "Phone call" };
@@ -123,14 +124,22 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
             <div className="flex flex-wrap gap-2">
               {q.status === "sent" && <Button onClick={() => setPanel("approve")}>Record approval</Button>}
               {q.status === "sent" && <Button variant="secondary" onClick={() => setPanel("reject")}>Customer said no</Button>}
-              {["sent", "approved"].includes(q.status) && can("payments-in") && <Button variant="secondary" onClick={() => setPanel("advance")}>Take an advance</Button>}
+              {["sent", "approved", "converted"].includes(q.status) && can("payments-in") && <Button variant="secondary" onClick={() => setPanel("advance")}>Take an advance</Button>}
               {["sent", "approved", "rejected", "expired"].includes(q.status) && (
                 <Button variant="ghost" disabled={busy} onClick={() => act("revise")}>Revise</Button>
               )}
             </div>
           )}
           {q.status === "expired" && <Notice tone="warning">This quotation passed its validity date ({day(q.valid_until)}). Revise it to send updated prices.</Notice>}
-          {q.status === "approved" && <p className="text-sm text-muted">Next: the repair order, made from this approved quotation (being built).</p>}
+          {q.status === "approved" && open && can("repair-orders") && !panel && (
+            <Button disabled={busy} onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try { router.push(`/repair-orders/${(await api<{ id: string }>(`/api/quotations/${q.id}/repair-order`, { method: "POST" })).id}`); }
+              catch (err) { setError((err as Error).message); setBusy(false); }
+            }}>Make the repair order</Button>
+          )}
+          {q.repair_order && <Link href={`/repair-orders/${q.repair_order.id}`} className={`${linkButton} w-fit`}>Open repair order {q.repair_order.number}</Link>}
         </div>
 
         <div className="space-y-4">

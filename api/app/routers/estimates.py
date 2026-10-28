@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session
 
 from app.auth import Actor, current_actor, require
 from app.db import get_db, utcnow
-from app.models import Car, Customer, Item, ItemCode, JobCard, JobCardLine, LabourCode, Payment, Quotation, QuotationLine, User, Visit
+from app.models import (
+    Car, Customer, Item, ItemCode, JobCard, JobCardLine, LabourCode, Payment, Quotation, QuotationLine, RepairOrder, User, Visit,
+)
 from app.numbering import next_number
 from app.routers.workshop import _attach, _get_visit, _require_open, snapshot_of
 from app.stock import on_hand_map
@@ -229,7 +231,8 @@ def quotation_out(db: Session, q: Quotation) -> dict:
         "lines": lines, "totals": {**t, "advance": advance, "balance": t["total"] - advance},
         "revisions": [{"id": h.id, "revision": h.revision, "status": status_of(h)} for h in history],
         "advances": [payment_out(db, p) for p in advances],
-        "people": snapshot_of(db, v, db.get(Car, v.car_id)),  # car, owner and buyer for the printed copy
+        "people": snapshot_of(db, v, db.get(Car, v.car_id)),
+        "repair_order": (ro := db.scalar(select(RepairOrder).where(RepairOrder.quotation_id == q.id))) and {"id": ro.id, "number": ro.number},  # car, owner and buyer for the printed copy
     }
 
 
@@ -441,7 +444,7 @@ def take_advance(quotation_id: uuid.UUID, body: AdvanceIn, actor: Actor = Depend
     q = _get_quote(db, actor, quotation_id, lock=True)
     v = db.get(Visit, q.visit_id)
     _require_open(v)
-    if status_of(q) not in ("sent", "approved"):
+    if status_of(q) not in ("sent", "approved", "converted"):
         raise HTTPException(409, "An advance can be taken once the quotation is sent or approved")
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet payment")

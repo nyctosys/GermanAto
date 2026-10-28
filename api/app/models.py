@@ -483,3 +483,70 @@ class Payment(BranchScoped):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     received_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     void_reason: Mapped[str] = mapped_column(Text, default="")
+
+
+# --- repair order (spec §2, §2.3) ------------------------------------------------------------
+
+RO_STAGES = ("received", "diagnosis", "awaiting_approval", "in_repair", "testing", "ready", "delivered")
+
+
+class RepairOrder(BranchScoped):
+    """What was actually done. Made from an approved quotation; parts are issued
+    from stock here, and every event lands in its activity trail."""
+
+    __tablename__ = "repair_orders"
+    __table_args__ = (
+        CheckConstraint(f"status IN {RO_STAGES + ('on_hold',)}", name="ro_status"),
+        CheckConstraint("status <> 'on_hold' OR held_from IS NOT NULL", name="ro_hold_from"),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    visit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("visits.id"), unique=True)  # one per visit
+    quotation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("quotations.id"))
+    status: Mapped[str] = mapped_column(String(18), default="received")
+    held_from: Mapped[str | None] = mapped_column(String(18))  # the stage to resume to
+
+    lines: Mapped[list["RepairOrderLine"]] = relationship(cascade="all, delete-orphan", lazy="selectin",
+                                                          order_by="RepairOrderLine.position")
+
+
+class RepairOrderLine(Entity):
+    __tablename__ = "repair_order_lines"
+    __table_args__ = (
+        CheckConstraint("kind IN ('labour', 'part')", name="ro_line_kind"),
+        CheckConstraint(LINE_TARGET, name="ro_line_target"),
+        CheckConstraint("qty > 0", name="ro_line_qty"),
+        CheckConstraint("unit_price >= 0", name="ro_line_price"),
+        CheckConstraint("state IN ('pending', 'done', 'not_done')", name="ro_line_state"),
+        CheckConstraint("issued_qty >= 0 AND (kind = 'part' OR issued_qty = 0)", name="ro_line_issued"),
+    )
+
+    repair_order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repair_orders.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(8))
+    labour_code_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("labour_codes.id"))
+    item_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("items.id"))
+    description: Mapped[str] = mapped_column(String(200))
+    qty: Mapped[Decimal] = mapped_column(Numeric(12, 3))
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2))  # the agreed price
+    in_quote: Mapped[bool] = mapped_column(Boolean, default=True)  # False: extra work added after approval
+    state: Mapped[str] = mapped_column(String(8), default="pending")
+    technician_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    issued_qty: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("0"))  # net of returns
+
+
+class RepairOrderActivity(BranchScoped):
+    """Append-only timeline. Internal unless marked customer-visible (§2.3)."""
+
+    __tablename__ = "repair_order_activity"
+    __table_args__ = (
+        CheckConstraint("kind IN ('status', 'finding', 'note', 'parts', 'customer_update', 'line')", name="ro_activity_kind"),
+    )
+
+    repair_order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repair_orders.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    body: Mapped[str] = mapped_column(Text, default="")
+    from_status: Mapped[str | None] = mapped_column(String(18))
+    to_status: Mapped[str | None] = mapped_column(String(18))
+    line_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("repair_order_lines.id", ondelete="SET NULL"))
+    customer_visible: Mapped[bool] = mapped_column(Boolean, default=False)

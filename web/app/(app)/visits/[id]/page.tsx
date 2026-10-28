@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { carTitle, Plate } from "@/components/cars";
 import { QuoteBadge, type QuoteStatus } from "@/components/estimates";
+import { RoBadge, type RoStatus } from "@/components/repairs";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
@@ -20,6 +21,7 @@ type Visit = VisitSummary & {
   photos: File[]; signature: File | null; inspections: InspectionRef[];
   job_card: { id: string; number: string; lines: number } | null;
   quotations: { id: string; number: string; revision: number; status: QuoteStatus | "revised"; expired: boolean }[];
+  repair_order: { id: string; number: string; status: RoStatus } | null;
   payments: { id: string; number: string; kind: string; status: string; amount: string }[];
 };
 
@@ -198,7 +200,7 @@ function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => voi
 
   const row = "flex min-h-14 flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5";
   return (
-    <Card title="Estimate and approval" flush>
+    <Card title="The job" flush>
       <ul>
         <li>
           {v.job_card ? (
@@ -225,7 +227,17 @@ function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => voi
         {advance > 0 && (
           <li className={row}><span className="font-medium">Advance received</span><span className="num">{money(advance)}</span></li>
         )}
-        {["Repair order", "Invoice and payment", "Gate pass"].map((s) => (
+        <li>
+          {v.repair_order ? (
+            <Link href={`/repair-orders/${v.repair_order.id}`} className={`${row} hover:bg-paper-2`}>
+              <span><span className="block font-medium">Repair order</span><span className="block text-sm text-muted">{v.repair_order.number}</span></span>
+              <RoBadge status={v.repair_order.status} />
+            </Link>
+          ) : (
+            <div className={row}><span><span className="block font-medium">Repair order</span><span className="block text-sm text-muted">Made from the approved quotation.</span></span></div>
+          )}
+        </li>
+        {["Invoice and payment", "Gate pass"].map((s) => (
           <li key={s} className={`${row} text-ink-2`}><span>{s}</span><span className="text-sm text-muted">Being built</span></li>
         ))}
       </ul>
