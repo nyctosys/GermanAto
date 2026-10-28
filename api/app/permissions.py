@@ -12,7 +12,15 @@ PERMISSIONS: dict[str, str] = {
     "labour-codes": "Add and edit labour codes",
     "inventory": "See stock and add or edit items",
     "stock-adjust": "Correct stock levels (opening stock, counts, write-offs)",
-    # Later phases add their own here (visits, quotations, payments-in, ...).
+    "visits": "Check cars in and out, run inspections",
+    "job-cards": "Write job cards",
+    "quotations": "Price and send quotations, record approvals",
+    "repair-orders": "Work repair orders and issue parts",
+    "invoices": "Prepare invoices and counter sales",
+    "invoice-issue": "Issue invoices (locks the prices)",
+    "payments-in": "Record money received",
+    "release-on-credit": "Let a car leave with an unpaid balance",
+    # Later phases add their own here (payments-out, purchasing, ...).
 }
 
 DEFAULT_ROLES: dict[str, dict] = {

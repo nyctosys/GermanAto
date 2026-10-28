@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Branch, NumberSequence
 
-PREFIXES = {"customer": "CUS", "item": "ITM"}  # later: INS, JC, QT, RO, INV, CS, PO, GRN, PAY ...
+PREFIXES = {"customer": "CUS", "item": "ITM", "visit": "VIS", "inspection": "INS", "job_card": "JC",
+            "quotation": "QT", "repair_order": "RO", "invoice": "INV", "counter_sale": "CS", "payment": "PAY",
+            "credit_note": "CN"}  # later: PO, GRN, ...
 
 
 def next_number(db: Session, branch: Branch, kind: str) -> str:

@@ -298,3 +298,60 @@ class StockMovement(BranchScoped):
     reason: Mapped[str] = mapped_column(String(300), default="")
     source_type: Mapped[str | None] = mapped_column(String(40))   # grn / repair_order / invoice ...
     source_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+
+
+# --- Workshop: visits and inspections (spec §2, §2.4) -----------------------
+
+class Visit(BranchScoped):
+    """One stay of a car in the workshop, from check-in to gate pass. Every
+    workshop document belongs to a visit."""
+
+    __tablename__ = "visits"
+    __table_args__ = (
+        CheckConstraint("status IN ('open', 'closed', 'cancelled')", name="visit_status"),
+        CheckConstraint("kind IN ('workshop', 'pre_purchase')", name="visit_kind"),
+        CheckConstraint("fuel_eighths IS NULL OR fuel_eighths BETWEEN 0 AND 8", name="visit_fuel"),
+        CheckConstraint("odometer_out IS NULL OR odometer_in IS NULL OR odometer_out >= odometer_in", name="visit_odometer"),
+        # A car can be in the workshop only once at a time.
+        Index("uq_visit_open_car", "car_id", unique=True, postgresql_where=text("status = 'open'")),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    kind: Mapped[str] = mapped_column(String(14), default="workshop")
+    status: Mapped[str] = mapped_column(String(10), default="open")
+    car_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cars.id"), index=True)
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)  # owner at check-in
+    checked_in_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    odometer_in: Mapped[int | None] = mapped_column(Integer)
+    fuel_eighths: Mapped[int | None] = mapped_column(Integer)
+    complaint: Mapped[str] = mapped_column(Text, default="")
+    items_left: Mapped[str] = mapped_column(Text, default="")      # valuables left in the car
+    condition_notes: Mapped[str] = mapped_column(Text, default="")
+    signature_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    odometer_out: Mapped[int | None] = mapped_column(Integer)
+    close_note: Mapped[str] = mapped_column(Text, default="")       # cancel reason, or credit release reason
+
+
+class Inspection(BranchScoped):
+    """The vehicle inspection report. Answers are kept as validated JSON
+    against app.inspection_template at `template_version`."""
+
+    __tablename__ = "inspections"
+    __table_args__ = (
+        CheckConstraint("kind IN ('workshop', 'delivery', 'pre_purchase')", name="inspection_kind"),
+        CheckConstraint("status IN ('draft', 'signed')", name="inspection_status"),
+    )
+
+    number: Mapped[str] = mapped_column(String(24), unique=True)
+    kind: Mapped[str] = mapped_column(String(14))
+    status: Mapped[str] = mapped_column(String(8), default="draft")
+    visit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("visits.id"), index=True)
+    car_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cars.id"), index=True)
+    template_version: Mapped[int] = mapped_column(Integer)
+    supersedes_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("inspections.id"))  # a correction of a signed one
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)  # every section's answers (see routers/workshop.py)
+    inspector_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    inspector_signature_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
+    customer_signature_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
