@@ -146,7 +146,7 @@ function UserForm({ user, roles, onCancel, onSaved }:
             </Field>
           )}
           <Field error={errors.full_name} label="Full name"><Input name="full_name" defaultValue={user?.full_name} required autoComplete="off" /></Field>
-          <Field error={errors.phone} label="Phone"><Input name="phone" defaultValue={user?.phone} inputMode="tel" /></Field>
+          <Field error={errors.phone} label="Phone"><Input name="phone" defaultValue={user?.phone} inputMode="tel" placeholder="+92 300 1234567" /></Field>
           <Field error={errors.email} label="Email (optional)"><Input name="email" type="email" defaultValue={user?.email ?? ""} /></Field>
           <Field label="Role" hint={isSelf ? "You can't change your own role." : undefined}>
             <Select name="role_id" defaultValue={user?.role_id} required disabled={isSelf}>

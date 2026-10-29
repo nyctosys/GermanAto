@@ -109,7 +109,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
   }
 
   return (
-    <div onBlurCapture={() => setTried(true)}>
+    <div className="req-scope" onBlurCapture={() => setTried(true)}>
       <div className="mb-6">
         <h1>{initial ? `Purchase order ${initial.number}` : "New purchase order"}</h1>
         <p className="text-muted">{initial ? <PoBadge status="draft" /> : "Choose the vendor, add what you need, then send it."}</p>

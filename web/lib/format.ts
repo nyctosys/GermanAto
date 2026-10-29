@@ -11,7 +11,8 @@ export const when = (v: string) => new Date(v).toLocaleString("en-PK", { day: "n
 export const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time, not UTC
 
 /** Phones are stored as +923001234567; people read 0300 1234567. */
-export const phone = (v: string) => (v?.startsWith("+92") && v.length === 13 ? `0${v.slice(3, 6)} ${v.slice(6)}` : v);
+/** International format for display: +92 300 1234567. */
+export const phone = (v: string) => (v?.startsWith("+92") && v.length === 13 ? `+92 ${v.slice(3, 6)} ${v.slice(6)}` : v?.startsWith("+") && v.length > 8 ? `${v.slice(0, v.length - 7)} ${v.slice(-7)}` : v);
 
 /** Pieces, sets, pairs and boxes are counted whole; litres, kilograms and metres can be part-filled. */
 export const qtyStep = (unit?: string) => (["litre", "kg", "metre"].includes(unit ?? "") ? "any" : "1");

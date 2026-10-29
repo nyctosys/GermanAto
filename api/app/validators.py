@@ -8,10 +8,17 @@ from pydantic import AfterValidator, StringConstraints
 
 
 def normalize_pk_phone(value: str) -> str:
-    """Pakistani numbers to +92XXXXXXXXXX. Empty stays empty."""
+    """Phone numbers in international format. Pakistani numbers (0300..., 92300..., +92300...) become +92XXXXXXXXXX;
+    a number with another country code (+971..., 00971...) is kept as +<code><number>. Empty stays empty."""
     digits = re.sub(r"[^\d+]", "", value.strip())
     if not digits:
         return ""
+    if digits.startswith("00") and not digits.startswith("0092"):
+        digits = "+" + digits[2:]
+    if digits.startswith("+") and not digits.startswith("+92"):
+        if not re.fullmatch(r"\+[1-9]\d{7,14}", digits):
+            raise ValueError("Enter the number with its country code, e.g. +92 300 1234567")
+        return digits
     if digits.startswith("+92"):
         digits = digits[3:]
     elif digits.startswith("0092"):
@@ -21,7 +28,7 @@ def normalize_pk_phone(value: str) -> str:
     elif digits.startswith("0"):
         digits = digits[1:]
     if not re.fullmatch(r"\d{9,10}", digits):
-        raise ValueError("Enter a Pakistani phone number, e.g. 0300 1234567")
+        raise ValueError("Enter the number with its country code, e.g. +92 300 1234567")
     return "+92" + digits
 
 

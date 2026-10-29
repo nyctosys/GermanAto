@@ -314,12 +314,12 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
         <Section id="assessment" title="Overall assessment">
           <div className="space-y-5">
             <div>
-              <p className="mb-1.5 text-sm font-medium text-ink-2">Overall condition</p>
+              <p className="mb-1.5 text-sm font-medium text-ink-2">Overall condition<span className="text-error" aria-hidden="true"> *</span></p>
               <Segments value={data.assessment.overall ?? ""} onChange={(v) => update((d) => { d.assessment.overall = v; })}
                         options={Object.entries(tpl.overall).map(([value, label]) => ({ value, label }))} />
             </div>
             <div>
-              <p className="mb-1.5 text-sm font-medium text-ink-2">Recommendation</p>
+              <p className="mb-1.5 text-sm font-medium text-ink-2">Recommendation<span className="text-error" aria-hidden="true"> *</span></p>
               <Segments value={data.assessment.recommendation ?? ""} onChange={(v) => update((d) => { d.assessment.recommendation = v; })}
                         options={Object.entries(tpl.recommendation).map(([value, label]) => ({ value, label }))} />
             </div>
@@ -469,7 +469,7 @@ function SignOff({ inspection, data, saveState, version, onSigned }:
     <div className="mt-4">
       <Card title="Sign the report">
         <div className="grid gap-6 sm:grid-cols-2">
-          <SignaturePad label="Inspector" onChange={setInspectorSig} />
+          <SignaturePad label="Inspector *" onChange={setInspectorSig} />
           <SignaturePad label={inspection.kind === "pre_purchase" ? "Buyer (optional)" : "Customer (optional)"} onChange={setCustomerSig} />
         </div>
         <div className="mt-5 space-y-3">

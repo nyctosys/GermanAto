@@ -303,7 +303,7 @@ export const CHAPTERS: Chapter[] = [
       },
       {
         id: "advance-refund", title: "Give back an unused advance", who: "Administrator (advance-refund permission)",
-        steps: ["On the quotation, press Give back next to the advance. Write the reason, choose the account and attach proof. The whole advance goes back to the customer."],
+        steps: ["On the quotation, press Give back next to the advance. Write the reason, choose the account and attach proof. Change the amount to give back part of it; the rest stays held for the customer."],
       },
     ],
   },
@@ -315,7 +315,7 @@ export const CHAPTERS: Chapter[] = [
         id: "new-item", title: "Add a part to inventory", who: "Inventory manager",
         steps: [
           "Go to Inventory and press Add item.",
-          "Type the name, brand, category, unit, shelf, sale price, and the reorder level and quantity.",
+          "Type the name, brand, category, unit, shelf, sale price, and the reorder level (how much to order is decided later, on the purchase order). Pick the brand and category from the lists; choose Other to type a new one. Add the vendors who supply it on the item page.",
           "Add every barcode and manufacturer part number, so scanning finds the part.",
           "If you already hold stock, type the opening quantity and cost once, when you start.",
         ],
@@ -335,7 +335,7 @@ export const CHAPTERS: Chapter[] = [
         id: "po", title: "Order from a vendor", who: "Purchasing (purchasing permission)",
         steps: [
           "Go to Purchasing, then Purchase orders, and press New purchase order. Choose the vendor.",
-          "Add parts from Inventory by typing or scanning. Type the quantity and the agreed cost for each. To fill the list quickly, press Add everything below its reorder level.",
+          "Add parts from Inventory by typing or scanning. Type the quantity and the agreed cost for each. Choose the vendor first. To fill the list quickly, press Add everything below its reorder level: only that vendor's items (and items with no vendor set) are added, with a suggested quantity you can change.",
           "Add the expected date and notes. Press Send. Print it, or press Send on WhatsApp.",
         ],
         avoid: ["A sent order cannot be changed. Cancel it and make a new one."],
@@ -426,7 +426,7 @@ export const CHAPTERS: Chapter[] = [
         id: "employee", title: "Add an employee", who: "HR (hr permission)",
         steps: [
           "Go to People, then Employees, and press Add employee.",
-          "Type the name, job title, phone, CNIC, monthly salary, shift start and end times, weekly day off, and the joining date.",
+          "Type the name, job title, phone, CNIC, monthly salary, shift start and end times, weekly days off (tick every day, more than one is fine), and the joining date. Phone numbers are written with the country code, for example +92 300 1234567. CNIC is required.",
           "Type the device number, which is the person's number on the attendance machine. Any punches already received for that number are linked automatically.",
           "If the person also uses the system, link their login.",
         ],
@@ -445,7 +445,7 @@ export const CHAPTERS: Chapter[] = [
         id: "attendance", title: "Check and correct attendance", who: "HR",
         steps: [
           "Go to People, then Attendance, and look at the month. Each day shows one status: Present, Late (more than 15 minutes after shift start), Incomplete (only one punch), Absent, Off, Paid leave or Unpaid leave.",
-          "If someone forgot or failed to punch, press Add a missed punch and write a reason (at least five letters).",
+          "If someone forgot or failed to punch, go to Attendance, choose the employee under Add or fix a day by hand, and press Add a missed punch (write a reason). To mark a whole day as worked (8 hours) or as leave, press Mark present or leave.",
           "For approved leave, add a leave mark (paid or unpaid) with a reason.",
           "Do this before you run salary.",
         ],

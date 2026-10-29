@@ -139,8 +139,8 @@ export function CustomerForm({ customer, onSaved, onCancel }:
           <option value="company">Company or fleet</option>
         </Select>
       </Field>
-      <Field error={errors.phone} label="Mobile" hint="Used for WhatsApp updates."><Input name="phone" defaultValue={customer ? phone(customer.phone) : ""} required inputMode="tel" autoComplete="off" /></Field>
-      <Field error={errors.phone_alt} label="Other phone (optional)"><Input name="phone_alt" defaultValue={customer ? phone(customer.phone_alt) : ""} inputMode="tel" /></Field>
+      <Field error={errors.phone} label="Mobile" hint="Used for WhatsApp updates."><Input name="phone" defaultValue={customer ? phone(customer.phone) : ""} required inputMode="tel" placeholder="+92 300 1234567" autoComplete="off" /></Field>
+      <Field error={errors.phone_alt} label="Other phone (optional)"><Input name="phone_alt" defaultValue={customer ? phone(customer.phone_alt) : ""} inputMode="tel" placeholder="+92 300 1234567" /></Field>
       <Field error={errors.email} label="Email (optional)"><Input name="email" type="email" defaultValue={customer?.email} /></Field>
       <Field error={errors.cnic} label="CNIC" hint="13 digits, e.g. 35202-1234567-1"><Input name="cnic" defaultValue={customer?.cnic} required inputMode="numeric" /></Field>
       <div className="sm:col-span-2"><Field error={errors.address} label="Address (optional)"><Input name="address" defaultValue={customer?.address} maxLength={300} /></Field></div>

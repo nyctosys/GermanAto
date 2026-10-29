@@ -60,7 +60,7 @@ function BranchSettings() {
               <Field label="Branch code" hint="Fixed. It appears in every document number.">
                 <Input value={data.code} readOnly disabled />
               </Field>
-              <Field label="Phone"><Input name="phone" defaultValue={data.phone} inputMode="tel" autoComplete="tel" /></Field>
+              <Field label="Phone"><Input name="phone" defaultValue={data.phone} inputMode="tel" placeholder="+92 300 1234567" autoComplete="tel" /></Field>
               <Field label="Email"><Input name="email" type="email" defaultValue={data.email} autoComplete="email" /></Field>
               <div className="sm:col-span-2">
                 <Field label="Address"><Input name="address" defaultValue={data.address} maxLength={300} autoComplete="street-address" /></Field>

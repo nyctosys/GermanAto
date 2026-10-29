@@ -112,7 +112,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Name (optional)"><Input value={walkName} onChange={(e) => setWalkName(e.target.value)} maxLength={120} /></Field>
-                <Field label="Mobile (optional)" hint="For a WhatsApp receipt later."><Input value={walkPhone} onChange={(e) => setWalkPhone(e.target.value)} inputMode="tel" /></Field>
+                <Field label="Mobile (optional)" hint="For a WhatsApp receipt later."><Input value={walkPhone} onChange={(e) => setWalkPhone(e.target.value)} inputMode="tel" placeholder="+92 300 1234567" /></Field>
               </div>
             )}
           </div>

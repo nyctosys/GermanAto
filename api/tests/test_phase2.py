@@ -163,3 +163,15 @@ def test_last_unit_cannot_be_issued_twice(admin):
         t.join()
     assert sorted(results) == ["refused", "sold"]
     assert Decimal(admin.get(f"/api/items/{item['id']}").json()["on_hand"]) == 0
+
+
+def test_phone_numbers_keep_their_country_code():
+    from app.validators import normalize_pk_phone as n
+    assert n("0300 1234567") == "+92" + "3001234567" and n("+92 300 1234567") == "+923001234567"
+    assert n("+971 50 123 4567") == "+971501234567" and n("00971501234567") == "+971501234567"
+    for bad in ("+12", "+9715", "abc1"):
+        try:
+            n(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
