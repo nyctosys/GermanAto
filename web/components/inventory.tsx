@@ -33,7 +33,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
     const body: Record<string, unknown> = {
       name: f.get("name"), brand: f.get("brand"), category: f.get("category"), unit: f.get("unit"),
       fitment: f.get("fitment"), location: f.get("location"), sale_price: f.get("sale_price") || "0",
-      reorder_level: f.get("reorder_level") || "0", reorder_qty: f.get("reorder_qty") || "0", codes: filled,
+      reorder_level: f.get("reorder_level") || "0", reorder_qty: item?.reorder_qty ?? "0", codes: filled,
     };
     if (!item && f.get("opening_qty")) {
       body.opening_qty = f.get("opening_qty");
@@ -88,8 +88,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
       <Field label="Shelf or bin"><Input name="location" defaultValue={item?.location} placeholder="A3" /></Field>
       <div className="sm:col-span-2"><Field label="Fits" hint="Which cars it fits, for searching"><Input name="fitment" defaultValue={item?.fitment} placeholder="BMW 5 Series F10 2010–2016" /></Field></div>
       <Field label="Sale price (PKR)"><Input name="sale_price" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={item?.sale_price ?? ""} required /></Field>
-      <Field label="Reorder when stock reaches"><Input name="reorder_level" type="number" inputMode="decimal" min={0} step="0.001" defaultValue={item ? Number(item.reorder_level) : ""} /></Field>
-      <Field label="Reorder quantity"><Input name="reorder_qty" type="number" inputMode="decimal" min={0} step="0.001" defaultValue={item ? Number(item.reorder_qty) : ""} /></Field>
+      <Field label="Reorder when stock reaches" hint="How much to order is decided on the purchase order."><Input name="reorder_level" type="number" inputMode="decimal" min={0} step="0.001" defaultValue={item ? Number(item.reorder_level) : ""} /></Field>
 
       {!item && can("stock-adjust") && (
         <>

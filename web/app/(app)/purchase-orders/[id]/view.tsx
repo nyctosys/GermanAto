@@ -77,10 +77,13 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
   const costBad = (l: Line) => !unitCost.safeParse(l.unit_cost).success;
   const total = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unit_cost) || 0), 0);
 
+  /** Everything under its reorder level that this vendor supplies (or that has no vendor set), at the vendor's last price. */
   async function addLowStock() {
-    const low = await api<(Item & { reorder_qty: string })[]>("/api/items?stock=low&limit=100");
-    low.forEach(addLine);
-    if (!low.length) setError("Nothing is below its reorder level.");
+    if (!vendorId) { setError("Choose the vendor first. Only the items they supply are added."); return; }
+    setError(null);
+    const low = await api<(Item & { vendor_cost: string | null })[]>(`/api/items?${new URLSearchParams({ stock: "low", limit: "100", vendor_id: vendorId })}`);
+    low.forEach((i) => addLine({ ...i, avg_cost: i.vendor_cost ?? i.avg_cost, reorder_qty: String(Math.max(Number(i.reorder_level) * 2 - Number(i.on_hand), 1)) }));
+    if (!low.length) setError("Nothing is below its reorder level for this vendor.");
   }
 
   async function save(send: boolean) {

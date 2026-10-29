@@ -181,3 +181,16 @@ def test_permissions_split_the_work(admin):
     assert acct.post(f"/api/purchase-orders/{po['id']}/receive", json={"lines": []}).status_code == 403
     assert acct.post(f"/api/bills/{bill['id']}/payments", json={"amount": "50", **CASH}).status_code == 201  # the accountant pays
     assert acct.get("/api/bills").status_code == 200
+
+
+def test_an_item_can_have_several_vendors_and_reorder_lists_follow_the_vendor(admin):
+    a, b = new_vendor(admin, "Tyre House"), new_vendor(admin, "Battery Hub")
+    tyre = new_item(admin, "Tyre", codes=(("barcode", "7000000000011"),), reorder_level="5")
+    plain = new_item(admin, "Wiper", codes=(("barcode", "7000000000028"),), reorder_level="5")
+    mine = admin.put(f"/api/items/{tyre['id']}/vendors", json=[{"vendor_id": a["id"], "unit_cost": "9000"}, {"vendor_id": b["id"]}]).json()
+    assert {v["name"] for v in mine} == {"Tyre House", "Battery Hub"}
+    assert admin.put(f"/api/items/{tyre['id']}/vendors", json=[{"vendor_id": a["id"]}, {"vendor_id": a["id"]}]).status_code == 422
+    low = lambda vid: {i["name"]: i for i in admin.get("/api/items", params={"stock": "low", "vendor_id": vid}).json()}
+    assert set(low(a["id"])) == {"Tyre", "Wiper"} and float(low(a["id"])["Tyre"]["vendor_cost"]) == 9000
+    admin.put(f"/api/items/{tyre['id']}/vendors", json=[{"vendor_id": b["id"]}])
+    assert set(low(a["id"])) == {"Wiper"}  # the tyre is now only bought from Battery Hub; the wiper has no vendor set

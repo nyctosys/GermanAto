@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import Actor, require
 from app.db import get_db
-from app.models import Item, ItemCode, LabourCode, StockMovement, User
+from app.models import Item, ItemCode, ItemVendor, LabourCode, StockMovement, User, Vendor
 from app.numbering import next_number
 from app.stock import StockError, move, on_hand, on_hand_map
 from app.validators import Name, Text, normalize_code
@@ -163,9 +163,46 @@ def _get_item(db: Session, actor: Actor, item_id: uuid.UUID) -> Item:
     return item
 
 
+class ItemVendorIn(BaseModel):
+    vendor_id: uuid.UUID
+    unit_cost: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=4)
+
+
+@router.get("/items/{item_id}/vendors")
+def item_vendors(item_id: uuid.UUID, actor: Actor = Depends(can_stock), db: Session = Depends(get_db)):
+    item = _get_item(db, actor, item_id)
+    rows = db.execute(select(ItemVendor, Vendor).join(Vendor, Vendor.id == ItemVendor.vendor_id)
+                      .where(ItemVendor.item_id == item.id).order_by(Vendor.name))
+    return [{"vendor_id": v.id, "name": v.name, "unit_cost": iv.unit_cost} for iv, v in rows]
+
+
+@router.put("/items/{item_id}/vendors")
+def set_item_vendors(item_id: uuid.UUID, body: list[ItemVendorIn], actor: Actor = Depends(can_stock), db: Session = Depends(get_db)):
+    """Replaces the list of vendors that supply this item."""
+    item = _get_item(db, actor, item_id)
+    ids = [b.vendor_id for b in body]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(422, "The same vendor is listed twice")
+    found = {v.id for v in db.scalars(select(Vendor).where(Vendor.branch_id == actor.branch.id, Vendor.id.in_(ids)))} if ids else set()
+    if found != set(ids):
+        raise HTTPException(404, "Vendor not found")
+    have = {iv.vendor_id: iv for iv in db.scalars(select(ItemVendor).where(ItemVendor.item_id == item.id))}
+    for vid, iv in have.items():
+        if vid not in ids:
+            db.delete(iv)
+    for b in body:
+        row = have.get(b.vendor_id)
+        if row:
+            row.unit_cost = b.unit_cost
+        else:
+            db.add(ItemVendor(item_id=item.id, vendor_id=b.vendor_id, unit_cost=b.unit_cost, branch_id=actor.branch.id))
+    db.commit()
+    return item_vendors(item_id, actor, db)
+
+
 @router.get("/items")
 def list_items(q: str = "", stock: Literal["all", "low", "out"] = "all", limit: int = Query(100, ge=1, le=500),
-               actor: Actor = Depends(can_stock), db: Session = Depends(get_db)):
+               vendor_id: uuid.UUID | None = None, actor: Actor = Depends(can_stock), db: Session = Depends(get_db)):
     qty = (select(StockMovement.item_id, func.sum(StockMovement.qty).label("qty"))
            .where(StockMovement.branch_id == actor.branch.id).group_by(StockMovement.item_id).subquery())
     on_hand_col = func.coalesce(qty.c.qty, 0)
@@ -183,7 +220,14 @@ def list_items(q: str = "", stock: Literal["all", "low", "out"] = "all", limit: 
         stmt = stmt.where(Item.reorder_level > 0, on_hand_col <= Item.reorder_level)
     elif stock == "out":
         stmt = stmt.where(on_hand_col <= 0)
-    return [item_out(item, q_) for item, q_ in db.execute(stmt)]
+    if vendor_id:  # items this vendor supplies, plus items that have no vendor set yet
+        stmt = stmt.where(or_(Item.id.in_(select(ItemVendor.item_id).where(ItemVendor.vendor_id == vendor_id)),
+                              ~Item.id.in_(select(ItemVendor.item_id))))
+    costs = {iv.item_id: iv.unit_cost for iv in db.scalars(select(ItemVendor).where(ItemVendor.vendor_id == vendor_id))} if vendor_id else {}
+    out = [item_out(item, q_) for item, q_ in db.execute(stmt)]
+    for o in out:
+        o["vendor_cost"] = costs.get(o["id"])
+    return out
 
 
 @router.get("/items/lookup")

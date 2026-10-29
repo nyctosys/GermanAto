@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { type Item, ItemForm } from "@/components/inventory";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { money, qty, when } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -24,6 +24,47 @@ export default function ItemPage() {
         <ItemDetail />
       </Suspense>
     </RequirePermission>
+  );
+}
+
+type ItemVendorRow = { vendor_id: string; name: string; unit_cost: string | null };
+
+/** The vendors that can supply this item. Purchase orders offer only these when you reorder. */
+function Vendors({ itemId, editable }: { itemId: string; editable: boolean }) {
+  const mine = useApi<ItemVendorRow[]>(`/api/items/${itemId}/vendors`);
+  const all = useApi<{ id: string; name: string }[]>(editable ? "/api/vendors" : null);
+  const [adding, setAdding] = useState("");
+  const [cost, setCost] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const save = async (rows: { vendor_id: string; unit_cost: string | null }[]) => {
+    setError(null);
+    try { await api(`/api/items/${itemId}/vendors`, { method: "PUT", json: rows }); setAdding(""); setCost(""); mine.reload(); }
+    catch (err) { setError((err as Error).message); }
+  };
+  const rows = (mine.data ?? []).map((r) => ({ vendor_id: r.vendor_id, unit_cost: r.unit_cost }));
+  const free = (all.data ?? []).filter((v) => !rows.some((r) => r.vendor_id === v.id));
+  return (
+    <Card title="Vendors that supply this">
+      {mine.error ? <ErrorState message={mine.error} onRetry={mine.reload} /> : !mine.data ? <SkeletonRows rows={2} />
+        : !mine.data.length ? <p className="text-muted">No vendor set yet. Add one so this item can be reordered from them.</p> : (
+          <ul className="divide-y divide-rule">
+            {mine.data.map((v) => (
+              <li key={v.vendor_id} className="flex flex-wrap items-center justify-between gap-3 py-2">
+                <span><span className="font-medium">{v.name}</span>{v.unit_cost != null && <span className="num block text-sm text-muted">Last price {money(v.unit_cost)}</span>}</span>
+                {editable && <Button variant="danger" onClick={() => save(rows.filter((r) => r.vendor_id !== v.vendor_id))}>Remove</Button>}
+              </li>
+            ))}
+          </ul>
+        )}
+      {editable && (
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <div className="min-w-44 flex-1"><Field label="Add a vendor (optional)"><Select value={adding} onChange={(e) => setAdding(e.target.value)}><option value="">Choose a vendor</option>{free.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</Select></Field></div>
+          <div className="w-36"><Field label="Price (optional)"><Input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="Rs" /></Field></div>
+          <Button variant="secondary" disabled={!adding} onClick={() => save([...rows, { vendor_id: adding, unit_cost: cost || null }])}>Add</Button>
+        </div>
+      )}
+      <Notice>{error}</Notice>
+    </Card>
   );
 }
 
@@ -70,17 +111,20 @@ function ItemDetail() {
       )}
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+        <div className="space-y-4">
         <Card title="Details">
           <dl className="grid gap-4">
             <div><dt className="text-sm text-muted">Codes</dt>
               <dd>{data.codes.map((c) => <span key={c.code} className="num mr-3 inline-block">{c.code} <span className="text-sm text-muted">{c.kind === "mpn" ? "part number" : "barcode"}</span></span>)}</dd></div>
             {[["Category", data.category], ["Shelf or bin", data.location], ["Fits", data.fitment],
-              ["Reorder at", `${qty(data.reorder_level)} ${data.unit}, order ${qty(data.reorder_qty)}`],
+              ["Reorder at", `${qty(data.reorder_level)} ${data.unit}`],
               ["Stock value at cost", money(value)]].map(([l, v]) => (
               <div key={l}><dt className="text-sm text-muted">{l}</dt><dd className={v ? "" : "text-muted"}>{v || "Not set"}</dd></div>
             ))}
           </dl>
         </Card>
+        <Vendors itemId={data.id} editable={can("inventory")} />
+        </div>
         <Card title="Stock movements" flush>
           {!data.movements.length ? <EmptyState title="No movements yet">Opening stock, goods received, parts issued and adjustments appear here.</EmptyState> : (
             <table className="table-stack w-full text-left">

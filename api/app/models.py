@@ -264,6 +264,17 @@ class Item(BranchScoped):
     codes: Mapped[list["ItemCode"]] = relationship(cascade="all, delete-orphan", lazy="selectin", order_by="ItemCode.created_at")
 
 
+class ItemVendor(BranchScoped):
+    """A vendor that can supply an item, with the price they last quoted. An item can have several."""
+
+    __tablename__ = "item_vendors"
+    __table_args__ = (UniqueConstraint("item_id", "vendor_id"), CheckConstraint("unit_cost IS NULL OR unit_cost >= 0", name="item_vendor_cost"))
+
+    item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("items.id"))
+    vendor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("vendors.id"), index=True)
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+
+
 class ItemCode(BranchScoped):
     """A barcode or manufacturer part number. Matching uses the normalised
     form, so "11-42 7.583" and "1142 7583" are the same part."""
