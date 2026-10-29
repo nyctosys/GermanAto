@@ -27,7 +27,7 @@ export const SOURCE: Record<string, string> = {
 };
 const IN_SOURCES = ["invoice_payment", "advance", "other_income", "owner_capital", "transfer"];
 const OUT_SOURCES = ["vendor_payment", "expense", "drawings", "transfer", "refund", "salary", "salary_advance"];
-const IN_KINDS = ["other_income", "owner_capital", "transfer"];
+const IN_KINDS = ["invoice_payment", "other_income", "owner_capital", "transfer"];
 const OUT_KINDS = ["expense", "drawings", "transfer"];
 
 /** The one page for every payment in or out, whatever its source (spec R12, R13). */
@@ -39,12 +39,14 @@ export function MoneyBook({ direction }: { direction: "in" | "out" }) {
   const [from, setFrom] = useQueryParam("from");
   const [to, setTo] = useQueryParam("to");
   const [missing, setMissing] = useQueryParam("missing");
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<null | "expense" | "other">(null);
   const [voiding, setVoiding] = useState<Row | null>(null);
   const [error, setError] = useState<string | null>(null);
   const params = new URLSearchParams({ q, ...(source && { source }), ...(account && { account }), ...(from && { date_from: from }), ...(to && { date_to: to }), ...(missing && { missing_proof: "true" }) });
   const list = useApi<Page>(`/api/money-${direction}?${params}`);
   const sources = direction === "in" ? IN_SOURCES : OUT_SOURCES;
+  const day0 = today();
+  const todays = useApi<Page>(direction === "out" ? `/api/money-out?${new URLSearchParams({ source: "expense", date_from: day0, date_to: day0 })}` : null);
   const canRecord = direction === "in" ? can("payments-in") : can("expenses") || can("payments-out");
 
   async function void_(reason: string) {
@@ -66,10 +68,20 @@ export function MoneyBook({ direction }: { direction: "in" | "out" }) {
             {direction === "in" ? "Every payment received, from every source, in one place." : "Every payment made, from every source, in one place."}
           </p>
         </div>
-        {canRecord && !adding && <Button onClick={() => setAdding(true)}>{direction === "in" ? "Record money in" : "Record money out"}</Button>}
+        {canRecord && !adding && (
+          <div className="flex flex-wrap gap-2">
+            {direction === "out" && can("expenses") && <Button onClick={() => setAdding("expense")}>Add a daily expense</Button>}
+            <Button variant={direction === "out" && can("expenses") ? "secondary" : "primary"} onClick={() => setAdding("other")}>{direction === "in" ? "Record money in" : "Record other money out"}</Button>
+          </div>
+        )}
       </div>
 
-      {adding && <div className="mb-4"><EntryForm direction={direction} onCancel={() => setAdding(false)} onDone={() => { setAdding(false); list.reload(); }} /></div>}
+      {adding && <div className="mb-4"><EntryForm direction={direction} only={adding === "expense" ? "expense" : undefined} onCancel={() => setAdding(null)} onDone={() => { setAdding(null); list.reload(); todays.reload(); }} /></div>}
+      {direction === "out" && todays.data && (
+        <div className="mb-4 rounded-card bg-surface px-4 py-3 shell:px-5">
+          <p><span className="font-medium">Today&apos;s expenses: </span><span className="num">{money(todays.data.total)}</span> <span className="text-sm text-muted">across {todays.data.count} {todays.data.count === 1 ? "record" : "records"}</span></p>
+        </div>
+      )}
       {voiding && <div className="mb-4"><ReasonForm title={`Void ${voiding.number}`} hint="It stays on record, struck through, and the books are corrected." confirm="Void it" busy={false} onCancel={() => setVoiding(null)} onSubmit={void_} /></div>}
       {error && <div className="mb-4"><Notice>{error}</Notice></div>}
 
@@ -153,10 +165,13 @@ export function MoneyBook({ direction }: { direction: "in" | "out" }) {
   );
 }
 
-function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; onDone: () => void; onCancel: () => void }) {
+function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "out"; only?: string; onDone: () => void; onCancel: () => void }) {
   const { can } = useSession();
-  const kinds = (direction === "in" ? IN_KINDS : OUT_KINDS).filter((k) => (k === "expense" ? can("expenses") : k === "transfer" ? can("payments-out") : k === "drawings" ? can("payments-out") : can("payments-in")));
+  const kinds = (direction === "in" ? IN_KINDS : OUT_KINDS).filter((k) => (only ? k === only : direction === "out" && k === "expense" ? false : true))
+    .filter((k) => (k === "expense" ? can("expenses") : k === "transfer" ? can("payments-out") : k === "drawings" ? can("payments-out") : can("payments-in")));
   const cats = useApi<Category[]>("/api/expense-categories");
+  const owing = useApi<{ id: string; number: string; customer: string; balance: string }[]>(direction === "in" ? "/api/invoices?status=unpaid" : null);
+  const [invoiceId, setInvoiceId] = useState("");
   const [kind, setKind] = useState(kinds[0] ?? "other_income");
   const [v, setV] = useState({ amount: "", account: "cash", to_account: "", category_id: "", party: "", reference: "", note: "", occurred_on: today() });
   const [proof, setProof] = useState<Uploaded[]>([]);
@@ -165,6 +180,7 @@ function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; o
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
   const transfer = kind === "transfer";
+  const invoicePay = kind === "invoice_payment";
   const snapshot = { ...v, kind, proof, reason };
   const { errors, activate, live } = useLiveErrors(snapshot, (s) => {
     const r = entrySchema.safeParse(s);
@@ -174,11 +190,18 @@ function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; o
   async function submit(e: FormEvent) {
     e.preventDefault();
     activate();
-    const r = entrySchema.safeParse(snapshot);
+    const r = entrySchema.safeParse({ ...snapshot, kind: invoicePay ? "other_income" : kind });
     if (!r.success) return;
+    if (invoicePay && !invoiceId) { setError("Choose the invoice this payment is for."); return; }
     setBusy(true);
     setError(null);
     try {
+      if (invoicePay) {
+        await api(`/api/invoices/${invoiceId}/payments`, { method: "POST", json: { amount: v.amount.trim(), account: v.account, reference: v.reference, note: v.note,
+          proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : reason } });
+        onDone();
+        return;
+      }
       await api("/api/money-entries", { method: "POST", json: { kind, amount: v.amount.trim(), account: v.account, to_account: transfer ? v.to_account : null,
         category_id: kind === "expense" ? v.category_id : null, party: v.party, reference: v.reference, note: v.note, occurred_on: v.occurred_on,
         proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : reason } });
@@ -189,7 +212,7 @@ function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; o
       setBusy(false);
     }
   }
-  const LABEL: Record<string, string> = { other_income: "Other income", owner_capital: "Owner puts money in", transfer: "Transfer between accounts", expense: "Expense", drawings: "Owner takes money out" };
+  const LABEL: Record<string, string> = { invoice_payment: "Payment for an invoice", expense: "Daily expense", other_income: "Other income", owner_capital: "Owner puts money in", transfer: "Transfer between accounts", drawings: "Owner takes money out" };
 
   return (
     <Card title={direction === "in" ? "Record money in" : "Record money out"}>
@@ -199,6 +222,14 @@ function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; o
             {kinds.map((k) => <option key={k} value={k}>{LABEL[k]}</option>)}
           </Select>
         </Field>
+        {invoicePay && (
+          <Field label="Invoice">
+            <Select value={invoiceId} onChange={(e) => { const inv = owing.data?.find((i) => i.id === e.target.value); setInvoiceId(e.target.value); if (inv) set({ amount: String(Number(inv.balance)) }); }}>
+              <option value="">{owing.data?.length === 0 ? "No invoice is waiting for payment" : "Choose an invoice"}</option>
+              {owing.data?.map((i) => <option key={i.id} value={i.id}>{i.number}, {i.customer}, owes {money(i.balance)}</option>)}
+            </Select>
+          </Field>
+        )}
         <Field label="Amount (Rs)" error={errors.amount}><Input inputMode="decimal" value={v.amount} onChange={(e) => set({ amount: e.target.value })} autoFocus /></Field>
         <Field label={transfer ? "From" : direction === "in" ? "Received into" : "Paid from"}>
           <Select value={v.account} onChange={(e) => set({ account: e.target.value })}>
@@ -223,7 +254,7 @@ function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; o
         )}
         {!transfer && <Field label={direction === "in" ? "Received from (optional)" : "Paid to (optional)"} error={errors.party}><Input value={v.party} onChange={(e) => set({ party: e.target.value })} maxLength={120} /></Field>}
         <Field label="Date" error={errors.occurred_on}><Input type="date" max={today()} value={v.occurred_on} onChange={(e) => set({ occurred_on: e.target.value })} /></Field>
-        <Field label="Transaction reference (bank or wallet)" error={errors.reference}><Input value={v.reference} onChange={(e) => set({ reference: e.target.value })} maxLength={60} /></Field>
+        <Field required={false} label="Transaction reference (bank or wallet)" error={errors.reference}><Input value={v.reference} onChange={(e) => set({ reference: e.target.value })} maxLength={60} /></Field>
         <div className="sm:col-span-2"><ProofInput proof={proof} setProof={setProof} reason={reason} setReason={setReason} error={errors.reason} /></div>
         <div className="flex flex-col gap-3 sm:col-span-2">
           <Notice>{error}</Notice>

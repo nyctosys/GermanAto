@@ -84,7 +84,7 @@ function RowFields({ r, set, errors }: { r: Row; set: (p: Partial<Row>) => void;
         </Select>
       </Field>
       {r.account !== "cash" && (
-        <Field label="Transaction reference" error={errors.reference}>
+        <Field required={false} label="Transaction reference" error={errors.reference}>
           <Input value={r.reference} onChange={(e) => set({ reference: e.target.value })} maxLength={60} />
         </Field>
       )}

@@ -267,3 +267,7 @@
     display: none !important;
   }
 }
+
+/* The red * for a required field shows only inside a form, never on a search or filter box. */
+.req { display: none; }
+form .req { display: inline; }
