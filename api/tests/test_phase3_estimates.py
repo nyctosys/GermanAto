@@ -127,3 +127,17 @@ def test_quotation_terms_default_to_the_standard_clauses_and_can_be_replaced(adm
     assert mine["terms"] == ["Payment on delivery.", "Parts carry a 6 month warranty."]
     back = admin.put("/api/branch", json={**body, "email": None, "version": mine["version"], "quotation_terms": ""}).json()
     assert len(back["terms"]) == 15  # blank goes back to the standard terms
+
+
+def test_advance_cannot_exceed_the_quotation_total(admin):
+    visit, jc, *_ = setup_job(admin)
+    q = admin.post(f"/api/job-cards/{jc['id']}/quotation").json()
+    lines = [{k: l[k] for k in ("kind", "labour_code_id", "item_id", "qty")} | {"unit_price": "100"} for l in q["lines"]]
+    q = admin.put(f"/api/quotations/{q['id']}", json={"lines": lines, "include_tax": False,
+                                                     "valid_until": q["valid_until"], "version": q["version"]}).json()
+    admin.post(f"/api/quotations/{q['id']}/send", json={"version": q["version"]})
+    total = admin.get(f"/api/quotations/{q['id']}").json()["totals"]["total"]
+    over = {"amount": str(float(total) + 1), "account": "cash", "no_proof_reason": "Cash at the counter, no slip"}
+    r = admin.post(f"/api/quotations/{q['id']}/advances", json=over)
+    assert r.status_code == 422 and "more than the quotation total" in r.json()["detail"]
+    assert admin.post(f"/api/quotations/{q['id']}/advances", json={**over, "amount": str(total)}).status_code == 201

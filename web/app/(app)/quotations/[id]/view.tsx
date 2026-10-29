@@ -53,7 +53,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
   const { can } = useSession();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [panel, setPanel] = useState<"approve" | "reject" | "advance" | null>(null);
+  const [panel, setPanel] = useState<"approve" | "reject" | "advance" | "revise" | null>(null);
   const [refunding, setRefunding] = useState<Payment | null>(null);
   const open = q.visit.status === "open";
   const draft = q.status === "draft" && open;
@@ -116,6 +116,15 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
 
           {panel === "approve" && <ApproveForm q={q} busy={busy} onCancel={() => setPanel(null)} onSubmit={(b) => act("approve", { ...b, version: q.version })} />}
           {panel === "reject" && <RejectForm busy={busy} onCancel={() => setPanel(null)} onSubmit={(reason) => act("reject", { reason, version: q.version })} />}
+          {panel === "revise" && (
+            <Card title="Revise this quotation?">
+              <p className="mb-4">This makes a new draft revision. The current one is kept as &ldquo;Replaced by a revision&rdquo; and the customer will need to approve the new one.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button disabled={busy} onClick={() => { setPanel(null); act("revise"); }}>Yes, revise it</Button>
+                <Button variant="danger" onClick={() => setPanel(null)}>Cancel</Button>
+              </div>
+            </Card>
+          )}
           {panel === "advance" && <AdvanceForm q={q} onCancel={() => setPanel(null)} onDone={() => { setPanel(null); reload(); }} />}
 
           <Notice>{error}</Notice>
@@ -125,7 +134,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
               {q.status === "sent" && <Button variant="secondary" onClick={() => setPanel("reject")}>Customer said no</Button>}
               {["sent", "approved", "converted"].includes(q.status) && can("payments-in") && <Button variant="secondary" onClick={() => setPanel("advance")}>Take an advance</Button>}
               {["sent", "approved", "rejected", "expired"].includes(q.status) && (
-                <Button variant="ghost" disabled={busy} onClick={() => act("revise")}>Revise</Button>
+                <Button variant="ghost" disabled={busy} onClick={() => setPanel("revise")}>Revise</Button>
               )}
             </div>
           )}
@@ -332,12 +341,17 @@ function ApproveForm({ q, busy, onSubmit, onCancel }:
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | undefined>();
+  const [confirming, setConfirming] = useState(false);
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!proof.length && reason.trim().length < 5) { setError("Attach proof, or explain why there is none"); return; }
-    if (declined.length === q.lines.length) { setError(undefined); return; }
+    if (!confirming) { if (validate()) setConfirming(true); return; }
     onSubmit({ method, note, declined_line_ids: declined, proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : reason });
+  }
+  function validate() {
+    if (!proof.length && reason.trim().length < 5) { setError("Attach proof, or explain why there is none"); return false; }
+    if (declined.length === q.lines.length) { setError(undefined); return false; }
+    return true;
   }
   return (
     <Card title="Record the customer's approval">
@@ -358,8 +372,10 @@ function ApproveForm({ q, busy, onSubmit, onCancel }:
         )}
         <ProofInput proof={proof} setProof={setProof} reason={reason} setReason={setReason} error={error} />
         <Field label="Note (optional)"><Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} /></Field>
+        {confirming && <Notice tone="warning">Approve this quotation? The customer&apos;s go-ahead is recorded and the repair order can start. Check the lines and proof above first.</Notice>}
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy}>Approve</Button>
+          <Button type="submit" disabled={busy}>{confirming ? "Yes, approve" : "Approve"}</Button>
+          {confirming && <Button type="button" variant="secondary" onClick={() => setConfirming(false)}>Go back and edit</Button>}
           <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </form>
@@ -397,7 +413,7 @@ function AdvanceForm({ q, onDone, onCancel }: { q: Quotation; onDone: () => void
     }
   }
   return (
-    <PaymentForm title="Take an advance" hint={`Quotation total ${money(q.totals.total)}.`} busy={busy} onSubmit={submit} onCancel={onCancel}
+    <PaymentForm title="Take an advance" hint={`Quotation total ${money(q.totals.total)}. Still to take at most ${money(q.totals.balance)}.`} busy={busy} onSubmit={submit} onCancel={onCancel}
                  note={<><p className="text-sm text-muted">An advance is the customer&apos;s money until the invoice uses it. A refund needs an admin&apos;s approval.</p><Notice>{error}</Notice></>} />
   );
 }

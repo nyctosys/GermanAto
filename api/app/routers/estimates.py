@@ -447,6 +447,10 @@ def take_advance(quotation_id: uuid.UUID, body: AdvanceIn, actor: Actor = Depend
         raise HTTPException(409, "An advance can be taken once the quotation is sent or approved")
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet payment")
+    held = sum((p.amount for p in advances_on(db, v.id) if p.status == "posted" and not p.refunded and not p.invoice_id), Decimal(0))
+    room = totals(q)["total"] - held
+    if body.amount > room:
+        raise HTTPException(422, f"An advance cannot be more than the quotation total. Rs {max(room, Decimal(0)):,.2f} can still be taken")
     p = Payment(number=next_number(db, actor.branch, "payment"), kind="advance", customer_id=v.buyer_id or v.customer_id,
                 visit_id=v.id, quotation_id=q.id, received_by=actor.user.id, **body.model_dump())
     db.add(p)
