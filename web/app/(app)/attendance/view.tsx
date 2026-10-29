@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
+import { MarkForm, PunchForm } from "@/components/hr";
 import { useQueryParam } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { when } from "@/lib/format";
 import { useLiveErrors } from "@/lib/form";
@@ -54,11 +55,34 @@ function Body() {
             </table>
           )}
       </Card>
+      {list.data && list.data.employees.length > 0 && <ByHand people={list.data.employees.map((r) => r.employee)} onDone={list.reload} />}
       <div className="grid gap-4 shell:grid-cols-2">
         <Devices />
         <Unmatched />
       </div>
     </div>
+  );
+}
+
+/** Fix a day when the device got it wrong: a missed punch, a leave day, or a day marked present (8 hours). */
+function ByHand({ people, onDone }: { people: Row["employee"][]; onDone: () => void }) {
+  const [who, setWho] = useState("");
+  const [mode, setMode] = useState<"punch" | "mark" | null>(null);
+  const done = () => { setMode(null); onDone(); };
+  return (
+    <Card title="Add or fix a day by hand">
+      <div className="space-y-4">
+        <Field label="Employee"><Select value={who} onChange={(e) => { setWho(e.target.value); setMode(null); }}><option value="">Choose an employee</option>{people.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</Select></Field>
+        {who && !mode && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setMode("punch")}>Add a missed punch</Button>
+            <Button variant="secondary" onClick={() => setMode("mark")}>Mark present or leave</Button>
+          </div>
+        )}
+        {who && mode === "punch" && <PunchForm id={who} onDone={done} onCancel={() => setMode(null)} />}
+        {who && mode === "mark" && <MarkForm id={who} onDone={done} onCancel={() => setMode(null)} />}
+      </div>
+    </Card>
   );
 }
 
@@ -87,6 +111,7 @@ function Devices() {
   const [adding, setAdding] = useState(false);
   const [secret, setSecret] = useState<{ name: string; value: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [logOf, setLogOf] = useState<string | null>(null);
 
   async function toggle(d: Device) {
     setError(null);
@@ -121,12 +146,29 @@ function Devices() {
                 <div className="flex flex-wrap gap-2">
                   <Button variant="ghost" onClick={() => toggle(d)}>{d.is_active ? "Switch off" : "Switch on"}</Button>
                   <Button variant="ghost" onClick={() => rotate(d)}>{d.has_secret ? "New secret" : "Add a secret"}</Button>
+                  <Button variant="ghost" onClick={() => setLogOf(logOf === d.id ? null : d.id)}>{logOf === d.id ? "Hide log" : "Activity log"}</Button>
                 </div>
+                {logOf === d.id && <DeviceLog id={d.id} />}
               </li>
             ))}
           </ul>
         )}
     </Card>
+  );
+}
+
+/** The last things a terminal did, for working out why it does not seem to work. */
+function DeviceLog({ id }: { id: string }) {
+  const log = useApi<{ id: string; at: string; event: string; detail: string }[]>(`/api/attendance-devices/${id}/log`);
+  if (log.error) return <Notice>{log.error}</Notice>;
+  if (!log.data) return <SkeletonRows rows={2} />;
+  if (!log.data.length) return <p className="text-sm text-muted">Nothing yet. Punches received and refused calls show here.</p>;
+  return (
+    <ul className="space-y-1 rounded-control bg-paper-2 p-3 text-sm">
+      {log.data.map((r) => (
+        <li key={r.id} className="flex flex-wrap gap-x-3"><span className="num text-muted">{when(r.at)}</span><Badge tone={r.event === "refused" ? "error" : "success"}>{r.event === "refused" ? "Refused" : "Punches"}</Badge><span>{r.detail}</span></li>
+      ))}
+    </ul>
   );
 }
 

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app import attendance
 from app.auth import Actor, require
 from app.db import get_db
-from app.models import AttendanceDevice, DayMark, Employee, Punch, User
+from app.models import AttendanceDevice, DayMark, DeviceLog, Employee, Punch, User
 from app.numbering import next_number
 from app.validators import Cnic, Name, Phone, Text
 
@@ -42,12 +42,14 @@ class EmployeeIn(BaseModel):
     monthly_salary: Decimal = Field(default=Decimal(0), ge=0, le=100_000_000, decimal_places=2)
     shift_start: time = time(9, 0)
     shift_end: time = time(18, 0)
-    weekly_off: int = Field(default=6, ge=0, le=6)
+    days_off: list[int] = Field(default=[6], max_length=6)  # Python weekdays, 0 Monday to 6 Sunday
     joined_on: date
     notes: Text = Field(default="", max_length=3000)
 
     @model_validator(mode="after")
     def shift_makes_sense(self):
+        if any(not 0 <= d <= 6 for d in self.days_off) or len(set(self.days_off)) != len(self.days_off):
+            raise ValueError("Pick each weekday off at most once")
         if self.shift_end <= self.shift_start:
             raise ValueError("The shift must end after it starts")
         if self.joined_on > date.today() + timedelta(days=31):
@@ -63,7 +65,7 @@ class EmployeeUpdate(EmployeeIn):
 
 def employee_out(e: Employee, user: User | None = None) -> dict:
     data = {k: getattr(e, k) for k in ("id", "number", "full_name", "title", "phone", "cnic", "user_id", "device_pin", "monthly_salary",
-                                       "shift_start", "shift_end", "weekly_off", "joined_on", "left_on", "notes", "is_active", "version")}
+                                       "shift_start", "shift_end", "days_off", "joined_on", "left_on", "notes", "is_active", "version")}
     data["username"] = user.username if user else None
     return data
 
@@ -198,6 +200,14 @@ def update_device(device_id: uuid.UUID, body: DeviceUpdate, actor: Actor = Depen
     return device_out(d)
 
 
+@router.get("/attendance-devices/{device_id}/log")
+def device_log(device_id: uuid.UUID, actor: Actor = Depends(can_hr), db: Session = Depends(get_db)):
+    """The last 50 things this terminal did, newest first."""
+    d = _get(db, actor, AttendanceDevice, device_id, "Device")
+    rows = db.scalars(select(DeviceLog).where(DeviceLog.device_id == d.id).order_by(DeviceLog.created_at.desc()).limit(50))
+    return [{"id": r.id, "at": r.created_at, "event": r.event, "detail": r.detail} for r in rows]
+
+
 @router.post("/attendance-devices/{device_id}/secret")
 def new_secret(device_id: uuid.UUID, actor: Actor = Depends(can_hr), db: Session = Depends(get_db)):
     """Replaces the shared secret. The old one stops working at once."""
@@ -298,7 +308,7 @@ def void_punch(punch_id: uuid.UUID, body: VoidPunch, actor: Actor = Depends(can_
 class MarkIn(BaseModel):
     employee_id: uuid.UUID
     day: date
-    kind: Literal["paid_leave", "unpaid_leave"]
+    kind: Literal["paid_leave", "unpaid_leave", "present"]
     reason: Text = Field(min_length=3, max_length=500)
 
 

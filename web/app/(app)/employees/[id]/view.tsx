@@ -1,16 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Suspense, useState, type FormEvent } from "react";
-import { DayBadge, DAY, EmployeeForm, type Employee, WEEKDAYS } from "@/components/hr";
+import { Suspense, useState } from "react";
+import { DayBadge, EmployeeForm, type Employee, WEEKDAYS } from "@/components/hr";
 import { ReasonForm } from "@/components/purchasing";
-import { Segments, useQueryParam } from "@/components/search";
+import { useQueryParam } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, ErrorState, Input, Notice, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money, phone } from "@/lib/format";
-import { useLiveErrors } from "@/lib/form";
-import { issuesToFieldErrors, markSchema, punchSchema } from "@/lib/schemas";
 
 type Month = {
   month: string; employee: Employee; present: number; late: number; absent: number; paid_leave: number; unpaid_leave: number; off: number;
@@ -36,7 +35,6 @@ function View() {
   const month = monthParam || new Date().toLocaleDateString("en-CA").slice(0, 7);
   const data = useApi<Month>(`/api/attendance/${id}?month=${month}`);
   const [editing, setEditing] = useState(false);
-  const [panel, setPanel] = useState<"punch" | "mark" | null>(null);
   const [voiding, setVoiding] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,17 +87,12 @@ function View() {
           <Card title="Details">
             <dl className="space-y-3">
               {[["Salary", money(e.monthly_salary)], ["Phone", e.phone ? phone(e.phone) : ""], ["CNIC", e.cnic], ["Device number", e.device_pin],
-                ["Shift", `${e.shift_start.slice(0, 5)} to ${e.shift_end.slice(0, 5)}, off on ${WEEKDAYS[e.weekly_off]}`], ["Joined", day(e.joined_on)], ["Login", e.username ?? ""], ["Notes", e.notes]].map(([l, t]) => (
+                ["Shift", `${e.shift_start.slice(0, 5)} to ${e.shift_end.slice(0, 5)}, off on ${e.days_off.map((d) => WEEKDAYS[d]).join(" and ") || "no fixed day"}`], ["Joined", day(e.joined_on)], ["Login", e.username ?? ""], ["Notes", e.notes]].map(([l, t]) => (
                 <div key={l}><dt className="text-sm text-muted">{l}</dt><dd className={t ? "" : "text-muted"}>{t || "None"}</dd></div>
               ))}
             </dl>
           </Card>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => setPanel("punch")}>Add a missed punch</Button>
-            <Button variant="secondary" onClick={() => setPanel("mark")}>Mark a leave day</Button>
-          </div>
-          {panel === "punch" && <PunchForm id={e.id} onDone={() => { setPanel(null); data.reload(); }} onCancel={() => setPanel(null)} />}
-          {panel === "mark" && <MarkForm id={e.id} onDone={() => { setPanel(null); data.reload(); }} onCancel={() => setPanel(null)} />}
+          <Link href="/attendance" className="inline-flex min-h-11 items-center rounded-control border border-rule-strong bg-surface px-4 font-medium hover:bg-paper">Add a missed punch, leave or present day in Attendance</Link>
           {voiding && <ReasonForm title="Void this punch" hint="It stays on record, struck through, and no longer counts." confirm="Void it" busy={false} onCancel={() => setVoiding(null)} onSubmit={voidPunch} />}
           {error && <Notice>{error}</Notice>}
           <Card title="Punches this month" flush>
@@ -120,64 +113,5 @@ function View() {
         </div>
       </div>
     </>
-  );
-}
-
-function PunchForm({ id, onDone, onCancel }: { id: string; onDone: () => void; onCancel: () => void }) {
-  const [at, setAt] = useState("");
-  const [reason, setReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const { errors, activate, live } = useLiveErrors({ punched_at: at, reason }, (v) => {
-    const r = punchSchema.safeParse(v);
-    return r.success ? {} : issuesToFieldErrors(r.error.issues);
-  });
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    activate();
-    const r = punchSchema.safeParse({ punched_at: at, reason });
-    if (!r.success) return;
-    try { await api("/api/attendance/punches", { method: "POST", json: { employee_id: id, punched_at: at, reason: r.data.reason } }); onDone(); }
-    catch (err) { setError((err as Error).message); }
-  }
-  return (
-    <Card title="Add a missed punch">
-      <form noValidate onSubmit={submit} className="space-y-4" {...live}>
-        <Field label="Date and time" error={errors.punched_at}><Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} /></Field>
-        <Field label="Why" error={errors.reason} hint="For example: the finger scan failed at the door."><Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} /></Field>
-        <Notice>{error}</Notice>
-        <div className="flex flex-wrap gap-2"><Button type="submit">Add it</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
-      </form>
-    </Card>
-  );
-}
-
-function MarkForm({ id, onDone, onCancel }: { id: string; onDone: () => void; onCancel: () => void }) {
-  const [dayV, setDayV] = useState("");
-  const [kind, setKind] = useState("paid_leave");
-  const [reason, setReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const { errors, activate, live } = useLiveErrors({ day: dayV, kind, reason }, (v) => {
-    const r = markSchema.safeParse(v);
-    return r.success ? {} : issuesToFieldErrors(r.error.issues);
-  });
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    activate();
-    const r = markSchema.safeParse({ day: dayV, kind, reason });
-    if (!r.success) return;
-    try { await api("/api/attendance/marks", { method: "POST", json: { employee_id: id, ...r.data } }); onDone(); }
-    catch (err) { setError((err as Error).message); }
-  }
-  return (
-    <Card title="Mark a leave day">
-      <form noValidate onSubmit={submit} className="space-y-4" {...live}>
-        <Field label="Day" error={errors.day}><Input type="date" value={dayV} onChange={(e) => setDayV(e.target.value)} /></Field>
-        <Segments value={kind} onChange={setKind} options={[{ value: "paid_leave", label: DAY.paid_leave[0] }, { value: "unpaid_leave", label: DAY.unpaid_leave[0] }]} />
-        <Field label="Why" error={errors.reason}><Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} /></Field>
-        <p className="text-sm text-muted">Unpaid leave costs a day&apos;s pay in payroll; paid leave does not.</p>
-        <Notice>{error}</Notice>
-        <div className="flex flex-wrap gap-2"><Button type="submit">Mark it</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
-      </form>
-    </Card>
   );
 }

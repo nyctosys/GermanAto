@@ -279,7 +279,7 @@ export const employeeSchema = z.object({
   monthly_salary: rupees.transform((v) => v || "0"),
   shift_start: z.string().min(1, "Required"),
   shift_end: z.string().min(1, "Required"),
-  weekly_off: z.string().transform(Number),
+  days_off: z.string().transform((v) => (v ? v.split(",").map(Number) : [])),
   joined_on: z.string().min(1, "Required"),
   left_on: z.string().optional().transform((v) => v || null),
   user_id: z.string().optional().transform((v) => v || null),
@@ -301,7 +301,7 @@ export const punchSchema = z.object({
 
 export const markSchema = z.object({
   day: z.string().min(1, "Required"),
-  kind: z.enum(["paid_leave", "unpaid_leave"]),
+  kind: z.enum(["paid_leave", "unpaid_leave", "present"]),
   reason: text(500).refine((v) => v.length >= 3, "Say why"),
 });
 

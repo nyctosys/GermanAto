@@ -80,6 +80,15 @@ def test_days_are_worked_out_from_punches_leave_and_the_weekly_off(admin, anon):
     assert month["employees"][0]["absent"] == 22 and "days" not in month["employees"][0]
     assert admin.get("/api/attendance", params={"month": "September"}).status_code == 422
     assert admin.delete("/api/attendance/marks", params={"employee_id": e["id"], "day": "2026-09-04"}).status_code == 200
+    # A day marked present counts as 8 hours, and a person can have more than one weekly day off.
+    admin.post("/api/attendance/marks", json={"employee_id": e["id"], "day": "2026-09-05", "kind": "present", "reason": "Scanner was down"})
+    m = admin.get(f"/api/attendance/{e['id']}", params={"month": "2026-09"}).json()
+    sat = next(d for d in m["days"] if d["day"] == "2026-09-05")
+    assert sat["status"] == "present" and D(str(sat["hours"])) == D("8")
+    emp = admin.get(f"/api/employees/{e['id']}").json()
+    admin.put(f"/api/employees/{e['id']}", json={**emp, "days_off": [5, 6]})
+    m = admin.get(f"/api/attendance/{e['id']}", params={"month": "2026-09"}).json()
+    assert m["off"] == 7 and m["working_days"] == 22  # the marked Saturday is not counted as off
 
 
 def test_manual_punches_need_a_reason_and_can_be_voided_but_device_ones_cannot(admin, anon):
@@ -207,3 +216,14 @@ def test_payroll_is_for_payroll_users_only(admin):
     admin.post("/api/users", json={"username": "acct", "full_name": "Acct", "password": "acct-pass-1234", "role_id": roles["Accountant"], "branch_ids": [branch_id]})
     assert signed_in("inv", "inv-pass-1234").get("/api/payroll-runs").status_code == 403
     assert signed_in("acct", "acct-pass-1234").get("/api/payroll-runs").status_code == 200
+
+
+def test_device_log_shows_punches_and_refusals(admin, anon):
+    d = admin.post("/api/attendance-devices", json={"serial": "ZK-9009", "name": "Gate", "use_secret": True}).json()
+    admin.post("/api/employees", json={"full_name": "Log Tester", "joined_on": "2026-01-01", "device_pin": "9", "cnic": "3520212345679"})
+    assert anon.get("/iclock/cdata", params={"SN": "ZK-9009"}).status_code == 403  # no secret
+    ok = anon.post("/iclock/cdata", params={"SN": "ZK-9009", "table": "ATTLOG", "token": d["secret"]}, content="9\t2026-09-01 09:00:00\t0\t1\n77\t2026-09-01 09:01:00\t0\t1\n")
+    assert ok.text == "OK:2"
+    log = admin.get(f"/api/attendance-devices/{d['id']}/log").json()
+    assert {r["event"] for r in log} == {"refused", "punches"}
+    assert any("1 not matched" in r["detail"] for r in log)

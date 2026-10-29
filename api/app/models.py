@@ -6,7 +6,7 @@ from sqlalchemy import (
     BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text,
     Time, UniqueConstraint, func, text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, BranchScoped, Entity, uuid7, utcnow
@@ -999,7 +999,8 @@ class Employee(BranchScoped):
     monthly_salary: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
     shift_start: Mapped[time] = mapped_column(Time, default=time(9, 0))
     shift_end: Mapped[time] = mapped_column(Time, default=time(18, 0))
-    weekly_off: Mapped[int] = mapped_column(Integer, default=6)              # Python weekday: 6 is Sunday
+    weekly_off: Mapped[int] = mapped_column(Integer, default=6)              # first day off, kept for old readers
+    days_off: Mapped[list[int]] = mapped_column(ARRAY(Integer), default=lambda: [6])  # Python weekdays: 6 is Sunday
     joined_on: Mapped[date] = mapped_column(Date)
     left_on: Mapped[date | None] = mapped_column(Date)
     notes: Mapped[str] = mapped_column(Text, default="")
@@ -1017,6 +1018,17 @@ class AttendanceDevice(BranchScoped):
     secret_hash: Mapped[str] = mapped_column(String(64), default="")  # sha256 of the shared secret, if one is set
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DeviceLog(BranchScoped):
+    """What a terminal did: punches received, or a call that was refused. Handshakes are not logged (they come every minute)."""
+
+    __tablename__ = "device_logs"
+    __table_args__ = (Index("ix_device_log_device_time", "device_id", "created_at"),)
+
+    device_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attendance_devices.id"))
+    event: Mapped[str] = mapped_column(String(12))  # punches, refused
+    detail: Mapped[str] = mapped_column(String(300), default="")
 
 
 class Punch(BranchScoped):
@@ -1040,11 +1052,11 @@ class Punch(BranchScoped):
 
 
 class DayMark(BranchScoped):
-    """An approved absence: leave that is paid, or leave that is not."""
+    """A manual day: approved leave (paid or not), or a day marked present with no punches (counts as a full 8-hour day)."""
 
     __tablename__ = "day_marks"
     __table_args__ = (
-        CheckConstraint("kind IN ('paid_leave', 'unpaid_leave')", name="mark_kind"),
+        CheckConstraint("kind IN ('paid_leave', 'unpaid_leave', 'present')", name="mark_kind"),
         UniqueConstraint("employee_id", "day"),
     )
 

@@ -20,7 +20,7 @@ GRACE_MINUTES = 15  # arriving this much after the shift starts is not yet late
 @dataclass
 class Day:
     day: date
-    status: str  # present, late, incomplete, absent, off, paid_leave, unpaid_leave
+    status: str  # present (also a marked day), late, incomplete, absent, off, paid_leave, unpaid_leave
     first: datetime | None = None
     last: datetime | None = None
     hours: Decimal = Decimal(0)
@@ -68,12 +68,15 @@ def summarise(db: Session, e: Employee, start: date, end: date, today: date | No
     while d <= last_day:
         punches = by_day.get(d, [])
         if d in marks:
-            day = Day(d, marks[d].kind, punches=len(punches), note=marks[d].reason)
+            hours = Decimal(8) if marks[d].kind == "present" else Decimal(0)
+            day = Day(d, marks[d].kind, hours=hours, punches=len(punches), note=marks[d].reason)
             t.paid_leave += day.status == "paid_leave"
             t.unpaid_leave += day.status == "unpaid_leave"
-            t.working_days += d.weekday() != e.weekly_off
+            t.present += day.status == "present"
+            t.hours += hours
+            t.working_days += d.weekday() not in e.days_off
         elif not punches:
-            off = d.weekday() == e.weekly_off
+            off = d.weekday() in e.days_off
             day = Day(d, "off" if off else "absent")
             t.off += off
             t.absent += not off
@@ -88,7 +91,7 @@ def summarise(db: Session, e: Employee, start: date, end: date, today: date | No
             t.late += status == "late"
             t.incomplete += status == "incomplete"
             t.hours += hours
-            t.working_days += d.weekday() != e.weekly_off
+            t.working_days += d.weekday() not in e.days_off
         t.days.append(day)
         d += timedelta(days=1)
     return t

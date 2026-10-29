@@ -110,7 +110,7 @@ def _get_run(db: Session, actor: Actor, run_id: uuid.UUID, *, lock: bool = False
 def month_working_days(e: Employee, start: date, end: date) -> int:
     d, n = start, 0
     while d <= end:
-        n += d.weekday() != e.weekly_off
+        n += d.weekday() not in e.days_off
         d += timedelta(days=1)
     return n
 

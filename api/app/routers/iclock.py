@@ -12,17 +12,27 @@ from sqlalchemy.orm import Session
 
 from app import attendance
 from app.db import get_db, set_actor, utcnow
-from app.models import AttendanceDevice, Employee, Punch
+from app.models import AttendanceDevice, DeviceLog, Employee, Punch
 from app.routers.hr import _hash
 
 router = APIRouter(prefix="/iclock", tags=["attendance devices"])
 
 
+def _log(db: Session, d: AttendanceDevice, event: str, detail: str) -> None:
+    """Committed on its own, because the caller is about to refuse the request (which rolls back)."""
+    set_actor(db, branch_id=d.branch_id)
+    db.add(DeviceLog(device_id=d.id, event=event, detail=detail, branch_id=d.branch_id))
+    db.commit()
+
+
 def known_device(db: Session, serial: str, token: str, header: str) -> AttendanceDevice:
     d = db.scalar(select(AttendanceDevice).where(AttendanceDevice.serial == serial))
     if not d or not d.is_active:
+        if d:
+            _log(db, d, "refused", "The device is switched off")
         raise HTTPException(403, "Unknown device")
     if d.secret_hash and not hmac.compare_digest(d.secret_hash, _hash(token or header or "")):
+        _log(db, d, "refused", "Wrong or missing device secret")
         raise HTTPException(403, "Wrong device secret")
     d.last_seen_at = utcnow()
     set_actor(db, branch_id=d.branch_id)
@@ -53,7 +63,7 @@ async def push(request: Request, SN: str = Query(...), table: str = "", token: s
         db.commit()
         return "OK"
     pins = {e.device_pin: e.id for e in db.scalars(select(Employee).where(Employee.branch_id == d.branch_id, Employee.device_pin != ""))}
-    saved = 0
+    saved = unmatched = 0
     for line in body.splitlines():
         parts = line.strip().split("\t")
         if len(parts) < 2:
@@ -67,5 +77,9 @@ async def push(request: Request, SN: str = Query(...), table: str = "", token: s
             continue  # a terminal resends what it has already sent
         db.add(Punch(device_id=d.id, device_pin=pin, employee_id=pins.get(pin), punched_at=when, source="device", branch_id=d.branch_id))
         saved += 1
+        unmatched += pin not in pins
+    if saved:
+        db.add(DeviceLog(device_id=d.id, event="punches", branch_id=d.branch_id,
+                         detail=f"{saved} punch{'es' if saved != 1 else ''} received" + (f", {unmatched} not matched to an employee" if unmatched else "")))
     db.commit()
     return f"OK:{saved}"
