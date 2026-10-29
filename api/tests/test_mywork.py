@@ -71,3 +71,16 @@ def test_queues_depend_on_permissions_not_on_role_names(admin):
     visit, _, ro = ready_repair(admin)
     assert set(queues(tech)) <= {"repairs", "job-card", "make-ro"}  # a technician is only ever offered repair work
     assert "money" not in str(queues(tech)) and "pay-bills" not in queues(tech)
+
+
+def test_gate_history_lists_cars_that_left(admin):
+    from tests.test_phase3_billing import ready_repair
+    visit, _, ro = ready_repair(admin)
+    inv = admin.post(f"/api/repair-orders/{ro['id']}/invoice").json()
+    inv = admin.post(f"/api/invoices/{inv['id']}/issue", json={"version": inv["version"]}).json()
+    admin.post(f"/api/invoices/{inv['id']}/payments", json={"amount": str(inv["totals"]["balance"]), "account": "cash", "no_proof_reason": "Cash at the counter"})
+    assert admin.get("/api/gate/history").json() == []
+    assert admin.post(f"/api/visits/{visit['id']}/gate-pass", json={"handed_to": "Ali Khan"}).status_code == 200
+    rows = admin.get("/api/gate/history").json()
+    assert [r["number"] for r in rows] == [visit["number"]] and rows[0]["handed_to"] == "Ali Khan" and rows[0]["on_credit"] is False
+    assert admin.get("/api/gate/history", params={"q": "nobody-here"}).json() == []

@@ -5,7 +5,7 @@ import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { useFormErrors } from "@/lib/form";
-import { money } from "@/lib/format";
+import { money, when } from "@/lib/format";
 import { gatePassSchemaAt, parseForm } from "@/lib/schemas";
 import { Plate } from "@/components/cars";
 
@@ -16,7 +16,40 @@ export default function GatePage() {
     <RequirePermission permission={["gate", "visits"]}>
       <PageHeader title="Cars ready to leave" description="Repaired, invoiced and checked. Hand the car over only after you have checked the paperwork." />
       <Cars />
+      <History />
     </RequirePermission>
+  );
+}
+
+type Left = { id: string; number: string; plate: string; car: string; customer: string; left_at: string; handed_to: string; released_by: string | null;
+  odometer_in: number | null; odometer_out: number | null; on_credit: boolean; credit_reason: string };
+
+/** Cars that have already left, newest first. */
+function History() {
+  const [q, setQ] = useState("");
+  const list = useApi<Left[]>(`/api/gate/history?${new URLSearchParams({ q })}`);
+  return (
+    <div className="mt-8">
+      <h2 className="mb-3 text-lg font-semibold">Cars that have left</h2>
+      <Input aria-label="Search cars that have left" placeholder="Plate, customer, visit or who collected" value={q} onChange={(e) => setQ(e.target.value)} className="mb-3" />
+      <Card flush>
+        {list.error ? <ErrorState message={list.error} onRetry={list.reload} /> : !list.data ? <SkeletonRows rows={3} />
+          : !list.data.length ? <EmptyState title="No cars have left yet">Each car you release is listed here with who took it.</EmptyState> : (
+            <ul>
+              {list.data.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5">
+                  <div className="flex flex-wrap items-center gap-3"><Plate plate={r.plate} small /><span><span className="block font-medium">{r.car}</span><span className="block text-sm text-muted">{r.customer}, {r.number}</span></span></div>
+                  <div className="text-sm text-muted sm:text-right">
+                    <span className="block">{when(r.left_at)}</span>
+                    <span className="block">Taken by {r.handed_to || "not written down"}. Released by {r.released_by ?? "unknown"}.</span>
+                    {r.on_credit && <Badge tone="warning">Left owing money: {r.credit_reason}</Badge>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+      </Card>
+    </div>
   );
 }
 

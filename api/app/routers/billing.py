@@ -469,6 +469,24 @@ def gate_queue(actor: Actor = Depends(can_gate), db: Session = Depends(get_db)):
     return out
 
 
+@router.get("/gate/history")
+def gate_history(q: str = "", actor: Actor = Depends(can_gate), db: Session = Depends(get_db)):
+    """Cars that have left, newest first: who took them, when, and whether they went out owing money."""
+    stmt = (select(Visit, Car, Customer).join(Car, Car.id == Visit.car_id).join(Customer, Customer.id == Visit.customer_id)
+            .where(Visit.branch_id == actor.branch.id, Visit.status == "closed", Visit.closed_at.is_not(None))
+            .order_by(Visit.closed_at.desc()).limit(100))
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Visit.number.ilike(like), Car.plate.ilike(like), Customer.name.ilike(like), Visit.handed_to.ilike(like)))
+    out = []
+    for v, car, cust in db.execute(stmt):
+        by = db.get(User, v.released_by) if v.released_by else None
+        out.append({"id": v.id, "number": v.number, "plate": car.plate, "car": " ".join(str(x) for x in (car.year, car.make, car.model) if x),
+                    "customer": cust.name, "left_at": v.closed_at, "handed_to": v.handed_to, "released_by": by.full_name if by else None,
+                    "odometer_in": v.odometer_in, "odometer_out": v.odometer_out, "on_credit": bool(v.credit_released_by), "credit_reason": v.credit_reason})
+    return out
+
+
 @router.get("/visits/{visit_id}/gate-check")
 def get_gate_check(visit_id: uuid.UUID, actor: Actor = Depends(can_gate), db: Session = Depends(get_db)):
     return gate_check(db, _get_visit(db, actor, visit_id))
