@@ -1,4 +1,4 @@
-import { Children, cloneElement, isValidElement, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes } from "react";
+import { useState, Children, cloneElement, isValidElement, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes } from "react";
 
 // Every control is at least 44px tall (a finger, not a cursor) and changes
 // only colour on hover/press, never size.
@@ -155,4 +155,26 @@ export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "succ
     accent: "bg-error-soft text-accent",
   }[tone];
   return <span className={`inline-flex items-center rounded-control px-2 py-0.5 text-sm font-medium ${styles}`}>{children}</span>;
+}
+
+const OTHER = "__other";
+
+/** A pick-list with an "Other" way out. Posts its value under `name`, so it works inside a plain FormData form. */
+export function ChoiceSelect({ name, options, defaultValue = "", placeholder = "Choose", onChange }:
+  { name: string; options: string[]; defaultValue?: string; placeholder?: string; onChange?: (v: string) => void }) {
+  const known = options.includes(defaultValue);
+  const [pick, setPick] = useState(defaultValue && !known ? OTHER : defaultValue);
+  const [typed, setTyped] = useState(defaultValue && !known ? defaultValue : "");
+  const value = pick === OTHER ? typed : pick;
+  return (
+    <div className="flex flex-col gap-2">
+      <Select aria-label={name} value={pick} onChange={(e) => { setPick(e.target.value); onChange?.(e.target.value === OTHER ? typed : e.target.value); }}>
+        <option value="">{placeholder}</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        <option value={OTHER}>Other, type it</option>
+      </Select>
+      {pick === OTHER && <Input aria-label={`${name}, other`} value={typed} maxLength={60} placeholder="Type it" onChange={(e) => { setTyped(e.target.value); onChange?.(e.target.value); }} />}
+      <input type="hidden" name={name} value={value} />
+    </div>
+  );
 }

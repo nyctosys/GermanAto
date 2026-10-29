@@ -100,6 +100,9 @@ def test_labour_codes(admin):
     assert admin.put(f"/api/labour-codes/{code['id']}", json={**code, "code": "PNT-DOOR2"}).status_code == 422
     assert admin.put(f"/api/labour-codes/{code['id']}", json={**code, "is_active": False}).status_code == 200
     assert admin.get("/api/labour-codes").json() == []
+    a = admin.post("/api/labour-codes", json={"name": "Wash", "category": "Washing"}).json()
+    b = admin.post("/api/labour-codes", json={"name": "Wax", "category": "Washing"}).json()
+    assert a["code"].startswith("LAB-") and b["code"] != a["code"]
 
 
 # --- inventory ----------------------------------------------------------------

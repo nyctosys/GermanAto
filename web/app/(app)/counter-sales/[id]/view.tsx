@@ -10,7 +10,7 @@ import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { Button, Card, Checkbox, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
-import { money, qty } from "@/lib/format";
+import { money, qty, qtyStep } from "@/lib/format";
 import { linePrice, lineQty } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
@@ -136,7 +136,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
                     <span className={Number(l.qty) > Number(l.on_hand) ? "text-error" : ""}>{qty(l.on_hand)} {l.unit} in stock</span></p>
                 </div>
                 <Field label="Qty" error={tried && !lineQty.safeParse(l.qty).success ? "More than 0" : undefined}>
-                  <Input type="number" inputMode="decimal" min="0" step="any" value={l.qty} onChange={(e) => edit(l.key, { qty: e.target.value })} />
+                  <Input type="number" inputMode="decimal" min="0" step={qtyStep(l.unit)} value={l.qty} onChange={(e) => edit(l.key, { qty: e.target.value })} />
                 </Field>
                 <Field label="Price (Rs)" error={tried && !linePrice.safeParse(l.unit_price).success ? "Enter the price" : undefined}>
                   <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_price} onChange={(e) => edit(l.key, { unit_price: e.target.value })} />

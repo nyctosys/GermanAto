@@ -2,14 +2,13 @@
 
 import { useState, type FormEvent } from "react";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, ChoiceSelect, Checkbox, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
+import { LABOUR_CATEGORIES } from "@/lib/lists";
 import { useSession } from "@/lib/session";
 
 type Code = { id: string; code: string; name: string; category: string; description: string; is_active: boolean; version: number };
 
-// Suggestions only: any category can be typed.
-const CATEGORIES = ["Mechanical", "Electrical", "Denting", "Painting", "AC", "Diagnostics", "Detailing", "Inspection", "Tyres"];
 
 export default function LabourCodesPage() {
   return (
@@ -39,7 +38,7 @@ function LabourCodes() {
         <div className="mb-6">
           <Card title={editing === "new" ? "New labour code" : `Edit ${editing.code}`}>
             <CodeForm key={editing === "new" ? "new" : editing.id} code={editing === "new" ? null : editing}
-                      categories={[...new Set([...CATEGORIES, ...groups.map(([c]) => c)])]}
+                      categories={groups.map(([c]) => c)}
                       onDone={() => { setEditing(null); list.reload(); }} />
           </Card>
         </div>
@@ -84,7 +83,7 @@ function CodeForm({ code, categories, onDone }: { code: Code | null; categories:
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
-    const body = { code: code?.code ?? f.get("code"), name: f.get("name"), category: f.get("category"),
+    const body = { code: code?.code ?? "", name: f.get("name"), category: f.get("category"),
                    description: f.get("description"), is_active: code ? f.get("is_active") === "on" : true };
     setBusy(true);
     setError(null);
@@ -99,13 +98,8 @@ function CodeForm({ code, categories, onDone }: { code: Code | null; categories:
 
   return (
     <form onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
-      <Field label="Code" hint={code ? "Codes can't be changed once created." : "2 to 24 letters, digits or dashes, e.g. PNT-DOOR"}>
-        <Input name="code" defaultValue={code?.code} disabled={!!code} required pattern="[A-Za-z0-9][A-Za-z0-9\-]{1,23}" autoCapitalize="characters" spellCheck={false} />
-      </Field>
-      <Field label="Category">
-        <Input name="category" defaultValue={code?.category} required list="labour-categories" />
-        <datalist id="labour-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
-      </Field>
+      {code && <Field label="Code" hint="Made by the system. It can't be changed."><Input value={code.code} disabled readOnly /></Field>}
+      <Field label="Category"><ChoiceSelect name="category" options={[...new Set([...LABOUR_CATEGORIES, ...categories])]} defaultValue={code?.category} placeholder="Choose a category" /></Field>
       <div className="sm:col-span-2"><Field label="Name"><Input name="name" defaultValue={code?.name} required placeholder="Paint one door" /></Field></div>
       <div className="sm:col-span-2"><Field label="Description (optional)"><Input name="description" defaultValue={code?.description} /></Field></div>
       {code && <div className="sm:col-span-2"><Checkbox name="is_active" defaultChecked={code.is_active} label="In use" hint="Retired codes stay on old documents but can't be picked." /></div>}

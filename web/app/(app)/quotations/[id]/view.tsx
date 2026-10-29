@@ -11,7 +11,7 @@ import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, useApi } from "@/lib/api";
-import { day, money, qty, when } from "@/lib/format";
+import { day, money, qty, when, qtyStep } from "@/lib/format";
 import { linePrice, lineQty } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
@@ -199,11 +199,11 @@ function LinesTable({ q }: { q: Quotation }) {
   );
 }
 
-type Draft = { id: string; kind: "labour" | "part"; labour_code_id: string | null; item_id: string | null; name: string; code: string; qty: string; unit_price: string };
+type Draft = { id: string; kind: "labour" | "part"; labour_code_id: string | null; item_id: string | null; name: string; code: string; unit?: string; qty: string; unit_price: string };
 
 function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () => void; onSend: (version: number) => void; busy: boolean }) {
   const [lines, setLines] = useState<Draft[]>(() => q.lines.map((l) => ({
-    id: l.id, kind: l.kind, labour_code_id: l.labour_code_id, item_id: l.item_id, name: lineName(l), code: lineCode(l),
+    id: l.id, kind: l.kind, labour_code_id: l.labour_code_id, item_id: l.item_id, name: lineName(l), code: lineCode(l), unit: l.item?.unit,
     qty: String(Number(l.qty)), unit_price: Number(l.unit_price) ? String(Number(l.unit_price)) : "",
   })));
   const [includeTax, setIncludeTax] = useState(q.include_tax);
@@ -265,7 +265,7 @@ function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () =
                 <p className="flex gap-3 text-sm text-muted"><span>{l.kind === "labour" ? "Labour" : "Part"}</span><span>{l.code}</span></p>
               </div>
               <Field label="Qty" error={showErrors && qtyBad(l) ? "More than 0" : undefined}>
-                <Input type="number" inputMode="decimal" min="0" step="any" value={l.qty} onChange={(e) => edit(l.id, { qty: e.target.value })} />
+                <Input type="number" inputMode="decimal" min="0" step={qtyStep(l.unit)} value={l.qty} onChange={(e) => edit(l.id, { qty: e.target.value })} />
               </Field>
               <Field label="Price (Rs)" error={showErrors && priceBad(l) ? "Enter the price" : undefined}>
                 <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_price} placeholder={l.kind === "labour" ? "Labour price" : ""}

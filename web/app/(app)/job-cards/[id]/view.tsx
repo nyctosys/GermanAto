@@ -8,7 +8,7 @@ import { RequirePermission } from "@/components/shell";
 import { Button, Card, EmptyState, ErrorState, Input, Notice, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, ApiError, useApi } from "@/lib/api";
-import { money, qty, when } from "@/lib/format";
+import { money, qty, when, qtyStep } from "@/lib/format";
 import { lineQty } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
@@ -47,7 +47,7 @@ function fromPick(p: Pick): JobLine {
 function Editor({ initial }: { initial: JobCard }) {
   const router = useRouter();
   const { can } = useSession();
-  const [lines, setLines] = useState(initial.lines);
+  const [lines, setLines] = useState(initial.lines.map((l) => ({ ...l, qty: String(Number(l.qty)) })));
   const [notes, setNotes] = useState(initial.notes);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -140,7 +140,7 @@ function Editor({ initial }: { initial: JobCard }) {
                     <div className="flex items-end gap-2 sm:flex-col sm:items-stretch">
                       <label className="flex-1">
                         <span className="mb-1 block text-sm text-muted">Quantity</span>
-                        <Input type="number" inputMode="decimal" min="0" step="any" value={l.qty} disabled={locked}
+                        <Input type="number" inputMode="decimal" min="0" step={qtyStep(l.item?.unit)} value={l.qty} disabled={locked}
                                aria-invalid={bad.includes(l.id)} className={`min-h-11 w-full rounded-control border bg-surface px-3 text-base ${bad.includes(l.id) ? "border-error" : "border-rule-strong"}`}
                                onChange={(e) => change((ls) => ls.map((x) => (x.id === l.id ? { ...x, qty: e.target.value } : x)))} />
                       </label>

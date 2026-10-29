@@ -12,3 +12,6 @@ export const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
 
 /** Phones are stored as +923001234567; people read 0300 1234567. */
 export const phone = (v: string) => (v?.startsWith("+92") && v.length === 13 ? `0${v.slice(3, 6)} ${v.slice(6)}` : v);
+
+/** Pieces, sets, pairs and boxes are counted whole; litres, kilograms and metres can be part-filled. */
+export const qtyStep = (unit?: string) => (["litre", "kg", "metre"].includes(unit ?? "") ? "any" : "1");

@@ -9,7 +9,7 @@ import { ItemPicker, marginPct, type Po, ReasonForm, type PoLine, PoBadge, type 
 import { PURCHASING, RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
-import { day, money, qty, today } from "@/lib/format";
+import { day, money, qty, today, qtyStep } from "@/lib/format";
 import { liveForm } from "@/lib/form";
 import { billSchema, type FieldErrors, lineQty, parseForm, unitCost } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
@@ -134,7 +134,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
                       {Number(l.avg_cost) > 0 && <span className="num">Average cost {money(l.avg_cost)}</span>}</p>
                   </div>
                   <Field label="Qty" error={tried && qtyBad(l) ? "More than 0" : undefined}>
-                    <Input type="number" inputMode="decimal" min="0" step="any" value={l.qty} onChange={(e) => edit(l.key, { qty: e.target.value })} />
+                    <Input type="number" inputMode="decimal" min="0" step={qtyStep(l.unit)} value={l.qty} onChange={(e) => edit(l.key, { qty: e.target.value })} />
                   </Field>
                   <Field label="Cost each (Rs)" error={tried && costBad(l) ? "Enter the cost" : undefined}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_cost} onChange={(e) => edit(l.key, { unit_cost: e.target.value })} />

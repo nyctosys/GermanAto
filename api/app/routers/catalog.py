@@ -26,7 +26,7 @@ Qty = Field(max_digits=12, decimal_places=3)
 # --- labour codes ----------------------------------------------------------
 
 class LabourCodeIn(BaseModel):
-    code: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{1,23}$")
+    code: str = Field(default="", pattern=r"^([A-Za-z0-9][A-Za-z0-9-]{1,23})?$")  # blank: the system picks LAB-0001, LAB-0002, ...
     name: Name
     category: Name
     description: Text = Field(default="", max_length=1000)
@@ -56,6 +56,11 @@ def list_labour_codes(q: str = "", include_inactive: bool = False, actor: Actor 
 
 @router.post("/labour-codes", status_code=201)
 def create_labour_code(body: LabourCodeIn, actor: Actor = Depends(require("labour-codes")), db: Session = Depends(get_db)):
+    if not body.code:
+        n = db.scalar(select(func.count()).select_from(LabourCode).where(LabourCode.branch_id == actor.branch.id)) + 1
+        while db.scalar(select(LabourCode.id).where(LabourCode.branch_id == actor.branch.id, LabourCode.code == f"LAB-{n:04d}")):
+            n += 1
+        body.code = f"LAB-{n:04d}"
     if db.scalar(select(LabourCode.id).where(LabourCode.branch_id == actor.branch.id, LabourCode.code == body.code)):
         raise HTTPException(409, f"The code {body.code} is already used")
     code = LabourCode(**body.model_dump())
@@ -70,9 +75,9 @@ def update_labour_code(code_id: uuid.UUID, body: LabourCodeIn, actor: Actor = De
     code = db.get(LabourCode, code_id)
     if not code or code.branch_id != actor.branch.id:
         raise HTTPException(404, "Labour code not found")
-    if body.code != code.code:
+    if body.code and body.code != code.code:
         raise HTTPException(422, "A code can't be renamed once created (old documents use it). Add a new code instead.")
-    for key, value in body.model_dump().items():
+    for key, value in body.model_dump(exclude={"code"}).items():
         setattr(code, key, value)
     db.commit()
     return labour_out(code)
