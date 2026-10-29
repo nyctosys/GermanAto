@@ -302,7 +302,7 @@ function ReturnForm({ inv, busy, onSubmit, onCancel }: { inv: Invoice; busy: boo
         {tried && !picked.length && <p role="alert" className="text-sm text-error">Enter a quantity on at least one line.</p>}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={busy}>{busy ? "Recording" : "Issue the credit note"}</Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </form>
     </Card>

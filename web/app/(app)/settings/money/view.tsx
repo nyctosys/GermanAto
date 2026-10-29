@@ -81,7 +81,7 @@ function AccountForm({ a, onDone, onCancel }: { a: Account; onDone: () => void; 
       <Field label="As of" error={errors.opening_date}><Input name="opening_date" type="date" defaultValue={a.opening_date} /></Field>
       <div className="flex flex-col gap-3 sm:col-span-2">
         <Notice>{error}</Notice>
-        <div className="flex flex-wrap gap-2"><Button type="submit" variant="success" disabled={busy}>{busy ? "Saving" : "Save"}</Button><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button></div>
+        <div className="flex flex-wrap gap-2"><Button type="submit" variant="success" disabled={busy}>{busy ? "Saving" : "Save"}</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
       </div>
     </form>
   );

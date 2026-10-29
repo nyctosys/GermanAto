@@ -942,3 +942,11 @@ Each person gets **one** role, holding only the permissions for their part. Seve
 
 ### Cars ready to leave (guard)
 **Where:** Cars ready to leave (needs `gate` or `visits`; endpoint `GET /api/gate/queue`). Each car shows its plate, car, customer and invoice. **Release this car** opens a short form (odometer now, who is taking the car); a car that still owes money shows "Do not release" instead, because only a person holding `release-on-credit` may release it on credit, from the visit page.
+
+---
+
+## 29. Team feedback round (33 items)
+
+Kept current as each story lands (stories US-1001 to US-1013 in `prd.json`).
+
+- **US-1001 look and feel.** Cancel buttons use the red `danger` variant. Sidebar section titles are bold. `Field` shows a red asterisk unless its label contains "(optional)"; pass `required` to force it. The visit page has a progress bar (`JobProgress`: checked in, job card, quotation, approved, repair, ready, invoiced, paid, left). Back also shows on report, settings and admin pages. A repair order can only go to Ready from Testing.

@@ -99,7 +99,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant={item ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : item ? "Save changes" : "Add item"}</Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </div>
     </form>

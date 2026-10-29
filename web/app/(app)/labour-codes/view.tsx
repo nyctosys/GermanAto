@@ -113,7 +113,7 @@ function CodeForm({ code, categories, onDone }: { code: Code | null; categories:
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant={code ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : code ? "Save changes" : "Add labour code"}</Button>
-          <Button type="button" variant="secondary" onClick={onDone}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onDone}>Cancel</Button>
         </div>
       </div>
     </form>

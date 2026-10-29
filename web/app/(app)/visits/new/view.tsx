@@ -152,7 +152,7 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
       <Notice>{error}</Notice>
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={busy}>{busy ? "Checking in" : "Check in"}</Button>
-        <Link href="/visits" className="flex min-h-11 items-center rounded-control border border-rule-strong bg-surface px-4 font-medium">Cancel</Link>
+        <Link href="/visits" className="flex min-h-11 items-center rounded-control border border-error bg-error px-4 font-medium text-error-ink hover:bg-error-2">Cancel</Link>
       </div>
     </form>
   );

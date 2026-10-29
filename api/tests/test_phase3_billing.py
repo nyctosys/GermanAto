@@ -19,7 +19,8 @@ def ready_repair(admin):
         if l["kind"] == "part":
             admin.post(f"{url}/lines/{l['id']}/issue", json={"qty": l["qty"]})
         admin.patch(f"{url}/lines/{l['id']}", json={"state": "done"})
-    admin.post(f"{url}/status", json={"to": "ready", "version": admin.get(url).json()["version"]})
+    for to in ("testing", "ready"):
+        admin.post(f"{url}/status", json={"to": to, "version": admin.get(url).json()["version"]})
     return visit, item, admin.get(url).json()
 
 

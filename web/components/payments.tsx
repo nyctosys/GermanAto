@@ -113,7 +113,7 @@ export function PaymentForm({ title, hint, suggested, busy, onSubmit, onCancel, 
         {note}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={busy}>{busy ? "Recording" : "Record the payment"}</Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </form>
     </Card>
@@ -175,7 +175,7 @@ export function RefundForm({ title, hint, amount, fixedAmount, needsReason, busy
         <RowFields r={row} set={(p) => setRow((r) => ({ ...r, ...(fixedAmount ? { ...p, amount: r.amount } : p) }))} errors={errors} />
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="danger" disabled={busy}>{busy ? "Recording" : "Give the money back"}</Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </form>
     </Card>

@@ -147,7 +147,7 @@ function Adjust({ item, onDone }: { item: Item; onDone: () => void }) {
           <Notice>{error}</Notice>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="success" disabled={busy}>{busy ? "Saving" : "Save adjustment"}</Button>
-            <Button type="button" variant="secondary" onClick={onDone}>Cancel</Button>
+            <Button type="button" variant="danger" onClick={onDone}>Cancel</Button>
           </div>
         </div>
       </form>

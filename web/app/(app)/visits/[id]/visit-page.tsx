@@ -58,6 +58,31 @@ function nextStep(v: Visit): { text: string; href?: string; who: string } | null
   return { text: "Write the job card: the list of work to quote. Inspect the car first if you need to.", who: "Front desk or technician" };
 }
 
+/** Where the visit has got to, as a bar: the steps done so far are filled in. */
+function JobProgress({ v }: { v: Visit }) {
+  const q = v.quotations.find((x) => x.status !== "revised");
+  const steps: [string, boolean][] = [
+    ["Checked in", true],
+    ["Job card", !!v.job_card],
+    ["Quotation", !!q && q.status !== "draft"],
+    ["Approved", q?.status === "approved" || q?.status === "converted" || !!v.repair_order],
+    ["Repair", !!v.repair_order && v.repair_order.status !== "received"],
+    ["Ready", ["ready", "delivered"].includes(v.repair_order?.status ?? "")],
+    ["Invoiced", !!v.invoice && v.invoice.status !== "draft"],
+    ["Paid", v.invoice?.status === "paid"],
+    ["Left", v.status === "closed"],
+  ];
+  const done = steps.filter(([, d]) => d).length;
+  return (
+    <div className="mb-4 rounded-card bg-surface px-4 py-3 shell:px-5" role="group" aria-label={`Progress: ${done} of ${steps.length} steps done`}>
+      <div className="h-2 overflow-hidden rounded-full bg-paper-3"><div className="h-full rounded-full bg-accent transition-[width] duration-(--dur-micro)" style={{ width: `${(done / steps.length) * 100}%` }} /></div>
+      <ol className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        {steps.map(([name, d]) => <li key={name} className={d ? "font-medium text-ink" : "text-muted"}>{d ? "Done: " : ""}{name}</li>)}
+      </ol>
+    </div>
+  );
+}
+
 function VisitDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -102,6 +127,8 @@ function VisitDetail() {
             : v.status === "cancelled" ? <Badge>Cancelled</Badge> : <Badge tone="success">Delivered</Badge>}
         </div>
       </div>
+
+      {v.status !== "cancelled" && <JobProgress v={v} />}
 
       {(() => {
         const n = nextStep(v);

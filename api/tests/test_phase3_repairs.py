@@ -77,7 +77,7 @@ def test_status_rules_and_activity(admin):
     assert held["status"] == "on_hold" and held["held_from"] == "in_repair"
     assert go("in_repair").status_code == 200  # resuming needs no note
     assert "Mark these done" in go("testing").json()["detail"]
-    assert "Mark these done" in go("ready").json()["detail"]
+    assert "Testing first" in go("ready").json()["detail"]
 
     tech = admin.get("/api/technicians").json()[0]
     for l in admin.get(url).json()["lines"]:

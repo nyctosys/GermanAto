@@ -153,7 +153,7 @@ function DeviceForm({ onDone, onCancel }: { onDone: (d: Device) => void; onCance
       <Field label="Name" error={errors.name}><Input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Front door" /></Field>
       <label className="flex min-h-11 cursor-pointer items-center gap-3"><input type="checkbox" checked={useSecret} onChange={(e) => setUseSecret(e.target.checked)} className="size-5 accent-accent" /><span>Require a secret (recommended)</span></label>
       <Notice>{error}</Notice>
-      <div className="flex flex-wrap gap-2"><Button type="submit">Register</Button><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button></div>
+      <div className="flex flex-wrap gap-2"><Button type="submit">Register</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
     </form>
   );
 }

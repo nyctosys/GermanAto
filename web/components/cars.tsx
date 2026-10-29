@@ -66,7 +66,7 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant={car ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : car ? "Save changes" : "Add car"}</Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </div>
     </form>

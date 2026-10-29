@@ -116,7 +116,7 @@ function RoleForm({ role, permissions, onCancel, onSaved }:
           <Notice>{error}</Notice>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant={role ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : role ? "Save changes" : "Create role"}</Button>
-            <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+            <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
           </div>
         </form>
       </Card>

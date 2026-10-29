@@ -227,7 +227,7 @@ function EntryForm({ direction, onDone, onCancel }: { direction: "in" | "out"; o
         <div className="sm:col-span-2"><ProofInput proof={proof} setProof={setProof} reason={reason} setReason={setReason} error={errors.reason} /></div>
         <div className="flex flex-col gap-3 sm:col-span-2">
           <Notice>{error}</Notice>
-          <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{busy ? "Recording" : "Record it"}</Button><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button></div>
+          <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{busy ? "Recording" : "Record it"}</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
         </div>
       </form>
     </Card>

@@ -84,7 +84,7 @@ export function EmployeeForm({ employee, onSaved, onCancel }: { employee?: Emplo
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant={employee ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : employee ? "Save changes" : "Add employee"}</Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </div>
     </form>

@@ -153,7 +153,7 @@ export function VendorForm({ vendor, onSaved, onCancel }: { vendor?: Vendor; onS
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant={vendor ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : vendor ? "Save changes" : "Add vendor"}</Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </div>
     </form>

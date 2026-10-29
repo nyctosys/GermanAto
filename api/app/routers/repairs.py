@@ -189,6 +189,8 @@ def change_status(ro_id: uuid.UUID, body: StatusIn, actor: Actor = Depends(can_r
     backwards = body.to != "on_hold" and WORKING.index(body.to) < WORKING.index(current)
     if (body.to == "on_hold" or backwards) and len(body.note) < 3:
         raise HTTPException(422, "Say why: a note is needed to put a job on hold or move it back a stage")
+    if body.to == "ready" and current != "testing":
+        raise HTTPException(422, "A car cannot go straight to Ready. Move it to Testing first, check the work, then Ready")
     # Leaving In repair for Testing, or Testing for Ready, needs every line Done or Not done.
     if body.to in ("testing", "ready") and not backwards:
         pending = [l.description for l in ro.lines if l.state == "pending"]

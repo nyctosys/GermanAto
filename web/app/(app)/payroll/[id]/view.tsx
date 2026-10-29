@@ -140,7 +140,7 @@ function LineForm({ line, busy, onSubmit, onCancel }: { line: Line; busy: boolea
       <Field label="Bonus (+) or deduction (-), Rs" error={errors.adjustment}><Input inputMode="decimal" value={adj} onChange={(e) => setAdj(e.target.value)} placeholder="0" /></Field>
       <Field label="What it is for" error={errors.adjustment_reason}><Input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={200} /></Field>
       <Field label="Advance to take back, Rs" error={errors.advance_recovery} hint={`Owes ${money(line.outstanding_advance)}`}><Input inputMode="decimal" value={rec} onChange={(e) => setRec(e.target.value)} /></Field>
-      <div className="flex flex-wrap gap-2 sm:col-span-3"><Button type="submit" variant="success" disabled={busy}>Save</Button><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button></div>
+      <div className="flex flex-wrap gap-2 sm:col-span-3"><Button type="submit" variant="success" disabled={busy}>Save</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
     </form>
   );
 }

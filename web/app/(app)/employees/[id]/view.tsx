@@ -145,7 +145,7 @@ function PunchForm({ id, onDone, onCancel }: { id: string; onDone: () => void; o
         <Field label="Date and time" error={errors.punched_at}><Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} /></Field>
         <Field label="Why" error={errors.reason} hint="For example: the finger scan failed at the door."><Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} /></Field>
         <Notice>{error}</Notice>
-        <div className="flex flex-wrap gap-2"><Button type="submit">Add it</Button><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button></div>
+        <div className="flex flex-wrap gap-2"><Button type="submit">Add it</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
       </form>
     </Card>
   );
@@ -176,7 +176,7 @@ function MarkForm({ id, onDone, onCancel }: { id: string; onDone: () => void; on
         <Field label="Why" error={errors.reason}><Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} /></Field>
         <p className="text-sm text-muted">Unpaid leave costs a day&apos;s pay in payroll; paid leave does not.</p>
         <Notice>{error}</Notice>
-        <div className="flex flex-wrap gap-2"><Button type="submit">Mark it</Button><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button></div>
+        <div className="flex flex-wrap gap-2"><Button type="submit">Mark it</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
       </form>
     </Card>
   );

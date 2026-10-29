@@ -439,6 +439,188 @@
       "priority": 28,
       "passes": true,
       "notes": ""
+    },
+    {
+      "id": "US-1001",
+      "title": "Look and feel: red Cancel, bold sidebar headings, required asterisks, progress bar, back buttons",
+      "description": "Items 6,7,12,15,23,21: danger-styled Cancel everywhere, bold sidebar section headings, a red asterisk on every required field label, a step progress bar on multi-stage documents, Back on every screen, confirm dialogs where an action is risky.",
+      "acceptanceCriteria": [
+        "Items 6,7,12,15,23,21: danger-styled Cancel everywhere, bold sidebar section headings, a red asterisk on every required field label, a step progress bar on multi-stage documents, Back on every screen, confirm dialogs where an action is risky.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1002",
+      "title": "Inventory: brand and category dropdowns, decimal quantities",
+      "description": "Items 1,2,4: brand and category pick from lists (with add new), quantities show without trailing zeros and accept sensible decimals.",
+      "acceptanceCriteria": [
+        "Items 1,2,4: brand and category pick from lists (with add new), quantities show without trailing zeros and accept sensible decimals.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1003",
+      "title": "Auto-generated codes for labour codes",
+      "description": "Item 8 and 5: labour code is generated, category is a working dropdown.",
+      "acceptanceCriteria": [
+        "Item 8 and 5: labour code is generated, category is a working dropdown.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1004",
+      "title": "Customers and cars: make list, CNIC required, phone format, transfer with new customer",
+      "description": "Items 9,10,11,17,29,30: car make dropdown, CNIC required, +92 phone format, + new customer in car transfer and counter sale, fix the stuck Saving on add customer.",
+      "acceptanceCriteria": [
+        "Items 9,10,11,17,29,30: car make dropdown, CNIC required, +92 phone format, + new customer in car transfer and counter sale, fix the stuck Saving on add customer.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1005",
+      "title": "Quotations: confirm revise, safe approve, advance cap",
+      "description": "Items 13,14,16: revise asks to confirm, approve asks to confirm and allows edit before, advance cannot exceed the quotation total.",
+      "acceptanceCriteria": [
+        "Items 13,14,16: revise asks to confirm, approve asks to confirm and allows edit before, advance cannot exceed the quotation total.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1006",
+      "title": "Repair orders cannot jump to Ready",
+      "description": "Item 27: stages must be walked in order and work lines must be done.",
+      "acceptanceCriteria": [
+        "Item 27: stages must be walked in order and work lines must be done.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1007",
+      "title": "Attendance: multi day off, missed punch and leave in Attendance, mark present, device audit",
+      "description": "Items 18,20,25,19.",
+      "acceptanceCriteria": [
+        "Items 18,20,25,19.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1008",
+      "title": "Payroll: bonus or penalty toggle, percent or amount, advance take-back",
+      "description": "Items 22,24.",
+      "acceptanceCriteria": [
+        "Items 22,24.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1009",
+      "title": "Advance refund: variable amount up to the held balance",
+      "description": "Item 26.",
+      "acceptanceCriteria": [
+        "Item 26.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1010",
+      "title": "Car gate history",
+      "description": "Item 28.",
+      "acceptanceCriteria": [
+        "Item 28.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1011",
+      "title": "Purchasing: reorder through purchase orders, many vendors per item, vendor choice",
+      "description": "Items 3,31,32.",
+      "acceptanceCriteria": [
+        "Items 3,31,32.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1012",
+      "title": "Money: daily expenses module and payment-received dropdowns",
+      "description": "Item 33.",
+      "acceptanceCriteria": [
+        "Item 33.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-1013",
+      "title": "Automation suggestions",
+      "description": "Final list of things the system can do by itself, with the ones that are safe built in.",
+      "acceptanceCriteria": [
+        "Final list of things the system can do by itself, with the ones that are safe built in.",
+        "Typecheck, lint, API tests and the Hallmark check pass",
+        "Checked in the browser at 375, 768 and 1280px with the overflow scan",
+        "docs/SYSTEM_GUIDE.md and web/content/manual.ts updated in the same commit"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

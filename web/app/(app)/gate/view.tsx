@@ -78,7 +78,7 @@ function Release({ car, onDone, onCancel }: { car: Car; onDone: () => void; onCa
       <div className="sm:col-span-2"><Field label="Note (optional)"><Input name="note" maxLength={500} /></Field></div>
       <div className="flex flex-col gap-3 sm:col-span-2">
         <Notice>{error}</Notice>
-        <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{busy ? "Releasing" : "Release the car"}</Button><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button></div>
+        <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{busy ? "Releasing" : "Release the car"}</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
       </div>
     </form>
   );

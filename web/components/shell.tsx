@@ -115,6 +115,7 @@ const PARENT: Record<string, string> = {
   visits: "/visits", customers: "/customers", cars: "/cars", quotations: "/quotations", "repair-orders": "/repair-orders",
   invoices: "/invoices", "counter-sales": "/invoices", "job-cards": "/visits", inspections: "/visits", inventory: "/inventory",
   vendors: "/vendors", "purchase-orders": "/purchase-orders", bills: "/bills", employees: "/employees", payroll: "/payroll", periods: "/periods",
+  reports: "/", settings: "/", admin: "/",
 };
 
 /** Back goes to the screen the person came from; when they opened this one directly, to its list. */
@@ -191,7 +192,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
         if (!visible.length) return null;
         return (
           <div key={section}>
-            <p className="mb-1 px-3 text-sm text-muted">{section}</p>
+            <p className="mb-1 px-3 text-sm font-semibold uppercase tracking-wide text-ink-2">{section}</p>
             <ul className="space-y-0.5">
               {visible.map((i) => {
                 const active = i.href === "/" ? pathname === "/" : pathname.startsWith(i.href);

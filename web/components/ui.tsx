@@ -41,14 +41,14 @@ export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSe
 }
 
 /** A labelled control. `error` (from parseForm / liveForm) replaces the hint and outlines the control in red. */
-export function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
+export function Field({ label, hint, error, required, children }: { label: string; hint?: string; error?: string; required?: boolean; children: ReactNode }) {
   const marked = Children.map(children, (child) => {
     if (!isValidElement(child)) return child;
     return cloneElement(child as ReactElement<{ "aria-invalid"?: boolean }>, { "aria-invalid": !!error || undefined });
   });
   return (
     <label className={`flex min-w-0 flex-col gap-1.5 ${error ? "[&_:is(input,select,textarea)]:border-error" : ""}`}>
-      <span className="text-[0.9375rem] font-medium text-ink-2">{label}</span>
+      <span className="text-[0.9375rem] font-medium text-ink-2">{label}{(required ?? !/optional/i.test(label)) && <span className="ml-0.5 text-error" aria-hidden="true">*</span>}</span>
       {marked}
       {error ? <span role="alert" className="text-sm text-error">{error}</span>
         : hint && <span className="text-sm text-muted">{hint}</span>}

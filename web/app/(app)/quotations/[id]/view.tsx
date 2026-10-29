@@ -360,7 +360,7 @@ function ApproveForm({ q, busy, onSubmit, onCancel }:
         <Field label="Note (optional)"><Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} /></Field>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={busy}>Approve</Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </form>
     </Card>
@@ -375,7 +375,7 @@ function RejectForm({ busy, onSubmit, onCancel }: { busy: boolean; onSubmit: (re
         <Field label="Reason" hint="Kept on the quotation; counts in the conversion report."><Input value={reason} onChange={(e) => setReason(e.target.value)} required minLength={3} autoFocus /></Field>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="danger" disabled={busy}>Mark rejected</Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
         </div>
       </form>
     </Card>

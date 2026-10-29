@@ -183,7 +183,7 @@ function TransferForm({ car, onCancel, onDone }: { car: Detail; onCancel: () => 
           <p className="text-sm text-muted">Past visits and invoices stay with the owner at the time. <Badge>Can&apos;t be undone</Badge></p>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={busy}>{busy ? "Transferring" : "Transfer car"}</Button>
-            <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+            <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
           </div>
         </div>
       </form>
