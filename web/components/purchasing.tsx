@@ -124,9 +124,11 @@ export function VendorForm({ vendor, onSaved, onCancel }: { vendor?: Vendor; onS
     setBusy(true);
     setError(null);
     try {
-      onSaved(vendor
+      const saved = vendor
         ? await api<Vendor>(`/api/vendors/${vendor.id}`, { method: "PUT", json: { ...data, version: vendor.version, is_active: new FormData(form.current!).get("is_active") === "on" } })
-        : await api<Vendor>("/api/vendors", { method: "POST", json: data }));
+        : await api<Vendor>("/api/vendors", { method: "POST", json: data });
+      setBusy(false);
+      onSaved(saved);
     } catch (err) {
       setError(applyApi(err));
       setBusy(false);

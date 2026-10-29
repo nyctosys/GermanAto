@@ -12,7 +12,7 @@ REMOTE = str(uuid.uuid4())  # another branch server
 
 
 def customer(admin, name="Local Ali", phone="0300-1111111"):
-    c = admin.post("/api/customers", json={"name": name, "phone": phone, "kind": "individual"})
+    c = admin.post("/api/customers", json={"name": name, "phone": phone, "cnic": "3520212345671", "kind": "individual"})
     assert c.status_code == 201, c.text
     return c.json()
 

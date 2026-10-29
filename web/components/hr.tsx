@@ -42,9 +42,11 @@ export function EmployeeForm({ employee, onSaved, onCancel }: { employee?: Emplo
     setError(null);
     try {
       const body = { ...data, notes: data.notes };
-      onSaved(employee
+      const saved = employee
         ? await api<Employee>(`/api/employees/${employee.id}`, { method: "PUT", json: { ...body, is_active: new FormData(form.current!).get("is_active") === "on", version: employee.version } })
-        : await api<Employee>("/api/employees", { method: "POST", json: body }));
+        : await api<Employee>("/api/employees", { method: "POST", json: body });
+      setBusy(false);
+      onSaved(saved);
     } catch (err) {
       setError(applyApi(err));
       setBusy(false);
@@ -56,7 +58,7 @@ export function EmployeeForm({ employee, onSaved, onCancel }: { employee?: Emplo
       <Field label="Full name" error={errors.full_name}><Input name="full_name" defaultValue={employee?.full_name} required maxLength={120} autoComplete="off" autoFocus /></Field>
       <Field label="Job title (optional)" error={errors.title}><Input name="title" defaultValue={employee?.title} maxLength={80} placeholder="Technician" /></Field>
       <Field label="Phone (optional)" error={errors.phone}><Input name="phone" defaultValue={employee ? phone(employee.phone) : ""} inputMode="tel" /></Field>
-      <Field label="CNIC (optional)" error={errors.cnic} hint="13 digits"><Input name="cnic" defaultValue={employee?.cnic} inputMode="numeric" /></Field>
+      <Field label="CNIC" error={errors.cnic} hint="13 digits"><Input name="cnic" defaultValue={employee?.cnic} inputMode="numeric" /></Field>
       <Field label="Monthly salary (Rs)" error={errors.monthly_salary}><Input name="monthly_salary" inputMode="decimal" defaultValue={employee ? String(Number(employee.monthly_salary)) : ""} /></Field>
       <Field label="Number on the attendance device" error={errors.device_pin} hint="Claims punches already received for it."><Input name="device_pin" defaultValue={employee?.device_pin} maxLength={20} inputMode="numeric" /></Field>
       <Field label="Shift starts" error={errors.shift_start}><Input name="shift_start" type="time" defaultValue={hhmm(employee?.shift_start ?? "09:00")} /></Field>

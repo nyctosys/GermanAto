@@ -42,9 +42,11 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
     setBusy(true);
     setError(null);
     try {
-      onSaved(item
+      const saved = item
         ? await api<Item>(`/api/items/${item.id}`, { method: "PUT", json: { ...body, version: item.version, is_active: item.is_active } })
-        : await api<Item>("/api/items", { method: "POST", json: body }));
+        : await api<Item>("/api/items", { method: "POST", json: body });
+      setBusy(false);
+      onSaved(saved);
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);

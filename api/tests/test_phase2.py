@@ -8,7 +8,7 @@ from test_foundation import make_user, signed_in
 
 
 def new_customer(client, name="Ali Khan", phone="0300 1234567", **extra):
-    r = client.post("/api/customers", json={"name": name, "phone": phone, **extra})
+    r = client.post("/api/customers", json={"name": name, "phone": phone, "cnic": "35202-1234567-1", **extra})
     assert r.status_code == 201, r.json()
     return r.json()
 
@@ -36,9 +36,9 @@ def test_customer_numbering_and_normalising(admin):
 
 def test_duplicate_phone_asks_first(admin):
     first = new_customer(admin)
-    r = admin.post("/api/customers", json={"name": "Ali K.", "phone": "+92 300 1234567"})
+    r = admin.post("/api/customers", json={"name": "Ali K.", "phone": "+92 300 1234567", "cnic": "35202-1234567-1"})
     assert r.status_code == 409 and r.json()["detail"]["matches"][0]["id"] == str(first["id"])
-    assert admin.post("/api/customers", json={"name": "Ali K.", "phone": "03001234567",
+    assert admin.post("/api/customers", json={"name": "Ali K.", "phone": "03001234567", "cnic": "35202-1234567-1",
                                               "allow_duplicate_phone": True}).status_code == 201
 
 

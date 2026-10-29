@@ -25,7 +25,7 @@ const phone = phoneOrEmpty.refine(Boolean, "Required");
 
 const email = z.string().trim().toLowerCase().refine((v) => !v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), "Enter a valid email");
 
-const cnic = z.string().transform((v, ctx) => {
+const cnicOrEmpty = z.string().transform((v, ctx) => {
   const d = v.replace(/\D/g, "");
   if (!d) return "";
   if (d.length !== 13) {
@@ -34,6 +34,8 @@ const cnic = z.string().transform((v, ctx) => {
   }
   return `${d.slice(0, 5)}-${d.slice(5, 12)}-${d[12]}`;
 });
+
+const cnic = cnicOrEmpty.refine(Boolean, "Required");
 
 /** A 17-character VIN or a local chassis number (NZE141-6012345): the same field. */
 const vin = z.string().transform((v) => v.toUpperCase().replace(/\s/g, ""))

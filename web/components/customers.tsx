@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { Button, Checkbox, Field, Input, Notice, Select } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { phone } from "@/lib/format";
@@ -21,6 +22,7 @@ export function CustomerPicker({ value, onChange, exclude }:
   const [results, setResults] = useState<Customer[]>([]);
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const listId = useId();
   const input = useRef<HTMLInputElement>(null);
 
@@ -50,7 +52,8 @@ export function CustomerPicker({ value, onChange, exclude }:
 
   const pick = (c: Customer) => { onChange(c); setOpen(false); };
   return (
-    <div className="relative">
+    <div className="flex items-start gap-2">
+    <div className="relative min-w-0 flex-1">
       <input
         ref={input}
         role="combobox"
@@ -83,6 +86,15 @@ export function CustomerPicker({ value, onChange, exclude }:
         </ul>
       )}
     </div>
+    <Button type="button" variant="secondary" aria-label="New customer" onClick={() => setCreating(true)}>+ New customer</Button>
+    {creating && createPortal(
+      <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-ink/40 p-4" role="dialog" aria-modal="true" aria-label="New customer">
+        <div className="my-8 w-full max-w-2xl rounded-card bg-surface p-5">
+          <h2 className="mb-4 text-lg font-semibold">New customer</h2>
+          <CustomerForm onSaved={(c) => { setCreating(false); onChange(c); }} onCancel={() => setCreating(false)} />
+        </div>
+      </div>, document.body)}
+    </div>
   );
 }
 
@@ -108,6 +120,7 @@ export function CustomerForm({ customer, onSaved, onCancel }:
         ? await api<Customer>(`/api/customers/${customer.id}`, { method: "PUT", json: { ...body, version: customer.version, is_active } })
         : await api<Customer>("/api/customers", { method: "POST", json: body });
       useRecords.getState().put("customers", saved);
+      setBusy(false);
       onSaved(saved);
     } catch (err) {
       const detail = err instanceof ApiError ? (err.detail as { code?: string; matches?: Customer[] }) : undefined;
@@ -118,7 +131,7 @@ export function CustomerForm({ customer, onSaved, onCancel }:
   }
 
   return (
-    <form ref={form} noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); save(); }} className="grid gap-5 sm:grid-cols-2" {...live}>
+    <form ref={form} noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); e.stopPropagation(); save(); }} className="grid gap-5 sm:grid-cols-2" {...live}>
       <Field error={errors.name} label="Name"><Input name="name" defaultValue={customer?.name} required maxLength={120} autoComplete="off" /></Field>
       <Field error={errors.kind} label="Type">
         <Select name="kind" defaultValue={customer?.kind ?? "individual"}>
@@ -129,7 +142,7 @@ export function CustomerForm({ customer, onSaved, onCancel }:
       <Field error={errors.phone} label="Mobile" hint="Used for WhatsApp updates."><Input name="phone" defaultValue={customer ? phone(customer.phone) : ""} required inputMode="tel" autoComplete="off" /></Field>
       <Field error={errors.phone_alt} label="Other phone (optional)"><Input name="phone_alt" defaultValue={customer ? phone(customer.phone_alt) : ""} inputMode="tel" /></Field>
       <Field error={errors.email} label="Email (optional)"><Input name="email" type="email" defaultValue={customer?.email} /></Field>
-      <Field error={errors.cnic} label="CNIC (optional)" hint="13 digits, e.g. 35202-1234567-1"><Input name="cnic" defaultValue={customer?.cnic} inputMode="numeric" /></Field>
+      <Field error={errors.cnic} label="CNIC" hint="13 digits, e.g. 35202-1234567-1"><Input name="cnic" defaultValue={customer?.cnic} required inputMode="numeric" /></Field>
       <div className="sm:col-span-2"><Field error={errors.address} label="Address (optional)"><Input name="address" defaultValue={customer?.address} maxLength={300} /></Field></div>
       <div className="sm:col-span-2"><Field error={errors.notes} label="Notes (optional)"><Input name="notes" defaultValue={customer?.notes} /></Field></div>
       <div className="sm:col-span-2">

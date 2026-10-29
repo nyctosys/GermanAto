@@ -30,7 +30,7 @@ class CustomerIn(BaseModel):
     phone: Phone = Field(min_length=1)
     phone_alt: Phone = ""
     email: Email = ""
-    cnic: Cnic = ""
+    cnic: Cnic = Field(min_length=1)  # required: identifies the customer
     address: Text = Field(default="", max_length=300)
     notes: Text = Field(default="", max_length=2000)
     whatsapp_opt_out: bool = False

@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import { Button, Field, Input, Notice, Select } from "@/components/ui";
+import { Button, ChoiceSelect, Field, Input, Notice, Select } from "@/components/ui";
+import { CAR_MAKES } from "@/lib/lists";
 import { api } from "@/lib/api";
 import { useFormErrors } from "@/lib/form";
 import { useRecords } from "@/lib/records";
@@ -39,6 +40,7 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
         ? await api<Car>(`/api/cars/${car.id}`, { method: "PUT", json: { ...body, version: car.version } })
         : await api<Car>("/api/cars", { method: "POST", json: { ...body, owner_id: ownerId } });
       useRecords.getState().put("cars", saved);
+      setBusy(false);
       onSaved(saved);
     } catch (err) {
       setError(applyApi(err));
@@ -49,7 +51,7 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
   return (
     <form ref={form} onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3" {...live}>
       <Field error={errors.plate} label="Number plate" hint="As written, e.g. LEA-21-1234"><Input name="plate" defaultValue={car?.plate} maxLength={20} autoCapitalize="characters" /></Field>
-      <Field error={errors.make} label="Make"><Input name="make" defaultValue={car?.make} required placeholder="BMW" /></Field>
+      <Field error={errors.make} label="Make"><ChoiceSelect name="make" options={CAR_MAKES} defaultValue={car?.make} placeholder="Choose the make" /></Field>
       <Field error={errors.model} label="Model"><Input name="model" defaultValue={car?.model} placeholder="520i" /></Field>
       <Field error={errors.year} label="Year"><Input name="year" type="number" inputMode="numeric" min={1950} max={new Date().getFullYear() + 1} defaultValue={car?.year ?? ""} /></Field>
       <Field error={errors.fuel} label="Fuel">
