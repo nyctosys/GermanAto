@@ -4,6 +4,7 @@ Workshop management for GermanATO. The new system lives in `api/` (FastAPI + Pos
 
 - How the system works today, module by module (kept current with every change): [docs/SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md)
 - What the new system must do: [docs/NEW_SYSTEM_SPEC.md](docs/NEW_SYSTEM_SPEC.md)
+- How the team tests everything, step by step (tick-off checklist): [docs/TEST_CHECKLIST.md](docs/TEST_CHECKLIST.md)
 - What the old app did, page by page (the parity checklist): [docs/feature-inventory/](docs/feature-inventory/README.md)
 
 ## Run it locally
