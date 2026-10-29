@@ -71,9 +71,16 @@ def test_inspection_lifecycle(admin):
     assert admin.put(f"/api/inspections/{ins['id']}", json={"data": data, "version": signed["version"]}).status_code == 409
     rev = admin.post(f"/api/inspections/{ins['id']}/revise")
     assert rev.status_code == 201 and rev.json()["supersedes_id"] == ins["id"] and rev.json()["status"] == "draft"
-    assert admin.post(f"/api/inspections/{ins['id']}/revise").status_code == 409
+    clash = admin.post(f"/api/inspections/{ins['id']}/revise")
+    assert clash.status_code == 409 and clash.json()["detail"]["inspection_id"] == rev.json()["id"]
     listed = admin.get(f"/api/visits/{visit['id']}").json()["inspections"]
     assert [(i["status"], i["supersedes_id"]) for i in listed] == [("signed", None), ("draft", ins["id"])]
+    assert admin.delete(f"/api/inspections/{ins['id']}").status_code == 409  # signed stays
+    assert admin.delete(f"/api/inspections/{rev.json()['id']}").status_code == 200
+    left = admin.get(f"/api/visits/{visit['id']}").json()["inspections"]
+    assert len(left) == 1 and left[0]["id"] == ins["id"] and left[0]["status"] == "signed"
+    again = admin.post(f"/api/inspections/{ins['id']}/revise")
+    assert again.status_code == 201 and again.json()["supersedes_id"] == ins["id"]
 
 
 def test_closed_visit_takes_nothing_more(admin):

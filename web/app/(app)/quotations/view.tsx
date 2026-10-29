@@ -17,7 +17,8 @@ const TABS = [["all", "All"], ["draft", "Draft"], ["sent", "Sent"], ["approved",
 export default function QuotationsPage() {
   return (
     <RequirePermission permission="quotations">
-      <PageHeader title="Quotations" description="Every estimate, from draft to approved. A quotation is made from a visit's job card." />
+      <PageHeader title="Quotations" description="Every estimate, from draft to approved. A quotation is made from a visit's job card."
+                  actions={<Link href="/quotations/new" className="flex min-h-11 items-center rounded-control bg-primary px-5 font-medium text-primary-ink hover:bg-primary-2 active:bg-primary-3 active:duration-0">Make a quotation</Link>} />
       <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
         <List />
       </Suspense>
@@ -39,8 +40,8 @@ function List() {
         {list.error ? <ErrorState message={list.error} onRetry={list.reload} />
           : !list.data ? <SkeletonRows />
           : !list.data.length ? (
-            <EmptyState title="No quotations here">
-              Open a car from <Link href="/visits" className="underline">the workshop</Link>, write its job card, then make the quotation.
+            <EmptyState title="No quotations here" action={<Link href="/quotations/new" className="text-accent underline">Make a quotation</Link>}>
+              Pick a car that is in the workshop, write its job card if needed, then make the quotation.
             </EmptyState>
           ) : (
             <table className="table-stack w-full">

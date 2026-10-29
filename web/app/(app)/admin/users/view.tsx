@@ -5,7 +5,8 @@ import { RequirePermission } from "@/components/shell";
 import {
   Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows,
 } from "@/components/ui";
-import { type FieldErrors, parseForm, userSchema } from "@/lib/schemas";
+import { useFormErrors } from "@/lib/form";
+import { parseForm, userSchema } from "@/lib/schemas";
 import { api, useApi } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -102,12 +103,13 @@ function UserForm({ user, roles, onCancel, onSaved }:
   // On a phone the form opens above a long list; bring it into view.
   useEffect(() => { ref.current?.scrollIntoView({ block: "start", behavior: "smooth" }); }, []);
 
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const schema = () => userSchema.extend({ password: user ? userSchema.shape.password : userSchema.shape.password.refine(Boolean, "Required") });
+  const { errors, setErrors, live, applyApi } = useFormErrors(schema);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const branchIds = f.getAll("branch_ids");
-    const { data, errors } = parseForm(userSchema.extend({ password: user ? userSchema.shape.password : userSchema.shape.password.refine(Boolean, "Required") }), e.currentTarget);
+    const { data, errors } = parseForm(schema(), e.currentTarget);
     setErrors(errors ?? {});
     if (!data) return;
     if (!branchIds.length) {
@@ -127,7 +129,7 @@ function UserForm({ user, roles, onCancel, onSaved }:
       else await api("/api/users", { method: "POST", json: { ...body, username: data.username } });
       onSaved();
     } catch (err) {
-      setError((err as Error).message);
+      setError(applyApi(err));
       setBusy(false);
     }
   }
@@ -135,7 +137,7 @@ function UserForm({ user, roles, onCancel, onSaved }:
   return (
     <div ref={ref} className="mb-6 scroll-mt-20">
       <Card title={user ? `Edit ${user.full_name}` : "New user"}>
-        <form onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2">
+        <form onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2" {...live}>
           {user ? (
             <Field label="Username" hint="Usernames can't be changed."><Input value={user.username} disabled readOnly /></Field>
           ) : (
@@ -172,7 +174,7 @@ function UserForm({ user, roles, onCancel, onSaved }:
           <div className="flex flex-col gap-3 sm:col-span-2">
             <Notice>{error}</Notice>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={busy}>{busy ? "Saving" : user ? "Save changes" : "Create user"}</Button>
+              <Button type="submit" variant={user ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : user ? "Save changes" : "Create user"}</Button>
               <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
             </div>
           </div>

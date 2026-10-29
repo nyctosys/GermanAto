@@ -27,8 +27,10 @@ from app.validators import Text
 router = APIRouter(prefix="/api", tags=["repairs"])
 can_repair = require("repair-orders")
 
-STAGE_NAMES = {"received": "Received", "diagnosis": "Diagnosis", "awaiting_approval": "Awaiting approval",
-               "in_repair": "In repair", "testing": "Testing", "ready": "Ready", "delivered": "Delivered", "on_hold": "On hold"}
+STAGE_NAMES = {
+    "received": "Received", "in_repair": "In repair", "testing": "Testing",
+    "ready": "Ready", "delivered": "Delivered", "on_hold": "On hold",
+}
 WORKING = RO_STAGES[:-1]  # delivered is set by the gate pass
 
 
@@ -44,6 +46,18 @@ def _require_working(db: Session, ro: RepairOrder) -> None:
     _require_open(db.get(Visit, ro.visit_id))
     if ro.status == "delivered":
         raise HTTPException(409, "This car has been delivered; the repair order is closed")
+
+
+def _work_stage(ro: RepairOrder) -> str:
+    """The stage that gates work: on hold resumes to held_from."""
+    return ro.held_from if ro.status == "on_hold" else ro.status
+
+
+def _refuse_stage(ro: RepairOrder, action: str, allowed: set[str]) -> None:
+    stage = _work_stage(ro)
+    if stage not in allowed:
+        names = ", ".join(STAGE_NAMES[s].lower() for s in RO_STAGES if s in allowed)
+        raise HTTPException(409, f"You can only {action} while the job is {names}. It is {STAGE_NAMES[stage].lower()}.")
 
 
 def _log(db: Session, ro: RepairOrder, kind: str, body: str = "", **extra) -> RepairOrderActivity:
@@ -157,7 +171,7 @@ def technicians(actor: Actor = Depends(can_repair), db: Session = Depends(get_db
 # --- status ------------------------------------------------------------------------------------
 
 class StatusIn(BaseModel):
-    to: Literal["received", "diagnosis", "awaiting_approval", "in_repair", "testing", "ready", "on_hold"]
+    to: Literal["received", "in_repair", "testing", "ready", "on_hold"]
     note: Text = Field(default="", max_length=1000)
     customer_visible: bool = False
     version: int
@@ -175,7 +189,8 @@ def change_status(ro_id: uuid.UUID, body: StatusIn, actor: Actor = Depends(can_r
     backwards = body.to != "on_hold" and WORKING.index(body.to) < WORKING.index(current)
     if (body.to == "on_hold" or backwards) and len(body.note) < 3:
         raise HTTPException(422, "Say why: a note is needed to put a job on hold or move it back a stage")
-    if body.to == "ready":
+    # Leaving In repair for Testing, or Testing for Ready, needs every line Done or Not done.
+    if body.to in ("testing", "ready") and not backwards:
         pending = [l.description for l in ro.lines if l.state == "pending"]
         if pending:
             raise HTTPException(422, f"Mark these done or not done first: {', '.join(pending)}")
@@ -208,6 +223,7 @@ def add_line(ro_id: uuid.UUID, body: ExtraLineIn, actor: Actor = Depends(can_rep
     invoice and the customer both see it was added after approval."""
     ro = _get_ro(db, actor, ro_id, lock=True)
     _require_working(db, ro)
+    _refuse_stage(ro, "add extra work", {"in_repair", "testing"})
     codes, items = _targets(db, actor, [body])
     name = (codes[body.labour_code_id] if body.labour_code_id else items[body.item_id]).name
     line = RepairOrderLine(position=len(ro.lines), in_quote=False, description=name, approval_method=body.approval_method,
@@ -235,12 +251,15 @@ def update_line(ro_id: uuid.UUID, line_id: uuid.UUID, body: LineUpdate, actor: A
     _require_working(db, ro)
     line = _line(ro, line_id)
     if body.technician_id or body.clear_technician:
+        _refuse_stage(ro, "assign a technician", {"received", "in_repair", "testing"})
         tech = body.technician_id and db.scalar(select(User).join(UserBranch, UserBranch.user_id == User.id).where(
             User.id == body.technician_id, UserBranch.branch_id == actor.branch.id, User.is_active))
         if body.technician_id and not tech:
             raise HTTPException(422, "That person isn't active at this branch")
         line.technician_id = body.technician_id if not body.clear_technician else None
     if body.state and body.state != line.state:
+        # In repair / testing only. Received is read-mostly; Ready+ is locked.
+        _refuse_stage(ro, "mark work done or not done", {"in_repair", "testing"})
         if body.state == "done" and line.kind == "part" and line.issued_qty <= 0:
             raise HTTPException(422, f"Issue {line.description} from stock before marking it done")
         if body.state == "not_done" and line.issued_qty > 0:
@@ -255,6 +274,7 @@ def update_line(ro_id: uuid.UUID, line_id: uuid.UUID, body: LineUpdate, actor: A
 def remove_line(ro_id: uuid.UUID, line_id: uuid.UUID, actor: Actor = Depends(can_repair), db: Session = Depends(get_db)):
     ro = _get_ro(db, actor, ro_id, lock=True)
     _require_working(db, ro)
+    _refuse_stage(ro, "remove a line", {"in_repair", "testing"})
     line = _line(ro, line_id)
     if line.in_quote:
         raise HTTPException(409, "A line the customer approved stays on the order. Mark it not done instead.")
@@ -273,12 +293,17 @@ class QtyIn(BaseModel):
 @router.post("/repair-orders/{ro_id}/lines/{line_id}/issue")
 def issue_part(ro_id: uuid.UUID, line_id: uuid.UUID, body: QtyIn, actor: Actor = Depends(can_repair),
                db: Session = Depends(get_db)):
-    """Takes the part out of stock at average cost (spec D4)."""
+    """Takes the part out of stock at average cost (spec D4).
+    Main window is In repair; Received allows an early issue; Testing allows a top-up."""
     ro = _get_ro(db, actor, ro_id, lock=True)
     _require_working(db, ro)
+    _refuse_stage(ro, "issue parts from stock", {"received", "in_repair", "testing"})
     line = _line(ro, line_id)
     if line.kind != "part":
         raise HTTPException(422, "Only parts are issued from stock")
+    remaining = line.qty - line.issued_qty
+    if body.qty > remaining:
+        raise HTTPException(422, f"Only {remaining.normalize():f} still to issue on this line")
     try:
         move(db, line.item_id, "issue", -body.qty, reason=f"{ro.number}: {line.description}",
              source_type="repair_order_line", source_id=line.id)
@@ -293,9 +318,11 @@ def issue_part(ro_id: uuid.UUID, line_id: uuid.UUID, body: QtyIn, actor: Actor =
 @router.post("/repair-orders/{ro_id}/lines/{line_id}/return")
 def return_part(ro_id: uuid.UUID, line_id: uuid.UUID, body: QtyIn, actor: Actor = Depends(can_repair),
                 db: Session = Depends(get_db)):
-    """An unused part goes back at the cost it left at, so stock value is unchanged."""
+    """An unused part goes back at the cost it left at, so stock value is unchanged.
+    Allowed through Ready so unused parts can be corrected before the invoice."""
     ro = _get_ro(db, actor, ro_id, lock=True)
     _require_working(db, ro)
+    _refuse_stage(ro, "return parts to stock", {"received", "in_repair", "testing", "ready"})
     line = _line(ro, line_id)
     if body.qty > line.issued_qty:
         raise HTTPException(422, f"Only {line.issued_qty.normalize():f} were issued on this line")

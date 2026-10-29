@@ -21,7 +21,8 @@ A workshop tool that gets out of the way. Surfaces are white on a light ash floo
 | Name | Hex | In the logo | Role in the app |
 |---|---|---|---|
 | Logo Red | `#F10A01` | "GERMAN" | Brand reference only. White text on it is 4.4:1, below AA, so it is not used behind text. |
-| **GermanATO Red** | `#D10A01` | Logo Red deepened just enough for AA | **Primary buttons** (white text 5.6:1); primary text links |
+| **GermanATO Red** | `#D10A01` | Logo Red deepened just enough for AA | Brand accents, primary text links, sidebar current bar |
+| **Action Teal** | `#0F766E` | — | **Primary buttons** (white text); hover `#0D5F59`, pressed `#0A4A45` |
 | Red Hover | `#B80800` | — | Primary button hover (white text 6.8:1) |
 | **Hexagon Oxblood** | `#6D0000` | The hexagon (77% of the logo) | Primary button **pressed** state; "German" in the wordmark |
 | Logo Black | `#000000` | "ATO" | "ATO" in the wordmark |
@@ -74,9 +75,11 @@ A workshop tool that gets out of the way. Surfaces are white on a light ash floo
 
 | Component | Spec |
 |---|---|
-| Primary button | GermanATO Red, white text, 500, 4px radius, min-height 44px, padding 0 20px. Hover Red Hover; pressed Hexagon Oxblood, shown instantly. Disabled: 55% opacity. |
-| Secondary button | White, Carbon text, 1px Silver Fog border, same size. Hover Light Ash. |
-| Ghost button | Cloud Gray fill, Carbon text, no border. Hover Car Silver. A quiet action, but always a visible pill: bare text is reserved for links, which are underlined. |
+| Primary button | Teal (`#0F766E`), white text, 500, 4px radius, min-height 44px, padding 0 20px. Hover `#0D5F59`; pressed `#0A4A45`, shown instantly. Disabled: 55% opacity. Forward actions: Issue, Send, Record, Approve, Add, Check in. |
+| Success button | Success green (`#1E7B34`), white text, same size. Hover `#18662B`; pressed `#124F21`. Use for Save, Save draft, Save as draft, Save changes, and finish/complete actions. |
+| Danger button | Error red (`#B80800`), white text, same size. Hover `#9A0600`; pressed Hexagon Oxblood. Use for Delete, Discard, Remove, Void, Retire, Cancel permanently, Reject. |
+| Secondary button | White, Carbon text, 1px Silver Fog border, same size. Hover Cloud Gray fill and darker border. Neutral dismiss: Cancel, Keep it, Not now. |
+| Ghost button | Cloud Gray fill, Carbon text, no border. Hover Car Silver with a visible border. A quiet action, but always a visible pill: bare text is reserved for links, which are underlined. |
 | Inputs and selects | White, 1px Silver Fog border, 4px radius, min-height 44px, 16px text. Focus: Carbon border plus focus ring. Invalid: error border plus a message under the field. |
 | Panels (cards) | White on the Light Ash page, 12px radius, **no border, no shadow**. Header separated from the body by a Cloud Gray rule. |
 | Tables | Pewter 14px heads in sentence case, Cloud Gray row rules, rows at least 48px. Under 640px each row becomes a labelled stack. |
@@ -103,7 +106,7 @@ A workshop tool that gets out of the way. Surfaces are white on a light ash floo
 
 ## 6b. Pressable things look pressable
 
-- **Buttons** are filled or outlined pills (primary red, secondary white with a border, ghost Cloud Gray). Bare text is never a button.
+- **Buttons** are filled or outlined pills (primary teal, success green, danger red, secondary white with a border, ghost Cloud Gray). Every enabled button darkens or fills on hover; pressed colour lands instantly. Bare text is never a button.
 - **Text links** are underlined.
 - **A whole row that is a link** (lists of customers, cars, the steps of a job) carries a chevron on its right edge.
 - **Every enabled control shows the pointing hand** on a pointer device; disabled ones show the not-allowed cursor.
@@ -111,7 +114,7 @@ A workshop tool that gets out of the way. Surfaces are white on a light ash floo
 ## 7. Do and don't
 
 **Do**
-- Keep GermanATO Red for the one primary action on each screen.
+- Keep teal (`#0F766E`, white text) for the main forward action on each screen; green for save/complete; filled red only for destructive confirms. Brand red remains for text links and the sidebar current bar.
 - Let the real object lead each page (plate, report, invoice).
 - Keep transitions colour-only at 0.33s, with an instant pressed colour.
 - Use sentence case and weights 400/500.

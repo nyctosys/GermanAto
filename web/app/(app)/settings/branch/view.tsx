@@ -79,7 +79,7 @@ function BranchSettings() {
               <div className="flex flex-col gap-3 sm:col-span-2">
                 <Notice>{saveError}</Notice>
                 {saved && <Notice tone="success">Settings saved.</Notice>}
-                <div><Button type="submit" disabled={busy}>{busy ? "Saving" : "Save settings"}</Button></div>
+                <div><Button type="submit" variant="success" disabled={busy}>{busy ? "Saving" : "Save settings"}</Button></div>
               </div>
             </form>
           )}

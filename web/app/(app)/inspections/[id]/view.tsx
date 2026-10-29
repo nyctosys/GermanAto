@@ -140,13 +140,35 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
               <Link href={`/print/inspections/${initial.id}`} target="_blank" className="flex min-h-11 items-center rounded-control border border-rule-strong bg-surface px-4 font-medium hover:bg-paper-2">Print report</Link>
               <Button variant="secondary" onClick={async () => {
                 try { router.push(`/inspections/${(await api<{ id: string }>(`/api/inspections/${initial.id}/revise`, { method: "POST" })).id}`); }
-                catch (err) { alert((err as Error).message); }
+                catch (err) {
+                  const detail = err instanceof ApiError ? (err.detail as { inspection_id?: string; message?: string }) : undefined;
+                  if (detail?.inspection_id) { router.push(`/inspections/${detail.inspection_id}`); return; }
+                  alert((err as Error).message);
+                }
               }}>Revise</Button>
             </>
-          ) : <SaveStatus save={save} onReload={reload} />}
+          ) : (
+            <>
+              <SaveStatus save={save} onReload={reload} />
+              {initial.supersedes_id && (
+                <Button variant="danger" onClick={async () => {
+                  if (!confirm("Discard this revision? The signed report stays as it was.")) return;
+                  try {
+                    const r = await api<{ supersedes_id: string }>(`/api/inspections/${initial.id}`, { method: "DELETE", toast: "Revision discarded" });
+                    router.push(`/inspections/${r.supersedes_id}`);
+                  } catch (err) { alert((err as Error).message); }
+                }}>Discard revision</Button>
+              )}
+            </>
+          )}
         </div>
       </div>
       {readOnly && <div className="mb-4"><Notice tone="success">This report is signed and can&apos;t be changed. A correction creates a new version that keeps this one.</Notice></div>}
+      {!readOnly && initial.supersedes_id && (
+        <div className="mb-4">
+          <Notice tone="warning">This is a revision of a signed report. Discard it if you started it by mistake — the signed version stays.</Notice>
+        </div>
+      )}
 
       <nav aria-label="Sections" className="no-print sticky top-[57px] z-20 -mx-4 mb-4 overflow-x-auto bg-paper/85 px-4 py-2 backdrop-blur shell:top-0 sm:-mx-6 sm:px-6 shell:-mx-10 shell:px-10">
         <ul className="flex gap-2">
@@ -413,7 +435,7 @@ function Rows<T>({ rows, render, onAdd, onRemove, addLabel, empty, readOnly }:
       {rows.map((row, i) => (
         <div key={i} className="flex flex-wrap items-start gap-2 rounded-control border border-rule p-2 sm:flex-nowrap sm:border-0 sm:p-0">
           {render(row, i)}
-          {!readOnly && <Button type="button" variant="ghost" onClick={() => onRemove(i)}>Remove</Button>}
+          {!readOnly && <Button type="button" variant="danger" onClick={() => onRemove(i)}>Remove</Button>}
         </div>
       ))}
       {!readOnly && <Button type="button" variant="secondary" onClick={onAdd}>{addLabel}</Button>}

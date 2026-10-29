@@ -4,6 +4,7 @@ import { useState } from "react";
 import { RequirePermission } from "@/components/shell";
 import { Button, Card, Checkbox, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
+import { liveForm } from "@/lib/form";
 import { type FieldErrors, parseForm, reminderSchema, templateSchema } from "@/lib/schemas";
 
 type Template = { key: string; label: string; body: string; enabled: boolean; version: number };
@@ -43,13 +44,13 @@ function TemplateForm({ t, onDone }: { t: Template; onDone: () => void }) {
     catch (err) { setError((err as Error).message); }
   }
   return (
-    <form noValidate onSubmit={submit} className="grid gap-3">
+    <form noValidate onSubmit={submit} className="grid gap-3" {...liveForm(templateSchema, errors, setErrors)}>
       <Field label={t.label} error={errors.body}>
         <textarea name="body" defaultValue={t.body} rows={3} maxLength={600} className="min-h-24 w-full rounded-control border border-rule-strong bg-surface px-3 py-2 text-base hover:border-ink-2 focus-visible:border-ink" />
       </Field>
       <Checkbox name="enabled" label="Send this message" defaultChecked={t.enabled} />
       <Notice>{error}</Notice>
-      <div className="flex flex-wrap items-center gap-3"><Button type="submit" className="self-start">Save</Button>{saved && <span className="text-sm text-muted">Saved</span>}</div>
+      <div className="flex flex-wrap items-center gap-3"><Button type="submit" variant="success" className="self-start">Save</Button>{saved && <span className="text-sm text-muted">Saved</span>}</div>
     </form>
   );
 }
@@ -69,7 +70,7 @@ function ReminderForm({ d, onDone }: { d: Data; onDone: () => void }) {
   }
   return (
     <Card title="Reminders">
-      <form noValidate onSubmit={submit} className="grid gap-4">
+      <form noValidate onSubmit={submit} className="grid gap-4" {...liveForm(reminderSchema, errors, setErrors)}>
         <Field label="Chase an unpaid invoice after (days)" hint="Only the latest step is sent each time." error={errors.reminder_days}>
           <Input name="reminder_days" defaultValue={d.reminder_days} inputMode="numeric" />
         </Field>
@@ -77,7 +78,7 @@ function ReminderForm({ d, onDone }: { d: Data; onDone: () => void }) {
           <Input name="service_reminder_days" type="number" inputMode="numeric" defaultValue={d.service_reminder_days} />
         </Field>
         <Notice>{error}</Notice>
-        <div className="flex flex-wrap items-center gap-3"><Button type="submit" className="self-start">Save</Button>{saved && <span className="text-sm text-muted">Saved</span>}</div>
+        <div className="flex flex-wrap items-center gap-3"><Button type="submit" variant="success" className="self-start">Save</Button>{saved && <span className="text-sm text-muted">Saved</span>}</div>
         <p className="text-sm text-muted">Reminders are queued when someone presses Queue due reminders on the Messages page, or when a daily job calls it. Each reminder is queued once.</p>
       </form>
     </Card>

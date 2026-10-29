@@ -24,20 +24,31 @@
   --color-rule-strong: #8E8E8E;  /* Silver Fog: input and secondary-button borders (3.3:1) */
   --color-silver: #D0D0D0;       /* Car Silver: decorative dividers */
   /* Brand, sampled from the logo */
-  --color-accent: #D10A01;       /* GermanATO Red: primary action only (white 5.6:1) */
+  --color-accent: #D10A01;       /* GermanATO Red: nav bar, brand accents */
   --color-accent-2: #B80800;     /* hover */
   --color-accent-3: #6D0000;     /* Hexagon Oxblood: pressed */
   --color-accent-soft: #F4F4F4;
   --color-accent-ink: #FFFFFF;
+  /* Primary action buttons (Issue, Send, Record, Approve, Add…) */
+  --color-primary: #0F766E;      /* teal, white text AA */
+  --color-primary-2: #0D5F59;    /* hover */
+  --color-primary-3: #0A4A45;    /* pressed */
+  --color-primary-ink: #FFFFFF;
   --color-oxblood: #6D0000;
   --color-logo-black: #000000;
   --color-amber: #F98B00;        /* Tagline Amber: warning accent rules only */
   --color-focus: #171717;
   /* Status */
   --color-error: #B80800;
+  --color-error-2: #9A0600;   /* danger button hover */
+  --color-error-3: #6D0000;   /* danger button pressed (oxblood) */
   --color-error-soft: #FDECEC;
+  --color-error-ink: #FFFFFF;
   --color-success: #1E7B34;
+  --color-success-2: #18662B; /* success button hover */
+  --color-success-3: #124F21; /* success button pressed */
   --color-success-soft: #E8F5EC;
+  --color-success-ink: #FFFFFF;
   --color-warning: #8A4B00;
   --color-warning-soft: #FFF3E0;
   --color-scrim: rgb(23 23 23 / 0.4);

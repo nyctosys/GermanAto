@@ -46,14 +46,17 @@ def test_repair_order_carries_approved_lines_only(admin):
 def test_parts_issue_and_return_through_stock(admin):
     visit, item, _, q = approved_quote(admin)
     ro = admin.post(f"/api/quotations/{approve(admin, q)['id']}/repair-order").json()
+    base = f"/api/repair-orders/{ro['id']}"
+    ro = admin.post(f"{base}/status", json={"to": "in_repair", "version": ro["version"]}).json()
     part = next(l for l in ro["lines"] if l["kind"] == "part")
-    url = f"/api/repair-orders/{ro['id']}/lines/{part['id']}"
+    url = f"{base}/lines/{part['id']}"
     assert admin.patch(url, json={"state": "done"}).status_code == 422  # nothing issued yet
-    assert admin.post(f"{url}/issue", json={"qty": "7"}).status_code == 409  # only 6 in stock
-    ro = admin.post(f"{url}/issue", json={"qty": "3"}).json()
-    assert stock(admin, item) == 3
+    assert admin.post(f"{url}/issue", json={"qty": "7"}).status_code == 422  # more than the line qty (2)
+    assert admin.post(f"{url}/issue", json={"qty": "3"}).status_code == 422  # still over the line qty
+    ro = admin.post(f"{url}/issue", json={"qty": "2"}).json()
+    assert stock(admin, item) == 4
     ro = admin.post(f"{url}/return", json={"qty": "1"}).json()
-    assert stock(admin, item) == 4 and Decimal(next(l for l in ro["lines"] if l["id"] == part["id"])["issued_qty"]) == 2
+    assert stock(admin, item) == 5 and Decimal(next(l for l in ro["lines"] if l["id"] == part["id"])["issued_qty"]) == 1
     assert admin.post(f"{url}/return", json={"qty": "5"}).status_code == 422
     assert Decimal(str(admin.get(f"/api/items/{item['id']}").json()["avg_cost"])) == 1000  # a return keeps the cost
     assert admin.post(f"/api/visits/{visit['id']}/cancel", json={"reason": "Changed mind"}).status_code == 409
@@ -66,11 +69,14 @@ def test_status_rules_and_activity(admin):
     url = f"/api/repair-orders/{ro['id']}"
     go = lambda to, **kw: admin.post(f"{url}/status", json={"to": to, "version": admin.get(url).json()["version"], **kw})
     assert go("in_repair").status_code == 200
-    assert go("diagnosis").status_code == 422  # backwards needs a note
+    assert go("received").status_code == 422  # backwards needs a note
+    assert go("received", note="Still booking the bay").status_code == 200
+    assert go("in_repair").status_code == 200
     assert go("on_hold").status_code == 422
     held = go("on_hold", note="Waiting for parts").json()
     assert held["status"] == "on_hold" and held["held_from"] == "in_repair"
     assert go("in_repair").status_code == 200  # resuming needs no note
+    assert "Mark these done" in go("testing").json()["detail"]
     assert "Mark these done" in go("ready").json()["detail"]
 
     tech = admin.get("/api/technicians").json()[0]
@@ -79,6 +85,7 @@ def test_status_rules_and_activity(admin):
             admin.post(f"{url}/lines/{l['id']}/issue", json={"qty": l["qty"]})
         r = admin.patch(f"{url}/lines/{l['id']}", json={"state": "done", "technician_id": tech["id"]})
         assert r.status_code == 200, r.json()
+    assert go("testing").json()["status"] == "testing"
     assert go("ready").json()["status"] == "ready"
 
     r = admin.post(f"{url}/activity", json={"kind": "customer_update", "body": "Your car is ready, collect after 5pm",
@@ -92,6 +99,8 @@ def test_extra_work_is_flagged_and_removable(admin):
     ro = admin.post(f"/api/quotations/{approve(admin, q)['id']}/repair-order").json()
     url = f"/api/repair-orders/{ro['id']}"
     base = {"kind": "labour", "labour_code_id": code["id"], "unit_price": "1500", "reason": "Found a leaking sump plug"}
+    assert admin.post(f"{url}/lines", json={**base, "approval_method": "phone", "no_proof_reason": "Agreed on a call"}).status_code == 409  # still Received
+    ro = admin.post(f"{url}/status", json={"to": "in_repair", "version": ro["version"]}).json()
     assert admin.post(f"{url}/lines", json={**base, "reason": "", "approval_method": "phone", "no_proof_reason": "Agreed on a call"}).status_code == 422  # reason
     assert admin.post(f"{url}/lines", json={**base}).status_code == 422  # how did the customer agree?
     assert admin.post(f"{url}/lines", json={**base, "approval_method": "phone"}).status_code == 422  # proof or a reason

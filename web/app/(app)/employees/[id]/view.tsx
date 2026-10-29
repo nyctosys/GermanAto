@@ -9,7 +9,8 @@ import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money, phone } from "@/lib/format";
-import { type FieldErrors, markSchema, punchSchema } from "@/lib/schemas";
+import { useLiveErrors } from "@/lib/form";
+import { issuesToFieldErrors, markSchema, punchSchema } from "@/lib/schemas";
 
 type Month = {
   month: string; employee: Employee; present: number; late: number; absent: number; paid_leave: number; unpaid_leave: number; off: number;
@@ -110,7 +111,7 @@ function View() {
                       <span className="num">{new Date(p.at).toLocaleString("en-PK", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</span>
                       <span className="block text-sm text-muted">{p.source === "device" ? "From the device" : `Entered by hand: ${p.reason}`}</span>
                     </span>
-                    {p.source === "manual" && !p.voided ? <Button variant="ghost" onClick={() => setVoiding(p.id)}>Void</Button> : p.voided ? <Badge>Voided</Badge> : null}
+                    {p.source === "manual" && !p.voided ? <Button variant="danger" onClick={() => setVoiding(p.id)}>Void</Button> : p.voided ? <Badge>Voided</Badge> : null}
                   </li>
                 ))}
               </ul>
@@ -125,21 +126,22 @@ function View() {
 function PunchForm({ id, onDone, onCancel }: { id: string; onDone: () => void; onCancel: () => void }) {
   const [at, setAt] = useState("");
   const [reason, setReason] = useState("");
-  const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
+  const { errors, activate, live } = useLiveErrors({ punched_at: at, reason }, (v) => {
+    const r = punchSchema.safeParse(v);
+    return r.success ? {} : issuesToFieldErrors(r.error.issues);
+  });
   async function submit(e: FormEvent) {
     e.preventDefault();
+    activate();
     const r = punchSchema.safeParse({ punched_at: at, reason });
-    const found: FieldErrors = {};
-    if (!r.success) for (const i of r.error.issues) found[String(i.path[0])] ??= i.message;
-    setErrors(found);
     if (!r.success) return;
     try { await api("/api/attendance/punches", { method: "POST", json: { employee_id: id, punched_at: at, reason: r.data.reason } }); onDone(); }
     catch (err) { setError((err as Error).message); }
   }
   return (
     <Card title="Add a missed punch">
-      <form noValidate onSubmit={submit} className="space-y-4">
+      <form noValidate onSubmit={submit} className="space-y-4" {...live}>
         <Field label="Date and time" error={errors.punched_at}><Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} /></Field>
         <Field label="Why" error={errors.reason} hint="For example: the finger scan failed at the door."><Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} /></Field>
         <Notice>{error}</Notice>
@@ -153,21 +155,22 @@ function MarkForm({ id, onDone, onCancel }: { id: string; onDone: () => void; on
   const [dayV, setDayV] = useState("");
   const [kind, setKind] = useState("paid_leave");
   const [reason, setReason] = useState("");
-  const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
+  const { errors, activate, live } = useLiveErrors({ day: dayV, kind, reason }, (v) => {
+    const r = markSchema.safeParse(v);
+    return r.success ? {} : issuesToFieldErrors(r.error.issues);
+  });
   async function submit(e: FormEvent) {
     e.preventDefault();
+    activate();
     const r = markSchema.safeParse({ day: dayV, kind, reason });
-    const found: FieldErrors = {};
-    if (!r.success) for (const i of r.error.issues) found[String(i.path[0])] ??= i.message;
-    setErrors(found);
     if (!r.success) return;
     try { await api("/api/attendance/marks", { method: "POST", json: { employee_id: id, ...r.data } }); onDone(); }
     catch (err) { setError((err as Error).message); }
   }
   return (
     <Card title="Mark a leave day">
-      <form noValidate onSubmit={submit} className="space-y-4">
+      <form noValidate onSubmit={submit} className="space-y-4" {...live}>
         <Field label="Day" error={errors.day}><Input type="date" value={dayV} onChange={(e) => setDayV(e.target.value)} /></Field>
         <Segments value={kind} onChange={setKind} options={[{ value: "paid_leave", label: DAY.paid_leave[0] }, { value: "unpaid_leave", label: DAY.unpaid_leave[0] }]} />
         <Field label="Why" error={errors.reason}><Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} /></Field>

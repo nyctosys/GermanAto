@@ -479,3 +479,30 @@ def test_only_admins_with_the_permission_sign_off(admin):
     acct = signed_in("acct", "acct-pass-1234")
     assert acct.get("/api/missing-evidence").status_code == 200
     assert acct.post("/api/missing-evidence/sign", json={"source_type": "money_entry", "source_id": e["id"], "reason": "Not allowed to do this"}).status_code == 403
+
+
+def test_missing_evidence_can_optionally_attach_proof_later(admin):
+    e = entry(admin, kind="other_income", amount="80", party="Scrap").json()
+    before = admin.get("/api/missing-evidence").json()
+    assert any(r["id"] == e["id"] for r in before["rows"])
+    open_before = before["open"]
+
+    assert admin.post("/api/missing-evidence/attach", json={
+        "source_type": "money_entry", "source_id": e["id"],
+    }).status_code == 422  # proof is only needed when you choose to attach it
+
+    ok = admin.post("/api/missing-evidence/attach", json={
+        "source_type": "money_entry", "source_id": e["id"], "proof_id": upload(admin, PNG + b"later"),
+    })
+    assert ok.status_code == 200 and ok.json()["proof_url"]
+    after = admin.get("/api/missing-evidence").json()
+    assert after["open"] == open_before - 1
+    assert not any(r["id"] == e["id"] for r in after["rows"])
+    assert admin.post("/api/missing-evidence/attach", json={
+        "source_type": "money_entry", "source_id": e["id"], "proof_id": upload(admin, PNG + b"again"),
+    }).status_code == 409  # already has proof
+    # Accept without proof still works for other records — attaching later is optional
+    other = entry(admin, kind="other_income", amount="15").json()
+    assert admin.post("/api/missing-evidence/sign", json={
+        "source_type": "money_entry", "source_id": other["id"], "reason": "Small cash, no slip expected",
+    }).status_code == 201

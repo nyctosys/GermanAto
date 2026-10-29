@@ -5,6 +5,7 @@ import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money } from "@/lib/format";
+import { fieldErrorsFromApi, liveForm } from "@/lib/form";
 import { accountSchema, categorySchema, type FieldErrors, parseForm } from "@/lib/schemas";
 
 type Account = { id: string; kind: string; name: string; opening_balance: string; opening_date: string; is_active: boolean; version: number; balance?: string };
@@ -55,6 +56,7 @@ function AccountForm({ a, onDone, onCancel }: { a: Account; onDone: () => void; 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const live = liveForm(accountSchema, errors, setErrors);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const { data, errors } = parseForm(accountSchema, e.currentTarget);
@@ -66,18 +68,20 @@ function AccountForm({ a, onDone, onCancel }: { a: Account; onDone: () => void; 
       await api(`/api/accounts/${a.id}`, { method: "PUT", json: { ...data, is_active: true, version: a.version } });
       onDone();
     } catch (err) {
-      setError((err as Error).message);
+      const mapped = fieldErrorsFromApi(err);
+      if (Object.keys(mapped.fields).length) setErrors((p) => ({ ...p, ...mapped.fields }));
+      setError(mapped.banner);
       setBusy(false);
     }
   }
   return (
-    <form noValidate onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+    <form noValidate onSubmit={submit} className="grid gap-4 sm:grid-cols-2" {...live}>
       <Field label="Name" error={errors.name}><Input name="name" defaultValue={a.name} maxLength={60} /></Field>
       <Field label="Opening balance (Rs)" error={errors.opening_balance}><Input name="opening_balance" inputMode="decimal" defaultValue={String(Number(a.opening_balance))} /></Field>
       <Field label="As of" error={errors.opening_date}><Input name="opening_date" type="date" defaultValue={a.opening_date} /></Field>
       <div className="flex flex-col gap-3 sm:col-span-2">
         <Notice>{error}</Notice>
-        <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{busy ? "Saving" : "Save"}</Button><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button></div>
+        <div className="flex flex-wrap gap-2"><Button type="submit" variant="success" disabled={busy}>{busy ? "Saving" : "Save"}</Button><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button></div>
       </div>
     </form>
   );
@@ -114,7 +118,7 @@ function Categories() {
 
   return (
     <Card title="Expense categories" flush>
-      <form noValidate onSubmit={(e) => save(e)} className="flex flex-wrap items-start gap-3 border-b border-rule p-4 shell:px-5">
+      <form noValidate onSubmit={(e) => save(e)} className="flex flex-wrap items-start gap-3 border-b border-rule p-4 shell:px-5" {...liveForm(categorySchema, errors, setErrors)}>
         <div className="min-w-48 flex-1"><Field label="New category" error={errors.name}><Input name="name" maxLength={80} placeholder="e.g. Garbage collection" /></Field></div>
         <Button type="submit" className="mt-7">Add</Button>
       </form>
@@ -128,14 +132,14 @@ function Categories() {
                 {editing === c.id ? (
                   <form noValidate onSubmit={(e) => save(e, c)} className="flex flex-1 flex-wrap items-center gap-2">
                     <div className="min-w-40 flex-1"><Input name="name" defaultValue={c.name} maxLength={80} aria-label="Category name" autoFocus /></div>
-                    <Button type="submit">Save</Button><Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
+                    <Button type="submit" variant="success">Save</Button><Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
                   </form>
                 ) : (
                   <>
                     <span className={c.is_active ? "" : "text-muted line-through"}>{c.name}</span>
                     <span className="flex gap-2">
                       <Button variant="ghost" onClick={() => setEditing(c.id)}>Rename</Button>
-                      <Button variant="ghost" onClick={() => toggle(c)}>{c.is_active ? "Retire" : "Restore"}</Button>
+                      <Button variant={c.is_active ? "danger" : "secondary"} onClick={() => toggle(c)}>{c.is_active ? "Retire" : "Restore"}</Button>
                     </span>
                   </>
                 )}

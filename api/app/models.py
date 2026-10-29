@@ -508,7 +508,7 @@ class Payment(BranchScoped):
 
 # --- repair order (spec §2, §2.3) ------------------------------------------------------------
 
-RO_STAGES = ("received", "diagnosis", "awaiting_approval", "in_repair", "testing", "ready", "delivered")
+RO_STAGES = ("received", "in_repair", "testing", "ready", "delivered")
 
 
 class RepairOrder(BranchScoped):

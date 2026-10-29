@@ -128,7 +128,7 @@ function View({ bill, onChange }: { bill: Bill; onChange: (b: Bill) => void }) {
           {!panel && !voiding && live && (
             <div className="flex flex-wrap gap-2">
               {owing && can("payments-out") && <Button onClick={() => setPanel("pay")}>Pay this bill</Button>}
-              {can("purchasing") && Number(bill.paid) === 0 && <Button variant="ghost" onClick={() => setPanel("void")}>Void the bill</Button>}
+              {can("purchasing") && Number(bill.paid) === 0 && <Button variant="danger" onClick={() => setPanel("void")}>Void the bill</Button>}
             </div>
           )}
         </div>
@@ -144,7 +144,7 @@ function View({ bill, onChange }: { bill: Bill; onChange: (b: Bill) => void }) {
           </Card>
           {payments.length > 0 && (
             <PaymentList title="Payments" payments={payments}
-                         action={(p) => (p.status === "posted" && live && can("payments-out") ? <Button variant="ghost" onClick={() => setVoiding(p.id)}>Void</Button> : null)} />
+                         action={(p) => (p.status === "posted" && live && can("payments-out") ? <Button variant="danger" onClick={() => setVoiding(p.id)}>Void</Button> : null)} />
           )}
         </div>
       </div>

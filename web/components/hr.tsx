@@ -4,7 +4,8 @@ import { useRef, useState, type FormEvent } from "react";
 import { Badge, Button, Field, Input, Notice, Select } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { phone } from "@/lib/format";
-import { employeeSchema, type FieldErrors, parseForm } from "@/lib/schemas";
+import { useFormErrors } from "@/lib/form";
+import { employeeSchema, parseForm } from "@/lib/schemas";
 
 export type Employee = {
   id: string; number: string; full_name: string; title: string; phone: string; cnic: string; user_id: string | null; username: string | null;
@@ -27,7 +28,7 @@ const hhmm = (t: string) => t.slice(0, 5);
 /** Add or edit an employee. A device number claims the punches already received for it. */
 export function EmployeeForm({ employee, onSaved, onCancel }: { employee?: Employee; onSaved: (e: Employee) => void; onCancel: () => void }) {
   const logins = useApi<{ id: string; username: string; full_name: string }[]>("/api/employee-logins");
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const { errors, setErrors, live, applyApi } = useFormErrors(employeeSchema);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const form = useRef<HTMLFormElement>(null);
@@ -45,13 +46,13 @@ export function EmployeeForm({ employee, onSaved, onCancel }: { employee?: Emplo
         ? await api<Employee>(`/api/employees/${employee.id}`, { method: "PUT", json: { ...body, is_active: new FormData(form.current!).get("is_active") === "on", version: employee.version } })
         : await api<Employee>("/api/employees", { method: "POST", json: body }));
     } catch (err) {
-      setError((err as Error).message);
+      setError(applyApi(err));
       setBusy(false);
     }
   }
 
   return (
-    <form ref={form} noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3">
+    <form ref={form} noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3" {...live}>
       <Field label="Full name" error={errors.full_name}><Input name="full_name" defaultValue={employee?.full_name} required maxLength={120} autoComplete="off" autoFocus /></Field>
       <Field label="Job title (optional)" error={errors.title}><Input name="title" defaultValue={employee?.title} maxLength={80} placeholder="Technician" /></Field>
       <Field label="Phone (optional)" error={errors.phone}><Input name="phone" defaultValue={employee ? phone(employee.phone) : ""} inputMode="tel" /></Field>
@@ -82,7 +83,7 @@ export function EmployeeForm({ employee, onSaved, onCancel }: { employee?: Emplo
       <div className="flex flex-col gap-3 sm:col-span-2 shell:col-span-3">
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy}>{busy ? "Saving" : employee ? "Save changes" : "Add employee"}</Button>
+          <Button type="submit" variant={employee ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : employee ? "Save changes" : "Add employee"}</Button>
           <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         </div>
       </div>

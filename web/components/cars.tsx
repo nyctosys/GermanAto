@@ -3,8 +3,9 @@
 import { useRef, useState, type FormEvent } from "react";
 import { Button, Field, Input, Notice, Select } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useFormErrors } from "@/lib/form";
 import { useRecords } from "@/lib/records";
-import { type FieldErrors, carSchema, parseForm } from "@/lib/schemas";
+import { carSchema, parseForm } from "@/lib/schemas";
 
 export type Car = {
   id: string; plate: string; vin: string; engine_no: string; make: string; model: string;
@@ -22,7 +23,7 @@ export const carTitle = (c: Pick<Car, "make" | "model" | "year">) => [c.year, c.
 export function CarForm({ car, ownerId, onSaved, onCancel }:
   { car?: Car; ownerId?: string; onSaved: (c: Car) => void; onCancel: () => void }) {
   const [error, setError] = useState<string | null>(null);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const { errors, setErrors, live, applyApi } = useFormErrors(carSchema);
   const [busy, setBusy] = useState(false);
   const form = useRef<HTMLFormElement>(null);
 
@@ -40,13 +41,13 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
       useRecords.getState().put("cars", saved);
       onSaved(saved);
     } catch (err) {
-      setError((err as Error).message);
+      setError(applyApi(err));
       setBusy(false);
     }
   }
 
   return (
-    <form ref={form} onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3">
+    <form ref={form} onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3" {...live}>
       <Field error={errors.plate} label="Number plate" hint="As written, e.g. LEA-21-1234"><Input name="plate" defaultValue={car?.plate} maxLength={20} autoCapitalize="characters" /></Field>
       <Field error={errors.make} label="Make"><Input name="make" defaultValue={car?.make} required placeholder="BMW" /></Field>
       <Field error={errors.model} label="Model"><Input name="model" defaultValue={car?.model} placeholder="520i" /></Field>
@@ -64,7 +65,7 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
       <div className="flex flex-col gap-3 sm:col-span-2 shell:col-span-3">
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy}>{busy ? "Saving" : car ? "Save changes" : "Add car"}</Button>
+          <Button type="submit" variant={car ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : car ? "Save changes" : "Add car"}</Button>
           <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         </div>
       </div>

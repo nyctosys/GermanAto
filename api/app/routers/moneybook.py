@@ -257,3 +257,30 @@ def sign_off(body: SignoffIn, actor: Actor = Depends(can_signoff), db: Session =
     db.add(EvidenceSignoff(**body.model_dump()))
     db.commit()
     return {"ok": True}
+
+
+# Attachment entity_type for each money source (matches how proof is stored when first recorded).
+PROOF_ENTITY = {"payment": "payments", "vendor_payment": "vendor_payments", "money_entry": "money_entries"}
+
+
+class AttachProofIn(BaseModel):
+    source_type: Literal["payment", "vendor_payment", "money_entry"]
+    source_id: uuid.UUID
+    proof_id: uuid.UUID
+
+
+@router.post("/missing-evidence/attach", status_code=200)
+def attach_proof(body: AttachProofIn, actor: Actor = Depends(see_money), db: Session = Depends(get_db)):
+    """When the slip or photo turns up later, put it on the record so it leaves this list."""
+    model = {"payment": Payment, "vendor_payment": VendorPayment, "money_entry": MoneyEntry}[body.source_type]
+    rec = db.get(model, body.source_id)
+    if not rec or rec.branch_id != actor.branch.id:
+        raise HTTPException(404, "Record not found")
+    if getattr(rec, "status", "posted") != "posted":
+        raise HTTPException(409, "This record is voided")
+    if rec.proof_id:
+        raise HTTPException(409, "This record already has proof")
+    _attach(db, actor, [body.proof_id], PROOF_ENTITY[body.source_type], rec.id)
+    rec.proof_id = body.proof_id
+    db.commit()
+    return {"ok": True, "proof_url": f"/api/attachments/{body.proof_id}/file"}

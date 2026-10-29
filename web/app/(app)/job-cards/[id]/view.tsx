@@ -144,7 +144,7 @@ function Editor({ initial }: { initial: JobCard }) {
                                aria-invalid={bad.includes(l.id)} className={`min-h-11 w-full rounded-control border bg-surface px-3 text-base ${bad.includes(l.id) ? "border-error" : "border-rule-strong"}`}
                                onChange={(e) => change((ls) => ls.map((x) => (x.id === l.id ? { ...x, qty: e.target.value } : x)))} />
                       </label>
-                      {!locked && <Button variant="ghost" onClick={() => change((ls) => ls.filter((x) => x.id !== l.id))}>Remove</Button>}
+                      {!locked && <Button variant="danger" onClick={() => change((ls) => ls.filter((x) => x.id !== l.id))}>Remove</Button>}
                     </div>
                   </li>
                 ))}
@@ -165,7 +165,7 @@ function Editor({ initial }: { initial: JobCard }) {
               {card.quotation
                 ? <Link href={`/quotations/${card.quotation.id}`} className={linkButton}>Open quotation {card.quotation.number}</Link>
                 : can("quotations") && <Button onClick={quote} disabled={busy || !lines.length}>Make the quotation</Button>}
-              <Button variant={card.quotation || !can("quotations") ? "primary" : "secondary"} onClick={save} disabled={busy || !dirty}>{busy ? "Saving" : "Save job card"}</Button>
+              <Button variant="success" onClick={save} disabled={busy || !dirty}>{busy ? "Saving" : "Save job card"}</Button>
             </div>
           )}
           {card.quotation && <p className="flex flex-wrap items-center gap-2 text-sm text-muted">Quotation {card.quotation.number}, revision {card.quotation.revision}: <QuoteBadge status={card.quotation.status} /> Changes here don&apos;t change a quotation already made; revise the quotation instead.</p>}

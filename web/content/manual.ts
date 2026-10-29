@@ -231,7 +231,8 @@ export const CHAPTERS: Chapter[] = [
         id: "repair-order", title: "Run the repair order", who: "Service advisor and mechanics",
         steps: [
           "On the approved quotation, press Make the repair order. Only the approved lines come across.",
-          "Move the job forward as work progresses: Received, Diagnosis, Awaiting approval, In repair, Testing, Ready.",
+          "Move the job forward as work progresses: Received → In repair → Testing → Ready. Put on hold from any stage if you are waiting.",
+          "Issue parts and mark work Done while In repair. You cannot move to Testing until every line is Done or Not done. In Testing you can still update marks; you cannot move to Ready until every line is Done or Not done. Ready locks marks but still lets you return unused parts.",
           "Press Issue on each part line to take the part out of stock.",
           "Choose the mechanic on each line. Mark the line Done or Not done when finished.",
           "Write notes in the activity list: a Note, a Finding, or a Customer update (the customer can see this one).",
@@ -397,12 +398,13 @@ export const CHAPTERS: Chapter[] = [
         avoid: ["You cannot change a day that is already closed. Record the correction today."],
       },
       {
-        id: "missing-proof", title: "Check records that have no proof", who: "Administrator (evidence-signoff permission)",
+        id: "missing-proof", title: "Check records that have no proof", who: "Administrator (evidence-signoff permission); anyone on Money can optionally add proof later",
         steps: [
           "Go to Money, then Missing proof. Read the reason given for each record.",
           "If the reason is acceptable, press Accept and type why. If not, ask the person to bring proof.",
+          "Optional: if the photo or document turns up later, press Add proof and upload it. You do not have to — Accept still clears the wait.",
         ],
-        right: ["Accepted records no longer count as waiting, and they no longer stop the month from closing."],
+        right: ["Accepted records no longer count as waiting, and they no longer stop the month from closing.", "A record with proof attached later leaves the list."],
       },
       {
         id: "cash-close", title: "Close the day (count the money)", who: "Accountant (cash-close permission). Every evening.",

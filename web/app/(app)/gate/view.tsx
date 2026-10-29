@@ -4,8 +4,9 @@ import { useState, type FormEvent } from "react";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
+import { useFormErrors } from "@/lib/form";
 import { money } from "@/lib/format";
-import { type FieldErrors, gatePassSchema, parseForm } from "@/lib/schemas";
+import { gatePassSchemaAt, parseForm } from "@/lib/schemas";
 import { Plate } from "@/components/cars";
 
 type Car = { id: string; number: string; plate: string; car: string; customer: string; invoice: string | null; balance: string; odometer_in: number | null; can_release: boolean };
@@ -49,27 +50,27 @@ function Cars() {
 }
 
 function Release({ car, onDone, onCancel }: { car: Car; onDone: () => void; onCancel: () => void }) {
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const schema = () => gatePassSchemaAt({ minOut: car.odometer_in, requireHandedTo: true });
+  const { errors, setErrors, live, applyApi } = useFormErrors(schema);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const { data, errors } = parseForm(gatePassSchema, e.currentTarget);
+    const { data, errors } = parseForm(schema(), e.currentTarget);
     setErrors(errors ?? {});
     if (!data) return;
-    if (!data.handed_to) { setErrors({ handed_to: "Write who is taking the car" }); return; }
     setBusy(true);
     setError(null);
     try {
       await api(`/api/visits/${car.id}/gate-pass`, { method: "POST", json: data, toast: `${car.plate} released` });
       onDone();
     } catch (err) {
-      setError((err as Error).message);
+      setError(applyApi(err));
       setBusy(false);
     }
   }
   return (
-    <form noValidate onSubmit={submit} className="mt-4 grid gap-4 border-t border-rule pt-4 sm:grid-cols-2">
+    <form noValidate onSubmit={submit} className="mt-4 grid gap-4 border-t border-rule pt-4 sm:grid-cols-2" {...live}>
       <Field label="Odometer reading now" hint={car.odometer_in ? `It was ${car.odometer_in.toLocaleString()} km at check-in.` : undefined} error={errors.odometer_out}>
         <Input name="odometer_out" inputMode="numeric" autoFocus />
       </Field>

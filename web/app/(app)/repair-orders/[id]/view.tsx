@@ -6,7 +6,7 @@ import { Suspense, startTransition, useOptimistic, useState, type FormEvent } fr
 import { type Uploaded, PhotoCapture } from "@/components/capture";
 import { CatalogPicker, lineCode, linkButton, type Pick } from "@/components/estimates";
 import { ProofInput } from "@/components/payments";
-import { RO_STAGES, RoBadge, STAGE, type RoLine, type RoStatus } from "@/components/repairs";
+import { RO_STAGES, RoBadge, STAGE, stageActions, workStage, type RoLine, type RoStatus } from "@/components/repairs";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
@@ -68,6 +68,8 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
   }
 
   const pending = ro.lines.filter((l) => l.state === "pending").length;
+  const stage = workStage(ro.status, ro.held_from);
+  const actions = stageActions(stage);
   return (
     <>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -87,9 +89,18 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
 
           <Card title="Work and parts" actions={<span className="text-sm text-muted">{pending ? `${pending} to do` : "All lines marked"}</span>} flush>
             <ul>
-              {ro.lines.map((l) => <LineRow key={l.id} l={l} techs={techs} working={working} busy={busy} call={call} />)}
+              {ro.lines.map((l) => <LineRow key={l.id} l={l} techs={techs} working={working} actions={actions} busy={busy} call={call} />)}
             </ul>
-            {working && <ExtraWork busy={busy} onAdd={(b) => call("/lines", "POST", b)} />}
+            {working && actions.extraWork && <ExtraWork busy={busy} onAdd={(b) => call("/lines", "POST", b)} />}
+            {working && stage === "received" && (
+              <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Move to In repair to issue parts, mark work done, or add extra work.</p>
+            )}
+            {working && stage === "testing" && (
+              <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Finish marking every line Done or Not done before moving to Ready.</p>
+            )}
+            {working && stage === "ready" && (
+              <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Ready: lines are locked. You can still return unused parts before making the invoice.</p>
+            )}
           </Card>
 
           <ActivityCard ro={ro} working={working} onAdd={(b) => call("/activity", "POST", b)} />
@@ -121,9 +132,14 @@ function StatusCard({ ro, working, busy, onMove }:
   const at = RO_STAGES.indexOf(current);
   const next = RO_STAGES[at + 1];
   const needsNote = target === "on_hold" || (target != null && RO_STAGES.indexOf(target) < at);
+  const pending = ro.lines.filter((l) => l.state === "pending");
+  const needsLinesDone = (to: RoStatus | null) => to === "testing" || to === "ready";
+  const nextBlocked = needsLinesDone(next) && pending.length > 0;
+  const targetBlocked = needsLinesDone(target) && pending.length > 0;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (targetBlocked) return;
     if (target && (await onMove(target, note))) { setTarget(null); setNote(""); }
   }
   return (
@@ -137,15 +153,21 @@ function StatusCard({ ro, working, busy, onMove }:
         ))}
       </ol>
       {ro.status === "on_hold" && <div className="mb-4"><Notice tone="warning">On hold. It resumes at {STAGE[ro.held_from!].toLowerCase()}.</Notice></div>}
+      {working && nextBlocked && (
+        <div className="mb-4">
+          <Notice tone="warning">Mark every line Done or Not done before moving to {STAGE[next!].toLowerCase()}: {pending.map((l) => l.description).join(", ")}</Notice>
+        </div>
+      )}
       {working ? (
         target ? (
           <form onSubmit={submit} className="space-y-4">
             <p>Move to <b className="font-medium">{STAGE[target]}</b></p>
+            {targetBlocked && <Notice tone="warning">Mark every line Done or Not done first: {pending.map((l) => l.description).join(", ")}</Notice>}
             <Field label={needsNote ? "Why? (required)" : "Note (optional)"}>
               <Input value={note} onChange={(e) => setNote(e.target.value)} required={needsNote} minLength={needsNote ? 3 : undefined} autoFocus maxLength={1000} />
             </Field>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={busy}>Confirm</Button>
+              <Button type="submit" disabled={busy || targetBlocked}>Confirm</Button>
               <Button type="button" variant="secondary" onClick={() => setTarget(null)}>Cancel</Button>
             </div>
           </form>
@@ -153,7 +175,9 @@ function StatusCard({ ro, working, busy, onMove }:
           <div className="flex flex-wrap items-end gap-2">
             {ro.status === "on_hold"
               ? <Button onClick={() => onMove(ro.held_from!, "")} disabled={busy}>Resume</Button>
-              : next && next !== "delivered" && <Button onClick={() => setTarget(next)} disabled={busy}>Move to {STAGE[next].toLowerCase()}</Button>}
+              : next && next !== "delivered" && (
+                <Button onClick={() => setTarget(next)} disabled={busy || nextBlocked}>Move to {STAGE[next].toLowerCase()}</Button>
+              )}
             {ro.status !== "on_hold" && <Button variant="secondary" onClick={() => setTarget("on_hold")}>Put on hold</Button>}
             <label className="min-w-40">
               <span className="sr-only">Move to another stage</span>
@@ -170,12 +194,16 @@ function StatusCard({ ro, working, busy, onMove }:
   );
 }
 
-function LineRow({ l, techs, working, busy, call }:
-  { l: RoLine; techs: { id: string; name: string }[]; working: boolean; busy: boolean; call: (path: string, method: string, json?: object) => Promise<boolean> }) {
+function LineRow({ l, techs, working, actions, busy, call }:
+  { l: RoLine; techs: { id: string; name: string }[]; working: boolean; actions: ReturnType<typeof stageActions>;
+    busy: boolean; call: (path: string, method: string, json?: object) => Promise<boolean> }) {
   const [move, setMove] = useState<"issue" | "return" | null>(null);
   const [amount, setAmount] = useState("");
   const url = `/lines/${l.id}`;
   const remaining = Math.max(Number(l.qty) - Number(l.issued_qty), 0);
+  const canMark = l.kind === "labour" ? actions.markLabour : actions.markPart;
+  const canIssue = actions.issue && remaining > 0;
+  const canReturn = actions.returnStock && Number(l.issued_qty) > 0;
 
   return (
     <li className="space-y-3 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5">
@@ -196,27 +224,29 @@ function LineRow({ l, techs, working, busy, call }:
             </p>
           )}
         </div>
-        {working ? (
+        {working && canMark ? (
           <LineState state={l.state} save={(s) => call(url, "PATCH", { state: s })} />
         ) : <Badge tone={l.state === "done" ? "success" : "neutral"}>{l.state === "done" ? "Done" : l.state === "not_done" ? "Not done" : "To do"}</Badge>}
       </div>
 
-      {working && (
+      {working && (actions.assignTech || canIssue || canReturn || (actions.removeExtra && !l.in_quote)) && (
         <div className="flex flex-wrap items-end gap-2">
-          <label className="min-w-48 flex-1">
-            <span className="mb-1 block text-sm text-muted">Technician</span>
-            <Select value={l.technician_id ?? ""} disabled={busy}
-                    onChange={(e) => call(url, "PATCH", e.target.value ? { technician_id: e.target.value } : { clear_technician: true })}>
-              <option value="">Not assigned</option>
-              {techs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </Select>
-          </label>
-          {l.item && !move && <Button variant="secondary" onClick={() => { setMove("issue"); setAmount(String(remaining || 1)); }}>Issue from stock</Button>}
-          {l.item && !move && Number(l.issued_qty) > 0 && <Button variant="ghost" onClick={() => { setMove("return"); setAmount("1"); }}>Return unused</Button>}
-          {!l.in_quote && Number(l.issued_qty) === 0 && <Button variant="ghost" onClick={() => call(url, "DELETE")}>Remove</Button>}
+          {actions.assignTech && (
+            <label className="min-w-48 flex-1">
+              <span className="mb-1 block text-sm text-muted">Technician</span>
+              <Select value={l.technician_id ?? ""} disabled={busy}
+                      onChange={(e) => call(url, "PATCH", e.target.value ? { technician_id: e.target.value } : { clear_technician: true })}>
+                <option value="">Not assigned</option>
+                {techs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+            </label>
+          )}
+          {l.item && !move && canIssue && <Button variant="secondary" onClick={() => { setMove("issue"); setAmount(String(remaining || 1)); }}>Issue from stock</Button>}
+          {l.item && !move && canReturn && <Button variant="ghost" onClick={() => { setMove("return"); setAmount("1"); }}>Return unused</Button>}
+          {actions.removeExtra && !l.in_quote && Number(l.issued_qty) === 0 && <Button variant="danger" onClick={() => call(url, "DELETE")}>Remove</Button>}
         </div>
       )}
-      {!working && l.technician && <p className="text-sm text-muted">By {l.technician}</p>}
+      {(!working || !actions.assignTech) && l.technician && <p className="text-sm text-muted">By {l.technician}</p>}
 
       {move && (
         <form className="flex flex-wrap items-end gap-2 rounded-control bg-paper-2 p-3"
@@ -259,7 +289,7 @@ function ExtraWork({ busy, onAdd }: { busy: boolean; onAdd: (b: object) => Promi
           <CatalogPicker onPick={(p) => { setPick(p); setPrice(p.kind === "part" && Number(p.sale_price) ? String(Number(p.sale_price)) : ""); }} />
         </>
       ) : (
-        <form onSubmit={submit} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_6rem_9rem]">
+        <form onSubmit={submit} onBlurCapture={() => setTried(true)} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_6rem_9rem]">
           <p className="font-medium sm:col-span-3">{pick.name} <span className="text-sm font-normal text-muted">{pick.code}</span></p>
           <Field label="Why is it needed?" error={tried && reason.trim().length < 3 ? "Required" : undefined}>
             <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} autoFocus />

@@ -14,7 +14,7 @@ export default function VisitsPage() {
   return (
     <RequirePermission permission="visits">
       <PageHeader title="Workshop" description="Cars in the workshop now. Every job starts with a check-in."
-                  actions={<Link href="/visits/new" className="flex min-h-11 items-center rounded-control bg-accent px-5 font-medium text-accent-ink hover:bg-accent-2 active:bg-accent-3 active:duration-0">Check in a car</Link>} />
+                  actions={<Link href="/visits/new" className="flex min-h-11 items-center rounded-control bg-primary px-5 font-medium text-primary-ink hover:bg-primary-2 active:bg-primary-3 active:duration-0">Check in a car</Link>} />
       <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
         <Board />
       </Suspense>

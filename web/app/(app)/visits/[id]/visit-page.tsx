@@ -11,8 +11,9 @@ import { Badge, Button, Card, ErrorState, Field, Input, Notice, SkeletonRows } f
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { type VisitSummary, elapsed } from "@/components/visits";
 import { api, useApi } from "@/lib/api";
+import { useFormErrors } from "@/lib/form";
 import { money, phone, when } from "@/lib/format";
-import { type FieldErrors, gatePassSchema, parseForm } from "@/lib/schemas";
+import { gatePassSchemaAt, parseForm } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 type File = { id: string; name: string; url: string; mime: string };
@@ -178,7 +179,7 @@ function VisitDetail() {
           {open ? <GatePass v={v} onDone={reload} /> : v.status === "closed" && <GatePassDone v={v} />}
           {open && (
             cancelling ? <CancelVisit id={v.id} onDone={() => { setCancelling(false); reload(); }} onCancel={() => setCancelling(false)} />
-              : <Button variant="ghost" onClick={() => setCancelling(true)}>Cancel this visit</Button>
+              : <Button variant="danger" onClick={() => setCancelling(true)}>Cancel this visit</Button>
           )}
           {v.status === "cancelled" && v.close_note && <Notice tone="warning">Cancelled: {v.close_note}</Notice>}
         </div>
@@ -292,25 +293,23 @@ function GatePass({ v, onDone }: { v: Visit; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const balance = Number(check.data?.balance ?? 0);
+  const schema = () => gatePassSchemaAt({ minOut: v.odometer_in, creditBalance: balance });
+  const { errors, setErrors, live, applyApi } = useFormErrors(schema);
   if (!can("visits") || !check.data) return null;
-  const balance = Number(check.data.balance);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const { data, errors } = parseForm(gatePassSchema, e.currentTarget);
-    const more: FieldErrors = {};
-    if (data && v.odometer_in != null && data.odometer_out != null && data.odometer_out < v.odometer_in) more.odometer_out = "Less than at check-in";
-    if (data && balance > 0 && data.credit_reason.length < 5) more.credit_reason = "Give the reason";
-    setErrors({ ...errors, ...more });
-    if (!data || Object.keys(more).length) return;
+    const { data, errors } = parseForm(schema(), e.currentTarget);
+    setErrors(errors ?? {});
+    if (!data) return;
     setBusy(true);
     setError(null);
     try {
       await api(`/api/visits/${v.id}/gate-pass`, { method: "POST", json: data });
       onDone();
     } catch (err) {
-      setError((err as Error).message);
+      setError(applyApi(err));
       setBusy(false);
     }
   }
@@ -329,7 +328,7 @@ function GatePass({ v, onDone }: { v: Visit; onDone: () => void }) {
           <Button onClick={() => setOpen(true)} disabled={balance > 0 && !can("release-on-credit")}>Release the car</Button>
         </div>
       ) : (
-        <form onSubmit={submit} noValidate className="space-y-4">
+        <form onSubmit={submit} noValidate className="space-y-4" {...live}>
           <Field error={errors.odometer_out} label="Odometer at exit (km)" hint={v.odometer_in != null ? `At check-in: ${v.odometer_in.toLocaleString("en-PK")} km` : undefined}>
             <Input name="odometer_out" type="number" inputMode="numeric" min={v.odometer_in ?? 0} />
           </Field>

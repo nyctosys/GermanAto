@@ -7,7 +7,8 @@ import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { when } from "@/lib/format";
-import { deviceSchema, type FieldErrors } from "@/lib/schemas";
+import { useLiveErrors } from "@/lib/form";
+import { deviceSchema, issuesToFieldErrors } from "@/lib/schemas";
 
 type Row = { employee: { id: string; number: string; full_name: string; title: string }; present: number; late: number; absent: number; paid_leave: number; unpaid_leave: number; working_days: number; hours: string };
 type Device = { id: string; serial: string; name: string; is_active: boolean; has_secret: boolean; last_seen_at: string | null; version: number; secret?: string };
@@ -133,20 +134,21 @@ function DeviceForm({ onDone, onCancel }: { onDone: (d: Device) => void; onCance
   const [serial, setSerial] = useState("");
   const [name, setName] = useState("");
   const [useSecret, setUseSecret] = useState(true);
-  const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
+  const { errors, activate, live } = useLiveErrors({ serial, name }, (v) => {
+    const r = deviceSchema.safeParse(v);
+    return r.success ? {} : issuesToFieldErrors(r.error.issues);
+  });
   async function submit(e: FormEvent) {
     e.preventDefault();
+    activate();
     const r = deviceSchema.safeParse({ serial, name });
-    const found: FieldErrors = {};
-    if (!r.success) for (const i of r.error.issues) found[String(i.path[0])] ??= i.message;
-    setErrors(found);
     if (!r.success) return;
     try { onDone(await api<Device>("/api/attendance-devices", { method: "POST", json: { ...r.data, use_secret: useSecret } })); }
     catch (err) { setError((err as Error).message); }
   }
   return (
-    <form noValidate onSubmit={submit} className="space-y-4">
+    <form noValidate onSubmit={submit} className="space-y-4" {...live}>
       <Field label="Serial number" error={errors.serial} hint="Printed on the device, or in its menu under System information."><Input value={serial} onChange={(e) => setSerial(e.target.value)} autoFocus maxLength={40} /></Field>
       <Field label="Name" error={errors.name}><Input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Front door" /></Field>
       <label className="flex min-h-11 cursor-pointer items-center gap-3"><input type="checkbox" checked={useSecret} onChange={(e) => setUseSecret(e.target.checked)} className="size-5 accent-accent" /><span>Require a secret (recommended)</span></label>

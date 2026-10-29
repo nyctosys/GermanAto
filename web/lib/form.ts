@@ -1,0 +1,121 @@
+"use client";
+
+import { type Dispatch, type FocusEvent, type FormEvent, type SetStateAction, useCallback, useMemo, useState } from "react";
+import type { z } from "zod";
+import { ApiError } from "@/lib/api";
+import { type FieldErrors, fieldErrorAt, issuesToFieldErrors } from "@/lib/schemas";
+
+type Schema = z.ZodType;
+type SchemaOrFn = Schema | (() => Schema);
+
+/**
+ * Spread onto a <form>: leaving a field shows its error beside it at once, and fixing
+ * it clears the message as they type. Pass a function when the schema depends on other state
+ * (e.g. last odometer reading).
+ */
+export function liveForm(
+  schema: SchemaOrFn,
+  errors: FieldErrors,
+  setErrors: Dispatch<SetStateAction<FieldErrors>>,
+) {
+  const get = typeof schema === "function" ? schema : () => schema;
+  const sync = (form: HTMLFormElement, name: string) => {
+    if (!name) return;
+    const msg = fieldErrorAt(get(), form, name);
+    setErrors((prev) => {
+      if (msg) return prev[name] === msg ? prev : { ...prev, [name]: msg };
+      if (!(name in prev)) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  };
+  const control = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return null;
+    return target;
+  };
+  return {
+    onBlur: (e: FocusEvent<HTMLFormElement>) => {
+      const t = control(e.target);
+      if (t?.name) sync(e.currentTarget, t.name);
+    },
+    // Re-check as they type so a bad odometer (etc.) lights up on that field at once.
+    onInput: (e: FormEvent<HTMLFormElement>) => {
+      const t = control(e.target);
+      if (t?.name) sync(e.currentTarget, t.name);
+    },
+    onChange: (e: FormEvent<HTMLFormElement>) => {
+      const t = control(e.target);
+      if (!t?.name) return;
+      const kind = t instanceof HTMLInputElement ? t.type : "";
+      if (t.tagName === "SELECT" || kind === "checkbox" || kind === "radio" || kind === "date") {
+        sync(e.currentTarget, t.name);
+      }
+    },
+  };
+}
+
+/** Put an API failure on the right field when we can; otherwise return a banner message. */
+export function fieldErrorsFromApi(err: unknown): { fields: FieldErrors; banner: string | null } {
+  if (!(err instanceof ApiError)) {
+    return { fields: {}, banner: err instanceof Error ? err.message : "Something went wrong" };
+  }
+  const detail = err.detail;
+  if (Array.isArray(detail)) {
+    const fields = issuesToFieldErrors(
+      (detail as { loc?: (string | number)[]; msg?: string }[])
+        .filter((d) => d.msg)
+        .map((d) => ({
+          path: (d.loc ?? []).filter((p) => p !== "body" && p !== "query"),
+          message: d.msg!,
+        })),
+    );
+    if (Object.keys(fields).length) return { fields, banner: null };
+  }
+  const msg = err.message;
+  const rules: [RegExp, string][] = [
+    [/odometer.*less than last|last time|last reading/i, "odometer_in"],
+    [/exit reading|less than at check-in|odometer.*check-in/i, "odometer_out"],
+    [/credit|unpaid|reason for releas/i, "credit_reason"],
+    [/handed|who is taking/i, "handed_to"],
+    [/\bphone\b/i, "phone"],
+    [/\bcnic\b/i, "cnic"],
+    [/\bvin\b|chassis/i, "vin"],
+    [/password/i, "password"],
+    [/username/i, "username"],
+    [/\bemail\b/i, "email"],
+    [/\bplate\b/i, "plate"],
+    [/odometer/i, "odometer_km"],
+  ];
+  for (const [re, field] of rules) {
+    if (re.test(msg)) return { fields: { [field]: msg }, banner: null };
+  }
+  return { fields: {}, banner: msg };
+}
+
+/** Field errors + live handlers + API mapping for native <form> screens. */
+export function useFormErrors(schema: SchemaOrFn) {
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const live = useMemo(() => liveForm(schema, errors, setErrors), [schema, errors]);
+  const applyApi = useCallback((err: unknown) => {
+    const { fields, banner } = fieldErrorsFromApi(err);
+    if (Object.keys(fields).length) setErrors((prev) => ({ ...prev, ...fields }));
+    return banner;
+  }, []);
+  return { errors, setErrors, live, applyApi };
+}
+
+/**
+ * Controlled forms (payments, money book): once a field is left or they submit,
+ * every wrong value shows beside its control and updates as they type.
+ */
+export function useLiveErrors<T>(value: T, validate: (v: T) => FieldErrors) {
+  const [active, setActive] = useState(false);
+  const errors = active ? validate(value) : {};
+  return {
+    errors,
+    active,
+    activate: () => setActive(true),
+    live: { onBlurCapture: () => setActive(true) },
+  };
+}
