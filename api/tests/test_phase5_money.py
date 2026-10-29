@@ -355,7 +355,7 @@ def test_a_held_advance_is_refunded_in_full_by_an_admin_only(admin):
     visit, item, _, q = approved_quote(admin)
     advance = admin.post(f"/api/quotations/{q['id']}/advances", json={"amount": "2500", **CASH}).json()
     adv_id = advance["id"]
-    assert admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "1000", "reason": "Job cancelled", **CASH}).status_code == 422  # in full
+    assert admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "3000", "reason": "Job cancelled", **CASH}).status_code == 422  # more than held
     assert admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "2500", "reason": "x", **CASH}).status_code == 422  # a reason
     assert admin.post(f"/api/visits/{visit['id']}/cancel", json={"reason": "Customer left"}).status_code == 409  # money is held
     done = admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "2500", "reason": "Job cancelled", **CASH})
@@ -373,6 +373,17 @@ def test_a_held_advance_is_refunded_in_full_by_an_admin_only(admin):
     branch_id = admin.get("/api/auth/me").json()["branch"]["id"]
     admin.post("/api/users", json={"username": "acct", "full_name": "Acct", "password": "acct-pass-1234", "role_id": roles["Accountant"], "branch_ids": [branch_id]})
     assert signed_in("acct", "acct-pass-1234").post(f"/api/advances/{adv_id}/refund", json={"amount": "2500", "reason": "x" * 5, **CASH}).status_code == 403
+
+
+def test_a_held_advance_can_be_given_back_in_parts(admin):
+    visit, item, _, q = approved_quote(admin)
+    adv_id = admin.post(f"/api/quotations/{q['id']}/advances", json={"amount": "2500", **CASH}).json()["id"]
+    part = admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "1000", "reason": "Customer changed the work", **CASH})
+    assert part.status_code == 201 and part.json()["refunded"] is False and float(part.json()["held"]) == 1500
+    assert rows(admin)["2200"] == -1500
+    assert admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "1600", "reason": "Too much", **CASH}).status_code == 422
+    rest = admin.post(f"/api/advances/{adv_id}/refund", json={"amount": "1500", "reason": "The rest", **CASH})
+    assert rest.status_code == 201 and rest.json()["refunded"] is True and rows(admin)["2200"] == 0
 
 
 def test_a_counter_sale_return_puts_the_part_back_at_its_cost(admin):

@@ -111,7 +111,9 @@ def void_entry(entry_id: uuid.UUID, body: VoidIn, actor: Actor = Depends(current
         raise HTTPException(409, "Already voided")
     assert_day_open(db, actor.branch.id, {e.account, e.to_account}, e.occurred_on)
     if e.payment_id:  # a voided refund means the advance is still held
-        db.get(Payment, e.payment_id).refunded = False
+        pay = db.get(Payment, e.payment_id)
+        pay.refunded_amount = max(pay.refunded_amount - e.amount, Decimal(0))
+        pay.refunded = False
     if e.payroll_line_id:  # a voided salary payment reopens the run
         run = db.get(PayrollRun, db.get(PayrollLine, e.payroll_line_id).payroll_run_id)
         if run.status == "paid":

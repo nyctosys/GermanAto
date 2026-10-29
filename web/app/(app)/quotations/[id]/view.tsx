@@ -157,8 +157,8 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
                          action={(p) => (!p.refunded && !p.invoice_id && p.status === "posted" && can("advance-refund") ? <Button variant="ghost" onClick={() => setRefunding(p)}>Give back</Button> : null)} />
           )}
           {refunding && (
-            <RefundForm title={`Give back ${refunding.number}`} hint="Only an admin can do this. The whole advance goes back, and it stays on record." amount={String(Number(refunding.amount))}
-                        fixedAmount needsReason busy={busy} onCancel={() => setRefunding(null)}
+            <RefundForm title={`Give back ${refunding.number}`} hint={`Only an admin can do this. You can give back all of it or part of it: at most ${money(refunding.held ?? refunding.amount)} is held. It stays on record.`} amount={String(Number(refunding.held ?? refunding.amount))}
+                        needsReason busy={busy} onCancel={() => setRefunding(null)}
                         onSubmit={async (b) => {
                           setBusy(true);
                           setError(null);

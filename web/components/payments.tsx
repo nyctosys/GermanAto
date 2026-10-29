@@ -7,7 +7,7 @@ import { money, when } from "@/lib/format";
 import { useLiveErrors } from "@/lib/form";
 import { type FieldErrors, issuesToFieldErrors, paymentRowSchema } from "@/lib/schemas";
 
-export type Payment = { id: string; number: string; kind?: string; refunded?: boolean; invoice_id?: string | null; status: string; account: string; reference: string; amount: string;
+export type Payment = { id: string; number: string; kind?: string; refunded?: boolean; held?: string; invoice_id?: string | null; status: string; account: string; reference: string; amount: string;
   received_at: string; received_by: string | null; proof_url: string | null; no_proof_reason: string };
 
 export const ACCOUNT: Record<string, string> = { cash: "Cash", bank: "Bank transfer", wallet: "Mobile wallet" };
@@ -153,7 +153,7 @@ export const splitBodies = (rows: Row[]) => rows.map((r) => toBody(r));
 export { newRow, type Row as PaymentRow };
 
 /**
- * Give money back: an advance (the whole amount, with the admin's reason) or an overpayment.
+ * Give money back: an advance (all or part of what is held, with the admin's reason) or an overpayment.
  * Same proof rule as every other money record.
  */
 export function RefundForm({ title, hint, amount, fixedAmount, needsReason, busy, onSubmit, onCancel }:

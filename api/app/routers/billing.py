@@ -102,7 +102,7 @@ def invoice_out(db: Session, inv: Invoice) -> dict:
     car = db.get(Car, inv.car_id) if inv.car_id else None
     customer = db.get(Customer, inv.customer_id) if inv.customer_id else None
     issuer = db.get(User, inv.issued_by) if inv.issued_by else None
-    held = sum((p.amount for p in _held_advances(db, v.id)), Decimal(0)) if v and inv.status == "draft" else Decimal(0)
+    held = sum((p.held for p in _held_advances(db, v.id)), Decimal(0)) if v and inv.status == "draft" else Decimal(0)
     credit = v and v.credit_released_by and db.get(User, v.credit_released_by)
     return {
         "id": inv.id, "number": inv.number, "kind": inv.kind, "status": inv.status, "pay_status": pay_status(inv, b),
@@ -364,7 +364,7 @@ def issue_invoice(invoice_id: uuid.UUID, body: IssueIn, actor: Actor = Depends(c
         if body.payments:
             raise HTTPException(422, "Record payments on the issued invoice")
         held = _held_advances(db, inv.visit_id)
-        if sum((p.amount for p in held), Decimal(0)) > total:
+        if sum((p.held for p in held), Decimal(0)) > total:
             raise HTTPException(409, "The advances are more than the invoice. The difference must be refunded (admin approval) first.")
         for p in held:
             p.invoice_id = inv.id
@@ -646,7 +646,7 @@ class AdvanceRefundIn(RefundIn):
 
 @router.post("/advances/{payment_id}/refund", status_code=201)
 def refund_advance(payment_id: uuid.UUID, body: AdvanceRefundIn, actor: Actor = Depends(can_refund_advance), db: Session = Depends(get_db)):
-    """Gives a held advance back (admin approval: only people with advance-refund can). The whole advance goes back."""
+    """Gives a held advance back, all of it or part (admin approval: only people with advance-refund can)."""
     p = db.scalar(select(Payment).where(Payment.id == payment_id).with_for_update())
     if not p or p.branch_id != actor.branch.id or p.kind != "advance":
         raise HTTPException(404, "Advance not found")
@@ -654,10 +654,11 @@ def refund_advance(payment_id: uuid.UUID, body: AdvanceRefundIn, actor: Actor = 
         raise HTTPException(409, "This advance has already been refunded or voided")
     if p.invoice_id:
         raise HTTPException(409, "This advance was used on an invoice. Use a credit note and refund instead.")
-    if body.amount != p.amount:
-        raise HTTPException(422, f"An advance is refunded in full: {p.amount:,.2f}")
+    if body.amount > p.held:
+        raise HTTPException(422, f"At most {p.held:,.2f} of this advance can still be given back")
     customer = db.get(Customer, p.customer_id) if p.customer_id else None
     _refund_entry(db, actor, body, party=customer.name if customer else "", payment_id=p.id)
-    p.refunded = True
+    p.refunded_amount += body.amount
+    p.refunded = p.refunded_amount >= p.amount
     db.commit()
     return payment_out(db, p)

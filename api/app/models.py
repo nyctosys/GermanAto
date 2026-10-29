@@ -494,7 +494,13 @@ class Payment(BranchScoped):
     visit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("visits.id"), index=True)
     quotation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("quotations.id"))
     invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("invoices.id"), index=True)  # set when applied
-    refunded: Mapped[bool] = mapped_column(Boolean, default=False)  # a held advance given back to the customer
+    refunded: Mapped[bool] = mapped_column(Boolean, default=False)  # a held advance given back in full
+    refunded_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))  # how much of it has gone back so far
+
+    @property
+    def held(self) -> Decimal:
+        """What of an advance is still the customer's money with us."""
+        return Decimal(0) if self.refunded else self.amount - self.refunded_amount
     account: Mapped[str] = mapped_column(String(8))
     reference: Mapped[str] = mapped_column(String(60), default="")  # cheque no., transaction id
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))

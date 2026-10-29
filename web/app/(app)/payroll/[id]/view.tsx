@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { linkButton } from "@/components/estimates";
 import { RUN } from "@/components/hr";
 import { type PaymentBody, PaymentForm } from "@/components/payments";
+import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
@@ -123,23 +124,47 @@ function View({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
   );
 }
 
+const round2 = (n: number) => String(Math.round(n * 100) / 100);
+
+/** Adjust one person's pay: a bonus or a penalty, and how much advance to take back. Each can be rupees or a percentage. */
 function LineForm({ line, busy, onSubmit, onCancel }: { line: Line; busy: boolean; onSubmit: (b: object) => void; onCancel: () => void }) {
-  const [adj, setAdj] = useState(Number(line.adjustment) ? String(Number(line.adjustment)) : "");
+  const adjNow = Number(line.adjustment);
+  const [kind, setKind] = useState<"bonus" | "penalty">(adjNow < 0 ? "penalty" : "bonus");
+  const [adjUnit, setAdjUnit] = useState<"rs" | "pct">("rs");
+  const [adj, setAdj] = useState(adjNow ? String(Math.abs(adjNow)) : "");
   const [why, setWhy] = useState(line.adjustment_reason);
+  const [recUnit, setRecUnit] = useState<"rs" | "pct">("rs");
   const [rec, setRec] = useState(String(Number(line.advance_recovery)));
   const [errors, setErrors] = useState<FieldErrors>({});
+  const base = Number(line.base_pay), owed = Number(line.outstanding_advance);
+  const adjRs = adjUnit === "pct" ? round2((base * Number(adj || 0)) / 100) : adj;
+  const recRs = recUnit === "pct" ? round2((owed * Number(rec || 0)) / 100) : rec;
+  const signed = kind === "penalty" && Number(adjRs) ? `-${adjRs}` : adjRs;
+  const unitToggle = (u: "rs" | "pct", set: (u: "rs" | "pct") => void) => (
+    <Segments value={u} onChange={(v) => set(v as "rs" | "pct")} options={[{ value: "rs", label: "Rs" }, { value: "pct", label: "%" }]} />
+  );
   return (
     <form noValidate className="grid gap-4 rounded-control bg-paper-2 p-4 sm:grid-cols-3" onSubmit={(e) => {
       e.preventDefault();
-      const r = payrollLineSchema.safeParse({ adjustment: adj, adjustment_reason: why, advance_recovery: rec });
+      const r = payrollLineSchema.safeParse({ adjustment: signed, adjustment_reason: why, advance_recovery: recRs });
       const found: FieldErrors = {};
       if (!r.success) for (const i of r.error.issues) found[String(i.path[0])] ??= i.message;
+      if (r.success && Number(r.data.advance_recovery) > owed) found.advance_recovery = `They only owe ${money(owed)}`;
       setErrors(found);
-      if (r.success) onSubmit(r.data);
+      if (r.success && !Object.keys(found).length) onSubmit(r.data);
     }}>
-      <Field label="Bonus (+) or deduction (-), Rs" error={errors.adjustment}><Input inputMode="decimal" value={adj} onChange={(e) => setAdj(e.target.value)} placeholder="0" /></Field>
+      <div className="space-y-2">
+        <Segments value={kind} onChange={(v) => setKind(v as typeof kind)} options={[{ value: "bonus", label: "Bonus" }, { value: "penalty", label: "Penalty" }]} />
+        {unitToggle(adjUnit, setAdjUnit)}
+        <Field label={kind === "bonus" ? "Bonus" : "Penalty"} error={errors.adjustment} hint={adjUnit === "pct" ? `${adj || 0}% of base pay ${money(base)} = ${money(adjRs || 0)}` : undefined}>
+          <Input inputMode="decimal" value={adj} onChange={(e) => setAdj(e.target.value.replace(/^-/, ""))} placeholder="0" />
+        </Field>
+      </div>
       <Field label="What it is for" error={errors.adjustment_reason}><Input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={200} /></Field>
-      <Field label="Advance to take back, Rs" error={errors.advance_recovery} hint={`Owes ${money(line.outstanding_advance)}`}><Input inputMode="decimal" value={rec} onChange={(e) => setRec(e.target.value)} /></Field>
+      <div className="space-y-2">
+        {unitToggle(recUnit, setRecUnit)}
+        <Field label="Advance to take back" error={errors.advance_recovery} hint={`Owes ${money(owed)}${recUnit === "pct" ? `. ${rec || 0}% = ${money(recRs || 0)}` : ""}`}><Input inputMode="decimal" value={rec} onChange={(e) => setRec(e.target.value)} /></Field>
+      </div>
       <div className="flex flex-wrap gap-2 sm:col-span-3"><Button type="submit" variant="success" disabled={busy}>Save</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
     </form>
   );

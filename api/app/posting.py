@@ -47,7 +47,7 @@ def credit_note(db: Session, branch: Branch, cn: CreditNote) -> None:
 
 def advances_applied(db: Session, branch: Branch, inv: Invoice, advances: list[Payment]) -> None:
     """The customer's advance stops being a liability and settles the receivable."""
-    total = sum((p.amount for p in advances), Z)
+    total = sum((p.held for p in advances), Z)
     journal.post(db, branch, f"Advances applied to {inv.number}", [Line("2200", debit=total), Line("1100", credit=total)],
                  source=("invoice_advances", inv.id))
 
