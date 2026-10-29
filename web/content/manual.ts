@@ -398,12 +398,13 @@ export const CHAPTERS: Chapter[] = [
         avoid: ["You cannot change a day that is already closed. Record the correction today."],
       },
       {
-        id: "missing-proof", title: "Check records that have no proof", who: "Administrator (evidence-signoff permission)",
+        id: "missing-proof", title: "Check records that have no proof", who: "Administrator (evidence-signoff permission); anyone on Money can optionally add proof later",
         steps: [
           "Go to Money, then Missing proof. Read the reason given for each record.",
           "If the reason is acceptable, press Accept and type why. If not, ask the person to bring proof.",
+          "Optional: if the photo or document turns up later, press Add proof and upload it. You do not have to — Accept still clears the wait.",
         ],
-        right: ["Accepted records no longer count as waiting, and they no longer stop the month from closing."],
+        right: ["Accepted records no longer count as waiting, and they no longer stop the month from closing.", "A record with proof attached later leaves the list."],
       },
       {
         id: "cash-close", title: "Close the day (count the money)", who: "Accountant (cash-close permission). Every evening.",

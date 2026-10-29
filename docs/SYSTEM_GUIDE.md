@@ -510,7 +510,7 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Billing | `POST repair-orders/{id}/invoice`, `POST counter-sales`, `PUT counter-sales/{id}`, `GET invoices`, `GET/PUT invoices/{id}`, `POST invoices/{id}/refresh`, `…/issue`, `…/payments`, `…/void` |
 | Gate and record | `GET visits/{id}/gate-check`, `POST visits/{id}/gate-pass`, `GET visits/{id}/dossier` |
 | Money | `GET/PUT accounts`, `GET/POST expense-categories`, `PUT expense-categories/{id}`, `GET money-in`, `GET money-out`, `POST money-entries`, `POST money-entries/{id}/void`, `GET journal/trial-balance`, `GET journal/entries` |
-| Missing proof | `GET missing-evidence`, `POST missing-evidence/sign` |
+| Missing proof | `GET missing-evidence`, `POST missing-evidence/sign`, `POST missing-evidence/attach` |
 | Sync | `GET sync/status`, `POST sync/run`, `GET sync/conflicts`, `POST sync/conflicts/{id}/resolve`, `POST sync/tokens`; branch servers call `POST sync/push` and `GET sync/pull` with a token |
 | Messages | `GET messages`, `POST messages/send`, `POST messages/{id}/retry`, `POST messages/run-reminders`, `GET/PUT message-templates`, `PUT message-settings`; Twilio calls `POST webhooks/twilio/status` and `/inbound` |
 | Reports and month end | `GET dashboard`, `GET reports/pnl`, `…/cashflow`, `…/receivables`, `…/payables`, `…/stock-value`, `…/discounts`, `…/operations`, `…/hr`, `GET periods`, `GET periods/{p}/checklist`, `POST periods/{p}/close`, `…/reopen`, `GET periods/{p}/pack` |
@@ -697,6 +697,7 @@ At the end of the day, count what is really in the **cash drawer**, the **bank**
 - This page lists **every** such record, money in and money out (customer payments and advances, vendor payments, expenses, owner money, transfers, refunds), each with the reason that was given. A transfer is listed once.
 - It shows how many are **waiting for an admin** and their total value.
 - An admin (needs `evidence-signoff`) can **Accept** a record with a reason. Their name and the reason are kept. The record still shows as having no proof, but it no longer counts as waiting: the alert on the Money in and Money out pages goes down, and month-end closing will not be blocked by it.
+- **Add proof** is optional: if the photo or document turns up later, anyone who can open this page can attach it (`POST missing-evidence/attach`). The record then leaves the list. You do not have to add proof — Accept still works without it.
 - **Waiting and accepted** shows both, so nothing that was accepted is hidden.
 
 ---
