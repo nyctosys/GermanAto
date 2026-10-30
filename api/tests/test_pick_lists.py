@@ -80,3 +80,8 @@ def test_unused_records_delete_used_ones_refuse(admin):
     kept = admin.post("/api/items", json={**item, "codes": [{"kind": "barcode", "code": "DEL-2"}], "opening_qty": "5", "opening_cost": "3"}).json()
     r = admin.delete(f"/api/items/{kept['id']}")
     assert r.status_code == 409 and "inactive" in r.json()["detail"]
+
+
+def test_phone_with_letters_is_refused(admin):
+    r = admin.post("/api/customers", json={"name": "Test Phone", "phone": "+92317881123kkjjj", "cnic": "35202-1234567-1"})
+    assert r.status_code == 422 and "digits only" in str(r.json())

@@ -10,6 +10,8 @@ from pydantic import AfterValidator, StringConstraints
 def normalize_pk_phone(value: str) -> str:
     """Phone numbers in international format. Pakistani numbers (0300..., 92300..., +92300...) become +92XXXXXXXXXX;
     a number with another country code (+971..., 00971...) is kept as +<code><number>. Empty stays empty."""
+    if re.search(r"[^\d\s+\-()./]", value):
+        raise ValueError("A phone number has digits only, e.g. +92 300 1234567")
     digits = re.sub(r"[^\d+]", "", value.strip())
     if not digits:
         return ""

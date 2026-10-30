@@ -9,6 +9,10 @@ const checkbox = z.literal("on").optional().transform(Boolean);
 
 /** International format: Pakistani numbers become +92XXXXXXXXXX, other country codes are kept; empty stays empty. */
 const phoneOrEmpty = z.string().transform((v, ctx) => {
+  if (/[^\d\s+\-()./]/.test(v)) {
+    ctx.addIssue({ code: "custom", message: "A phone number has digits only, e.g. +92 300 1234567" });
+    return z.NEVER;
+  }
   let d = v.trim().replace(/[^\d+]/g, "");
   if (!d) return "";
   if (d.startsWith("00") && !d.startsWith("0092")) d = `+${d.slice(2)}`;
