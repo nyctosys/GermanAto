@@ -6,7 +6,7 @@ import { useToasts } from "@/lib/toast";
 export function Toaster() {
   const { toasts, dismiss } = useToasts();
   return (
-    <div aria-live="polite" className="no-print pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div aria-live="polite" className="no-print pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-4 pt-[max(1rem,env(safe-area-inset-top))] shell:items-end">
       {toasts.map((t) => (
         <div key={t.id} role={t.tone === "error" ? "alert" : "status"}
              className={`pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-control py-1 pl-4 pr-1 shadow-lg ${t.tone === "error" ? "bg-error text-accent-ink" : "bg-ink text-surface"}`}>

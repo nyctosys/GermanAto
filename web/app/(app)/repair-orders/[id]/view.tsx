@@ -95,7 +95,7 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
             {working && stage === "received" && (
               <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Move to In repair to issue parts, mark work done, or add extra work.</p>
             )}
-            {working && stage === "testing" && (
+            {working && stage === "testing" && pending > 0 && (
               <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Finish marking every line Done or Not done before moving to Ready.</p>
             )}
             {working && stage === "ready" && (
@@ -339,7 +339,7 @@ function ActivityCard({ ro, working, onAdd }: { ro: RepairOrder; working: boolea
             <span className="sr-only">{KINDS[kind]}</span>
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={3000}
                       placeholder={kind === "finding" ? "What did you find?" : kind === "customer_update" ? "What the customer should know, e.g. ready by 5pm" : "What happened"}
-                      className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-accent" />
+                      className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-ink" />
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label>

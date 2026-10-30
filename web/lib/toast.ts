@@ -13,8 +13,10 @@ export const useToasts = create<Store>((set, get) => ({
   show: (tone, message) => {
     // The same notice twice in a row (a double action, an autosave) is shown once.
     if (get().toasts.some((t) => t.message === message && t.tone === tone)) return;
+    // A plain "Saved" next to a more specific notice ("Quotation made") adds nothing.
+    if (message === "Saved" && get().toasts.length) return;
     const id = next++;
-    set((s) => ({ toasts: [...s.toasts.slice(-2), { id, tone, message }] }));
+    set((s) => ({ toasts: [...s.toasts.filter((t) => t.message !== "Saved").slice(-2), { id, tone, message }] }));
     timers.set(id, setTimeout(() => get().dismiss(id), tone === "error" ? 9000 : 5000));
   },
   dismiss: (id) => {

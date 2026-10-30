@@ -29,8 +29,8 @@ export function DaysOff({ name, defaultValue }: { name: string; defaultValue: nu
     <fieldset className="flex flex-wrap gap-2">
       <legend className="sr-only">Weekly days off</legend>
       {WEEKDAYS.map((d, i) => (
-        <label key={d} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-control border px-3 ${days.includes(i) ? "border-accent bg-accent-soft font-medium" : "border-rule-strong bg-surface"}`}>
-          <input type="checkbox" className="size-4 accent-accent" checked={days.includes(i)} onChange={(e) => setDays(e.target.checked ? [...days, i].sort() : days.filter((x) => x !== i))} />
+        <label key={d} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-control border px-3 ${days.includes(i) ? "border-primary bg-paper-3 font-medium" : "border-rule-strong bg-surface"}`}>
+          <input type="checkbox" className="size-4 accent-primary" checked={days.includes(i)} onChange={(e) => setDays(e.target.checked ? [...days, i].sort() : days.filter((x) => x !== i))} />
           {d.slice(0, 3)}
         </label>
       ))}
@@ -74,16 +74,16 @@ export function EmployeeForm({ employee, onSaved, onCancel }: { employee?: Emplo
 
   return (
     <form ref={form} noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3" {...live}>
-      <Field label="Full name" error={errors.full_name}><Input name="full_name" defaultValue={employee?.full_name} required maxLength={120} autoComplete="off" autoFocus /></Field>
+      <Field required label="Full name" error={errors.full_name}><Input name="full_name" defaultValue={employee?.full_name} required maxLength={120} autoComplete="off" autoFocus /></Field>
       <Field label="Job title (optional)" error={errors.title}><Input name="title" defaultValue={employee?.title} maxLength={80} placeholder="Technician" /></Field>
       <Field label="Phone (optional)" error={errors.phone}><Input name="phone" defaultValue={employee ? phone(employee.phone) : ""} inputMode="tel" placeholder="+92 300 1234567" /></Field>
-      <Field label="CNIC" error={errors.cnic} hint="13 digits"><Input name="cnic" defaultValue={employee?.cnic} inputMode="numeric" /></Field>
-      <Field label="Monthly salary (Rs)" error={errors.monthly_salary}><Input name="monthly_salary" inputMode="decimal" defaultValue={employee ? String(Number(employee.monthly_salary)) : ""} /></Field>
+      <Field required label="CNIC" error={errors.cnic} hint="13 digits"><Input name="cnic" defaultValue={employee?.cnic} inputMode="numeric" /></Field>
+      <Field required label="Monthly salary (Rs)" error={errors.monthly_salary}><Input name="monthly_salary" inputMode="decimal" defaultValue={employee ? String(Number(employee.monthly_salary)) : ""} /></Field>
       <Field label="Number on the attendance device" error={errors.device_pin} hint="Claims punches already received for it."><Input name="device_pin" defaultValue={employee?.device_pin} maxLength={20} inputMode="numeric" /></Field>
-      <Field label="Shift starts" error={errors.shift_start}><Input name="shift_start" type="time" defaultValue={hhmm(employee?.shift_start ?? "09:00")} /></Field>
-      <Field label="Shift ends" error={errors.shift_end}><Input name="shift_end" type="time" defaultValue={hhmm(employee?.shift_end ?? "18:00")} /></Field>
+      <Field required label="Shift starts" error={errors.shift_start}><Input name="shift_start" type="time" defaultValue={hhmm(employee?.shift_start ?? "09:00")} /></Field>
+      <Field required label="Shift ends" error={errors.shift_end}><Input name="shift_end" type="time" defaultValue={hhmm(employee?.shift_end ?? "18:00")} /></Field>
       <Field label="Weekly days off" error={errors.days_off} hint="Tick every day this person does not work."><DaysOff name="days_off" defaultValue={employee?.days_off ?? [6]} /></Field>
-      <Field label="Joined on" error={errors.joined_on}><Input name="joined_on" type="date" defaultValue={employee?.joined_on} /></Field>
+      <Field required label="Joined on" error={errors.joined_on}><Input name="joined_on" type="date" defaultValue={employee?.joined_on} /></Field>
       {employee && <Field label="Left on (if they left)" error={errors.left_on}><Input name="left_on" type="date" defaultValue={employee.left_on ?? ""} /></Field>}
       <Field label="Linked login (optional)" error={errors.user_id}>
         <Select name="user_id" defaultValue={employee?.user_id ?? ""}>

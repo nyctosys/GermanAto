@@ -51,8 +51,8 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
   return (
     <form ref={form} onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3" {...live}>
       <Field error={errors.plate} label="Number plate" hint="As written, e.g. LEA-21-1234"><Input name="plate" defaultValue={car?.plate} maxLength={20} autoCapitalize="characters" /></Field>
-      <Field error={errors.make} label="Make"><ChoiceSelect name="make" options={CAR_MAKES} defaultValue={car?.make} placeholder="Choose the make" /></Field>
-      <Field error={errors.model} label="Model"><Input name="model" defaultValue={car?.model} placeholder="520i" /></Field>
+      <Field required error={errors.make} label="Make"><ChoiceSelect name="make" options={CAR_MAKES} defaultValue={car?.make} placeholder="Choose make" /></Field>
+      <Field error={errors.model} label="Model"><Input name="model" defaultValue={car?.model} placeholder="e.g. Corolla" /></Field>
       <Field error={errors.year} label="Year"><Input name="year" type="number" inputMode="numeric" min={1950} max={new Date().getFullYear() + 1} defaultValue={car?.year ?? ""} /></Field>
       <Field error={errors.fuel} label="Fuel">
         <Select name="fuel" defaultValue={car?.fuel ?? "petrol"}>

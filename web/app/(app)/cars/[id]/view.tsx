@@ -53,6 +53,7 @@ function CarDetail() {
         </div>
         {mode === "view" && (
           <div className="flex flex-wrap gap-2">
+            {c.owner && <Link href={`/visits/new?car=${c.id}`} className="inline-flex min-h-11 items-center rounded-control border border-primary bg-primary px-5 text-[0.9375rem] font-medium text-primary-ink hover:bg-primary-2">Check in this car</Link>}
             <Button variant="secondary" onClick={() => setMode("edit")}>Edit details</Button>
             {can("car-transfer") && <Button variant="secondary" onClick={() => setMode("transfer")}>Transfer owner</Button>}
           </div>
@@ -102,7 +103,7 @@ function CarDetail() {
                 ))}
               </ol>
             )}
-          <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Repairs and invoices will appear here too once those screens are in use.</p>
+          <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Each visit to the workshop, with its invoices, is listed here.</p>
         </Card>
       </div>
 

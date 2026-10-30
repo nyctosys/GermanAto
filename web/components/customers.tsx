@@ -71,7 +71,7 @@ export function CustomerPicker({ value, onChange, exclude }:
         }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder="Name, phone, customer number or plate"
-        className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted focus-visible:border-accent"
+        className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted focus-visible:border-ink"
       />
       {open && (
         <ul id={listId} role="listbox" className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-control border border-rule-strong bg-surface py-1">

@@ -42,7 +42,7 @@ const keyFor = (fingerprint: string) => {
 // What to tell the person after a successful write, by what was done. First match wins; the fallback is by method.
 const DONE: [RegExp, string][] = [
   [/\/payments$/, "Payment recorded"], [/\/advances$/, "Advance recorded"], [/\/refund$|\/refunds?$/, "Refund recorded"],
-  [/\/credit-notes$/, "Credit note issued"], [/\/invoices\/[^/]+\/issue$/, "Invoice issued"], [/\/lines\/[^/]+\/(issue|return)$/, "Stock updated"], [/\/gate-pass$/, "Car released"], [/\/send$/, "Sent"],
+  [/\/credit-notes$/, "Credit note issued"], [/\/invoices\/[^/]+\/issue$/, "Invoice issued"], [/\/lines\/[^/]+\/(issue|return)$/, "Stock updated"], [/\/gate-pass$/, "Car released"], [/\/send$/, "Sent to the customer"],
   [/\/approve$/, "Approval recorded"], [/\/reject$/, "Marked as rejected"], [/\/revise$/, "New version made"], [/\/sign$/, "Signed"],
   [/\/void$/, "Cancelled (voided). It stays on the list, crossed out."], [/\/cancel$/, "Cancelled"], [/\/status$/, "Status updated"],
   [/\/receive$/, "Goods received"], [/\/bill$/, "Bill recorded"], [/\/close$/, "Closed"], [/\/reopen$/, "Reopened"],

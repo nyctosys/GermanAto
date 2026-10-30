@@ -42,15 +42,17 @@ export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSe
 
 /** A labelled control. `error` (from parseForm / liveForm) replaces the hint and outlines the control in red. */
 export function Field({ label, hint, error, required, children }: { label: string; hint?: string; error?: string; required?: boolean; children: ReactNode }) {
+  // A star only where the control is really required (or the form says so with `required`).
+  const childRequired = Children.toArray(children).some((c) => isValidElement(c) && !!(c.props as { required?: boolean }).required);
   const marked = Children.map(children, (child) => {
     if (!isValidElement(child)) return child;
     return cloneElement(child as ReactElement<{ "aria-invalid"?: boolean }>, { "aria-invalid": !!error || undefined });
   });
   return (
     <label className={`flex min-w-0 flex-col gap-1.5 ${error ? "[&_:is(input,select,textarea)]:border-error" : ""}`}>
-      <span className="text-[0.9375rem] font-medium text-ink-2">{label}{(required ?? !/optional/i.test(label)) && <span className="req ml-0.5 text-error" aria-hidden="true">*</span>}</span>
+      <span className="text-[0.9375rem] font-medium text-ink-2">{label}{(required ?? childRequired) && <span className="req ml-0.5 text-error" aria-hidden="true">*</span>}</span>
       {marked}
-      {error ? <span role="alert" className="text-sm text-error">{error}</span>
+      {error ? <span role="alert" className="text-sm text-error">{error === "Required" ? `Please fill in: ${label.replace(/\s*\(.*\)\s*$/, "").toLowerCase()}` : error}</span>
         : hint && <span className="text-sm text-muted">{hint}</span>}
     </label>
   );
@@ -152,7 +154,7 @@ export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "succ
     success: "bg-success-soft text-success",
     warning: "bg-warning-soft text-warning",
     error: "bg-error-soft text-error",
-    accent: "bg-error-soft text-accent",
+    accent: "bg-paper-3 text-primary font-medium",
   }[tone];
   return <span className={`inline-flex items-center rounded-control px-2 py-0.5 text-sm font-medium ${styles}`}>{children}</span>;
 }

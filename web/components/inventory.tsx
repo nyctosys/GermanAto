@@ -55,7 +55,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
 
   return (
     <form onSubmit={submit} className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3">
-      <div className="sm:col-span-2"><Field label="Name"><Input name="name" defaultValue={item?.name} required maxLength={160} placeholder="Oil filter" /></Field></div>
+      <div className="sm:col-span-2"><Field required label="Name"><Input name="name" defaultValue={item?.name} required maxLength={160} placeholder="Oil filter" /></Field></div>
       <Field label="Brand (optional)"><ChoiceSelect name="brand" options={PART_BRANDS} defaultValue={item?.brand} placeholder="Choose a brand" /></Field>
 
       <fieldset className="space-y-2 sm:col-span-2 shell:col-span-3">
@@ -81,13 +81,13 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
         )}
       </fieldset>
 
-      <Field label="Category"><ChoiceSelect name="category" options={PART_CATEGORIES} defaultValue={item?.category} placeholder="Choose a category" /></Field>
+      <Field required label="Category"><ChoiceSelect name="category" options={PART_CATEGORIES} defaultValue={item?.category} placeholder="Choose a category" /></Field>
       <Field label="Unit">
         <Select name="unit" defaultValue={item?.unit ?? "pcs"}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select>
       </Field>
       <Field label="Shelf or bin"><Input name="location" defaultValue={item?.location} placeholder="A3" /></Field>
       <div className="sm:col-span-2"><Field label="Fits" hint="Which cars it fits, for searching"><Input name="fitment" defaultValue={item?.fitment} placeholder="BMW 5 Series F10 2010–2016" /></Field></div>
-      <Field label="Sale price (PKR)"><Input name="sale_price" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={item?.sale_price ?? ""} required /></Field>
+      <Field required label="Sale price (PKR)"><Input name="sale_price" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={item?.sale_price ?? ""} required /></Field>
       <Field label="Reorder when stock reaches" hint="How much to order is decided on the purchase order."><Input name="reorder_level" type="number" inputMode="decimal" min={0} step="0.001" defaultValue={item ? Number(item.reorder_level) : ""} /></Field>
 
       {!item && can("stock-adjust") && (

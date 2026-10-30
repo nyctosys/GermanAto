@@ -81,7 +81,7 @@ export function ItemPicker({ onPick, onNotFound }: { onPick: (i: PickItem) => vo
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder="Add an item: name, number, or scan a barcode or part number"
         enterKeyHint="search"
-        className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted focus-visible:border-accent"
+        className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted focus-visible:border-ink"
       />
       {open && (
         <ul id={listId} role="listbox" className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-control border border-rule-strong bg-surface py-1">
@@ -136,7 +136,7 @@ export function VendorForm({ vendor, onSaved, onCancel }: { vendor?: Vendor; onS
   }
   return (
     <form ref={form} noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2" {...live}>
-      <Field error={errors.name} label="Vendor name"><Input name="name" defaultValue={vendor?.name} required maxLength={120} autoComplete="off" autoFocus /></Field>
+      <Field required error={errors.name} label="Vendor name"><Input name="name" defaultValue={vendor?.name} required maxLength={120} autoComplete="off" autoFocus /></Field>
       <Field error={errors.contact_person} label="Contact person (optional)"><Input name="contact_person" defaultValue={vendor?.contact_person} maxLength={120} /></Field>
       <Field error={errors.phone} label="Phone (optional)"><Input name="phone" defaultValue={vendor ? phone(vendor.phone) : ""} inputMode="tel" placeholder="+92 300 1234567" /></Field>
       <Field error={errors.email} label="Email (optional)"><Input name="email" type="email" defaultValue={vendor?.email} /></Field>

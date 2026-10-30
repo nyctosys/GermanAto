@@ -332,7 +332,7 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
             </div>
             <Field label="Inspector summary">
               <textarea rows={4} value={data.assessment.summary} maxLength={3000} onChange={(e) => update((d) => { d.assessment.summary = e.target.value; })}
-                        className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-accent disabled:opacity-80" />
+                        className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-ink disabled:opacity-80" />
             </Field>
             <p className="text-sm text-muted">{tpl.disclaimer}</p>
           </div>

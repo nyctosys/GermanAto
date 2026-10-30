@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { HowItWorks } from "@/components/how-it-works";
 import { MyWork } from "@/components/my-work";
 import { Stat, StatGroup } from "@/components/reports";
 import { Card, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
@@ -39,6 +40,7 @@ export default function Dashboard() {
         description={`${branch.name}. ${todo.length ? `${todo[0][0]}${todo.length > 1 ? `, and ${todo.length - 1} more thing${todo.length > 2 ? "s" : ""} to look at` : ""}.` : "Everything is up to date."}`}
         actions={can("visits") ? <Link href="/visits/new" className="flex min-h-11 items-center rounded-control bg-primary px-5 font-medium text-primary-ink hover:bg-primary-2 active:bg-primary-3 active:duration-0">Check in a car</Link> : undefined} />
 
+      <HowItWorks />
       <h2 className="mb-2">My work</h2>
       <div className="mb-6"><MyWork /></div>
 

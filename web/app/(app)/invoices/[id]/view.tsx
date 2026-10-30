@@ -98,7 +98,8 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
           <Notice>{error}</Notice>
           {!paying && !voiding && !returning && !refunding && (
             <div className="flex flex-wrap gap-2">
-              {inv.status === "issued" && can("credit-notes") && <Button variant="secondary" onClick={() => setReturning(true)}>Return or correct</Button>}
+              {inv.status === "issued" && inv.pay_status === "paid" && inv.kind === "workshop" && <p className="text-ink-2">Paid in full. <strong>The car can now leave</strong>: open Cars ready to leave in the menu and release it with the gate pass.</p>}
+              {inv.status === "issued" && can("credit-notes") && <Button variant="secondary" onClick={() => setReturning(true)}>Correct this invoice</Button>}
               {Number(inv.totals.refundable) > 0 && can("credit-notes") && <Button onClick={() => setRefunding(true)}>Give money back</Button>}
               {inv.status === "issued" && Number(inv.totals.balance) > 0 && can("payments-in") && <Button onClick={() => setPaying(true)}>Take a payment</Button>}
               {draft && !counter && can("invoice-issue") && (
@@ -190,7 +191,7 @@ function WorkshopDraft({ inv, busy, call }: { inv: Invoice; busy: boolean; call:
           <div className="sm:col-span-2">
             <Field label="Notes on the invoice (optional)">
               <textarea rows={2} maxLength={3000} value={notes} onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
-                        className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-accent" />
+                        className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-ink" />
             </Field>
           </div>
         </div>
@@ -223,7 +224,7 @@ function Totals({ inv }: { inv: Invoice }) {
         <div className="mt-1 border-t border-rule pt-1">{row("Total", t.total, true)}</div>
         {inv.status === "draft" && Number(t.advance_held) > 0 && row("Advance to apply", `-${t.advance_held}`)}
         {inv.status === "issued" && Number(t.credited) > 0 && row("Credited (returns)", `-${t.credited}`)}
-        {inv.status === "issued" && <>{row("Paid", `-${t.paid}`)}{Number(t.balance) < 0 ? row("Owed back to the customer", `${-Number(t.balance)}`, true) : row("Balance", t.balance, true)}</>}
+        {inv.status === "issued" && <>{row("Paid so far", Number(t.paid) ? `-${t.paid}` : t.paid)}{Number(t.balance) < 0 ? row("Owed back to the customer", `${-Number(t.balance)}`, true) : row("Balance", t.balance, true)}</>}
       </dl>
     </Card>
   );

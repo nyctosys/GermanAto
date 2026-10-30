@@ -38,7 +38,7 @@ export function SearchBox({ placeholder, label = "Search", autoFocus }: { placeh
         placeholder={placeholder}
         autoFocus={autoFocus}
         enterKeyHint="search"
-        className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted hover:border-muted focus-visible:border-accent"
+        className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted hover:border-muted focus-visible:border-ink"
       />
     </label>
   );

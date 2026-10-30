@@ -128,6 +128,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
           {panel === "advance" && <AdvanceForm q={q} onCancel={() => setPanel(null)} onDone={() => { setPanel(null); reload(); }} />}
 
           <Notice>{error}</Notice>
+          {open && !panel && q.status === "sent" && <p className="text-ink-2">The customer has the quotation. <strong>When they agree, press Record approval</strong>. If they decline, press Customer said no. If they pay something first, press Take an advance. To change a price, press Revise.</p>}
           {open && !panel && q.status !== "draft" && (
             <div className="flex flex-wrap gap-2">
               {q.status === "sent" && <Button onClick={() => setPanel("approve")}>Record approval</Button>}
@@ -297,7 +298,7 @@ function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () =
           <div className="sm:col-span-2">
             <Field label="Notes for the customer (optional)">
               <textarea rows={3} maxLength={3000} value={notes} onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
-                        className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-accent" />
+                        className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-ink" />
             </Field>
           </div>
         </div>
@@ -309,7 +310,7 @@ function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () =
         <Button onClick={() => save(true)} disabled={saving || busy}>{busy ? "Sending" : "Send to the customer"}</Button>
         <Button variant="success" onClick={() => save(false)} disabled={saving || !dirty}>{saving ? "Saving" : "Save draft"}</Button>
       </div>
-      <p className="text-sm text-muted">Sending locks the prices. WhatsApp delivery comes with the messaging stage; print it for now.</p>
+      <p className="text-sm text-muted">Sending locks the prices. The customer gets a WhatsApp message when it is switched on under Message wording; you can also print it.</p>
     </>
   );
 }
@@ -342,6 +343,7 @@ function ApproveForm({ q, busy, onSubmit, onCancel }:
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [confirming, setConfirming] = useState(false);
+  useEffect(() => { if (confirming) document.getElementById("confirm-approve")?.scrollIntoView({ block: "center" }); }, [confirming]);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -372,7 +374,7 @@ function ApproveForm({ q, busy, onSubmit, onCancel }:
         )}
         <ProofInput proof={proof} setProof={setProof} reason={reason} setReason={setReason} error={error} />
         <Field label="Note (optional)"><Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} /></Field>
-        {confirming && <Notice tone="warning">Approve this quotation? The customer&apos;s go-ahead is recorded and the repair order can start. Check the lines and proof above first.</Notice>}
+        {confirming && <div id="confirm-approve"><Notice tone="warning">Approve this quotation? The customer&apos;s go-ahead is recorded and the repair order can start. Check the lines and proof above first.</Notice></div>}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={busy}>{confirming ? "Yes, approve" : "Approve"}</Button>
           {confirming && <Button type="button" variant="secondary" onClick={() => setConfirming(false)}>Go back and edit</Button>}

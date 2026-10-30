@@ -217,20 +217,20 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
   return (
     <Card title={direction === "in" ? "Record money in" : "Record money out"}>
       <form noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2" {...live}>
-        <Field label="What is it">
+        <Field required label="What is it">
           <Select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
             {kinds.map((k) => <option key={k} value={k}>{LABEL[k]}</option>)}
           </Select>
         </Field>
         {invoicePay && (
-          <Field label="Invoice">
+          <Field required label="Invoice">
             <Select value={invoiceId} onChange={(e) => { const inv = owing.data?.find((i) => i.id === e.target.value); setInvoiceId(e.target.value); if (inv) set({ amount: String(Number(inv.balance)) }); }}>
               <option value="">{owing.data?.length === 0 ? "No invoice is waiting for payment" : "Choose an invoice"}</option>
               {owing.data?.map((i) => <option key={i.id} value={i.id}>{i.number}, {i.customer}, owes {money(i.balance)}</option>)}
             </Select>
           </Field>
         )}
-        <Field label="Amount (Rs)" error={errors.amount}><Input inputMode="decimal" value={v.amount} onChange={(e) => set({ amount: e.target.value })} autoFocus /></Field>
+        <Field required label="Amount (Rs)" error={errors.amount}><Input inputMode="decimal" value={v.amount} onChange={(e) => set({ amount: e.target.value })} autoFocus /></Field>
         <Field label={transfer ? "From" : direction === "in" ? "Received into" : "Paid from"}>
           <Select value={v.account} onChange={(e) => set({ account: e.target.value })}>
             {Object.entries(ACCOUNT).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
@@ -245,7 +245,7 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
           </Field>
         )}
         {kind === "expense" && (
-          <Field label="Category" error={errors.category_id}>
+          <Field required label="Category" error={errors.category_id}>
             <Select value={v.category_id} onChange={(e) => set({ category_id: e.target.value })}>
               <option value="">Choose a category</option>
               {cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -253,7 +253,7 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
           </Field>
         )}
         {!transfer && <Field label={direction === "in" ? "Received from (optional)" : "Paid to (optional)"} error={errors.party}><Input value={v.party} onChange={(e) => set({ party: e.target.value })} maxLength={120} /></Field>}
-        <Field label="Date" error={errors.occurred_on}><Input type="date" max={today()} value={v.occurred_on} onChange={(e) => set({ occurred_on: e.target.value })} /></Field>
+        <Field required label="Date" error={errors.occurred_on}><Input type="date" max={today()} value={v.occurred_on} onChange={(e) => set({ occurred_on: e.target.value })} /></Field>
         <Field required={false} label="Transaction reference (bank or wallet)" error={errors.reference}><Input value={v.reference} onChange={(e) => set({ reference: e.target.value })} maxLength={60} /></Field>
         <div className="sm:col-span-2"><ProofInput proof={proof} setProof={setProof} reason={reason} setReason={setReason} error={errors.reason} /></div>
         <div className="flex flex-col gap-3 sm:col-span-2">

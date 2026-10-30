@@ -113,7 +113,7 @@ function Scan({ onUnknown }: { onUnknown: (code: string) => void }) {
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-ink-2">Scan a barcode</span>
         <input name="code" autoFocus autoComplete="off" spellCheck={false} enterKeyHint="search" placeholder="Scan, or type a code and press Enter"
-               className="min-h-12 w-full rounded-control border border-rule-strong bg-paper px-3 font-mono text-lg placeholder:font-sans placeholder:text-base placeholder:text-muted focus-visible:border-accent" />
+               className="min-h-12 w-full rounded-control border border-rule-strong bg-paper px-3 font-mono text-lg placeholder:font-sans placeholder:text-base placeholder:text-muted focus-visible:border-ink" />
       </label>
       {unknown && (
         <div className="mt-3 flex flex-wrap items-center gap-3">

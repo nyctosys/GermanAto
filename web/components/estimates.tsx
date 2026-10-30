@@ -73,7 +73,7 @@ export function CatalogPicker({ onPick }: { onPick: (p: Pick) => void }) {
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder="Add labour or a part: name, code, or scan a barcode"
         enterKeyHint="search"
-        className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted focus-visible:border-accent"
+        className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted focus-visible:border-ink"
       />
       {open && (
         <ul id={listId} role="listbox" className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-control border border-rule-strong bg-surface py-1">

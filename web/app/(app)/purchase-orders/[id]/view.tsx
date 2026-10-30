@@ -136,10 +136,10 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
                     <p className="flex flex-wrap gap-3 text-sm text-muted"><span>{l.number}</span><span>{qty(l.on_hand)} {l.unit} in stock</span>
                       {Number(l.avg_cost) > 0 && <span className="num">Average cost {money(l.avg_cost)}</span>}</p>
                   </div>
-                  <Field label="Qty" error={tried && qtyBad(l) ? "More than 0" : undefined}>
+                  <Field required label="Qty" error={tried && qtyBad(l) ? "More than 0" : undefined}>
                     <Input type="number" inputMode="decimal" min="0" step={qtyStep(l.unit)} value={l.qty} onChange={(e) => edit(l.key, { qty: e.target.value })} />
                   </Field>
-                  <Field label="Cost each (Rs)" error={tried && costBad(l) ? "Enter the cost" : undefined}>
+                  <Field required label="Cost each (Rs)" error={tried && costBad(l) ? "Enter the cost" : undefined}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_cost} onChange={(e) => edit(l.key, { unit_cost: e.target.value })} />
                   </Field>
                   <Button variant="danger" onClick={() => { setLines((ls) => ls.filter((x) => x.key !== l.key)); setDirty(true); }}>Remove</Button>
@@ -153,12 +153,12 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
             <Button onClick={() => save(true)} disabled={busy}>{busy ? "Working" : "Send to the vendor"}</Button>
             <Button variant="success" onClick={() => save(false)} disabled={busy || (!!initial && !dirty)}>Save draft</Button>
           </div>
-          <p className="text-sm text-muted">Sending locks the order. Print it to hand or send to the vendor; WhatsApp comes with the messaging stage.</p>
+          <p className="text-sm text-muted">Sending locks the order so it cannot be changed. Print it and hand it to the vendor, or send the printout yourself.</p>
         </div>
         <div className="space-y-4">
           <Card title="Order">
             <div className="space-y-5">
-              <Field label="Vendor" error={tried && !vendorId ? "Choose the vendor" : undefined} hint={can("vendors") ? undefined : "Ask someone with the vendors permission to add a new vendor."}>
+              <Field required label="Vendor" error={tried && !vendorId ? "Choose the vendor" : undefined} hint={can("vendors") ? undefined : "Ask someone with the vendors permission to add a new vendor."}>
                 <Select value={vendorId} onChange={(e) => { setVendorId(e.target.value); setDirty(true); }}>
                   <option value="">Choose a vendor</option>
                   {vendors.data?.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
@@ -167,7 +167,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
               <Field label="Expected on (optional)"><Input type="date" min={today()} value={expectedOn} onChange={(e) => { setExpectedOn(e.target.value); setDirty(true); }} /></Field>
               <Field label="Notes for the vendor (optional)">
                 <textarea rows={3} maxLength={3000} value={notes} onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
-                          className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-accent" />
+                          className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-ink" />
               </Field>
             </div>
           </Card>
@@ -345,10 +345,10 @@ function ReceiveForm({ po, onDone }: { po: Po; onDone: (p: Po) => void }) {
                   <p className="text-sm text-muted">{l.number}. Ordered {qty(l.qty)}, received {qty(l.received)}, {qty(l.outstanding)} still expected. {qty(l.on_hand)} {l.unit} in stock now.</p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <Field label="Arrived" error={tried ? qtyError(l) : undefined}>
+                  <Field required label="Arrived" error={tried ? qtyError(l) : undefined}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={rows[l.id].qty} onChange={(e) => set(l.id, { qty: e.target.value })} />
                   </Field>
-                  <Field label="Cost each (Rs)" error={tried ? costError(l) : undefined} hint={`Ordered at ${money(l.unit_cost)}`}>
+                  <Field required label="Cost each (Rs)" error={tried ? costError(l) : undefined} hint={`Ordered at ${money(l.unit_cost)}`}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={rows[l.id].cost} onChange={(e) => set(l.id, { cost: e.target.value })} />
                   </Field>
                   <Field label="New sale price (optional)" error={tried ? saleError(l) : undefined} hint={`Now ${money(l.sale_price)}`}>
@@ -366,7 +366,7 @@ function ReceiveForm({ po, onDone }: { po: Po; onDone: (p: Po) => void }) {
         </ul>
         <div className="grid gap-4 border-t border-rule px-4 py-4 sm:grid-cols-2 shell:px-5">
           <Field label="Vendor's delivery note number (optional)"><Input value={ref} onChange={(e) => setRef(e.target.value)} maxLength={60} /></Field>
-          <Field label="Received on"><Input type="date" max={today()} value={on} onChange={(e) => setOn(e.target.value)} /></Field>
+          <Field required label="Received on"><Input type="date" max={today()} value={on} onChange={(e) => setOn(e.target.value)} /></Field>
           <div className="flex flex-col gap-3 sm:col-span-2">
             <Notice>{error}</Notice>
             <div><Button type="submit" disabled={busy}>{busy ? "Counting in" : "Put the stock in"}</Button></div>
@@ -428,7 +428,7 @@ function BillForm({ receipt, po, onCancel }: { receipt: Receipt; po: Po; onCance
   return (
     <form noValidate onSubmit={submit} className="grid gap-4 rounded-control bg-paper-2 p-4 sm:grid-cols-2" {...live}>
       <p className="font-medium sm:col-span-2">Bill for {receipt.number}, goods {money(receipt.value)}</p>
-      <Field label="Vendor's invoice number" error={errors.vendor_invoice_no} hint="Stops the same invoice being entered twice."><Input name="vendor_invoice_no" maxLength={60} /></Field>
+      <Field required label="Vendor's invoice number" error={errors.vendor_invoice_no} hint="Stops the same invoice being entered twice."><Input name="vendor_invoice_no" maxLength={60} /></Field>
       <Field label="Bill date" error={errors.bill_date}><Input name="bill_date" type="date" max={today()} defaultValue={today()} /></Field>
       <Field label="Due on (optional)" error={errors.due_on} hint={po.vendor.terms_days ? `Blank means ${po.vendor.terms_days} days from the bill date.` : "Blank means due at once."}><Input name="due_on" type="date" /></Field>
       <Field label="Freight or discount (Rs, optional)" error={errors.adjustment} hint="Freight as a plus, a discount as a minus."><Input name="adjustment" inputMode="decimal" placeholder="0" /></Field>

@@ -19,7 +19,7 @@ export function ProofInput({ proof, setProof, reason, setReason, error }:
     <div className="space-y-3">
       <PhotoCapture value={proof} onChange={(v) => setProof(v.slice(-1))} label="Add proof: photo, screenshot or PDF" accept="image/*,application/pdf" note="Proof" />
       {!proof.length && (
-        <Field label="No proof? Say why" hint="For example: cash at the counter, no slip." error={error}>
+        <Field required label="No photo? Say why" hint="A photo or screenshot is best. Without one, write why, for example: cash at the counter, no slip." error={error}>
           <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
         </Field>
       )}

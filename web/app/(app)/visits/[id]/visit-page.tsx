@@ -55,7 +55,7 @@ function nextStep(v: Visit): { text: string; href?: string; who: string } | null
   if (q && (q.status === "sent" || q.expired)) return { text: q.expired ? "The quotation has expired. Revise it and send it again." : "Waiting for the customer. When they agree, record the approval.", href: `/quotations/${q.id}`, who: "Front desk" };
   if (q) return { text: "Price the quotation and send it to the customer.", href: `/quotations/${q.id}`, who: "Front desk" };
   if (v.job_card) return { text: "Make the quotation from the job card.", href: `/job-cards/${v.job_card.id}`, who: "Front desk" };
-  return { text: "Write the job card: the list of work to quote. Inspect the car first if you need to.", who: "Front desk or technician" };
+  return { text: "Write the job card: the list of work to quote. Inspect the car first if you need to.", href: "#the-job", who: "Front desk or technician" };
 }
 
 /** Where the visit has got to, as a bar: the steps done so far are filled in. */
@@ -75,7 +75,7 @@ function JobProgress({ v }: { v: Visit }) {
   const done = steps.filter(([, d]) => d).length;
   return (
     <div className="mb-4 rounded-card bg-surface px-4 py-3 shell:px-5" role="group" aria-label={`Progress: ${done} of ${steps.length} steps done`}>
-      <div className="h-2 overflow-hidden rounded-full bg-paper-3"><div className="h-full rounded-full bg-accent transition-[width] duration-(--dur-micro)" style={{ width: `${(done / steps.length) * 100}%` }} /></div>
+      <div className="h-2 overflow-hidden rounded-full bg-paper-3"><div className="h-full rounded-full bg-primary transition-[width] duration-(--dur-micro)" style={{ width: `${(done / steps.length) * 100}%` }} /></div>
       <ol className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         {steps.map(([name, d]) => <li key={name} className={d ? "font-medium text-ink" : "text-muted"}>{d ? "Done: " : ""}{name}</li>)}
       </ol>
@@ -135,7 +135,7 @@ function VisitDetail() {
         return n && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-card bg-surface px-4 py-3 shell:px-5">
             <p><span className="font-medium">Next step: </span>{n.text} <span className="text-sm text-muted">For: {n.who}.</span></p>
-            {n.href && <Link href={n.href} className="inline-flex min-h-11 items-center font-medium underline underline-offset-4">Open it</Link>}
+            {n.href && <Link href={n.href} className="inline-flex min-h-11 items-center font-medium underline underline-offset-4">{n.href.startsWith("#") ? "Go there" : "Open it"}</Link>}
           </div>
         );
       })()}
@@ -260,7 +260,7 @@ function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => voi
 
   const row = "flex min-h-14 flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5";
   return (
-    <Card title="The job" flush>
+    <div id="the-job" className="scroll-mt-4"><Card title="The job" flush>
       <ul>
         <li>
           {v.job_card ? (
@@ -308,7 +308,7 @@ function Estimate({ v, onError }: { v: Visit; onError: (m: string | null) => voi
           )}
         </li>
       </ul>
-    </Card>
+    </Card></div>
   );
 }
 

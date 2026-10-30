@@ -17,6 +17,10 @@ import { checkInSchemaAt, parseForm } from "@/lib/schemas";
 
 export default function CheckInPage() {
   const [car, setCar] = useState<Car | null>(null);
+  useEffect(() => {  // arriving from a car's page: that car is already chosen
+    const id = new URLSearchParams(window.location.search).get("car");
+    if (id) api<Car>(`/api/cars/${id}`).then(setCar).catch(() => {});
+  }, []);
   return (
     <RequirePermission permission="visits">
       <PageHeader title="Check in a car" description="Find the car, record its condition, and have the customer sign." />
@@ -56,9 +60,10 @@ function FindCar({ onPick }: { onPick: (c: Car) => void }) {
           {!results.length && <li className="px-3 py-4 text-muted">No car matches “{q}”.</li>}
         </ul>
       )}
-      <p className="mt-4 text-sm text-muted">
-        A new car? Add it from its owner&apos;s page under <Link href="/customers" className="underline">Customers</Link>, then come back.
-      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-rule pt-4">
+        <p className="text-sm text-muted">Not found? A new customer or car must be added first.</p>
+        <Link href="/customers" className="inline-flex min-h-11 items-center rounded-control border border-rule-strong bg-surface px-4 font-medium hover:bg-paper">Add a new customer and car</Link>
+      </div>
     </Card>
   );
 }
@@ -122,7 +127,7 @@ function CheckInForm({ car, onChangeCar }: { car: Car; onChangeCar: () => void }
           <div className="sm:col-span-2">
             <Field error={errors.complaint} label="What the customer says" hint="In their words: noises, warning lights, what they want done.">
               <textarea name="complaint" rows={3} maxLength={3000}
-                        className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-accent" />
+                        className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-ink" />
             </Field>
           </div>
           <Field error={errors.odometer_in} label="Odometer (km)" hint={car.odometer_km ? `Last reading ${car.odometer_km.toLocaleString("en-PK")} km` : undefined}>

@@ -12,11 +12,12 @@ import { Plate } from "@/components/cars";
 type Car = { id: string; number: string; plate: string; car: string; customer: string; invoice: string | null; balance: string; odometer_in: number | null; can_release: boolean };
 
 export default function GatePage() {
+  const [released, setReleased] = useState(0);  // a release refreshes the list of cars that have left
   return (
     <RequirePermission permission={["gate", "visits"]}>
       <PageHeader title="Cars ready to leave" description="Repaired, invoiced and checked. Hand the car over only after you have checked the paperwork." />
-      <Cars />
-      <History />
+      <Cars onReleased={() => setReleased((n) => n + 1)} />
+      <History key={released} />
     </RequirePermission>
   );
 }
@@ -53,7 +54,7 @@ function History() {
   );
 }
 
-function Cars() {
+function Cars({ onReleased }: { onReleased: () => void }) {
   const list = useApi<Car[]>("/api/gate/queue");
   const [open, setOpen] = useState<string | null>(null);
   if (list.error) return <Card flush><ErrorState message={list.error} onRetry={list.reload} /></Card>;
@@ -74,7 +75,7 @@ function Cars() {
                 : !c.can_release && <Badge tone="error">Owes {money(c.balance)}</Badge>}
             </div>
             {!c.can_release && <div className="mt-3"><Notice tone="warning">Do not release this car. It still owes {money(c.balance)}. Send the customer to the cashier. Only an administrator can release it on credit.</Notice></div>}
-            {open === c.id && <Release car={c} onDone={() => { setOpen(null); list.reload(); }} onCancel={() => setOpen(null)} />}
+            {open === c.id && <Release car={c} onDone={() => { setOpen(null); list.reload(); onReleased(); }} onCancel={() => setOpen(null)} />}
           </Card>
         </li>
       ))}

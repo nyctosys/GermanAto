@@ -155,7 +155,7 @@ function Editor({ initial }: { initial: JobCard }) {
           <Card title="Notes for the estimate">
             <textarea value={notes} disabled={locked} rows={3} maxLength={3000} aria-label="Notes"
                       onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
-                      className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-accent" />
+                      className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-ink" />
           </Card>
 
           {shortages.length > 0 && <Notice tone="warning">{shortages.length === 1 ? "One part is" : `${shortages.length} parts are`} short in stock. The quotation can still go out; order them before the repair starts.</Notice>}
