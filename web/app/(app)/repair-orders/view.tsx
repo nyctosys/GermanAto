@@ -20,7 +20,7 @@ export default function RepairOrdersPage() {
   return (
     <RequirePermission permission="repair-orders">
       <PageHeader title="Repair orders" description="The work under way. A repair order is made from an approved quotation."
-                  actions={<Link href="/repair-orders/new" className="flex min-h-11 items-center rounded-control bg-primary px-5 font-medium text-primary-ink hover:bg-primary-2 active:bg-primary-3 active:duration-0">Make a repair order</Link>} />
+                  actions={<Link href="/repair-orders/new" className="flex min-h-11 items-center rounded-control bg-action px-5 font-medium text-action-ink hover:bg-action-2 active:bg-action-3 active:duration-0">Make a repair order</Link>} />
       <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
         <Board />
       </Suspense>

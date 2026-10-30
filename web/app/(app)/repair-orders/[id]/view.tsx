@@ -1,5 +1,6 @@
 "use client";
 
+import { VisitProgress } from "@/components/job-progress";
 import Link from "next/link";
 import { NextStep } from "@/components/next-step";
 import { useParams, useRouter } from "next/navigation";
@@ -73,6 +74,7 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
   const actions = stageActions(stage);
   return (
     <>
+      {ro.visit && <VisitProgress visitId={ro.visit.id} />}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1>Repair order {ro.number}</h1>

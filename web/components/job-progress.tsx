@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useApi } from "@/lib/api";
 
 /** One stroke icon per step of a job. Drawn here so the bar needs no icon library. */
 const ICONS: Record<string, ReactNode> = {
@@ -43,4 +44,37 @@ export function JobProgress({ steps }: { steps: Step[] }) {
       {current >= 0 && <p className="mt-3 text-center text-sm sm:hidden"><span className="text-muted">Waiting for:</span> <span className="font-medium">{steps[current].label}</span> <span className="text-muted">(step {current + 1} of {steps.length})</span></p>}
     </div>
   );
+}
+
+
+type Progress = {
+  status: string;
+  job_card: unknown | null;
+  quotations: { status: string }[];
+  repair_order: { status: string } | null;
+  invoice: { status: string } | null;
+};
+
+/** The steps of a visit, worked out from what exists so far. */
+export function stepsOf(v: Progress): Step[] {
+  const q = v.quotations.find((x) => x.status !== "revised");
+  return [
+    { key: "checkin", label: "Checked in", done: true },
+    { key: "jobcard", label: "Job card", done: !!v.job_card },
+    { key: "quotation", label: "Quotation sent", done: !!q && q.status !== "draft" },
+    { key: "approved", label: "Approved", done: q?.status === "approved" || q?.status === "converted" || !!v.repair_order },
+    { key: "repair", label: "Repair", done: !!v.repair_order && v.repair_order.status !== "received" },
+    { key: "ready", label: "Ready", done: ["ready", "delivered"].includes(v.repair_order?.status ?? "") },
+    { key: "invoice", label: "Invoiced", done: !!v.invoice && v.invoice.status !== "draft" },
+    { key: "paid", label: "Paid", done: v.invoice?.status === "paid" || v.status === "closed" },
+    { key: "left", label: "Left", done: v.status === "closed" },
+  ];
+}
+
+/** The same progress bar as on the visit, for the job card, quotation, repair order, inspection and invoice of that visit.
+ *  Quietly shows nothing if the person cannot open visits. */
+export function VisitProgress({ visitId }: { visitId: string }) {
+  const { data } = useApi<Progress>(`/api/visits/${visitId}`);
+  if (!data || data.status === "cancelled") return null;
+  return <JobProgress steps={stepsOf(data)} />;
 }

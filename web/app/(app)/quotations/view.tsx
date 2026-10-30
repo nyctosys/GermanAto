@@ -18,7 +18,7 @@ export default function QuotationsPage() {
   return (
     <RequirePermission permission="quotations">
       <PageHeader title="Quotations" description="Every estimate, from draft to approved. A quotation is made from a visit's job card."
-                  actions={<Link href="/quotations/new" className="flex min-h-11 items-center rounded-control bg-primary px-5 font-medium text-primary-ink hover:bg-primary-2 active:bg-primary-3 active:duration-0">Make a quotation</Link>} />
+                  actions={<Link href="/quotations/new" className="flex min-h-11 items-center rounded-control bg-action px-5 font-medium text-action-ink hover:bg-action-2 active:bg-action-3 active:duration-0">Make a quotation</Link>} />
       <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
         <List />
       </Suspense>

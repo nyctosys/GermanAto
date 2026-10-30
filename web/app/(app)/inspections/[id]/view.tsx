@@ -1,5 +1,6 @@
 "use client";
 
+import { VisitProgress } from "@/components/job-progress";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
@@ -125,6 +126,7 @@ function InspectionForm({ initial, tpl, reload }: { initial: Inspection; tpl: Te
 
   return (
     <>
+      {initial.visit && <VisitProgress visitId={initial.visit.id} />}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
           <Plate plate={initial.car.plate} />

@@ -22,7 +22,7 @@ A workshop tool that gets out of the way. Surfaces are white on a light ash floo
 |---|---|---|---|
 | Logo Red | `#F10A01` | "GERMAN" | Brand reference only. White text on it is 4.4:1, below AA, so it is not used behind text. |
 | **GermanATO Red** | `#D10A01` | Logo Red deepened just enough for AA | Brand accents, primary text links, sidebar current bar |
-| **Action Teal** | `#0F766E` | — | **Primary buttons** (white text); hover `#0D5F59`, pressed `#0A4A45` |
+| **Workshop Amber** | `#F98B00` | The tagline | **Primary buttons** with Carbon text (8:1); hover `#E07B00`, pressed `#C96D00`. Teal `#0F766E` stays for links, badges and the progress bar. |
 | Red Hover | `#B80800` | — | Primary button hover (white text 6.8:1) |
 | **Hexagon Oxblood** | `#6D0000` | The hexagon (77% of the logo) | Primary button **pressed** state; "German" in the wordmark |
 | Logo Black | `#000000` | "ATO" | "ATO" in the wordmark |
@@ -75,7 +75,7 @@ A workshop tool that gets out of the way. Surfaces are white on a light ash floo
 
 | Component | Spec |
 |---|---|
-| Primary button | Teal (`#0F766E`), white text, 500, 4px radius, min-height 44px, padding 0 20px. Hover `#0D5F59`; pressed `#0A4A45`, shown instantly. Disabled: 55% opacity. Forward actions: Issue, Send, Record, Approve, Add, Check in. |
+| Primary button | Workshop Amber (`#F98B00`), Carbon text, 500, 4px radius, min-height 44px, padding 0 20px. Hover `#0D5F59`; pressed `#0A4A45`, shown instantly. Disabled: 55% opacity. Forward actions: Issue, Send, Record, Approve, Add, Check in. |
 | Success button | Success green (`#1E7B34`), white text, same size. Hover `#18662B`; pressed `#124F21`. Use for Save, Save draft, Save as draft, Save changes, and finish/complete actions. |
 | Danger button | Error red (`#B80800`), white text, same size. Hover `#9A0600`; pressed Hexagon Oxblood. Use for Delete, Discard, Remove, Void, Retire, Cancel permanently, Reject. |
 | Secondary button | White, Carbon text, 1px Silver Fog border, same size. Hover Cloud Gray fill and darker border. Neutral dismiss: Cancel, Keep it, Not now. |

@@ -1,5 +1,6 @@
 "use client";
 
+import { VisitProgress } from "@/components/job-progress";
 import Link from "next/link";
 import { NextStep } from "@/components/next-step";
 import { useParams, useRouter } from "next/navigation";
@@ -106,6 +107,7 @@ function Editor({ initial }: { initial: JobCard }) {
   const shortages = lines.filter((l) => l.item && Number(l.qty) > Number(l.item.on_hand));
   return (
     <>
+      {initial.visit && <VisitProgress visitId={initial.visit.id} />}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1>Job card</h1>

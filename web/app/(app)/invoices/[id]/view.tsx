@@ -1,5 +1,6 @@
 "use client";
 
+import { VisitProgress } from "@/components/job-progress";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -69,6 +70,7 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
 
   return (
     <>
+      {inv.visit && <VisitProgress visitId={inv.visit.id} />}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1>{counter ? "Counter sale" : "Invoice"} {inv.number}</h1>

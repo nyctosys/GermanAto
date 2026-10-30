@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { carTitle, Plate } from "@/components/cars";
 import { NextStep } from "@/components/next-step";
-import { JobProgress, type Step } from "@/components/job-progress";
+import { JobProgress, stepsOf } from "@/components/job-progress";
 import { linkButton, QuoteBadge, type QuoteStatus } from "@/components/estimates";
 import { RoBadge, type RoStatus } from "@/components/repairs";
 import { RequirePermission } from "@/components/shell";
@@ -58,22 +58,6 @@ function nextStep(v: Visit): { text: string; href?: string; who: string } | null
   if (q) return { text: "Price the quotation and send it to the customer.", href: `/quotations/${q.id}`, who: "Front desk" };
   if (v.job_card) return { text: "Make the quotation from the job card.", href: `/job-cards/${v.job_card.id}`, who: "Front desk" };
   return { text: "Write the job card: the list of work to quote. Inspect the car first if you need to.", href: "#the-job", who: "Front desk or technician" };
-}
-
-/** The steps of a visit, worked out from what exists so far. */
-function stepsOf(v: Visit): Step[] {
-  const q = v.quotations.find((x) => x.status !== "revised");
-  return [
-    { key: "checkin", label: "Checked in", done: true },
-    { key: "jobcard", label: "Job card", done: !!v.job_card },
-    { key: "quotation", label: "Quotation sent", done: !!q && q.status !== "draft" },
-    { key: "approved", label: "Approved", done: q?.status === "approved" || q?.status === "converted" || !!v.repair_order },
-    { key: "repair", label: "Repair", done: !!v.repair_order && v.repair_order.status !== "received" },
-    { key: "ready", label: "Ready", done: ["ready", "delivered"].includes(v.repair_order?.status ?? "") },
-    { key: "invoice", label: "Invoiced", done: !!v.invoice && v.invoice.status !== "draft" },
-    { key: "paid", label: "Paid", done: v.invoice?.status === "paid" || v.status === "closed" },
-    { key: "left", label: "Left", done: v.status === "closed" },
-  ];
 }
 
 function VisitDetail() {

@@ -34,6 +34,10 @@
   --color-primary-2: #0D5F59;    /* hover */
   --color-primary-3: #0A4A45;    /* pressed */
   --color-primary-ink: #FFFFFF;
+  --color-action: #F98B00;       /* workshop amber (the tagline): action buttons, with Carbon text (8:1) */
+  --color-action-2: #E07B00;     /* hover */
+  --color-action-3: #C96D00;     /* pressed */
+  --color-action-ink: #171717;
   --color-oxblood: #6D0000;
   --color-logo-black: #000000;
   --color-amber: #F98B00;        /* Tagline Amber: warning accent rules only */

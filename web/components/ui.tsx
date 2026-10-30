@@ -7,7 +7,7 @@ const control =
   "disabled:cursor-not-allowed disabled:opacity-55";
 
 const buttonVariants = {
-  primary: "border-primary bg-primary text-primary-ink hover:bg-primary-2 hover:border-primary-2 active:bg-primary-3 active:border-primary-3",
+  primary: "border-action bg-action text-action-ink hover:bg-action-2 hover:border-action-2 active:bg-action-3 active:border-action-3",
   secondary: "border-rule-strong bg-surface text-ink hover:border-ink-2 hover:bg-paper-3 active:bg-silver active:border-ink-2",
   // Destructive: delete, discard, void, cancel permanently, reject.
   danger: "border-error bg-error text-error-ink hover:bg-error-2 hover:border-error-2 active:bg-error-3 active:border-error-3",

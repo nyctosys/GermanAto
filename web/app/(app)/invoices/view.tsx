@@ -16,7 +16,7 @@ export default function InvoicesPage() {
   return (
     <RequirePermission permission="invoices">
       <PageHeader title="Invoices" description="Workshop invoices and counter sales."
-                  actions={<Link href="/counter-sales/new" className="flex min-h-11 items-center rounded-control bg-primary px-5 font-medium text-primary-ink hover:bg-primary-2 active:bg-primary-3 active:duration-0">New counter sale</Link>} />
+                  actions={<Link href="/counter-sales/new" className="flex min-h-11 items-center rounded-control bg-action px-5 font-medium text-action-ink hover:bg-action-2 active:bg-action-3 active:duration-0">New counter sale</Link>} />
       <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
         <List />
       </Suspense>

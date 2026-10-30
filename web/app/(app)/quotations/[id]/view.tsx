@@ -1,5 +1,6 @@
 "use client";
 
+import { VisitProgress } from "@/components/job-progress";
 import { DeleteButton } from "@/components/delete-button";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -79,6 +80,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
 
   return (
     <>
+      {q.visit && <VisitProgress visitId={q.visit.id} />}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1>Quotation {q.number}{q.revision > 1 ? `, revision ${q.revision}` : ""}</h1>

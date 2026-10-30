@@ -54,7 +54,7 @@ function CarDetail() {
         </div>
         {mode === "view" && (
           <div className="flex flex-wrap gap-2">
-            {c.owner && <Link href={`/visits/new?car=${c.id}`} className="inline-flex min-h-11 items-center rounded-control border border-primary bg-primary px-5 text-[0.9375rem] font-medium text-primary-ink hover:bg-primary-2">Check in this car</Link>}
+            {c.owner && <Link href={`/visits/new?car=${c.id}`} className="inline-flex min-h-11 items-center rounded-control border border-action bg-action px-5 text-[0.9375rem] font-medium text-action-ink hover:bg-action-2">Check in this car</Link>}
             <Button variant="secondary" onClick={() => setMode("edit")}>Edit details</Button>
             <DeleteButton path={`/api/cars/${c.id}`} what="car" goTo="/cars" label="Delete car" />
             {can("car-transfer") && <Button variant="secondary" onClick={() => setMode("transfer")}>Transfer owner</Button>}

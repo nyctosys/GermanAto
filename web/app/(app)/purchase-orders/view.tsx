@@ -18,7 +18,7 @@ export default function PurchaseOrdersPage() {
   return (
     <RequirePermission permission={PURCHASING}>
       <PageHeader title="Purchase orders" description="What we have ordered from vendors. Goods are counted in against an order."
-                  actions={can("purchasing") && <Link href="/purchase-orders/new" className="flex min-h-11 items-center rounded-control bg-primary px-5 font-medium text-primary-ink hover:bg-primary-2 active:bg-primary-3 active:duration-0">New purchase order</Link>} />
+                  actions={can("purchasing") && <Link href="/purchase-orders/new" className="flex min-h-11 items-center rounded-control bg-action px-5 font-medium text-action-ink hover:bg-action-2 active:bg-action-3 active:duration-0">New purchase order</Link>} />
       <Suspense fallback={<Card flush><SkeletonRows /></Card>}>
         <List />
       </Suspense>
