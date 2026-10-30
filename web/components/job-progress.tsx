@@ -40,7 +40,7 @@ export function JobProgress({ steps }: { steps: Step[] }) {
           );
         })}
       </ol>
-      {current >= 0 && <p className="mt-3 text-center text-sm sm:hidden"><span className="text-muted">Now:</span> <span className="font-medium">{steps[current].label}</span> <span className="text-muted">(step {current + 1} of {steps.length})</span></p>}
+      {current >= 0 && <p className="mt-3 text-center text-sm sm:hidden"><span className="text-muted">Waiting for:</span> <span className="font-medium">{steps[current].label}</span> <span className="text-muted">(step {current + 1} of {steps.length})</span></p>}
     </div>
   );
 }

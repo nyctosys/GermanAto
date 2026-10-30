@@ -114,7 +114,7 @@ export function PrintBar({ back, name, whatsapp, children }:
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" className="mr-2"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
           {back.label}
         </Link>
-        <button onClick={() => window.print()} className={`${pill} border-accent bg-accent text-accent-ink hover:bg-accent-2 active:bg-accent-3`}>Print or save as PDF</button>
+        <button onClick={() => window.print()} className={`${pill} border-primary bg-primary text-primary-ink hover:bg-primary-2 hover:border-primary-2 active:bg-primary-3 active:border-primary-3`}>Print or save as PDF</button>
         <button onClick={share} disabled={busy !== null} className={`${pill} border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3`}>{busy === "share" ? "Making the PDF" : "Share as PDF"}</button>
         <button onClick={() => downloadXlsx(`${slug(name)}.xlsx`, [sheetFromDocument(bar.current!.parentElement as HTMLElement, name.slice(0, 31))])} className={`${pill} border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3`}>Download for Excel</button>
         {whatsapp && <button onClick={chat} disabled={busy !== null} className={`${pill} border-rule-strong bg-surface text-ink hover:bg-paper active:bg-paper-3`}>{busy === "whatsapp" ? "Opening" : "Send on WhatsApp"}</button>}
