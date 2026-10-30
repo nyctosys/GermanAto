@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { carTitle, Plate } from "@/components/cars";
+import { JobProgress, type Step } from "@/components/job-progress";
 import { linkButton, QuoteBadge, type QuoteStatus } from "@/components/estimates";
 import { RoBadge, type RoStatus } from "@/components/repairs";
 import { RequirePermission } from "@/components/shell";
@@ -58,29 +59,20 @@ function nextStep(v: Visit): { text: string; href?: string; who: string } | null
   return { text: "Write the job card: the list of work to quote. Inspect the car first if you need to.", href: "#the-job", who: "Front desk or technician" };
 }
 
-/** Where the visit has got to, as a bar: the steps done so far are filled in. */
-function JobProgress({ v }: { v: Visit }) {
+/** The steps of a visit, worked out from what exists so far. */
+function stepsOf(v: Visit): Step[] {
   const q = v.quotations.find((x) => x.status !== "revised");
-  const steps: [string, boolean][] = [
-    ["Checked in", true],
-    ["Job card", !!v.job_card],
-    ["Quotation", !!q && q.status !== "draft"],
-    ["Approved", q?.status === "approved" || q?.status === "converted" || !!v.repair_order],
-    ["Repair", !!v.repair_order && v.repair_order.status !== "received"],
-    ["Ready", ["ready", "delivered"].includes(v.repair_order?.status ?? "")],
-    ["Invoiced", !!v.invoice && v.invoice.status !== "draft"],
-    ["Paid", v.invoice?.status === "paid"],
-    ["Left", v.status === "closed"],
+  return [
+    { key: "checkin", label: "Checked in", done: true },
+    { key: "jobcard", label: "Job card", done: !!v.job_card },
+    { key: "quotation", label: "Quotation sent", done: !!q && q.status !== "draft" },
+    { key: "approved", label: "Approved", done: q?.status === "approved" || q?.status === "converted" || !!v.repair_order },
+    { key: "repair", label: "Repair", done: !!v.repair_order && v.repair_order.status !== "received" },
+    { key: "ready", label: "Ready", done: ["ready", "delivered"].includes(v.repair_order?.status ?? "") },
+    { key: "invoice", label: "Invoiced", done: !!v.invoice && v.invoice.status !== "draft" },
+    { key: "paid", label: "Paid", done: v.invoice?.status === "paid" || v.status === "closed" },
+    { key: "left", label: "Left", done: v.status === "closed" },
   ];
-  const done = steps.filter(([, d]) => d).length;
-  return (
-    <div className="mb-4 rounded-card bg-surface px-4 py-3 shell:px-5" role="group" aria-label={`Progress: ${done} of ${steps.length} steps done`}>
-      <div className="h-2 overflow-hidden rounded-full bg-paper-3"><div className="h-full rounded-full bg-primary transition-[width] duration-(--dur-micro)" style={{ width: `${(done / steps.length) * 100}%` }} /></div>
-      <ol className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        {steps.map(([name, d]) => <li key={name} className={d ? "font-medium text-ink" : "text-muted"}>{d ? "Done: " : ""}{name}</li>)}
-      </ol>
-    </div>
-  );
 }
 
 function VisitDetail() {
@@ -128,7 +120,7 @@ function VisitDetail() {
         </div>
       </div>
 
-      {v.status !== "cancelled" && <JobProgress v={v} />}
+      {v.status !== "cancelled" && <JobProgress steps={stepsOf(v)} />}
 
       {(() => {
         const n = nextStep(v);
