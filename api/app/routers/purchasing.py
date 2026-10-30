@@ -25,7 +25,7 @@ from app.numbering import next_number
 from app.routers.estimates import Proof
 from app.routers.workshop import _attach
 from app.stock import StockError, move, on_hand_map
-from app.validators import Email, Name, Phone, Text, normalize_code
+from app.validators import PersonOrEmpty, Email, Name, Phone, Text, normalize_code
 
 router = APIRouter(prefix="/api", tags=["purchasing"])
 can_vendors = require("vendors")
@@ -59,7 +59,7 @@ def _get(db: Session, actor: Actor, model, id_: uuid.UUID, label: str, *, lock: 
 
 class VendorIn(BaseModel):
     name: Name
-    contact_person: Text = Field(default="", max_length=120)
+    contact_person: PersonOrEmpty = ""
     phone: Phone = ""
     email: Email = ""
     address: Text = Field(default="", max_length=300)

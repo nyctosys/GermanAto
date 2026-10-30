@@ -206,7 +206,7 @@ const signedMoney = z.string().trim().refine((v) => !v || (/^-?\d{1,9}(\.\d{1,2}
 
 export const vendorSchema = z.object({
   name,
-  contact_person: text(120),
+  contact_person: text(120).refine((v) => !/\d/.test(v), "A person's name has no numbers. Put a phone number in the Phone box."),
   phone: phoneOrEmpty,
   email,
   address: text(300),

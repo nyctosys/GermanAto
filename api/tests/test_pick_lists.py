@@ -85,3 +85,9 @@ def test_unused_records_delete_used_ones_refuse(admin):
 def test_phone_with_letters_is_refused(admin):
     r = admin.post("/api/customers", json={"name": "Test Phone", "phone": "+92317881123kkjjj", "cnic": "35202-1234567-1"})
     assert r.status_code == 422 and "digits only" in str(r.json())
+
+
+def test_vendor_contact_person_is_a_name_not_a_number(admin):
+    r = admin.post("/api/vendors", json={"name": "Parts Co", "contact_person": "0316112211"})
+    assert r.status_code == 422 and "no numbers" in str(r.json())
+    assert admin.post("/api/vendors", json={"name": "Parts Co", "contact_person": "Ijmaal Jhatu"}).status_code == 201

@@ -69,6 +69,14 @@ def _strip(value: str) -> str:
 
 
 Text = Annotated[str, AfterValidator(_strip)]
+def _person(v: str) -> str:
+    v = re.sub(r"\s+", " ", v).strip()
+    if re.search(r"\d", v):
+        raise ValueError("A person's name has no numbers. Put a phone number in the Phone box.")
+    return v
+
+
+PersonOrEmpty = Annotated[str, AfterValidator(_person), StringConstraints(max_length=120)]
 Name = Annotated[str, AfterValidator(_strip), StringConstraints(min_length=1, max_length=120)]
 Phone = Annotated[str, AfterValidator(normalize_pk_phone)]
 Username = Annotated[str, AfterValidator(lambda v: v.strip().lower()),
