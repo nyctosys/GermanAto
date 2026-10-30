@@ -315,7 +315,7 @@ export const CHAPTERS: Chapter[] = [
         id: "new-item", title: "Add a part to inventory", who: "Inventory manager",
         steps: [
           "Go to Inventory and press Add item.",
-          "Type the name, brand, category, unit, shelf, sale price, and the reorder level (how much to order is decided later, on the purchase order). Pick the brand and category from the lists. If yours is missing, choose "+ Add a new one to the list", type it and press Add to list: the spelling is checked (it may ask "Did you mean ...?") and the new name is then there for everyone. The same works for car makes and labour categories. To fix a name or hide one, use Settings, Pick-lists. Add the vendors who supply it on the item page.",
+          "Type the name, brand, category, unit, shelf, sale price, and the reorder level (how much to order is decided later, on the purchase order). Pick the brand and category from the lists. If yours is missing, choose + Add a new one to the list, type it and press Add to list: the spelling is checked (it may ask Did you mean one that is already there?) and the new name is then there for everyone. The same works for car makes and labour categories. To fix a name or hide one, use Settings, Pick-lists. Add the vendors who supply it on the item page.",
           "Add every barcode and manufacturer part number, so scanning finds the part.",
           "If you already hold stock, type the opening quantity and cost once, when you start.",
         ],
