@@ -88,7 +88,7 @@ function View() {
             <dl className="space-y-3">
               {[["Salary", money(e.monthly_salary)], ["Phone", e.phone ? phone(e.phone) : ""], ["CNIC", e.cnic], ["Device number", e.device_pin],
                 ["Shift", `${e.shift_start.slice(0, 5)} to ${e.shift_end.slice(0, 5)}, off on ${e.days_off.map((d) => WEEKDAYS[d]).join(" and ") || "no fixed day"}`], ["Joined", day(e.joined_on)], ["Login", e.username ?? ""], ["Notes", e.notes]].map(([l, t]) => (
-                <div key={l}><dt className="text-sm text-muted">{l}</dt><dd className={t ? "" : "text-muted"}>{t || "None"}</dd></div>
+                <div key={l}><dt className="text-sm text-muted">{l}</dt><dd className={t ? "" : "text-muted"}>{t || "Not added"}</dd></div>
               ))}
             </dl>
           </Card>

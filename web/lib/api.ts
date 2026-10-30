@@ -41,6 +41,7 @@ const keyFor = (fingerprint: string) => {
 
 // What to tell the person after a successful write, by what was done. First match wins; the fallback is by method.
 const DONE: [RegExp, string][] = [
+  [/\/payroll-runs\/[^/]+\/void$/, "Draft thrown away"],
   [/\/payments$/, "Payment recorded"], [/\/advances$/, "Advance recorded"], [/\/refund$|\/refunds?$/, "Refund recorded"],
   [/\/credit-notes$/, "Credit note issued"], [/\/invoices\/[^/]+\/issue$/, "Invoice issued"], [/\/lines\/[^/]+\/(issue|return)$/, "Stock updated"], [/\/gate-pass$/, "Car released"], [/\/purchase-orders\/[^/]+\/send$/, "Sent to the vendor"], [/\/quotations\/[^/]+\/send$/, "Sent to the customer"],
   [/\/approve$/, "Approval recorded"], [/\/reject$/, "Marked as rejected"], [/\/revise$/, "New version made"], [/\/sign$/, "Signed"],

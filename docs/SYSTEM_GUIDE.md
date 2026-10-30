@@ -961,3 +961,4 @@ Kept current as each story lands (stories US-1001 to US-1013 in `prd.json`).
 - **Users list** shows a missing phone as "Not added" and formats numbers like the rest of the app. Checked live with no changes needed: Messages, Month end checklist (each red line has a Fix it link), Roles, Money settings, Finance reports, Payroll (clear messages for a month not yet ended, a month with no staff, and a month already run).
 - **Print pages and phone width checked.** The print toolbar button is teal (red means danger). All 26 list screens have no sideways scroll at 375 px.
 - Empty-state links and proof links use teal (`text-primary`), not the red accent.
+- Checked live: payroll Adjust (bonus or penalty, Rs or %, with a live "10% of base pay = Rs 2,600" hint), payslip print, throwing away a draft (notice now says "Draft thrown away"). "Please fill in:" keeps acronyms like CNIC in capitals. Employee details show "Not added" for empty fields.
