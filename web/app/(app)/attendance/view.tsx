@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { MarkForm, PunchForm } from "@/components/hr";
+import { NextStep } from "@/components/next-step";
 import { useQueryParam } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
@@ -30,8 +31,10 @@ function Body() {
   const now = new Date().toLocaleDateString("en-CA").slice(0, 7);
   const month = monthParam || now;
   const list = useApi<{ month: string; employees: Row[] }>(`/api/attendance?month=${month}`);
+  const absent = (list.data?.employees ?? []).filter((r) => r.absent > 0);
   return (
     <div className="space-y-4">
+      {absent.length > 0 && <NextStep who="Manager or accountant" target="act-by-hand" open={false} label="Fix a day by hand">{absent.map((r) => r.employee.full_name).join(", ")} {absent.length === 1 ? "is" : "are"} shown absent. If the device missed them, add a missed punch or mark the day present.</NextStep>}
       <Card title="This month" actions={<Input type="month" aria-label="Month" value={month} max={now} onChange={(e) => setMonth(e.target.value)} className="min-h-11 rounded-control border border-rule-strong bg-surface px-3" />} flush>
         {list.error ? <ErrorState message={list.error} onRetry={list.reload} /> : !list.data ? <SkeletonRows />
           : !list.data.employees.length ? <EmptyState title="Nobody was employed this month">Add people under Employees.</EmptyState> : (
@@ -72,7 +75,7 @@ function ByHand({ people, onDone }: { people: Row["employee"][]; onDone: () => v
   return (
     <Card title="Add or fix a day by hand">
       <div className="space-y-4">
-        <Field label="Employee"><Select value={who} onChange={(e) => { setWho(e.target.value); setMode(null); }}><option value="">Choose an employee</option>{people.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</Select></Field>
+        <Field label="Employee"><Select id="act-by-hand" value={who} onChange={(e) => { setWho(e.target.value); setMode(null); }}><option value="">Choose an employee</option>{people.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</Select></Field>
         {who && !mode && (
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => setMode("punch")}>Add a missed punch</Button>

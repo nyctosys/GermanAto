@@ -215,13 +215,13 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
   const LABEL: Record<string, string> = { invoice_payment: "Payment for an invoice", expense: "Daily expense", other_income: "Other income", owner_capital: "Owner puts money in", transfer: "Transfer between accounts", drawings: "Owner takes money out" };
 
   return (
-    <Card title={direction === "in" ? "Record money in" : "Record money out"}>
+    <Card title={only === "expense" ? "Add a daily expense" : direction === "in" ? "Record money in" : "Record money out"}>
       <form noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2" {...live}>
-        <Field required label="What is it">
+        {kinds.length > 1 && <Field required label="What is it">
           <Select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
             {kinds.map((k) => <option key={k} value={k}>{LABEL[k]}</option>)}
           </Select>
-        </Field>
+        </Field>}
         {invoicePay && (
           <Field required label="Invoice">
             <Select value={invoiceId} onChange={(e) => { const inv = owing.data?.find((i) => i.id === e.target.value); setInvoiceId(e.target.value); if (inv) set({ amount: String(Number(inv.balance)) }); }}>

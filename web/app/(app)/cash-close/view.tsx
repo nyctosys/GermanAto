@@ -95,6 +95,7 @@ function AccountCard({ s, onDone }: { s: Status; onDone: () => void }) {
     <Card title={`${s.name}`}>
       <p className="text-sm text-muted">The books say there should be</p>
       <p className="num text-xl">{money(s.expected)}</p>
+      {Number(s.expected) < 0 && <p className="mt-1 text-sm text-error">Less than nothing? The opening balance may be missing. The owner can set it under Money settings.</p>}
       <p className="mt-2 text-sm text-muted">
         {s.last_close ? `Last counted ${day(s.last_close.close_date)}: ${money(s.last_close.counted)}` : "Never counted"}
       </p>

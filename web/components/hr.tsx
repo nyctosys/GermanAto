@@ -140,7 +140,7 @@ export function PunchForm({ id, onDone, onCancel }: { id: string; onDone: () => 
 
 export function MarkForm({ id, onDone, onCancel }: { id: string; onDone: () => void; onCancel: () => void }) {
   const [dayV, setDayV] = useState("");
-  const [kind, setKind] = useState("paid_leave");
+  const [kind, setKind] = useState("present");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const { errors, activate, live } = useLiveErrors({ day: dayV, kind, reason }, (v) => {
