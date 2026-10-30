@@ -384,7 +384,7 @@ function ApproveForm({ q, busy, onSubmit, onCancel }:
             {declined.length === q.lines.length && <p role="alert" className="text-sm text-error">Nothing is approved. Use “Customer said no” instead.</p>}
           </fieldset>
         )}
-        <ProofInput proof={proof} setProof={setProof} reason={reason} setReason={setReason} error={error} />
+        <ProofInput proof={proof} setProof={setProof} reason={reason} setReason={setReason} error={error} example="customer agreed at the desk, nothing in writing" />
         <Field label="Note (optional)"><Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} /></Field>
         {confirming && <div id="confirm-approve"><Notice tone="warning">Approve this quotation? The customer&apos;s go-ahead is recorded and the repair order can start. Check the lines and proof above first.</Notice></div>}
         <div className="flex flex-wrap gap-2">

@@ -13,13 +13,13 @@ export type Payment = { id: string; number: string; kind?: string; refunded?: bo
 export const ACCOUNT: Record<string, string> = { cash: "Cash", bank: "Bank transfer", wallet: "Mobile wallet" };
 
 /** Proof is always asked for; with none, the person must say why (owner decision 4). */
-export function ProofInput({ proof, setProof, reason, setReason, error }:
-  { proof: Uploaded[]; setProof: (v: Uploaded[]) => void; reason: string; setReason: (v: string) => void; error?: string }) {
+export function ProofInput({ proof, setProof, reason, setReason, error, example = "cash at the counter, no slip" }:
+  { proof: Uploaded[]; setProof: (v: Uploaded[]) => void; reason: string; setReason: (v: string) => void; error?: string; example?: string }) {
   return (
     <div className="space-y-3">
       <PhotoCapture value={proof} onChange={(v) => setProof(v.slice(-1))} label="Add proof: photo, screenshot or PDF" accept="image/*,application/pdf" note="Proof" />
       {!proof.length && (
-        <Field required label="No photo? Say why" hint="A photo or screenshot is best. Without one, write why, for example: cash at the counter, no slip." error={error}>
+        <Field required label="No photo? Say why" hint={`A photo or screenshot is best. Without one, write why, for example: ${example}.`} error={error}>
           <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
         </Field>
       )}
