@@ -1,5 +1,6 @@
 "use client";
 
+import { DeleteButton } from "@/components/delete-button";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
@@ -153,6 +154,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => save(true)} disabled={busy}>{busy ? "Working" : "Send to the vendor"}</Button>
             <Button variant="success" onClick={() => save(false)} disabled={busy || (!!initial && !dirty)}>Save draft</Button>
+            {initial && <DeleteButton path={`/api/purchase-orders/${initial.id}`} what="draft order" goTo="/purchase-orders" label="Delete draft" />}
           </div>
           <p className="text-sm text-muted">Sending locks the order so it cannot be changed. Print it and hand it to the vendor, or send the printout yourself.</p>
         </div>

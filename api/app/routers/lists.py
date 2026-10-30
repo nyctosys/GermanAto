@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth import Actor, current_actor
 from app.db import get_db
 from app.models import PickListEntry
-from app.pick_lists import DEFAULTS, PERMISSION, entries, lookalike, rename_on_records, squash, tidy
+from app.pick_lists import DEFAULTS, PERMISSION, is_used, entries, lookalike, rename_on_records, squash, tidy
 
 router = APIRouter(prefix="/api", tags=["lists"])
 
@@ -85,3 +85,17 @@ def edit_entry(kind: str, entry_id: uuid.UUID, body: EditIn, actor: Actor = Depe
         e.is_active = body.is_active
     db.commit()
     return _out(e)
+
+
+@router.delete("/lists/{kind}/{entry_id}")
+def delete_entry(kind: str, entry_id: uuid.UUID, actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
+    """Remove an entry nothing uses yet (one added by mistake). An entry in use is hidden instead."""
+    kind = _kind(kind, actor)
+    e = db.scalar(select(PickListEntry).where(PickListEntry.id == entry_id, PickListEntry.branch_id == actor.branch.id, PickListEntry.kind == kind))
+    if not e:
+        raise HTTPException(404, "Not found")
+    if is_used(db, kind, e.name):
+        raise HTTPException(409, f"{e.name} is already used on records, so it can't be deleted. Hide it instead.")
+    db.delete(e)
+    db.commit()
+    return {"ok": True}

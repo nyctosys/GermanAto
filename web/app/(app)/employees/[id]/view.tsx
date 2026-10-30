@@ -1,5 +1,6 @@
 "use client";
 
+import { DeleteButton } from "@/components/delete-button";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -54,7 +55,7 @@ function View() {
           <h1>{e.full_name}</h1>
           <p className="text-muted">{e.number}{e.title ? `, ${e.title}` : ""}{e.is_active ? "" : ", no longer working here"}</p>
         </div>
-        {!editing && <Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button>}
+        {!editing && <><Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button><DeleteButton path={`/api/employees/${id}`} what="employee" goTo="/employees" label="Delete employee" /></>}
       </div>
       {editing && <div className="mb-4"><Card title="Edit employee"><EmployeeForm employee={e} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); data.reload(); }} /></Card></div>}
 

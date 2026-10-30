@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import Car, Item, LabourCode, PickListEntry
 
 DEFAULTS: dict[str, list[str]] = {
+    "fitment": [],  # grows as the team adds cars a part fits ("Audi e-tron", "BMW 5 Series F10")
     "car_make": [
         "Toyota", "Honda", "Suzuki", "Nissan", "Mitsubishi", "Daihatsu", "Mazda", "Subaru", "Lexus", "Hyundai", "Kia", "Changan", "MG",
         "Proton", "Haval", "DFSK", "FAW", "Isuzu", "BMW", "Mercedes-Benz", "Audi", "Volkswagen", "Porsche", "Land Rover", "Jaguar",
@@ -36,15 +37,20 @@ DEFAULTS: dict[str, list[str]] = {
     ],
 }
 # The permission that lets a person see and add to each list.
-PERMISSION = {"car_make": "customers", "part_brand": "inventory", "part_category": "inventory", "labour_category": "labour-codes"}
+PERMISSION = {"fitment": "inventory", "car_make": "customers", "part_brand": "inventory", "part_category": "inventory", "labour_category": "labour-codes"}
 # Where each list's value is stored on records, so a rename carries through.
-USED_BY = {"car_make": Car.make, "part_brand": Item.brand, "part_category": Item.category, "labour_category": LabourCode.category}
+USED_BY = {"fitment": Item.fitment, "car_make": Car.make, "part_brand": Item.brand, "part_category": Item.category, "labour_category": LabourCode.category}
 
 
 def tidy(name: str) -> str:
     """Trim, collapse spaces, and capitalise a name typed all in lower case ("liqui moly" becomes "Liqui Moly")."""
     name = re.sub(r"\s+", " ", name or "").strip()
     return name.title() if name and name == name.lower() else name
+
+
+def split_fits(value: str | None) -> list[str]:
+    """An item's Fits is one text of names joined by semicolons (older ones may use commas)."""
+    return [p.strip() for p in re.split(r"[;,]", value or "") if p.strip()]
 
 
 def squash(name: str) -> str:
@@ -64,6 +70,8 @@ def seed(db: Session, branch_id, kind: str) -> None:
     }
     col = USED_BY[kind]
     used = [v for v in db.scalars(select(col).distinct()) if v and v.strip()]
+    if kind == "fitment":
+        used = [p for v in used for p in split_fits(v)]
     for name in [*DEFAULTS[kind], *(tidy(v) for v in used)]:
         key = name.lower()
         if name and key not in known:
@@ -100,8 +108,19 @@ def one_slip(a: str, b: str) -> bool:
     return any(long[:i] + long[i + 1:] == short for i in range(len(long)))
 
 
+def is_used(db: Session, kind: str, name: str) -> bool:
+    col = USED_BY[kind]
+    if kind == "fitment":
+        return any(name.lower() in (p.lower() for p in split_fits(v)) for v in db.scalars(select(col).where(col.ilike(f"%{name}%"))))
+    return bool(db.scalar(select(func.count()).select_from(col.class_).where(func.lower(col) == name.lower())))
+
+
 def rename_on_records(db: Session, kind: str, old: str, new: str, branch_id) -> None:
     col = USED_BY[kind]
+    if kind == "fitment":
+        for it in db.scalars(select(Item).where(Item.branch_id == branch_id, Item.fitment.ilike(f"%{old}%"))):
+            it.fitment = "; ".join(new if p.lower() == old.lower() else p for p in split_fits(it.fitment))
+        return
     stmt = update(col.class_).where(func.lower(col) == old.lower()).values({col.key: new})
     if hasattr(col.class_, "branch_id"):
         stmt = stmt.where(col.class_.branch_id == branch_id)

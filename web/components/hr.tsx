@@ -1,5 +1,6 @@
 "use client";
 
+import { PhoneInput } from "@/components/phone-input";
 import { useRef, useState, type FormEvent } from "react";
 import { Segments } from "@/components/search";
 import { Badge, Button, Card, Field, Input, Notice, Select } from "@/components/ui";
@@ -76,7 +77,7 @@ export function EmployeeForm({ employee, onSaved, onCancel }: { employee?: Emplo
     <form ref={form} noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3" {...live}>
       <Field required label="Full name" error={errors.full_name}><Input name="full_name" defaultValue={employee?.full_name} required maxLength={120} autoComplete="off" autoFocus /></Field>
       <Field label="Job title (optional)" error={errors.title}><Input name="title" defaultValue={employee?.title} maxLength={80} placeholder="Technician" /></Field>
-      <Field label="Phone (optional)" error={errors.phone}><Input name="phone" defaultValue={employee ? phone(employee.phone) : ""} inputMode="tel" placeholder="+92 300 1234567" /></Field>
+      <Field label="Phone (optional)" error={errors.phone}><PhoneInput name="phone" defaultValue={employee?.phone} /></Field>
       <Field required label="CNIC" error={errors.cnic} hint="13 digits"><Input name="cnic" defaultValue={employee?.cnic} inputMode="numeric" /></Field>
       <Field required label="Monthly salary (Rs)" error={errors.monthly_salary}><Input name="monthly_salary" inputMode="decimal" defaultValue={employee ? String(Number(employee.monthly_salary)) : ""} /></Field>
       <Field label="Number on the attendance device" error={errors.device_pin} hint="Claims punches already received for it."><Input name="device_pin" defaultValue={employee?.device_pin} maxLength={20} inputMode="numeric" /></Field>

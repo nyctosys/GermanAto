@@ -32,8 +32,11 @@ const field =
   `${control} w-full border-rule-strong bg-surface text-ink placeholder:text-muted ` +
   "hover:border-ink-2 focus-visible:border-ink aria-invalid:border-error";
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={field} {...props} />;
+const TEXTY = new Set([undefined, "text", "search", "tel", "email", "url", "password"]);
+
+/** A text box never takes endless text: 160 characters unless the field sets its own limit. */
+export function Input({ maxLength, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={field} maxLength={maxLength ?? (TEXTY.has(props.type) ? 160 : undefined)} {...props} />;
 }
 
 export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {

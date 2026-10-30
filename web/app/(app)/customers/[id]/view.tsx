@@ -1,5 +1,6 @@
 "use client";
 
+import { DeleteButton } from "@/components/delete-button";
 import Link from "next/link";
 import { NextStep } from "@/components/next-step";
 import { useParams, useRouter } from "next/navigation";
@@ -40,7 +41,7 @@ function CustomerDetail() {
       <PageHeader
         title={data.name}
         description={`${data.number}${data.kind === "company" ? ", company or fleet" : ""}`}
-        actions={!editing && <Button variant="secondary" onClick={() => setEditing(true)}>Edit details</Button>}
+        actions={!editing && <><Button variant="secondary" onClick={() => setEditing(true)}>Edit details</Button><DeleteButton path={`/api/customers/${data.id}`} what="customer" goTo="/customers" label="Delete customer" /></>}
       />
       {!editing && (current.length === 0
         ? <NextStep who="Front desk" target="act-add-car" label="Add car">This customer has no car yet. Add the car, then check it in.</NextStep>

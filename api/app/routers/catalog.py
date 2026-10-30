@@ -103,7 +103,7 @@ class ItemIn(BaseModel):
     brand: Text = Field(default="", max_length=60)
     category: Text = Field(default="", max_length=60)
     unit: Literal["pcs", "set", "litre", "kg", "metre", "pair", "box"] = "pcs"
-    fitment: Text = Field(default="", max_length=200)
+    fitment: Text = Field(default="", max_length=600)
     location: Text = Field(default="", max_length=60)
     sale_price: Decimal = Money
     reorder_level: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=3)

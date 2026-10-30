@@ -253,7 +253,7 @@ class Item(BranchScoped):
     brand: Mapped[str] = mapped_column(String(60), default="")
     category: Mapped[str] = mapped_column(String(60), default="")
     unit: Mapped[str] = mapped_column(String(12), default="pcs")
-    fitment: Mapped[str] = mapped_column(String(200), default="")  # e.g. "BMW 5 Series F10 2010-2016"
+    fitment: Mapped[str] = mapped_column(String(600), default="")  # e.g. "BMW 5 Series F10 2010-2016"
     location: Mapped[str] = mapped_column(String(60), default="")  # bin / shelf
     sale_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
     avg_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0"))  # from goods received

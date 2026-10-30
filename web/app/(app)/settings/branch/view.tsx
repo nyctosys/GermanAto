@@ -1,5 +1,6 @@
 "use client";
 
+import { PhoneInput } from "@/components/phone-input";
 import { useState, type FormEvent } from "react";
 import { RequirePermission } from "@/components/shell";
 import { Button, Card, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
@@ -60,7 +61,7 @@ function BranchSettings() {
               <Field label="Branch code" hint="Fixed. It appears in every document number.">
                 <Input value={data.code} readOnly disabled />
               </Field>
-              <Field label="Phone"><Input name="phone" defaultValue={data.phone} inputMode="tel" placeholder="+92 300 1234567" autoComplete="tel" /></Field>
+              <Field label="Phone"><PhoneInput name="phone" defaultValue={data.phone} /></Field>
               <Field label="Email"><Input name="email" type="email" defaultValue={data.email} autoComplete="email" /></Field>
               <div className="sm:col-span-2">
                 <Field label="Address"><Input name="address" defaultValue={data.address} maxLength={300} autoComplete="street-address" /></Field>

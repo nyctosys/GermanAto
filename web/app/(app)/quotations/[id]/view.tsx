@@ -1,5 +1,6 @@
 "use client";
 
+import { DeleteButton } from "@/components/delete-button";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
@@ -331,6 +332,7 @@ function DraftEditor({ q, onSaved, onSend, busy, onLive }:
       <div className="flex flex-wrap gap-2">
         <Button id="act-send-quote" onClick={() => save(true)} disabled={saving || busy}>{busy ? "Sending" : "Send to the customer"}</Button>
         <Button variant="success" onClick={() => save(false)} disabled={saving || !dirty}>{saving ? "Saving" : "Save draft"}</Button>
+        <DeleteButton path={`/api/quotations/${q.id}`} what="draft quotation" goTo="/quotations" label="Delete draft" />
       </div>
       <p className="text-sm text-muted">Sending locks the prices. The customer gets a WhatsApp message when it is switched on under Message wording; you can also print it.</p>
     </>

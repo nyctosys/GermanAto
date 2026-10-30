@@ -17,7 +17,7 @@ def normalize_pk_phone(value: str) -> str:
         digits = "+" + digits[2:]
     if digits.startswith("+") and not digits.startswith("+92"):
         if not re.fullmatch(r"\+[1-9]\d{7,14}", digits):
-            raise ValueError("Enter the number with its country code, e.g. +92 300 1234567")
+            raise ValueError("That number is too short or too long for its country code, e.g. +971 50 123 4567")
         return digits
     if digits.startswith("+92"):
         digits = digits[3:]
@@ -28,7 +28,7 @@ def normalize_pk_phone(value: str) -> str:
     elif digits.startswith("0"):
         digits = digits[1:]
     if not re.fullmatch(r"\d{9,10}", digits):
-        raise ValueError("Enter the number with its country code, e.g. +92 300 1234567")
+        raise ValueError(f"A Pakistani number has 10 digits after +92 (you typed {len(digits)}), e.g. +92 300 1234567")
     return "+92" + digits
 
 

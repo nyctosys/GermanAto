@@ -1,5 +1,6 @@
 "use client";
 
+import { DeleteButton } from "@/components/delete-button";
 import { useParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { type Item, ItemForm } from "@/components/inventory";
@@ -86,6 +87,7 @@ function ItemDetail() {
         actions={mode === "view" && (
           <>
             <Button variant="secondary" onClick={() => setMode("edit")}>Edit item</Button>
+            {can("inventory") && <DeleteButton path={`/api/items/${id}`} what="item" goTo="/inventory" label="Delete item" />}
             {can("stock-adjust") && <Button variant="secondary" onClick={() => setMode("adjust")}>Adjust stock</Button>}
           </>
         )}

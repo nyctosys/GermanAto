@@ -61,7 +61,7 @@ export function CarForm({ car, ownerId, onSaved, onCancel }:
       </Field>
       <Field error={errors.color} label="Colour"><Input name="color" defaultValue={car?.color} /></Field>
       <Field error={errors.vin} label="VIN / chassis number" hint="As stamped on the car, e.g. NZE141-6012345. Optional."><Input name="vin" defaultValue={car?.vin} maxLength={30} autoCapitalize="characters" spellCheck={false} /></Field>
-      <Field error={errors.engine_no} label="Engine number"><Input name="engine_no" defaultValue={car?.engine_no} autoCapitalize="characters" spellCheck={false} /></Field>
+      <Field error={errors.engine_no} label="Engine number"><Input name="engine_no" defaultValue={car?.engine_no} maxLength={40} autoCapitalize="characters" spellCheck={false} /></Field>
       <Field error={errors.odometer_km} label="Odometer (km)"><Input name="odometer_km" type="number" inputMode="numeric" min={0} defaultValue={car?.odometer_km ?? ""} /></Field>
       <div className="sm:col-span-2"><Field error={errors.notes} label="Notes"><Input name="notes" defaultValue={car?.notes} /></Field></div>
       <div className="flex flex-col gap-3 sm:col-span-2 shell:col-span-3">

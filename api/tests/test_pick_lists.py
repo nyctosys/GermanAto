@@ -56,3 +56,27 @@ def test_spacing_and_punctuation_variants_reuse_the_entry(admin):
     assert r.status_code == 201 and r.json()["name"] == "Liqui Moly" and r.json()["created"] is False
     r = admin.post("/api/lists/part_brand", json={"name": "Denzo"})
     assert r.status_code == 409 and "Denso" in r.json()["detail"]
+
+
+def test_fitment_list_grows_from_items_and_delete_only_when_unused(admin):
+    r = admin.post("/api/lists/fitment", json={"name": "audi e-tron"})
+    assert r.status_code == 201 and r.json()["name"] == "Audi E-Tron"
+    eid = r.json()["id"]
+    item = {"name": "Brake pad", "category": "Brakes", "unit": "pcs", "sale_price": "10", "reorder_level": "0", "reorder_qty": "0",
+            "fitment": "Audi E-Tron; BMW 5 Series", "codes": [{"kind": "barcode", "code": "FIT-1"}]}
+    assert admin.post("/api/items", json=item).status_code == 201
+    assert "BMW 5 Series" in names(admin, "fitment")  # a car typed on an item joins the list the next time it opens
+    assert admin.delete(f"/api/lists/fitment/{eid}").status_code == 409  # used on an item
+    other = admin.post("/api/lists/fitment", json={"name": "Skoda Octavia"}).json()["id"]
+    assert admin.delete(f"/api/lists/fitment/{other}").status_code == 200
+
+
+def test_unused_records_delete_used_ones_refuse(admin):
+    item = {"name": "Wiper", "category": "Body and glass", "unit": "pcs", "sale_price": "10", "reorder_level": "0", "reorder_qty": "0",
+            "codes": [{"kind": "barcode", "code": "DEL-1"}]}
+    made = admin.post("/api/items", json=item).json()
+    assert admin.delete(f"/api/items/{made['id']}").status_code == 200
+    assert admin.get(f"/api/items/{made['id']}").status_code == 404
+    kept = admin.post("/api/items", json={**item, "codes": [{"kind": "barcode", "code": "DEL-2"}], "opening_qty": "5", "opening_cost": "3"}).json()
+    r = admin.delete(f"/api/items/{kept['id']}")
+    assert r.status_code == 409 and "inactive" in r.json()["detail"]

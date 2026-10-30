@@ -1,5 +1,6 @@
 "use client";
 
+import { DeleteButton } from "@/components/delete-button";
 import { useState, type FormEvent } from "react";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
@@ -107,6 +108,7 @@ function CodeForm({ code, onDone }: { code: Code | null; onDone: () => void }) {
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant={code ? "success" : "primary"} disabled={busy}>{busy ? "Saving" : code ? "Save changes" : "Add labour code"}</Button>
           <Button type="button" variant="danger" onClick={onDone}>Cancel</Button>
+          {code && <DeleteButton path={`/api/labour-codes/${code.id}`} what="labour code" onDone={onDone} label="Delete code" />}
         </div>
       </div>
     </form>

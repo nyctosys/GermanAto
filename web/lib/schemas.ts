@@ -14,7 +14,7 @@ const phoneOrEmpty = z.string().transform((v, ctx) => {
   if (d.startsWith("00") && !d.startsWith("0092")) d = `+${d.slice(2)}`;
   if (d.startsWith("+") && !d.startsWith("+92")) {
     if (/^\+[1-9]\d{7,14}$/.test(d)) return d;
-    ctx.addIssue({ code: "custom", message: "Enter the number with its country code, e.g. +92 300 1234567" });
+    ctx.addIssue({ code: "custom", message: "That number is too short or too long for its country code, e.g. +971 50 123 4567" });
     return z.NEVER;
   }
   if (d.startsWith("+92")) d = d.slice(3);
@@ -22,7 +22,7 @@ const phoneOrEmpty = z.string().transform((v, ctx) => {
   else if (d.startsWith("92") && d.length === 12) d = d.slice(2);
   else if (d.startsWith("0")) d = d.slice(1);
   if (!/^\d{9,10}$/.test(d)) {
-    ctx.addIssue({ code: "custom", message: "Enter the number with its country code, e.g. +92 300 1234567" });
+    ctx.addIssue({ code: "custom", message: `A Pakistani number has 10 digits after +92 (you typed ${d.length}), e.g. +92 300 1234567` });
     return z.NEVER;
   }
   return "+92" + d;

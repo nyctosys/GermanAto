@@ -1,5 +1,6 @@
 "use client";
 
+import { DeleteButton } from "@/components/delete-button";
 import { useState, type FormEvent } from "react";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, ErrorState, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
@@ -12,6 +13,7 @@ const LISTS: { kind: ListKind; title: string; note: string }[] = [
   { kind: "part_brand", title: "Part brands", note: "Shown when adding stock." },
   { kind: "part_category", title: "Part categories", note: "Shown when adding stock." },
   { kind: "car_make", title: "Car makes", note: "Shown when adding a car." },
+  { kind: "fitment", title: "Cars a part fits", note: "Shown in the Fits box when adding stock." },
   { kind: "labour_category", title: "Labour categories", note: "Shown when adding a labour code." },
 ];
 
@@ -82,6 +84,7 @@ function ListCard({ kind, title, note }: { kind: ListKind; title: string; note: 
                   <span className="flex gap-2">
                     <Button variant="secondary" onClick={() => { setEditing(e.id); setName(e.name); setError(null); }}>Rename</Button>
                     <Button variant="secondary" onClick={() => save(e.id, { is_active: !e.is_active })}>{e.is_active ? "Hide" : "Show again"}</Button>
+                    <DeleteButton path={`/api/lists/${kind}/${e.id}`} what="entry" onDone={list.reload} />
                   </span>
                 </>
               )}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button, Input, Notice, Select } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 
-export type ListKind = "part_brand" | "part_category" | "car_make" | "labour_category";
+export type ListKind = "part_brand" | "part_category" | "car_make" | "labour_category" | "fitment";
 type Entry = { id: string; name: string };
 
 const ADD = "__add";

@@ -1,5 +1,6 @@
 "use client";
 
+import { DeleteButton } from "@/components/delete-button";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -41,7 +42,7 @@ function View() {
         </div>
         <div className="flex flex-wrap gap-2">
           {can("purchasing") && d.is_active && <Link href={`/purchase-orders/new?vendor=${d.id}`} className={linkButton}>New purchase order</Link>}
-          {can("vendors") && !editing && <Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button>}
+          {can("vendors") && !editing && <><Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button><DeleteButton path={`/api/vendors/${d.id}`} what="vendor" goTo="/vendors" label="Delete vendor" /></>}
         </div>
       </div>
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">

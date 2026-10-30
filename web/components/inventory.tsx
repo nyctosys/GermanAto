@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Button, Field, Input, Notice, Select } from "@/components/ui";
+import { ListMulti } from "@/components/list-multi";
 import { ListSelect } from "@/components/list-select";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -86,7 +87,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
         <Select name="unit" defaultValue={item?.unit ?? "pcs"}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select>
       </Field>
       <Field label="Shelf or bin"><Input name="location" defaultValue={item?.location} placeholder="A3" /></Field>
-      <div className="sm:col-span-2"><Field label="Fits" hint="Which cars it fits, for searching"><Input name="fitment" defaultValue={item?.fitment} placeholder="BMW 5 Series F10 2010–2016" /></Field></div>
+      <div className="sm:col-span-2"><Field label="Fits" hint="Pick every car it fits. A car not in the list yet is added with one click and is there next time."><ListMulti name="fitment" kind="fitment" defaultValue={item?.fitment} /></Field></div>
       <Field required label="Sale price (PKR)"><Input name="sale_price" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={item?.sale_price ?? ""} required /></Field>
       <Field label="Reorder when stock reaches" hint="How much to order is decided on the purchase order."><Input name="reorder_level" type="number" inputMode="decimal" min={0} step="0.001" defaultValue={item ? Number(item.reorder_level) : ""} /></Field>
 

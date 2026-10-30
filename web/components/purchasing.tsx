@@ -1,5 +1,6 @@
 "use client";
 
+import { PhoneInput } from "@/components/phone-input";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Badge, Button, Card, Field, Input, Notice } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -138,7 +139,7 @@ export function VendorForm({ vendor, onSaved, onCancel }: { vendor?: Vendor; onS
     <form ref={form} noValidate onSubmit={submit} className="grid gap-5 sm:grid-cols-2" {...live}>
       <Field required error={errors.name} label="Vendor name"><Input name="name" defaultValue={vendor?.name} required maxLength={120} autoComplete="off" autoFocus /></Field>
       <Field error={errors.contact_person} label="Contact person (optional)"><Input name="contact_person" defaultValue={vendor?.contact_person} maxLength={120} /></Field>
-      <Field error={errors.phone} label="Phone (optional)"><Input name="phone" defaultValue={vendor ? phone(vendor.phone) : ""} inputMode="tel" placeholder="+92 300 1234567" /></Field>
+      <Field error={errors.phone} label="Phone (optional)"><PhoneInput name="phone" defaultValue={vendor?.phone} /></Field>
       <Field error={errors.email} label="Email (optional)"><Input name="email" type="email" defaultValue={vendor?.email} /></Field>
       <div className="sm:col-span-2"><Field error={errors.address} label="Address (optional)"><Input name="address" defaultValue={vendor?.address} maxLength={300} /></Field></div>
       <Field error={errors.terms_days} label="Days to pay a bill" hint="Sets the due date on each bill. 0 means due at once.">
