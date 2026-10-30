@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { type Uploaded } from "@/components/capture";
 import { ACCOUNT, ProofInput } from "@/components/payments";
 import { ReasonForm } from "@/components/purchasing";
-import { useQueryParam } from "@/components/search";
+import { SearchInput, useQueryParam } from "@/components/search";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money, today } from "@/lib/format";
@@ -34,6 +34,7 @@ const OUT_KINDS = ["expense", "drawings", "transfer"];
 export function MoneyBook({ direction }: { direction: "in" | "out" }) {
   const { can } = useSession();
   const [q, setQ] = useQueryParam("q");
+  const [qText, setQText] = useState(q);
   const [source, setSource] = useQueryParam("source");
   const [account, setAccount] = useQueryParam("account");
   const [from, setFrom] = useQueryParam("from");
@@ -87,7 +88,7 @@ export function MoneyBook({ direction }: { direction: "in" | "out" }) {
 
       <Card title="Find">
         <div className="grid gap-4 sm:grid-cols-2 shell:grid-cols-4">
-          <Field label="Search"><Input type="search" defaultValue={q} onChange={(e) => setQ(e.target.value.trim())} placeholder="Name, number or reference" /></Field>
+          <Field label="Search"><SearchInput value={qText} onChange={(v) => { setQText(v); setQ(v.trim()); }} placeholder="Name, number or reference" /></Field>
           <Field label="Source">
             <Select value={source} onChange={(e) => setSource(e.target.value)}>
               <option value="">All sources</option>

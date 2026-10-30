@@ -1,11 +1,14 @@
 "use client";
 
+import type { Progress } from "@/components/job-progress";
+
 export type VisitSummary = {
   id: string; number: string; kind: "workshop" | "pre_purchase"; status: "open" | "closed" | "cancelled";
   checked_in_at: string; closed_at: string | null; odometer_in: number | null; complaint: string;
   car: { id: string; plate: string; make: string; model: string; year: number | null };
   customer: { id: string; name: string; phone: string; number: string };
   buyer: { id: string; name: string; phone: string; number: string } | null;
+  progress?: Progress;  // only on the Workshop list
 };
 
 /** Fuel level in eighths: eight large taps instead of a fiddly slider. */

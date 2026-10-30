@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { carTitle, Plate } from "@/components/cars";
+import { JobProgress, stepsOf } from "@/components/job-progress";
 import { SearchBox, Segments, useQueryParam } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { Card, EmptyState, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
@@ -29,7 +30,7 @@ function Board() {
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <SearchBox placeholder="Plate, customer or visit number" />
+        <SearchBox placeholder="Plate, customer or visit" />
         <Segments value={status || "open"} onChange={(v) => setStatus(v === "open" ? "" : v)}
                   options={[{ value: "open", label: "In now" }, { value: "closed", label: "Delivered" }, { value: "all", label: "All" }]} />
       </div>
@@ -43,23 +44,25 @@ function Board() {
             </EmptyState>
           </Card>
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2 shell:grid-cols-3">
+          <ul className="grid gap-3">
             {list.data.map((v) => (
               <li key={v.id}>
-                <Link href={`/visits/${v.id}`} className="flex h-full flex-col gap-3 rounded-card bg-surface p-4 transition-colors duration-(--dur-micro) hover:bg-paper-3/40 active:bg-paper-3 active:duration-0">
-                  <span className="flex items-start justify-between gap-3">
-                    <Plate plate={v.car.plate} small />
-                    <span className="text-sm text-muted">{v.status === "open" ? `In ${elapsed(v.checked_in_at)}` : v.status === "closed" ? `Out ${day(v.closed_at)}` : "Cancelled"}</span>
-                  </span>
-                  <span>
-                    <span className="block font-medium">{carTitle(v.car)}</span>
-                    <span className="block text-ink-2">{v.customer.name}</span>
+                <Link href={`/visits/${v.id}`} className="flex flex-col gap-3 rounded-card bg-surface p-4 transition-colors duration-(--dur-micro) hover:bg-paper-3 shell:px-5">
+                  <span className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+                      <Plate plate={v.car.plate} small />
+                      <span className="min-w-0">
+                        <span className="block font-medium">{carTitle(v.car)}</span>
+                        <span className="block text-ink-2">{v.customer.name}</span>
+                      </span>
+                    </span>
+                    <span className="text-right text-sm text-muted">
+                      <span className="block">{v.status === "open" ? `In ${elapsed(v.checked_in_at)}` : v.status === "closed" ? `Out ${day(v.closed_at)}` : "Cancelled"}</span>
+                      <span className="block">{v.number}{v.kind === "pre_purchase" && <span className="ml-2 font-medium text-primary">Pre-purchase</span>}</span>
+                    </span>
                   </span>
                   {v.complaint && <span className="line-clamp-2 text-sm text-muted">{v.complaint}</span>}
-                  <span className="mt-auto flex items-center justify-between text-sm text-muted">
-                    <span>{v.number}</span>
-                    {v.kind === "pre_purchase" && <span className="font-medium text-primary">Pre-purchase</span>}
-                  </span>
+                  {v.progress && v.status !== "cancelled" && <JobProgress flat steps={stepsOf(v.progress)} />}
                 </Link>
               </li>
             ))}

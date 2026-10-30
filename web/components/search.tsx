@@ -28,19 +28,35 @@ export function SearchBox({ placeholder, label = "Search", autoFocus }: { placeh
     const t = setTimeout(() => setQ(text.trim()), 250);
     return () => clearTimeout(t);
   }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <SearchInput value={text} onChange={setText} placeholder={placeholder} label={label} autoFocus={autoFocus} />;
+}
+
+/** The one look for every search box: a magnifier, a firm border, a clear button, and a Search button that does it now. */
+export function SearchInput({ value, onChange, placeholder, label = "Search", autoFocus, onSearch }:
+  { value: string; onChange: (v: string) => void; placeholder: string; label?: string; autoFocus?: boolean; onSearch?: () => void }) {
   return (
-    <label className="block min-w-0 flex-1">
-      <span className="sr-only">{label}</span>
-      <input
-        type="search"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        enterKeyHint="search"
-        className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted hover:border-muted focus-visible:border-ink"
-      />
-    </label>
+    <form role="search" className="flex min-w-[min(100%,18rem)] flex-1 gap-2" onSubmit={(e) => { e.preventDefault(); onSearch?.(); }}>
+      <label className="relative block min-w-0 flex-1">
+        <span className="sr-only">{label}</span>
+        <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-2" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" />
+        </svg>
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          enterKeyHint="search"
+          className="min-h-11 w-full cursor-text rounded-control border-2 border-ink-2 bg-surface pl-10 pr-10 text-base placeholder:text-muted hover:border-ink focus-visible:border-ink [&::-webkit-search-cancel-button]:hidden"
+        />
+        {value && (
+          <button type="button" aria-label="Clear the search" onClick={() => onChange("")}
+                  className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-control text-xl leading-none text-ink-2 hover:bg-paper-3">×</button>
+        )}
+      </label>
+      <button type="submit" className="min-h-11 shrink-0 cursor-pointer rounded-control border border-action bg-action px-4 text-[0.9375rem] font-medium text-action-ink transition-colors duration-(--dur-micro) hover:border-action-2 hover:bg-action-2 active:border-action-3 active:bg-action-3 active:duration-0">Search</button>
+    </form>
   );
 }
 

@@ -20,11 +20,11 @@ export type Step = { key: keyof typeof ICONS; label: string; done: boolean };
  * Where a job has got to: a row of round icons joined by a line. Finished steps are filled,
  * the step being worked on now has a ring, and later steps are grey.
  */
-export function JobProgress({ steps }: { steps: Step[] }) {
+export function JobProgress({ steps, flat = false }: { steps: Step[]; flat?: boolean }) {
   const done = steps.filter((s) => s.done).length;
   const current = steps.findIndex((s) => !s.done);
   return (
-    <div className="mb-4 rounded-card bg-surface px-3 py-4 shell:px-5" role="group" aria-label={`Progress: ${done} of ${steps.length} steps done`}>
+    <div className={flat ? "pt-1" : "mb-4 rounded-card bg-surface px-3 py-4 shell:px-5"} role="group" aria-label={`Progress: ${done} of ${steps.length} steps done`}>
       <ol className="flex">
         {steps.map((s, i) => {
           const state = s.done ? "done" : i === current ? "now" : "later";
@@ -47,7 +47,7 @@ export function JobProgress({ steps }: { steps: Step[] }) {
 }
 
 
-type Progress = {
+export type Progress = {
   status: string;
   job_card: unknown | null;
   quotations: { status: string }[];

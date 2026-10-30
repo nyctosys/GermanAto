@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button, EmptyState, Input, PageHeader } from "@/components/ui";
+import { SearchInput } from "@/components/search";
+import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { CHAPTERS, RULES, WORDS, type Chapter, type Sop } from "@/content/manual";
 
 // Filled pills on a phone, plain underlined links in the desktop sidebar.
@@ -56,7 +57,7 @@ export default function HelpPage() {
           </ul>
         </nav>
         <div className="grid min-w-0 gap-6 print:block">
-          <div className="no-print max-w-lg"><Input type="search" aria-label="Search the manual" placeholder="Search the manual: refund, salary, gate pass ..." value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="no-print max-w-lg"><SearchInput label="Search the manual" placeholder="Search the manual: refund, salary, gate pass ..." value={q} onChange={setQ} /></div>
 
           {/* Printed contents: a list to find chapters by number, since links do nothing on paper. */}
           <section className="hidden print:mt-5 print:block">

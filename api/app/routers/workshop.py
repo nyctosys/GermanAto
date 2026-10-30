@@ -257,7 +257,20 @@ def list_visits(status: Literal["open", "closed", "cancelled", "all"] = "open", 
         like = f"%{q.strip()}%"
         stmt = stmt.where(or_(Visit.number.ilike(like), Car.plate.ilike(like), Customer.name.ilike(like),
                               Car.make.ilike(like), Car.model.ilike(like)))
-    return [visit_summary(v, car, c, db.get(Customer, v.buyer_id) if v.buyer_id else None) for v, car, c in db.execute(stmt)]
+    rows = db.execute(stmt).all()
+    ids = [v.id for v, _, _ in rows]
+    cards = set(db.scalars(select(JobCard.visit_id).where(JobCard.visit_id.in_(ids))))
+    quotes: dict = {}
+    for q in db.scalars(select(Quotation).where(Quotation.visit_id.in_(ids), Quotation.status != "revised")):
+        quotes.setdefault(q.visit_id, []).append({"status": q.status})
+    ros = {r.visit_id: {"status": r.status} for r in db.scalars(select(RepairOrder).where(RepairOrder.visit_id.in_(ids)))}
+    invs = {i.visit_id: {"status": i.status} for i in db.scalars(
+        select(Invoice).where(Invoice.visit_id.in_(ids), Invoice.kind == "workshop", Invoice.status != "void"))}
+    # what the progress bar on each car needs, in the same shape as the visit page
+    return [{**visit_summary(v, car, c, db.get(Customer, v.buyer_id) if v.buyer_id else None),
+             "progress": {"status": v.status, "job_card": v.id in cards, "quotations": quotes.get(v.id, []),
+                          "repair_order": ros.get(v.id), "invoice": invs.get(v.id)}}
+            for v, car, c in rows]
 
 
 @router.get("/visits/{visit_id}")

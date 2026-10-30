@@ -114,3 +114,14 @@ def test_extra_work_is_flagged_and_removable(admin):
     assert extra["in_quote"] is False and extra["approval"] == {"method": "phone", "reason": "Agreed on a call", "proof_url": None}
     assert admin.delete(f"{url}/lines/{ro['lines'][0]['id']}").status_code == 409  # approved lines stay
     assert len(admin.delete(f"{url}/lines/{extra['id']}").json()["lines"]) == 2
+
+
+
+def test_workshop_list_carries_each_cars_progress(admin):
+    visit, _, _, q = approved_quote(admin)  # a sent quotation
+    row = next(v for v in admin.get("/api/visits").json() if v["id"] == visit["id"])
+    assert row["progress"]["job_card"] and row["progress"]["quotations"] == [{"status": "sent"}] and row["progress"]["repair_order"] is None
+    q = approve(admin, q)
+    admin.post(f"/api/quotations/{q['id']}/repair-order")
+    row = next(v for v in admin.get("/api/visits").json() if v["id"] == visit["id"])
+    assert row["progress"]["repair_order"] == {"status": "received"}
