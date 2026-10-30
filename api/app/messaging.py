@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db import utcnow
 from app.models import Branch, Car, Customer, Invoice, Message, MessageTemplate, Visit
+from app.config import local_today
 
 # key -> (what it is for, default wording). Fields: {name} {number} {total} {balance} {car} {workshop} {days}
 DEFAULTS: dict[str, tuple[str, str]] = {
@@ -188,7 +189,7 @@ def due_days(branch: Branch) -> list[int]:
 def run_reminders(db: Session, branch: Branch, today: date | None = None) -> dict:
     """Queues every reminder that is due and not queued before (the dedupe key makes it safe to run daily or twice)."""
     from app.routers.billing import balance_of  # late: billing imports this module for its events
-    today = today or date.today()
+    today = today or local_today()
     made = {"payment": 0, "service": 0, "welcome": 0}
     days = due_days(branch)
     for inv in db.scalars(select(Invoice).where(Invoice.branch_id == branch.id, Invoice.status == "issued", Invoice.customer_id.is_not(None))):

@@ -16,6 +16,7 @@ from app.models import Account, CashClose, User
 from app.money_setup import ensure_money_setup
 from app.numbering import next_number
 from app.validators import Text
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["cash close"])
 can_close = require("cash-close")
@@ -57,7 +58,7 @@ def status(actor: Actor = Depends(can_see), db: Session = Depends(get_db)):
         last = last_close(db, actor, kind)
         out.append({"account": kind, "name": names[kind], "expected": journal.money_balance(db, actor.branch, kind),
                     "last_close": last and {"close_date": last.close_date, "counted": last.counted, "difference": last.difference},
-                    "closed_today": bool(last and last.close_date == date.today())})
+                    "closed_today": bool(last and last.close_date == local_today())})
     return out
 
 
@@ -82,8 +83,8 @@ class CloseIn(BaseModel):
 @router.post("/cash-closes", status_code=201)
 def close(body: CloseIn, actor: Actor = Depends(can_close), db: Session = Depends(get_db)):
     """Signs the count for a day. The expected figure is worked out from the journal up to the end of that day."""
-    day = body.close_date or date.today()
-    if day > date.today():
+    day = body.close_date or local_today()
+    if day > local_today():
         raise HTTPException(422, "A day can't be closed before it has happened")
     if db.scalar(select(CashClose.id).where(CashClose.branch_id == actor.branch.id, CashClose.account == body.account, CashClose.close_date == day)):
         raise HTTPException(409, "This account is already closed for that day")

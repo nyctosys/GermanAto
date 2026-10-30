@@ -24,6 +24,7 @@ from app.pricing import CENT, money, totals  # noqa: F401  (re-exported for the 
 from app.routers.workshop import _attach, _get_inspection, _get_visit, _require_open, snapshot_of
 from app.stock import on_hand_map
 from app.validators import Text, normalize_code
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["estimates"])
 can_job = require("job-cards")
@@ -183,7 +184,7 @@ def save_job_card(job_card_id: uuid.UUID, body: JobCardIn, actor: Actor = Depend
 
 def status_of(q: Quotation) -> str:
     """'Expired' is derived: a sent quote past its validity date."""
-    return "expired" if q.status == "sent" and q.valid_until < date.today() else q.status
+    return "expired" if q.status == "sent" and q.valid_until < local_today() else q.status
 
 
 def advances_on(db: Session, visit_id: uuid.UUID) -> list[Payment]:
@@ -257,7 +258,7 @@ def start_quotation(job_card_id: uuid.UUID, actor: Actor = Depends(can_quote), d
     codes, items = _targets(db, actor, [LineIn(kind=l.kind, labour_code_id=l.labour_code_id, item_id=l.item_id, qty=l.qty)
                                         for l in jc.lines])
     q = Quotation(number=next_number(db, actor.branch, "quotation"), visit_id=v.id, job_card_id=jc.id,
-                  tax_rate=actor.branch.tax_rate, valid_until=date.today() + timedelta(days=QUOTE_VALID_DAYS),
+                  tax_rate=actor.branch.tax_rate, valid_until=local_today() + timedelta(days=QUOTE_VALID_DAYS),
                   lines=[QuotationLine(position=n, kind=l.kind, labour_code_id=l.labour_code_id, item_id=l.item_id, qty=l.qty,
                                        description=(codes[l.labour_code_id] if l.labour_code_id else items[l.item_id]).name,
                                        unit_price=l.proposed_price if l.proposed_price is not None else items[l.item_id].sale_price if l.item_id else Decimal(0))
@@ -280,7 +281,7 @@ def list_quotations(status: Literal["draft", "sent", "approved", "rejected", "ex
                               Customer.phone.ilike(like), Car.plate.ilike(like)))
     if status in ("sent", "expired"):
         stmt = stmt.where(Quotation.status == "sent",
-                          Quotation.valid_until < date.today() if status == "expired" else Quotation.valid_until >= date.today())
+                          Quotation.valid_until < local_today() if status == "expired" else Quotation.valid_until >= local_today())
     elif status != "all":
         stmt = stmt.where(Quotation.status == status)
     return [{"id": q.id, "number": q.number, "revision": q.revision, "status": status_of(q), "total": totals(q)["total"],
@@ -339,7 +340,7 @@ def send_quotation(quotation_id: uuid.UUID, body: VersionIn, actor: Actor = Depe
     unpriced = [l.description for l in q.lines if l.unit_price <= 0]
     if unpriced:
         raise HTTPException(422, f"Enter a price for {', '.join(unpriced)}")
-    if q.valid_until < date.today():
+    if q.valid_until < local_today():
         raise HTTPException(422, "The validity date has passed. Set a new one.")
     q.status, q.sent_at = "sent", utcnow()
     messaging.queue(db, actor.branch, db.get(Customer, db.get(Visit, q.visit_id).customer_id), "quotation_sent",
@@ -420,7 +421,7 @@ def revise_quotation(quotation_id: uuid.UUID, actor: Actor = Depends(can_quote),
     db.flush()  # free the one-current-quotation slot before the new revision takes it
     new = Quotation(number=old.number, revision=old.revision + 1, supersedes_id=old.id, visit_id=old.visit_id,
                     job_card_id=old.job_card_id, tax_rate=actor.branch.tax_rate, include_tax=old.include_tax,
-                    discount=old.discount, notes=old.notes, valid_until=date.today() + timedelta(days=QUOTE_VALID_DAYS),
+                    discount=old.discount, notes=old.notes, valid_until=local_today() + timedelta(days=QUOTE_VALID_DAYS),
                     lines=[QuotationLine(position=l.position, kind=l.kind, labour_code_id=l.labour_code_id, item_id=l.item_id,
                                          description=l.description, qty=l.qty, unit_price=l.unit_price) for l in old.lines])
     db.add(new)

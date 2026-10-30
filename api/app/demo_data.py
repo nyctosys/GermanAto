@@ -25,6 +25,7 @@ from fastapi.testclient import TestClient
 
 import app.events  # noqa: F401 — audit/outbox flush hooks
 from app.main import app
+from app.config import local_today
 
 CASH = {"account": "cash", "no_proof_reason": "Demo cash at the counter"}
 MARKER_PHONE = "0399 0000001"
@@ -131,7 +132,7 @@ def money_setup(client) -> None:
         ok(client.put(f"/api/accounts/{cash['id']}", json={
             "name": cash["name"] or "Cash drawer",
             "opening_balance": "50000",
-            "opening_date": date.today().isoformat(),
+            "opening_date": local_today().isoformat(),
             "version": cash["version"],
         }), "cash opening")
     ok(client.get("/api/expense-categories"), "expense categories")
@@ -296,9 +297,9 @@ def purchasing(client, items) -> dict:
         "lines": [{"po_line_id": l["id"], "qty": l["qty"], "unit_cost": l["unit_cost"]} for l in po["lines"]],
     }), "receive PO")
     grn = receipt["receipts"][0]
-    today = date.today().isoformat()
+    today = local_today().isoformat()
     bill = ok(client.post(f"/api/goods-receipts/{grn['id']}/bill", json={
-        "bill_date": today, "vendor_invoice_no": f"DEMO-{date.today().strftime('%Y%m%d')}",
+        "bill_date": today, "vendor_invoice_no": f"DEMO-{local_today().strftime('%Y%m%d')}",
     }), "vendor bill")
     ok(client.post(f"/api/bills/{bill['id']}/payments", json={
         "amount": str(bill["total"]), **CASH,
@@ -386,7 +387,7 @@ def hr_sample(client) -> None:
             "serial": "DEMO-ZK-1001", "name": "Demo front door", "use_secret": False,
         }), "attendance device")
     # A few punches this month so attendance has rows
-    today = date.today()
+    today = local_today()
     day = today.replace(day=1)
     lines = []
     while day <= today and day.weekday() != 6:  # skip Sundays
@@ -403,7 +404,7 @@ def hr_sample(client) -> None:
             print(f"  (attendance push skipped: {r.status_code} {r.text})")
     # Leave mark on employee 2
     ok(client.post("/api/attendance/marks", json={
-        "employee_id": e2["id"], "day": date.today().isoformat(),
+        "employee_id": e2["id"], "day": local_today().isoformat(),
         "kind": "paid_leave", "reason": "Demo family day",
     }), "leave mark")
     print(f"  Employees: {e1['number']}, {e2['number']}")

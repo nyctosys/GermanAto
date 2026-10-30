@@ -15,6 +15,7 @@ from app import journal
 from app.models import Account, ExpenseCategory
 from app.money_setup import ensure_money_setup
 from app.validators import Name, Text
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["money"])
 can_settings = require("settings")
@@ -57,7 +58,7 @@ def update_account(account_id: uuid.UUID, body: AccountUpdate, actor: Actor = De
         raise HTTPException(404, "Account not found")
     if body.version != a.version:
         raise HTTPException(409, "Someone else changed this account. Reload and try again.")
-    if body.opening_date > date.today():
+    if body.opening_date > local_today():
         raise HTTPException(422, "The opening date is in the future")
     for k, v in body.model_dump(exclude={"version"}).items():
         setattr(a, k, v)

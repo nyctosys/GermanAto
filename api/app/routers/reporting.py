@@ -13,6 +13,7 @@ from app.db import get_db
 from app.models import Item, MoneyEntry, Quotation, RepairOrder, Visit
 from app.routers import moneybook
 from app.pricing import totals
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["reports"])
 finance = require("reports-finance")
@@ -20,7 +21,7 @@ ops = require("reports-ops")
 
 
 def span(date_from: date | None, date_to: date | None) -> tuple[date, date]:
-    today = date.today()
+    today = local_today()
     start, end = date_from or today.replace(day=1), date_to or today
     if end < start:
         raise HTTPException(422, "The end date is before the start date")
@@ -64,7 +65,7 @@ def r_ops(date_from: date | None = None, date_to: date | None = None, actor: Act
 
 @router.get("/reports/hr")
 def r_hr(month: str | None = None, actor: Actor = Depends(require("hr")), db: Session = Depends(get_db)):
-    month = month or date.today().strftime("%Y-%m")
+    month = month or local_today().strftime("%Y-%m")
     try:
         attendance.month_range(month)
     except ValueError:
@@ -75,7 +76,7 @@ def r_hr(month: str | None = None, actor: Actor = Depends(require("hr")), db: Se
 @router.get("/dashboard")
 def dashboard(actor: Actor = Depends(require("dashboard")), db: Session = Depends(get_db)):
     """What the owner looks at first. Workshop and stock figures for everyone with the dashboard; money for those who may see finance."""
-    branch, today = actor.branch, date.today()
+    branch, today = actor.branch, local_today()
     month_start = today.replace(day=1)
     in_workshop = db.scalar(select(func.count()).select_from(Visit).where(Visit.branch_id == branch.id, Visit.status == "open"))
     quotes = db.scalars(select(Quotation).where(Quotation.branch_id == branch.id, Quotation.status.in_(("draft", "sent")))).all()

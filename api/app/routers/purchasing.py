@@ -26,6 +26,7 @@ from app.routers.estimates import Proof
 from app.routers.workshop import _attach
 from app.stock import StockError, move, on_hand_map
 from app.validators import PersonOrEmpty, Email, Name, Phone, Text, normalize_code
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["purchasing"])
 can_vendors = require("vendors")
@@ -236,7 +237,7 @@ def _apply_po(db: Session, actor: Actor, po: PurchaseOrder, body: PoIn) -> None:
             raise HTTPException(422, "An item on this order wasn't found")
         if not item.is_active:
             raise HTTPException(422, f"{item.name} is inactive. Reactivate it or remove the line.")
-    if body.expected_on and body.expected_on < date.today() and po.status == "draft" and po.id is None:
+    if body.expected_on and body.expected_on < local_today() and po.status == "draft" and po.id is None:
         raise HTTPException(422, "The expected date is in the past")
     po.vendor_id, po.expected_on, po.notes = body.vendor_id, body.expected_on, body.notes
     po.lines = [PurchaseOrderLine(position=n, **l.model_dump()) for n, l in enumerate(body.lines)]
@@ -354,7 +355,7 @@ def receive(po_id: uuid.UUID, body: ReceiptIn, actor: Actor = Depends(can_receiv
     if po.status not in ("sent", "partly_received"):
         raise HTTPException(409, {"draft": "Send the order before receiving against it", "received": "This order is fully received",
                                   "closed": "This order was closed", "cancelled": "This order was cancelled"}[po.status])
-    if body.received_on and body.received_on > date.today():
+    if body.received_on and body.received_on > local_today():
         raise HTTPException(422, "The receipt date is in the future")
     got = _received(db, po)
     po_lines = {l.id: l for l in po.lines}
@@ -373,7 +374,7 @@ def receive(po_id: uuid.UUID, body: ReceiptIn, actor: Actor = Depends(can_receiv
             raise HTTPException(422, f"{item.name}: {l.qty.normalize():f} is more than the {outstanding.normalize():f} still expected")
 
     g = GoodsReceipt(number=next_number(db, actor.branch, "goods_receipt"), purchase_order_id=po.id, vendor_id=po.vendor_id,
-                     received_on=body.received_on or date.today(), supplier_ref=body.supplier_ref, notes=body.notes)
+                     received_on=body.received_on or local_today(), supplier_ref=body.supplier_ref, notes=body.notes)
     db.add(g)
     db.flush()
     warnings = []
@@ -435,7 +436,7 @@ def bill_out(db: Session, b: VendorBill) -> dict:
     payments = db.scalars(select(VendorPayment).where(VendorPayment.bill_id == b.id).order_by(VendorPayment.paid_at)).all()
     return {"id": b.id, "number": b.number, "status": b.status, "pay_state": pay_state(b, t), "version": b.version,
             "vendor_invoice_no": b.vendor_invoice_no, "bill_date": b.bill_date, "due_on": b.due_on,
-            "overdue": b.status == "posted" and t["balance"] > 0 and b.due_on < date.today(),
+            "overdue": b.status == "posted" and t["balance"] > 0 and b.due_on < local_today(),
             "adjustment_reason": b.adjustment_reason, "void_reason": b.void_reason, "created_at": b.created_at, **t,
             "vendor": {"id": v.id, "name": v.name},
             "receipt": {"id": g.id, "number": g.number, "received_on": g.received_on, "supplier_ref": g.supplier_ref},
@@ -460,7 +461,7 @@ def record_bill(grn_id: uuid.UUID, body: BillIn, actor: Actor = Depends(can_purc
     g = _get(db, actor, GoodsReceipt, grn_id, "Goods receipt", lock=True)
     if db.scalar(select(VendorBill.id).where(VendorBill.goods_receipt_id == g.id, VendorBill.status == "posted")):
         raise HTTPException(409, "This receipt already has a bill")
-    if body.bill_date > date.today():
+    if body.bill_date > local_today():
         raise HTTPException(422, "The bill date is in the future")
     if body.adjustment != 0 and len(body.adjustment_reason) < 3:
         raise HTTPException(422, "Say what the adjustment is for (freight, discount)")
@@ -498,7 +499,7 @@ def list_bills(status: Literal["owing", "paid", "overdue", "all"] = "owing", ven
     for b, v in db.execute(stmt):
         t = bill_totals(db, b)
         state = pay_state(b, t)
-        overdue = t["balance"] > 0 and b.due_on < date.today()
+        overdue = t["balance"] > 0 and b.due_on < local_today()
         if status == "owing" and state == "paid" or status == "paid" and state != "paid" or status == "overdue" and not overdue:
             continue
         out.append({"id": b.id, "number": b.number, "vendor": {"id": v.id, "name": v.name}, "vendor_invoice_no": b.vendor_invoice_no,

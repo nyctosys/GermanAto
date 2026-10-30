@@ -19,6 +19,7 @@ from app.models import (
 )
 from app.numbering import next_number
 from app.validators import Text
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["workshop"])
 can_visit = require("visits")
@@ -294,7 +295,7 @@ def get_visit(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Sessio
                          "supersedes_id": i.supersedes_id} for i in inspections],
         "job_card": job_card and {"id": job_card.id, "number": job_card.number, "lines": len(job_card.lines)},
         "quotations": [{"id": q.id, "number": q.number, "revision": q.revision, "status": q.status,
-                        "expired": q.status == "sent" and q.valid_until < date.today()} for q in quotes],
+                        "expired": q.status == "sent" and q.valid_until < local_today()} for q in quotes],
         "repair_order": ro and {"id": ro.id, "number": ro.number, "status": ro.status},
         "invoice": (inv := db.scalar(select(Invoice).where(Invoice.visit_id == v.id, Invoice.kind == "workshop", Invoice.status != "void")))
                    and {"id": inv.id, "number": inv.number, "status": inv.status},

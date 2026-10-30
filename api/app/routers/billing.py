@@ -28,6 +28,7 @@ from app.routers.repairs import _get_ro, _log, repair_order_out
 from app.routers.workshop import _attach, _get_visit, _require_open, get_visit, person
 from app.stock import StockError, move
 from app.validators import Phone, Text
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["billing"])
 can_bill = require("invoices")
@@ -632,7 +633,7 @@ class RefundIn(Proof):
 def _refund_entry(db: Session, actor: Actor, body: RefundIn, *, party: str, invoice_id=None, payment_id=None) -> MoneyEntry:
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet refund")
-    e = MoneyEntry(number=next_number(db, actor.branch, "refund"), kind="refund", occurred_on=date.today(), account=body.account, amount=body.amount,
+    e = MoneyEntry(number=next_number(db, actor.branch, "refund"), kind="refund", occurred_on=local_today(), account=body.account, amount=body.amount,
                    party=party, reference=body.reference, note=body.note, proof_id=body.proof_id, no_proof_reason=body.no_proof_reason,
                    invoice_id=invoice_id, payment_id=payment_id)
     db.add(e)

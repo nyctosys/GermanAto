@@ -19,6 +19,7 @@ from app.models import CashClose, Invoice, JournalEntry, PayrollRun, PeriodClose
 from app.routers import moneybook
 from app.routers.payroll import run_out
 from app.validators import Text
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["periods"])
 can_close = require("period-close")
@@ -71,7 +72,7 @@ def checklist(db: Session, actor: Actor, month: str) -> dict:
     def item(key, text, ok, detail="", blocking=True, link=None):
         items.append({"key": key, "label": text, "ok": ok, "detail": detail, "blocking": blocking, "link": link})
 
-    item("ended", "The month has ended", end < date.today(), "" if end < date.today() else f"It ends on {end:%d %b %Y}.")
+    item("ended", "The month has ended", end < local_today(), "" if end < local_today() else f"It ends on {end:%d %b %Y}.")
 
     open_earlier = sorted(m for m in active_months(db, actor) if m < month and not _is_closed(db, actor, "month", m))
     item("earlier", "Earlier months are closed", not open_earlier, f"{label(open_earlier[0])} is still open." if open_earlier else "", link="/periods")
@@ -123,8 +124,8 @@ def status_out(db: Session, actor: Actor, kind: str, period: str) -> dict:
 @router.get("/periods")
 def periods(actor: Actor = Depends(can_see), db: Session = Depends(get_db)):
     """Every month from the first entry in the books to now, and each year, with whether it is closed."""
-    first = db.scalar(select(func.min(JournalEntry.entry_date)).where(JournalEntry.branch_id == actor.branch.id)) or date.today()
-    months = months_between(first, date.today())
+    first = db.scalar(select(func.min(JournalEntry.entry_date)).where(JournalEntry.branch_id == actor.branch.id)) or local_today()
+    months = months_between(first, local_today())
     years = sorted({m[:4] for m in months})
     return {"months": [status_out(db, actor, "month", m) for m in reversed(months)], "years": [status_out(db, actor, "year", y) for y in reversed(years)]}
 
@@ -149,7 +150,7 @@ def close_period(period: str, body: CloseIn, actor: Actor = Depends(can_close), 
         if not c["can_close"]:
             raise HTTPException(409, "The checklist isn't complete: " + "; ".join(f"{i['label']}" for i in c["items"] if i["blocking"] and not i["ok"]))
     else:
-        if end >= date.today():
+        if end >= local_today():
             raise HTTPException(422, "A year can be closed after it has ended")
         pending = sorted(m for m in active_months(db, actor) if m.startswith(period) and not _is_closed(db, actor, "month", m))
         if pending:
@@ -179,7 +180,7 @@ def reopen_period(period: str, body: ReopenIn, actor: Actor = Depends(can_reopen
     if kind == "month":
         if _is_closed(db, actor, "year", period[:4]):
             raise HTTPException(409, f"{period[:4]} is closed. Reopen the year first.")
-        later = [m for m in months_between(date.fromisoformat(f"{period}-01"), date.today())[1:] if _is_closed(db, actor, "month", m)]
+        later = [m for m in months_between(date.fromisoformat(f"{period}-01"), local_today())[1:] if _is_closed(db, actor, "month", m)]
         if later:
             raise HTTPException(409, f"{label(later[0])} is closed after it. Reopen the latest month first.")
     r.status, r.reopen_reason, r.reopened_at, r.reopened_by = "open", body.reason, utcnow(), actor.user.id
@@ -206,7 +207,7 @@ def pack(period: str, actor: Actor = Depends(can_see), db: Session = Depends(get
               for m in months_between(start, end)] if kind == "year" else []
     return {"period": period, "label": label(period), "kind": kind, "status": status_out(db, actor, kind, period),
             "pnl": reports.pnl(db, branch, start, end), "cashflow": reports.cashflow(db, branch, start, end), "months": months,
-            "receivables": reports.receivables(db, branch, min(end, date.today())), "payables": reports.payables(db, branch, min(end, date.today())),
+            "receivables": reports.receivables(db, branch, min(end, local_today())), "payables": reports.payables(db, branch, min(end, local_today())),
             "stock": {"total": reports.stock_value(db, branch)["total"]}, "cash_closes": closes, "entries": entries,
             "payroll": [{"month": r["month"], "status": r["status"], "gross": r["totals"]["gross"], "net": r["totals"]["net"]} for r in runs],
             "journal_balance": journal.balances(db, branch, as_of=end)}

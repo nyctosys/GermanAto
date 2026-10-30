@@ -21,6 +21,7 @@ from app.routers.cashclose import assert_day_open
 from app.routers.estimates import Proof
 from app.routers.workshop import _attach
 from app.validators import Text
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["money"])
 
@@ -72,8 +73,8 @@ def entry_out(db: Session, e: MoneyEntry) -> dict:
 def record_entry(body: EntryIn, actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
     if not actor.can(NEEDS[body.kind]):
         raise HTTPException(403, "You don't have permission to do this")
-    when = body.occurred_on or date.today()
-    if when > date.today():
+    when = body.occurred_on or local_today()
+    if when > local_today():
         raise HTTPException(422, "The date is in the future")
     assert_day_open(db, actor.branch.id, {body.account, body.to_account}, when)
     touched = {body.account, body.to_account} - {None, "cash"}

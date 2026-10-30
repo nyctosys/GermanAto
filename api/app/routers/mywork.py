@@ -14,6 +14,7 @@ from app.auth import Actor, require
 from app.db import get_db
 from app.models import (Car, CashClose, Customer, GoodsReceipt, Invoice, JobCard, Message, PayrollRun, PeriodClose, PurchaseOrder, Punch,
                         Quotation, RepairOrder, Vendor, VendorBill, Visit)
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["my work"])
 SHOW = 5  # items listed per queue; the rest are behind "see all"
@@ -26,7 +27,7 @@ def _car(db: Session, car_id) -> str:
 
 def build(db: Session, actor: Actor) -> list[dict]:
     from app.routers.billing import gate_queue  # late import: billing imports this package's neighbours
-    b, today, can = actor.branch, date.today(), actor.can
+    b, today, can = actor.branch, local_today(), actor.can
     groups: list[dict] = []
 
     def add(key: str, title: str, do: str, items: list[dict], href: str):

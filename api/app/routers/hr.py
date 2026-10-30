@@ -18,6 +18,7 @@ from app.db import get_db
 from app.models import AttendanceDevice, DayMark, DeviceLog, Employee, Punch, User
 from app.numbering import next_number
 from app.validators import Cnic, Name, Phone, Text
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["hr"])
 can_hr = require("hr")
@@ -53,7 +54,7 @@ class EmployeeIn(BaseModel):
             raise ValueError("Pick each weekday off at most once")
         if self.shift_end <= self.shift_start:
             raise ValueError("The shift must end after it starts")
-        if self.joined_on > date.today() + timedelta(days=31):
+        if self.joined_on > local_today() + timedelta(days=31):
             raise ValueError("The joining date is too far ahead")
         return self
 

@@ -17,3 +17,10 @@ SESSION_DAYS = int(os.environ.get("SESSION_DAYS", "14"))
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # Attendance devices send local wall-clock times; this is the workshop's zone.
 TIMEZONE = os.environ.get("TIMEZONE", "Asia/Karachi")
+
+
+def local_today():
+    """Today's date at the workshop. The server clock is UTC, which is still yesterday in Pakistan until 5 am."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo(TIMEZONE)).date()

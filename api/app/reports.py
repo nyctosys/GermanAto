@@ -16,6 +16,7 @@ from app.models import (
     RepairOrderLine, StockMovement, User, Vendor, VendorBill, VendorPayment, Visit,
 )
 from app.pricing import money, totals
+from app.config import local_today
 
 Z = Decimal(0)
 BUCKETS = ("0-30", "31-60", "61-90", "90+")
@@ -61,7 +62,7 @@ def cashflow(db: Session, branch: Branch, start: date, end: date) -> dict:
 def receivables(db: Session, branch: Branch, as_of: date | None = None) -> dict:
     """Every issued invoice that is not settled, aged from the day it was issued. A negative balance is money owed back."""
     from app.routers.billing import balance_of
-    today = as_of or date.today()
+    today = as_of or local_today()
     rows, by_bucket = [], defaultdict(lambda: Z)
     names = {c.id: c.name for c in db.scalars(select(Customer).where(Customer.id.in_(select(Invoice.customer_id).where(Invoice.branch_id == branch.id))))}
     for inv in db.scalars(select(Invoice).where(Invoice.branch_id == branch.id, Invoice.status == "issued").order_by(Invoice.issued_at)):
@@ -77,7 +78,7 @@ def receivables(db: Session, branch: Branch, as_of: date | None = None) -> dict:
 
 def payables(db: Session, branch: Branch, as_of: date | None = None) -> dict:
     from app.routers.purchasing import bill_totals
-    today = as_of or date.today()
+    today = as_of or local_today()
     rows, by_bucket = [], defaultdict(lambda: Z)
     names = {v.id: v.name for v in db.scalars(select(Vendor).where(Vendor.branch_id == branch.id))}
     for b in db.scalars(select(VendorBill).where(VendorBill.branch_id == branch.id, VendorBill.status == "posted").order_by(VendorBill.due_on)):

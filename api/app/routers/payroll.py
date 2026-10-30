@@ -21,6 +21,7 @@ from app.routers.cashclose import assert_day_open
 from app.routers.estimates import Proof
 from app.routers.workshop import _attach
 from app.validators import Text
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["payroll"])
 can_pay = require("payroll")
@@ -69,8 +70,8 @@ def give_advance(body: AdvanceIn, actor: Actor = Depends(can_pay), db: Session =
         raise HTTPException(422, f"That would put {given - recovered + body.amount:,.2f} of advances outstanding, more than a month's pay ({emp.monthly_salary:,.2f})")
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet payment")
-    assert_day_open(db, actor.branch.id, {body.account}, date.today())
-    e = MoneyEntry(number=next_number(db, actor.branch, "salary_advance"), kind="salary_advance", occurred_on=date.today(), account=body.account,
+    assert_day_open(db, actor.branch.id, {body.account}, local_today())
+    e = MoneyEntry(number=next_number(db, actor.branch, "salary_advance"), kind="salary_advance", occurred_on=local_today(), account=body.account,
                    amount=body.amount, party=emp.full_name, reference=body.reference, note=body.note, proof_id=body.proof_id,
                    no_proof_reason=body.no_proof_reason, employee_id=emp.id)
     db.add(e)
@@ -162,7 +163,7 @@ class RunIn(BaseModel):
 def start_run(body: RunIn, actor: Actor = Depends(can_pay), db: Session = Depends(get_db)):
     """Works out everyone's pay for a finished month. Draft until approved, so it can be checked and adjusted."""
     start, end = attendance.month_range(body.month)
-    if end >= date.today():
+    if end >= local_today():
         raise HTTPException(422, "Payroll is run after the month has ended")
     if db.scalar(select(PayrollRun.id).where(PayrollRun.branch_id == actor.branch.id, PayrollRun.month == body.month, PayrollRun.status != "void")):
         raise HTTPException(409, "There is already a payroll run for this month")
@@ -311,9 +312,9 @@ def pay_line(run_id: uuid.UUID, line_id: uuid.UUID, body: PayIn, actor: Actor = 
         raise HTTPException(409, "Already paid")
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet payment")
-    assert_day_open(db, actor.branch.id, {body.account}, date.today())
+    assert_day_open(db, actor.branch.id, {body.account}, local_today())
     emp = db.get(Employee, line.employee_id)
-    e = MoneyEntry(number=next_number(db, actor.branch, "salary"), kind="salary", occurred_on=date.today(), account=body.account, amount=line.net_pay,
+    e = MoneyEntry(number=next_number(db, actor.branch, "salary"), kind="salary", occurred_on=local_today(), account=body.account, amount=line.net_pay,
                    party=emp.full_name, reference=body.reference, note=body.note or f"Salary {run.month}", proof_id=body.proof_id,
                    no_proof_reason=body.no_proof_reason, employee_id=emp.id, payroll_line_id=line.id)
     db.add(e)

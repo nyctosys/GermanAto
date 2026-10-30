@@ -15,6 +15,7 @@ from app.db import get_db
 from app.models import Attachment, AuditLog, Car, CarOwnership, Customer, Inspection, Invoice, User, Visit
 from app.numbering import next_number
 from app.validators import Cnic, Email, Name, Phone, Text, Upper, Vin, normalize_plate
+from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["customers"])
 can_view = require("customers")
@@ -48,7 +49,7 @@ class CarIn(BaseModel):
     engine_no: Upper = Field(default="", max_length=40)
     make: Name
     model: Text = Field(default="", max_length=60)
-    year: int | None = Field(default=None, ge=1950, le=date.today().year + 1)
+    year: int | None = Field(default=None, ge=1950, le=local_today().year + 1)
     color: Text = Field(default="", max_length=40)
     fuel: FUELS = "petrol"
     odometer_km: int | None = Field(default=None, ge=0, le=3_000_000)
@@ -189,7 +190,7 @@ def create_car(body: CarCreate, _: Actor = Depends(can_view), db: Session = Depe
     car = Car(plate_norm=plate_norm, **body.model_dump(exclude={"owner_id"}))
     db.add(car)
     db.flush()
-    db.add(CarOwnership(car_id=car.id, customer_id=body.owner_id, since=date.today(), reason="First registered",
+    db.add(CarOwnership(car_id=car.id, customer_id=body.owner_id, since=local_today(), reason="First registered",
                         odometer_km=body.odometer_km))
     db.commit()
     return car_out(car, db.get(Customer, body.owner_id))
@@ -237,7 +238,7 @@ def transfer_car(car_id: uuid.UUID, body: TransferIn, actor: Actor = Depends(req
         raise HTTPException(409, "The car already belongs to this customer")
     if current and body.on < current.since:
         raise HTTPException(422, f"The transfer date can't be before the current owner got the car ({current.since})")
-    if body.on > date.today():
+    if body.on > local_today():
         raise HTTPException(422, "The transfer date can't be in the future")
     proofs = db.scalars(select(Attachment).where(Attachment.id.in_(body.attachment_ids),
                                                  Attachment.branch_id == actor.branch.id)).all()

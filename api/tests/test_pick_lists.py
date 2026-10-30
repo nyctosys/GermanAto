@@ -91,3 +91,10 @@ def test_vendor_contact_person_is_a_name_not_a_number(admin):
     r = admin.post("/api/vendors", json={"name": "Parts Co", "contact_person": "0316112211"})
     assert r.status_code == 422 and "no numbers" in str(r.json())
     assert admin.post("/api/vendors", json={"name": "Parts Co", "contact_person": "Ijmaal Jhatu"}).status_code == 201
+
+
+def test_today_is_the_workshops_date_not_the_servers():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from app.config import local_today
+    assert local_today() == datetime.now(ZoneInfo("Asia/Karachi")).date()

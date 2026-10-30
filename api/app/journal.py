@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Account, Branch, JournalEntry, JournalLine, LedgerAccount, PeriodClose
 from app.numbering import next_number
+from app.config import local_today
 
 CENT = Decimal("0.01")
 
@@ -82,14 +83,14 @@ def post(db: Session, branch: Branch, memo: str, lines: list[Line], *, on: date 
     debit, credit = sum((l.debit for l in lines), Decimal(0)), sum((l.credit for l in lines), Decimal(0))
     if debit != credit:
         raise JournalError(f"Unbalanced entry for {memo!r}: debits {debit} and credits {credit}")
-    closed = closed_period(db, branch, on or date.today())
+    closed = closed_period(db, branch, on or local_today())
     if closed:
         raise JournalError(f"{closed} is closed, so nothing can be recorded in it. Record it today instead, or ask an admin to reopen the month.")
     chart = ensure_chart(db, branch)
     unknown = {l.code for l in lines} - set(chart)
     if unknown:
         raise JournalError(f"Unknown ledger account {sorted(unknown)}")
-    entry = JournalEntry(number=next_number(db, branch, "journal"), entry_date=on or date.today(), memo=memo[:300], branch_id=branch.id,
+    entry = JournalEntry(number=next_number(db, branch, "journal"), entry_date=on or local_today(), memo=memo[:300], branch_id=branch.id,
                          source_type=source[0] if source else None, source_id=source[1] if source else None,
                          reverses_id=reverses.id if reverses else None,
                          lines=[JournalLine(position=n, ledger_account_id=chart[l.code].id, debit=l.debit, credit=l.credit,
