@@ -120,8 +120,8 @@ def test_extra_work_is_flagged_and_removable(admin):
 def test_workshop_list_carries_each_cars_progress(admin):
     visit, _, _, q = approved_quote(admin)  # a sent quotation
     row = next(v for v in admin.get("/api/visits").json() if v["id"] == visit["id"])
-    assert row["progress"]["job_card"] and row["progress"]["quotations"] == [{"status": "sent"}] and row["progress"]["repair_order"] is None
+    assert row["progress"]["job_card"]["id"] and [q["status"] for q in row["progress"]["quotations"]] == ["sent"] and row["progress"]["repair_order"] is None
     q = approve(admin, q)
     admin.post(f"/api/quotations/{q['id']}/repair-order")
     row = next(v for v in admin.get("/api/visits").json() if v["id"] == visit["id"])
-    assert row["progress"]["repair_order"] == {"status": "received"}
+    assert row["progress"]["repair_order"]["status"] == "received"

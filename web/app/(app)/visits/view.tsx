@@ -46,8 +46,8 @@ function Board() {
         ) : (
           <ul className="grid gap-3">
             {list.data.map((v) => (
-              <li key={v.id}>
-                <Link href={`/visits/${v.id}`} className="flex flex-col gap-3 rounded-card bg-surface p-4 transition-colors duration-(--dur-micro) hover:bg-paper-3 shell:px-5">
+              <li key={v.id} className="rounded-card bg-surface transition-colors duration-(--dur-micro) hover:bg-paper-2">
+                <Link href={`/visits/${v.id}`} className="flex flex-col gap-3 rounded-card p-4 shell:px-5">
                   <span className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                     <span className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
                       <Plate plate={v.car.plate} small />
@@ -62,8 +62,8 @@ function Board() {
                     </span>
                   </span>
                   {v.complaint && <span className="line-clamp-2 text-sm text-muted">{v.complaint}</span>}
-                  {v.progress && v.status !== "cancelled" && <JobProgress flat steps={stepsOf(v.progress)} />}
                 </Link>
+                {v.progress && v.status !== "cancelled" && <div className="px-3 pb-3 shell:px-4"><JobProgress flat steps={stepsOf(v.progress)} /></div>}
               </li>
             ))}
           </ul>

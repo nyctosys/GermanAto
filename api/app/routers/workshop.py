@@ -265,19 +265,19 @@ def list_visits(status: Literal["open", "closed", "cancelled", "all"] = "open", 
                               Car.make.ilike(like), Car.model.ilike(like)))
     rows = db.execute(stmt).all()
     ids = [v.id for v, _, _ in rows]
-    cards = set(db.scalars(select(JobCard.visit_id).where(JobCard.visit_id.in_(ids))))
+    cards = {j.visit_id: {"id": j.id} for j in db.scalars(select(JobCard).where(JobCard.visit_id.in_(ids)))}
     signed: dict = {}
     for i in db.scalars(select(Inspection).where(Inspection.visit_id.in_(ids))):
-        signed.setdefault(i.visit_id, []).append({"status": i.status, "superseded": False})
+        signed.setdefault(i.visit_id, []).append({"id": i.id, "status": i.status, "supersedes_id": i.supersedes_id})
     quotes: dict = {}
     for q in db.scalars(select(Quotation).where(Quotation.visit_id.in_(ids), Quotation.status != "revised")):
-        quotes.setdefault(q.visit_id, []).append({"status": q.status})
-    ros = {r.visit_id: {"status": r.status} for r in db.scalars(select(RepairOrder).where(RepairOrder.visit_id.in_(ids)))}
-    invs = {i.visit_id: {"status": i.status, "paid": _is_paid(db, i), "kind": i.kind} for i in db.scalars(
+        quotes.setdefault(q.visit_id, []).append({"id": q.id, "status": q.status})
+    ros = {r.visit_id: {"id": r.id, "status": r.status} for r in db.scalars(select(RepairOrder).where(RepairOrder.visit_id.in_(ids)))}
+    invs = {i.visit_id: {"id": i.id, "status": i.status, "paid": _is_paid(db, i), "kind": i.kind} for i in db.scalars(
         select(Invoice).where(Invoice.visit_id.in_(ids), Invoice.kind.in_(("workshop", "inspection")), Invoice.status != "void"))}
     # what the progress bar on each car needs, in the same shape as the visit page
     return [{**visit_summary(v, car, c, db.get(Customer, v.buyer_id) if v.buyer_id else None),
-             "progress": {"kind": v.kind, "inspections": signed.get(v.id, []), "status": v.status, "job_card": v.id in cards, "quotations": quotes.get(v.id, []),
+             "progress": {"id": v.id, "kind": v.kind, "inspections": signed.get(v.id, []), "status": v.status, "job_card": cards.get(v.id), "quotations": quotes.get(v.id, []),
                           "repair_order": ros.get(v.id), "invoice": invs.get(v.id)}}
             for v, car, c in rows]
 

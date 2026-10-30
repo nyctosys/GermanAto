@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { useApi } from "@/lib/api";
 
@@ -16,7 +17,7 @@ const ICONS: Record<string, ReactNode> = {
   report: <path d="M6 3h9l3 3v15H6zM9 9h6M9 13h6M9 17h3" />,
 };
 
-export type Step = { key: keyof typeof ICONS; label: string; done: boolean };
+export type Step = { key: keyof typeof ICONS; label: string; done: boolean; href?: string };
 
 /**
  * Where a job has got to: a row of round icons joined by a line. Finished steps are filled,
@@ -31,14 +32,23 @@ export function JobProgress({ steps, flat = false }: { steps: Step[]; flat?: boo
         {steps.map((s, i) => {
           const state = s.done ? "done" : i === current ? "now" : "later";
           return (
-            <li key={s.key} className="relative flex min-w-0 flex-1 flex-col items-center gap-1.5" aria-current={state === "now" ? "step" : undefined}>
+            <li key={s.key} className="relative flex min-w-0 flex-1 flex-col items-center" aria-current={state === "now" ? "step" : undefined}>
               {i > 0 && <span aria-hidden="true" className={`absolute right-1/2 top-4 h-0.5 w-full -translate-y-1/2 ${steps[i - 1].done && s.done ? "bg-primary" : steps[i - 1].done ? "bg-primary/40" : "bg-rule-strong"}`} />}
-              <span className={`relative z-10 flex size-8 items-center justify-center rounded-full border-2 ${
-                state === "done" ? "border-primary bg-primary text-primary-ink" : state === "now" ? "border-primary bg-surface text-primary ring-4 ring-primary/20" : "border-rule-strong bg-paper-3 text-muted"}`}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[s.key]}</svg>
-              </span>
-              <span className={`hidden text-center text-xs leading-tight sm:block ${state === "later" ? "text-muted" : "font-medium text-ink"}`}>{s.label}</span>
-              <span className="sr-only">{state === "done" ? "Done" : state === "now" ? "Now" : "Not yet"}</span>
+              {(() => {
+                const inner = (
+                  <>
+                    <span className={`relative z-10 flex size-8 items-center justify-center rounded-full border-2 ${
+                      state === "done" ? "border-primary bg-primary text-primary-ink" : state === "now" ? "border-primary bg-surface text-primary ring-4 ring-primary/20" : "border-rule-strong bg-paper-3 text-muted"}`}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[s.key]}</svg>
+                    </span>
+                    <span className={`hidden text-center text-xs leading-tight sm:block ${state === "later" ? "text-muted" : "font-medium text-ink"}`}>{s.label}</span>
+                    <span className="sr-only">{s.label}: {state === "done" ? "Done" : state === "now" ? "Now" : "Not yet"}</span>
+                  </>
+                );
+                return s.href
+                  ? <Link href={s.href} title={s.label} className="flex min-h-11 w-full flex-col items-center gap-1.5 rounded-control px-0.5 pt-0.5 hover:bg-paper-3">{inner}</Link>
+                  : <span className="flex flex-col items-center gap-1.5">{inner}</span>;
+              })()}
             </li>
           );
         })}
@@ -50,39 +60,47 @@ export function JobProgress({ steps, flat = false }: { steps: Step[]; flat?: boo
 
 
 export type Progress = {
+  id?: string;
   kind?: string;
-  inspections?: { status: string; supersedes_id?: string | null }[];
+  inspections?: { id?: string; status: string; supersedes_id?: string | null }[];
   status: string;
-  job_card: unknown | null;
-  quotations: { status: string }[];
-  repair_order: { status: string } | null;
-  invoice: { status: string; paid?: boolean } | null;
+  job_card: { id?: string } | null;
+  quotations: { id?: string; status: string }[];
+  repair_order: { id?: string; status: string } | null;
+  invoice: { id?: string; status: string; paid?: boolean } | null;
 };
 
-/** The steps of a visit, worked out from what exists so far. */
+/** The steps of a visit, worked out from what exists so far. Each step opens the page that does it, or the right spot on the visit. */
 export function stepsOf(v: Progress): Step[] {
+  const visit = v.id ? `/visits/${v.id}` : undefined;
+  const at = (hash: string) => (visit ? `${visit}#${hash}` : undefined);
+  const to = (base: string, id?: string) => (id ? `${base}/${id}` : undefined);
+  const inv = to("/invoices", v.invoice?.id);
   if (v.kind === "pre_purchase") {
     const ins = v.inspections ?? [];
+    const signed = ins.find((i) => i.status === "signed");
     return [
-      { key: "checkin", label: "Checked in", done: true },
-      { key: "inspect", label: "Inspecting the car", done: ins.length > 0 },
-      { key: "report", label: "Report signed", done: ins.some((i) => i.status === "signed") },
-      { key: "invoice", label: "Invoiced", done: !!v.invoice && v.invoice.status !== "draft" },
-      { key: "paid", label: "Paid", done: !!v.invoice?.paid || v.status === "closed" },
-      { key: "left", label: "Report handed over", done: v.status === "closed" },
+      { key: "checkin", label: "Checked in", done: true, href: visit },
+      { key: "inspect", label: "Inspecting the car", done: ins.length > 0, href: to("/inspections", (signed ?? ins[0])?.id) ?? at("inspections") },
+      { key: "report", label: "Report signed", done: !!signed, href: to("/inspections", (signed ?? ins[0])?.id) ?? at("inspections") },
+      { key: "invoice", label: "Invoiced", done: !!v.invoice && v.invoice.status !== "draft", href: inv ?? at("inspection-fee") },
+      { key: "paid", label: "Paid", done: !!v.invoice?.paid || v.status === "closed", href: inv ?? at("inspection-fee") },
+      { key: "left", label: "Report handed over", done: v.status === "closed", href: at("hand-over") },
     ];
   }
-  const q = v.quotations.find((x) => x.status !== "revised");
+  const q = v.quotations.findLast((x) => x.status !== "revised");
+  const quote = to("/quotations", q?.id);
+  const ro = to("/repair-orders", v.repair_order?.id);
   return [
-    { key: "checkin", label: "Checked in", done: true },
-    { key: "jobcard", label: "Job card", done: !!v.job_card },
-    { key: "quotation", label: "Quotation sent", done: !!q && q.status !== "draft" },
-    { key: "approved", label: "Approved", done: q?.status === "approved" || q?.status === "converted" || !!v.repair_order },
-    { key: "repair", label: "Repair", done: !!v.repair_order && v.repair_order.status !== "received" },
-    { key: "ready", label: "Ready", done: ["ready", "delivered"].includes(v.repair_order?.status ?? "") },
-    { key: "invoice", label: "Invoiced", done: !!v.invoice && v.invoice.status !== "draft" },
-    { key: "paid", label: "Paid", done: !!v.invoice?.paid || v.status === "closed" },
-    { key: "left", label: "Left", done: v.status === "closed" },
+    { key: "checkin", label: "Checked in", done: true, href: visit },
+    { key: "jobcard", label: "Job card", done: !!v.job_card, href: to("/job-cards", v.job_card?.id) ?? at("the-job") },
+    { key: "quotation", label: "Quotation sent", done: !!q && q.status !== "draft", href: quote ?? at("the-job") },
+    { key: "approved", label: "Approved", done: q?.status === "approved" || q?.status === "converted" || !!v.repair_order, href: quote ?? at("the-job") },
+    { key: "repair", label: "Repair", done: !!v.repair_order && v.repair_order.status !== "received", href: ro ?? visit },
+    { key: "ready", label: "Ready", done: ["ready", "delivered"].includes(v.repair_order?.status ?? ""), href: ro ?? visit },
+    { key: "invoice", label: "Invoiced", done: !!v.invoice && v.invoice.status !== "draft", href: inv ?? ro ?? visit },
+    { key: "paid", label: "Paid", done: !!v.invoice?.paid || v.status === "closed", href: inv ?? visit },
+    { key: "left", label: "Left", done: v.status === "closed", href: visit },
   ];
 }
 
