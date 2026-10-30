@@ -287,6 +287,7 @@ function ExtraWork({ busy, onAdd }: { busy: boolean; onAdd: (b: object) => Promi
   const [noProof, setNoProof] = useState("");
   const [tried, setTried] = useState(false);
   const approvalBad = !proof.length && noProof.trim().length < 5;
+  const lineTotal = (Number(amount) || 0) * (Number(price) || 0);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -315,6 +316,7 @@ function ExtraWork({ busy, onAdd }: { busy: boolean; onAdd: (b: object) => Promi
           <Field label="Price (Rs)" error={tried && !linePrice.safeParse(price).success ? "Enter the price" : undefined}>
             <Input type="number" inputMode="decimal" min="0" step="any" value={price} onChange={(e) => setPrice(e.target.value)} />
           </Field>
+          {lineTotal > 0 && <p className="num text-sm font-medium text-ink-2 sm:col-span-3">Line total {money(lineTotal)}</p>}
           <div className="space-y-3 sm:col-span-3">
             <p className="text-sm font-medium text-ink-2">The customer agreed to the extra work</p>
             <Segments value={method} onChange={setMethod} options={[{ value: "in_person", label: "In person" }, { value: "whatsapp", label: "WhatsApp" }, { value: "phone", label: "Phone call" }]} />

@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { type Uploaded, PhotoCapture } from "@/components/capture";
-import { Button, Card, Field, Input, Select } from "@/components/ui";
+import { Button, Card, Field, Input, Notice, Select } from "@/components/ui";
 import { money, when } from "@/lib/format";
 import { useLiveErrors } from "@/lib/form";
 import { type FieldErrors, issuesToFieldErrors, paymentRowSchema } from "@/lib/schemas";
@@ -61,10 +61,14 @@ type Row = { key: string; amount: string; account: string; reference: string; pr
 
 const newRow = (amount = ""): Row => ({ key: crypto.randomUUID(), amount, account: "cash", reference: "", proof: [], reason: "" });
 
-/** One row's problems, by field (lib/schemas paymentRowSchema). */
-function rowErrors(r: Row): FieldErrors {
+/** One row's problems, by field (lib/schemas paymentRowSchema). Optional ceiling for balance / advance room. */
+function rowErrors(r: Row, max?: number, maxError?: string): FieldErrors {
   const res = paymentRowSchema.safeParse(r);
-  return res.success ? {} : issuesToFieldErrors(res.error.issues);
+  const errors: FieldErrors = res.success ? {} : issuesToFieldErrors(res.error.issues);
+  if (max != null && Number.isFinite(max) && r.amount.trim() !== "" && Number(r.amount) > max + 0.005) {
+    errors.amount = maxError ?? `At most ${money(max)} can be entered`;
+  }
+  return errors;
 }
 
 const toBody = (r: Row, note = ""): PaymentBody => ({
@@ -95,22 +99,38 @@ function RowFields({ r, set, errors, out }: { r: Row; set: (p: Partial<Row>) => 
   );
 }
 
-/** Record one payment (an advance, or a payment on an invoice). */
-export function PaymentForm({ title, hint, suggested, busy, onSubmit, onCancel, note, out }:
+/** Record one payment (an advance, or a payment on an invoice). Caps and other mistakes show under the field as they type. */
+export function PaymentForm({ title, hint, suggested, busy, onSubmit, onCancel, note, out, max, maxError }:
   { title: string; hint?: string; suggested?: string; busy: boolean; note?: ReactNode; out?: boolean;
-    onSubmit: (b: PaymentBody) => void; onCancel: () => void }) {
+    max?: number; maxError?: string;
+    onSubmit: (b: PaymentBody) => void | Promise<void>; onCancel: () => void }) {
   const [row, setRow] = useState<Row>(() => newRow(suggested ?? ""));
-  const { errors, activate, live } = useLiveErrors(row, rowErrors);
+  const [banner, setBanner] = useState<string | null>(null);
+  const check = (r: Row) => rowErrors(r, max, maxError);
+  const { errors, activate, live, applyApi, clearServer } = useLiveErrors(row, check);
+  const patch = (p: Partial<Row>) => {
+    clearServer();
+    setBanner(null);
+    setRow((r) => ({ ...r, ...p }));
+  };
   return (
     <Card title={title}>
-      <form noValidate className="space-y-4" {...live} onSubmit={(e: FormEvent) => {
+      <form noValidate className="space-y-4" {...live} onSubmit={async (e: FormEvent) => {
         e.preventDefault();
         activate();
-        if (!Object.keys(rowErrors(row)).length) onSubmit(toBody(row));
+        if (Object.keys(check(row)).length) return;
+        clearServer();
+        setBanner(null);
+        try {
+          await onSubmit(toBody(row));
+        } catch (err) {
+          setBanner(applyApi(err));
+        }
       }}>
         {hint && <p className="text-sm text-muted">{hint}</p>}
-        <RowFields out={out} r={row} set={(p) => setRow((r) => ({ ...r, ...p }))} errors={errors} />
+        <RowFields out={out} r={row} set={patch} errors={errors} />
         {note}
+        <Notice>{banner}</Notice>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={busy}>{busy ? "Recording" : "Record the payment"}</Button>
           <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>
@@ -158,21 +178,38 @@ export { newRow, type Row as PaymentRow };
  */
 export function RefundForm({ title, hint, amount, fixedAmount, needsReason, busy, onSubmit, onCancel }:
   { title: string; hint?: string; amount: string; fixedAmount?: boolean; needsReason?: boolean; busy: boolean;
-    onSubmit: (b: PaymentBody & { reason: string }) => void; onCancel: () => void }) {
+    onSubmit: (b: PaymentBody & { reason: string }) => void | Promise<void>; onCancel: () => void }) {
+  const ceiling = Number(amount);
+  const maxError = `At most ${money(ceiling)} can still be given back`;
   const [row, setRow] = useState<Row>(() => newRow(amount));
   const [why, setWhy] = useState("");
-  const { errors, active, activate, live } = useLiveErrors(row, rowErrors);
+  const [banner, setBanner] = useState<string | null>(null);
+  const check = (r: Row) => rowErrors(r, Number.isFinite(ceiling) ? ceiling : undefined, maxError);
+  const { errors, active, activate, live, applyApi, clearServer } = useLiveErrors(row, check);
   const whyBad = needsReason && why.trim().length < 3;
+  const patch = (p: Partial<Row>) => {
+    clearServer();
+    setBanner(null);
+    setRow((r) => ({ ...r, ...(fixedAmount ? { ...p, amount: r.amount } : p) }));
+  };
   return (
     <Card title={title}>
-      <form noValidate className="space-y-4" {...live} onSubmit={(e: FormEvent) => {
+      <form noValidate className="space-y-4" {...live} onSubmit={async (e: FormEvent) => {
         e.preventDefault();
         activate();
-        if (!Object.keys(rowErrors(row)).length && !whyBad) onSubmit({ ...toBody(row), reason: why.trim() });
+        if (Object.keys(check(row)).length || whyBad) return;
+        clearServer();
+        setBanner(null);
+        try {
+          await onSubmit({ ...toBody(row), reason: why.trim() });
+        } catch (err) {
+          setBanner(applyApi(err));
+        }
       }}>
         {hint && <p className="text-sm text-muted">{hint}</p>}
-        {needsReason && <Field label="Why is it being refunded?" error={active && whyBad ? "Say why" : undefined}><Input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={500} /></Field>}
-        <RowFields r={row} set={(p) => setRow((r) => ({ ...r, ...(fixedAmount ? { ...p, amount: r.amount } : p) }))} errors={errors} />
+        {needsReason && <Field label="Why is it being refunded?" error={active && whyBad ? "Say why" : undefined}><Input value={why} onChange={(e) => { setWhy(e.target.value); clearServer(); setBanner(null); }} maxLength={500} /></Field>}
+        <RowFields r={row} set={patch} errors={errors} />
+        <Notice>{banner}</Notice>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="danger" disabled={busy}>{busy ? "Recording" : "Give the money back"}</Button>
           <Button type="button" variant="danger" onClick={onCancel}>Cancel</Button>

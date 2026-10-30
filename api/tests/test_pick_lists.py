@@ -3,10 +3,24 @@ def names(client, kind):
 
 
 def test_lists_start_from_defaults_and_team_adds(admin):
-    assert "Bosch" in names(admin, "part_brand")
+    brands = names(admin, "part_brand")
+    for name in ("Audi", "BMW", "Mercedes-Benz", "Toyota", "Honda", "MINI", "Volkswagen", "Bosch"):
+        assert name in brands
     r = admin.post("/api/lists/part_brand", json={"name": "  ravenol   oils "})
     assert r.status_code == 201 and r.json()["name"] == "Ravenol Oils" and r.json()["created"]
     assert "Ravenol Oils" in names(admin, "part_brand")
+
+
+def test_new_defaults_join_an_already_seeded_list(admin):
+    """A branch seeded before a brand was in DEFAULTS still gets it the next time the list opens."""
+    assert "Bosch" in names(admin, "part_brand")
+    gone = next(e for e in admin.get("/api/lists/part_brand").json() if e["name"] == "BMW")
+    from app.db import SessionLocal
+    from app.models import PickListEntry
+    with SessionLocal() as db:
+        db.delete(db.get(PickListEntry, gone["id"]))
+        db.commit()
+    assert "BMW" in names(admin, "part_brand")
 
 
 def test_same_name_in_other_case_is_not_a_second_entry(admin):

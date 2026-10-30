@@ -73,7 +73,14 @@ export function fieldErrorsFromApi(err: unknown): { fields: FieldErrors; banner:
     if (Object.keys(fields).length) return { fields, banner: null };
   }
   const msg = err.message;
+  // Specific first: money amounts, proof, references, then identity fields.
   const rules: [RegExp, string][] = [
+    [/advance cannot|still be taken|still be given back|still owed|more than the (quotation|balance|invoice)|more than the balance|month'?s pay|advances outstanding|owed back|refundable|at most .*(owed|advance)/i, "amount"],
+    [/transaction reference|reference or a screenshot|screenshot for a bank/i, "reference"],
+    [/no proof|say why|write why|proof_id|no_proof_reason/i, "reason"],
+    [/categor(y|ies)|retired\. Pick another/i, "category_id"],
+    [/date is in the future/i, "occurred_on"],
+    [/discount is more/i, "discount"],
     [/odometer.*less than last|last time|last reading/i, "odometer_in"],
     [/exit reading|less than at check-in|odometer.*check-in/i, "odometer_out"],
     [/credit|unpaid|reason for releas/i, "credit_reason"],
@@ -106,16 +113,35 @@ export function useFormErrors(schema: SchemaOrFn) {
 }
 
 /**
- * Controlled forms (payments, money book): once a field is left or they submit,
- * every wrong value shows beside its control and updates as they type.
+ * Controlled forms (payments, money book): as soon as a field is typed or left,
+ * every wrong value shows beside its control and updates as they keep typing.
+ * Server refusals land on the same fields via applyApi; clearServer when the person edits.
  */
 export function useLiveErrors<T>(value: T, validate: (v: T) => FieldErrors) {
   const [active, setActive] = useState(false);
-  const errors = active ? validate(value) : {};
+  const [server, setServer] = useState<FieldErrors>({});
+  const local = active ? validate(value) : {};
+  const errors = { ...server, ...local };
+  const clearServer = useCallback(() => setServer({}), []);
+  const wake = useCallback(() => setActive(true), []);
+  const applyApi = useCallback((err: unknown) => {
+    const { fields, banner } = fieldErrorsFromApi(err);
+    if (Object.keys(fields).length) {
+      setActive(true);
+      setServer(fields);
+    }
+    return banner;
+  }, []);
   return {
     errors,
     active,
-    activate: () => setActive(true),
-    live: { onBlurCapture: () => setActive(true) },
+    activate: wake,
+    clearServer,
+    applyApi,
+    live: {
+      onBlurCapture: wake,
+      onInputCapture: wake,
+      onChangeCapture: wake,
+    },
   };
 }

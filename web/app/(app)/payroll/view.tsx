@@ -107,22 +107,30 @@ function Body() {
 
 function AdvanceForm({ employees, onDone, onCancel }: { employees: Adv["employees"]; onDone: () => void; onCancel: () => void }) {
   const [who, setWho] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [whoError, setWhoError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const pick = employees.find((e) => e.employee.id === who);
   async function submit(b: PaymentBody) {
-    if (!who) { setError("Choose the employee."); return; }
+    if (!who) { setWhoError("Choose the employee."); return; }
     setBusy(true);
-    setError(null);
-    try { await api("/api/salary-advances", { method: "POST", json: { ...b, employee_id: who } }); onDone(); }
-    catch (err) { setError((err as Error).message); setBusy(false); }
+    try {
+      await api("/api/salary-advances", { method: "POST", json: { ...b, employee_id: who } });
+      onDone();
+    } catch (err) {
+      setBusy(false);
+      throw err;
+    }
   }
   return (
     <PaymentForm title="Give an advance" hint="Paid out now and taken back from pay. Proof or a reason, like every payment." busy={busy} onSubmit={submit} onCancel={onCancel}
                  note={<>
-                   <Field label="To which employee"><Select value={who} onChange={(e) => setWho(e.target.value)}><option value="">Choose an employee</option>{employees.map((e) => <option key={e.employee.id} value={e.employee.id}>{e.employee.full_name}</option>)}</Select></Field>
+                   <Field label="To which employee" error={whoError}>
+                     <Select value={who} onChange={(e) => { setWho(e.target.value); setWhoError(undefined); }}>
+                       <option value="">Choose an employee</option>
+                       {employees.map((e) => <option key={e.employee.id} value={e.employee.id}>{e.employee.full_name}</option>)}
+                     </Select>
+                   </Field>
                    {pick && <p className="text-sm text-muted">Monthly pay {money(pick.employee.monthly_salary)}. Already owes {money(pick.outstanding)}.</p>}
-                   <Notice>{error}</Notice>
                  </>} />
   );
 }

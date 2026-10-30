@@ -105,3 +105,16 @@
 - Partial advance refunds use Payment.refunded_amount and the Payment.held property: use p.held (not p.amount) wherever advance money is summed.
 - Several weekly days off: employees.days_off (array); weekly_off kept only for old rows. DayMark kind 'present' = 8 hours.
 - Migrations 0025 to 0028 (days off + present, device_logs, refunded_amount, item_vendors).
+
+## Field-level form errors (30 Oct 2026)
+- Server refusals that belong to one field (advance too high, over balance, missing reference) map via `fieldErrorsFromApi` onto that field; PaymentForm/RefundForm catch thrown submit errors and show them under the control. Money book EntryForm uses the same path. Unmapped failures still use the red banner. Code: `web/lib/form.ts`, `web/components/payments.tsx`.
+
+## Part brand defaults (30 Oct 2026)
+- `part_brand` DEFAULTS: fixed company list (Audi, BMW, BYD, Changan, … Volvo) plus genuine/aftermarket lines. `pick_lists.seed` merges missing defaults into an already-seeded list so existing branches pick them up on next open without restoring retired entries. Staff can still add more via “+ Add a new one to the list”.
+
+## Live field errors (30 Oct 2026)
+- `useLiveErrors` wakes on input/change as well as blur, so wrong values show under the field while typing. `PaymentForm` takes `max` / `maxError` (advance room, invoice/bill balance); refunds cap at the held amount. Callers: quotation advance, invoice pay, bill pay.
+
+## Live quotation / invoice totals (30 Oct 2026)
+- Draft quotation and workshop invoice editors push `previewTotals` (now split labour/parts) into the right-hand Total card as qty/price/discount/tax change, so the panel updates without Save. Counter sales and PO drafts already did this in-page.
+- Same idea elsewhere: receive-goods shows delivery value; vendor bill form shows goods + adjustment; credit-note form shows credit total (+ tax); repair-order extra work shows line total. Cash close already showed the over/short live.

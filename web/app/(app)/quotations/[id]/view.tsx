@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { type Uploaded } from "@/components/capture";
+import { previewTotals } from "@/components/billing";
 import { CatalogPicker, lineCode, lineName, linkButton, type Pick, QuoteBadge, type QuoteLine, type QuoteStatus } from "@/components/estimates";
 import { NextStep } from "@/components/next-step";
 import { type Payment, type PaymentBody, PaymentForm, PaymentList, ProofInput, RefundForm } from "@/components/payments";
@@ -15,6 +16,8 @@ import { api, useApi } from "@/lib/api";
 import { day, money, qty, when, qtyStep } from "@/lib/format";
 import { linePrice, lineQty } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
+
+type LiveTotals = ReturnType<typeof previewTotals> & { includeTax: boolean };
 
 type Quotation = {
   id: string; number: string; revision: number; status: QuoteStatus; version: number; include_tax: boolean; tax_rate: string;
@@ -56,6 +59,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState<"approve" | "reject" | "advance" | "revise" | null>(null);
   const [refunding, setRefunding] = useState<Payment | null>(null);
+  const [live, setLive] = useState<LiveTotals | null>(null);
   const open = q.visit.status === "open";
   const draft = q.status === "draft" && open;
 
@@ -110,7 +114,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
               : ["act-revise", "Revise", true] as const;
             return next && <NextStep who={q.status === "approved" ? "Manager" : "Front desk"} target={act[0]} label={act[1]} open={act[2]}>{next}</NextStep>;
           })()}
-          {draft ? <DraftEditor q={q} onSaved={reload} onSend={(v) => act("send", { version: v })} busy={busy} />
+          {draft ? <DraftEditor q={q} onSaved={reload} onSend={(v) => act("send", { version: v })} busy={busy} onLive={setLive} />
             : <LinesTable q={q} />}
           {q.status === "approved" && q.approval && (
             <Card title="Approval">
@@ -164,7 +168,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
         </div>
 
         <div className="space-y-4">
-          <Totals q={q} />
+          <Totals q={q} live={draft ? live : null} />
           {q.advances.length > 0 && (
             <PaymentList title="Advances" payments={q.advances}
                          action={(p) => (!p.refunded && !p.invoice_id && p.status === "posted" && can("advance-refund") ? <Button variant="ghost" onClick={() => setRefunding(p)}>Give back</Button> : null)} />
@@ -174,9 +178,13 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
                         needsReason busy={busy} onCancel={() => setRefunding(null)}
                         onSubmit={async (b) => {
                           setBusy(true);
-                          setError(null);
-                          try { await api(`/api/advances/${refunding.id}/refund`, { method: "POST", json: b }); setRefunding(null); reload(); }
-                          catch (err) { setError((err as Error).message); setBusy(false); }
+                          try {
+                            await api(`/api/advances/${refunding.id}/refund`, { method: "POST", json: b });
+                            setRefunding(null);
+                            reload();
+                          } finally {
+                            setBusy(false);
+                          }
                         }} />
           )}
           <VehiclePanel carId={q.visit.car_id} ownerId={q.visit.customer_id} buyerId={q.visit.buyer_id} />
@@ -223,7 +231,8 @@ function LinesTable({ q }: { q: Quotation }) {
 
 type Draft = { id: string; kind: "labour" | "part"; labour_code_id: string | null; item_id: string | null; name: string; code: string; unit?: string; qty: string; unit_price: string };
 
-function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () => void; onSend: (version: number) => void; busy: boolean }) {
+function DraftEditor({ q, onSaved, onSend, busy, onLive }:
+  { q: Quotation; onSaved: () => void; onSend: (version: number) => void; busy: boolean; onLive: (t: LiveTotals) => void }) {
   const [lines, setLines] = useState<Draft[]>(() => q.lines.map((l) => ({
     id: l.id, kind: l.kind, labour_code_id: l.labour_code_id, item_id: l.item_id, name: lineName(l), code: lineCode(l), unit: l.item?.unit,
     qty: String(Number(l.qty)), unit_price: Number(l.unit_price) ? String(Number(l.unit_price)) : "",
@@ -252,7 +261,8 @@ function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () =
   };
   const priceBad = (l: Draft) => !linePrice.safeParse(l.unit_price).success;
   const qtyBad = (l: Draft) => !lineQty.safeParse(l.qty).success;
-  const preview = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unit_price) || 0), 0);
+  const preview = previewTotals(lines, discount, includeTax, Number(q.tax_rate));
+  useEffect(() => { onLive({ ...preview, includeTax }); }, [preview.labour, preview.parts, preview.discount, preview.tax, preview.total, includeTax, onLive]);
 
   /** Saves; when sending, every line must be priced first. */
   async function save(send: boolean) {
@@ -316,7 +326,7 @@ function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () =
         </div>
       </Card>
 
-      {dirty && <p className="text-sm text-muted">Lines before tax and discount come to {money(preview)}. Save to update the totals.</p>}
+      {dirty && <p className="text-sm text-muted">Unsaved changes. The total on the right updates as you type; press Save draft to keep them.</p>}
       <Notice>{error}</Notice>
       <div className="flex flex-wrap gap-2">
         <Button id="act-send-quote" onClick={() => save(true)} disabled={saving || busy}>{busy ? "Sending" : "Send to the customer"}</Button>
@@ -327,9 +337,19 @@ function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () =
   );
 }
 
-function Totals({ q }: { q: Quotation }) {
-  const t = q.totals;
-  const row = (label: string, v: string, strong = false) => (
+function Totals({ q, live }: { q: Quotation; live?: LiveTotals | null }) {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const t = live
+    ? {
+        labour: live.labour, parts: live.parts, discount: live.discount, tax: live.tax, total: live.total,
+        advance: Number(q.totals.advance), balance: r2(live.total - Number(q.totals.advance)),
+      }
+    : {
+        labour: Number(q.totals.labour), parts: Number(q.totals.parts), discount: Number(q.totals.discount),
+        tax: Number(q.totals.tax), total: Number(q.totals.total), advance: Number(q.totals.advance), balance: Number(q.totals.balance),
+      };
+  const includeTax = live?.includeTax ?? q.include_tax;
+  const row = (label: string, v: number, strong = false) => (
     <div className={`flex justify-between gap-4 py-1.5 ${strong ? "font-medium" : ""}`}><dt>{label}</dt><dd className="num">{money(v)}</dd></div>
   );
   return (
@@ -337,10 +357,10 @@ function Totals({ q }: { q: Quotation }) {
       <dl>
         {row("Labour", t.labour)}
         {row("Parts", t.parts)}
-        {Number(t.discount) > 0 && row("Discount", `-${t.discount}`)}
-        {q.include_tax && row(`Sales tax ${Number(q.tax_rate)}%`, t.tax)}
+        {t.discount > 0 && row("Discount", -t.discount)}
+        {includeTax && row(`Sales tax ${Number(q.tax_rate)}%`, t.tax)}
         <div className="mt-1 border-t border-rule pt-1">{row("Total", t.total, true)}</div>
-        {Number(t.advance) > 0 && <>{row("Advance received", `-${t.advance}`)}{row("Still to pay", t.balance, true)}</>}
+        {t.advance > 0 && <>{row("Advance received", -t.advance)}{row("Still to pay", t.balance, true)}</>}
       </dl>
     </Card>
   );
@@ -413,21 +433,21 @@ function RejectForm({ busy, onSubmit, onCancel }: { busy: boolean; onSubmit: (re
 }
 
 function AdvanceForm({ q, onDone, onCancel }: { q: Quotation; onDone: () => void; onCancel: () => void }) {
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function submit(body: PaymentBody) {
     setBusy(true);
-    setError(null);
     try {
       await api(`/api/quotations/${q.id}/advances`, { method: "POST", json: body });
       onDone();
     } catch (err) {
-      setError((err as Error).message);
       setBusy(false);
+      throw err;
     }
   }
   return (
     <PaymentForm title="Take an advance" hint={`Quotation total ${money(q.totals.total)}. Still to take at most ${money(q.totals.balance)}.`} busy={busy} onSubmit={submit} onCancel={onCancel}
-                 note={<><p className="text-sm text-muted">An advance is the customer&apos;s money until the invoice uses it. A refund needs an admin&apos;s approval.</p><Notice>{error}</Notice></>} />
+                 max={Number(q.totals.balance)}
+                 maxError={`An advance cannot be more than the quotation total. ${money(q.totals.balance)} can still be taken`}
+                 note={<p className="text-sm text-muted">An advance is the customer&apos;s money until the invoice uses it. A refund needs an admin&apos;s approval.</p>} />
   );
 }

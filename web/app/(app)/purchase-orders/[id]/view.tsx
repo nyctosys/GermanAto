@@ -308,6 +308,7 @@ function ReceiveForm({ po, onDone }: { po: Po; onDone: (p: Po) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (id: string, patch: Partial<Row>) => setRows((r) => ({ ...r, [id]: { ...r[id], ...patch } }));
+  const goods = open.reduce((s, l) => s + (Number(rows[l.id]?.qty) || 0) * (Number(rows[l.id]?.cost) || 0), 0);
 
   const qtyError = (l: PoLine) => {
     const q = Number(rows[l.id].qty);
@@ -378,6 +379,7 @@ function ReceiveForm({ po, onDone }: { po: Po; onDone: (p: Po) => void }) {
         <div className="grid gap-4 border-t border-rule px-4 py-4 sm:grid-cols-2 shell:px-5">
           <Field label="Vendor's delivery note number (optional)"><Input value={ref} onChange={(e) => setRef(e.target.value)} maxLength={60} /></Field>
           <Field required label="Received on"><Input type="date" max={today()} value={on} onChange={(e) => setOn(e.target.value)} /></Field>
+          <p className="num text-lg font-medium sm:col-span-2">Delivery value {money(goods)}</p>
           <div className="flex flex-col gap-3 sm:col-span-2">
             <Notice>{error}</Notice>
             <div><Button id="act-receive" type="submit" disabled={busy}>{busy ? "Counting in" : "Put the stock in"}</Button></div>
@@ -418,7 +420,9 @@ function BillForm({ receipt, po, onCancel }: { receipt: Receipt; po: Po; onCance
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [adjustment, setAdjustment] = useState("");
   const live = liveForm(billSchema, errors, setErrors);
+  const billTotal = Number(receipt.value) + (Number(adjustment) || 0);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -442,8 +446,11 @@ function BillForm({ receipt, po, onCancel }: { receipt: Receipt; po: Po; onCance
       <Field required label="Vendor's invoice number" error={errors.vendor_invoice_no} hint="Stops the same invoice being entered twice."><Input name="vendor_invoice_no" maxLength={60} /></Field>
       <Field label="Bill date" error={errors.bill_date}><Input name="bill_date" type="date" max={today()} defaultValue={today()} /></Field>
       <Field label="Due on (optional)" error={errors.due_on} hint={po.vendor.terms_days ? `Blank means ${po.vendor.terms_days} days from the bill date.` : "Blank means due at once."}><Input name="due_on" type="date" /></Field>
-      <Field label="Freight or discount (Rs, optional)" error={errors.adjustment} hint="Freight as a plus, a discount as a minus."><Input name="adjustment" inputMode="decimal" placeholder="0" /></Field>
+      <Field label="Freight or discount (Rs, optional)" error={errors.adjustment} hint="Freight as a plus, a discount as a minus.">
+        <Input name="adjustment" inputMode="decimal" placeholder="0" value={adjustment} onChange={(e) => setAdjustment(e.target.value)} />
+      </Field>
       <div className="sm:col-span-2"><Field label="What the adjustment is for" error={errors.adjustment_reason}><Input name="adjustment_reason" maxLength={200} /></Field></div>
+      <p className="num text-lg font-medium sm:col-span-2">Bill total {money(billTotal)}</p>
       <div className="flex flex-col gap-3 sm:col-span-2">
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">

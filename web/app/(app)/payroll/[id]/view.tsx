@@ -77,7 +77,18 @@ function View({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
       {paying && (
         <div className="mb-4">
           <PaymentForm out title={`Pay ${paying.employee.full_name}`} hint={`Net pay ${money(paying.net_pay)} for ${title}.`} suggested={String(Number(paying.net_pay))} busy={busy}
-                       onCancel={() => setPaying(null)} onSubmit={async (b: PaymentBody) => { if (await call(`/lines/${paying.id}/pay`, "POST", { account: b.account, reference: b.reference, note: b.note, proof_id: b.proof_id, no_proof_reason: b.no_proof_reason })) setPaying(null); }} />
+                       onCancel={() => setPaying(null)} onSubmit={async (b: PaymentBody) => {
+                         setBusy(true);
+                         try {
+                           onChange(await api<Run>(`/api/payroll-runs/${run.id}/lines/${paying.id}/pay`, {
+                             method: "POST",
+                             json: { account: b.account, reference: b.reference, note: b.note, proof_id: b.proof_id, no_proof_reason: b.no_proof_reason },
+                           }));
+                           setPaying(null);
+                         } finally {
+                           setBusy(false);
+                         }
+                       }} />
         </div>
       )}
       <Card flush>

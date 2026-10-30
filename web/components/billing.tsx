@@ -34,11 +34,23 @@ const PAY: Record<PayStatus, [string, "neutral" | "success" | "warning" | "error
 };
 export const PayBadge = ({ status }: { status: PayStatus }) => <Badge tone={PAY[status][1]}>{PAY[status][0]}</Badge>;
 
-/** Same arithmetic as the API (app/routers/estimates.py totals), for a live preview while editing. */
-export function previewTotals(lines: { qty: string; unit_price: string }[], discount: string, includeTax: boolean, rate: number) {
+/** Same arithmetic as the API (app/pricing.py totals), for a live preview while editing. */
+export function previewTotals(
+  lines: { kind?: "labour" | "part"; qty: string; unit_price: string }[],
+  discount: string,
+  includeTax: boolean,
+  rate: number,
+) {
   const r2 = (n: number) => Math.round(n * 100) / 100;
-  const subtotal = lines.reduce((s, l) => s + r2((Number(l.qty) || 0) * (Number(l.unit_price) || 0)), 0);
+  let labour = 0;
+  let parts = 0;
+  for (const l of lines) {
+    const amt = r2((Number(l.qty) || 0) * (Number(l.unit_price) || 0));
+    if (l.kind === "labour") labour = r2(labour + amt);
+    else parts = r2(parts + amt);
+  }
+  const subtotal = r2(labour + parts);
   const disc = Math.min(Number(discount) || 0, subtotal);
   const tax = includeTax ? r2((subtotal - disc) * rate / 100) : 0;
-  return { subtotal, discount: disc, tax, total: r2(subtotal - disc + tax) };
+  return { labour, parts, subtotal, discount: disc, tax, total: r2(subtotal - disc + tax) };
 }

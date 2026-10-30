@@ -116,7 +116,17 @@ function View({ bill, onChange }: { bill: Bill; onChange: (b: Bill) => void }) {
 
           {panel === "pay" && (
             <PaymentForm out title="Pay this vendor" hint={`Still owed: ${money(bill.balance)}. A part payment is fine.`} suggested={String(Number(bill.balance))} busy={busy}
-                         onCancel={() => setPanel(null)} onSubmit={async (b: PaymentBody) => { if (await call(`/api/bills/${bill.id}/payments`, b)) setPanel(null); }} />
+                         max={Number(bill.balance)}
+                         maxError={`That is more than the ${money(bill.balance)} still owed on this bill`}
+                         onCancel={() => setPanel(null)} onSubmit={async (b: PaymentBody) => {
+                           setBusy(true);
+                           try {
+                             onChange(await api<Bill>(`/api/bills/${bill.id}/payments`, { method: "POST", json: b }));
+                             setPanel(null);
+                           } finally {
+                             setBusy(false);
+                           }
+                         }} />
           )}
           {panel === "void" && (
             <ReasonForm title="Void this bill" hint="Only possible while nothing is paid on it. The number stays on record." confirm="Void the bill" busy={busy}

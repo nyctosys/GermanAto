@@ -8,7 +8,7 @@ import { useQueryParam } from "@/components/search";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money, today } from "@/lib/format";
-import { fieldErrorsFromApi, useLiveErrors } from "@/lib/form";
+import { useLiveErrors } from "@/lib/form";
 import { entrySchema, issuesToFieldErrors } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 import Link from "next/link";
@@ -172,29 +172,31 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
   const cats = useApi<Category[]>("/api/expense-categories");
   const owing = useApi<{ id: string; number: string; customer: string; balance: string }[]>(direction === "in" ? "/api/invoices?status=unpaid" : null);
   const [invoiceId, setInvoiceId] = useState("");
+  const [invoiceError, setInvoiceError] = useState<string | undefined>();
   const [kind, setKind] = useState(kinds[0] ?? "other_income");
   const [v, setV] = useState({ amount: "", account: "cash", to_account: "", category_id: "", party: "", reference: "", note: "", occurred_on: today() });
   const [proof, setProof] = useState<Uploaded[]>([]);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const set = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
   const transfer = kind === "transfer";
   const invoicePay = kind === "invoice_payment";
   const snapshot = { ...v, kind, proof, reason };
-  const { errors, activate, live } = useLiveErrors(snapshot, (s) => {
+  const { errors, activate, live, applyApi, clearServer } = useLiveErrors(snapshot, (s) => {
     const r = entrySchema.safeParse(s);
     return r.success ? {} : issuesToFieldErrors(r.error.issues);
   });
+  const set = (p: Partial<typeof v>) => { clearServer(); setError(null); setV((x) => ({ ...x, ...p })); };
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     activate();
     const r = entrySchema.safeParse({ ...snapshot, kind: invoicePay ? "other_income" : kind });
     if (!r.success) return;
-    if (invoicePay && !invoiceId) { setError("Choose the invoice this payment is for."); return; }
+    if (invoicePay && !invoiceId) { setInvoiceError("Choose the invoice this payment is for."); return; }
     setBusy(true);
     setError(null);
+    clearServer();
     try {
       if (invoicePay) {
         await api(`/api/invoices/${invoiceId}/payments`, { method: "POST", json: { amount: v.amount.trim(), account: v.account, reference: v.reference, note: v.note,
@@ -207,8 +209,7 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
         proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : reason } });
       onDone();
     } catch (err) {
-      const mapped = fieldErrorsFromApi(err);
-      setError(mapped.banner ?? (Object.values(mapped.fields)[0] ?? null));
+      setError(applyApi(err));
       setBusy(false);
     }
   }
@@ -223,8 +224,13 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
           </Select>
         </Field>}
         {invoicePay && (
-          <Field required label="Invoice">
-            <Select value={invoiceId} onChange={(e) => { const inv = owing.data?.find((i) => i.id === e.target.value); setInvoiceId(e.target.value); if (inv) set({ amount: String(Number(inv.balance)) }); }}>
+          <Field required label="Invoice" error={invoiceError}>
+            <Select value={invoiceId} onChange={(e) => {
+              const inv = owing.data?.find((i) => i.id === e.target.value);
+              setInvoiceId(e.target.value);
+              setInvoiceError(undefined);
+              if (inv) set({ amount: String(Number(inv.balance)) });
+            }}>
               <option value="">{owing.data?.length === 0 ? "No invoice is waiting for payment" : "Choose an invoice"}</option>
               {owing.data?.map((i) => <option key={i.id} value={i.id}>{i.number}, {i.customer}, owes {money(i.balance)}</option>)}
             </Select>
@@ -255,7 +261,7 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
         {!transfer && <Field label={direction === "in" ? "Received from (optional)" : "Paid to (optional)"} error={errors.party}><Input value={v.party} onChange={(e) => set({ party: e.target.value })} maxLength={120} /></Field>}
         <Field required label="Date" error={errors.occurred_on}><Input type="date" max={today()} value={v.occurred_on} onChange={(e) => set({ occurred_on: e.target.value })} /></Field>
         <Field required={false} label="Transaction reference (bank or wallet)" error={errors.reference}><Input value={v.reference} onChange={(e) => set({ reference: e.target.value })} maxLength={60} /></Field>
-        <div className="sm:col-span-2"><ProofInput proof={proof} setProof={setProof} reason={reason} setReason={setReason} error={errors.reason} /></div>
+        <div className="sm:col-span-2"><ProofInput proof={proof} setProof={(p) => { clearServer(); setError(null); setProof(p); }} reason={reason} setReason={(r) => { clearServer(); setError(null); setReason(r); }} error={errors.reason} /></div>
         <div className="flex flex-col gap-3 sm:col-span-2">
           <Notice>{error}</Notice>
           <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{busy ? "Recording" : "Record it"}</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>

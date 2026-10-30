@@ -1,5 +1,5 @@
-"""Team-managed pick-lists. The defaults below only seed a branch's list the first time it is opened;
-after that the team adds, renames and retires entries themselves (Settings, Pick-lists)."""
+"""Team-managed pick-lists. DEFAULTS seed each list and fill in any new names that are still
+missing; the team adds, renames and retires entries themselves (Settings, Pick-lists)."""
 import re
 from difflib import get_close_matches
 
@@ -14,10 +14,17 @@ DEFAULTS: dict[str, list[str]] = {
         "Proton", "Haval", "DFSK", "FAW", "Isuzu", "BMW", "Mercedes-Benz", "Audi", "Volkswagen", "Porsche", "Land Rover", "Jaguar",
         "Volvo", "Peugeot", "Renault", "Ford", "Chevrolet", "Jeep", "Tesla", "BYD",
     ],
+    # Permanent company brands for inventory (seeded on every branch; the team can still add more).
+    # Aftermarket / genuine lines stay as extras for parts stock.
     "part_brand": [
-        "Toyota Genuine", "Honda Genuine", "Suzuki Genuine", "Bosch", "Mann", "Mahle", "Denso", "NGK", "Brembo", "ATE", "TRW", "Sachs",
-        "Bilstein", "KYB", "Monroe", "Gates", "Continental", "Valeo", "Hella", "Castrol", "Shell", "Mobil", "Total", "Liqui Moly", "Febi",
-        "Lemförder", "Meyle", "SKF", "Optimax", "Local",
+        "Audi", "BMW", "BYD", "Changan", "Chevrolet", "Daihatsu", "Ford", "Haval", "Honda", "Hyundai",
+        "Isuzu", "Jaguar", "Jeep", "Kia", "Land Rover", "Lexus", "Mazda", "Mercedes-Benz", "MG", "MINI",
+        "Mitsubishi", "Nissan", "Peugeot", "Porsche", "Renault", "Subaru", "Suzuki", "Toyota", "Volkswagen", "Volvo",
+        "Toyota Genuine", "Honda Genuine", "Suzuki Genuine", "BMW Genuine", "Mercedes Genuine", "Audi Genuine", "VW Genuine",
+        "Bosch", "Mann", "Mahle", "Denso", "NGK", "Brembo", "ATE", "TRW", "Sachs", "ZF",
+        "Bilstein", "KYB", "Monroe", "Gates", "Continental", "Valeo", "Hella", "Osram",
+        "Castrol", "Shell", "Mobil", "Total", "Liqui Moly", "Febi", "Lemförder", "Meyle", "SKF",
+        "Optimax", "Local",
     ],
     "part_category": [
         "Filters", "Oil and fluids", "Brakes", "Suspension", "Engine", "Transmission", "Electrical", "Lighting", "Cooling", "Belts and hoses",
@@ -41,16 +48,22 @@ def tidy(name: str) -> str:
 
 
 def seed(db: Session, branch_id, kind: str) -> None:
-    """Fills an empty list with the defaults plus anything already typed on records, once."""
-    if db.scalar(select(func.count()).select_from(PickListEntry).where(PickListEntry.branch_id == branch_id, PickListEntry.kind == kind)):
-        return
+    """Puts every default name on the list, plus anything already typed on records.
+    Safe to call again: names that are already there (even if retired) are left alone, so a
+    later DEFAULTS update still adds new brands like BMW without bringing back a retired entry."""
+    known = {
+        e.key
+        for e in db.scalars(
+            select(PickListEntry).where(PickListEntry.branch_id == branch_id, PickListEntry.kind == kind)
+        )
+    }
     col = USED_BY[kind]
     used = [v for v in db.scalars(select(col).distinct()) if v and v.strip()]
-    seen: set[str] = set()
     for name in [*DEFAULTS[kind], *(tidy(v) for v in used)]:
-        if name and name.lower() not in seen:
-            seen.add(name.lower())
-            db.add(PickListEntry(branch_id=branch_id, kind=kind, name=name, key=name.lower()))
+        key = name.lower()
+        if name and key not in known:
+            known.add(key)
+            db.add(PickListEntry(branch_id=branch_id, kind=kind, name=name, key=key))
     db.flush()
 
 

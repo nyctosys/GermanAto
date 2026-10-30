@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { type CreditNote, type Invoice, PayBadge, previewTotals } from "@/components/billing";
 import { lineCode, linkButton } from "@/components/estimates";
 import { NextStep } from "@/components/next-step";
@@ -33,6 +33,8 @@ function Loader() {
   return <View key={`${inv.data.id}-${inv.data.version}-${inv.data.payments.length}`} inv={inv.data} reload={inv.reload} />;
 }
 
+type LiveTotals = ReturnType<typeof previewTotals> & { includeTax: boolean };
+
 function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
   const router = useRouter();
   const { can } = useSession();
@@ -42,6 +44,7 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
   const [voiding, setVoiding] = useState(false);
   const [returning, setReturning] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  const [live, setLive] = useState<LiveTotals | null>(null);
   const draft = inv.status === "draft";
   const counter = inv.kind === "counter_sale";
 
@@ -90,20 +93,40 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="space-y-4">
-          {draft && !counter ? <WorkshopDraft inv={inv} busy={busy} call={call} />
+          {draft && !counter ? <WorkshopDraft inv={inv} busy={busy} call={call} onLive={setLive} />
             : <Lines inv={inv} />}
           {draft && counter && <Link href={`/counter-sales/${inv.id}`} className={`${linkButton} w-fit`}>Continue the sale</Link>}
 
           {inv.credit_release && <Notice tone="warning">Released on credit by {inv.credit_release.by}: {inv.credit_release.reason}</Notice>}
           {paying && (
             <PaymentForm title="Take a payment" hint={`Balance ${money(inv.totals.balance)}.`} suggested={String(Number(inv.totals.balance))} busy={busy}
-                         onCancel={() => setPaying(false)} onSubmit={async (b: PaymentBody) => { if (await call("/payments", b)) setPaying(false); }} />
+                         max={Number(inv.totals.balance)}
+                         maxError={`That is more than the balance of ${money(inv.totals.balance)}`}
+                         onCancel={() => setPaying(false)} onSubmit={async (b: PaymentBody) => {
+                           setBusy(true);
+                           try {
+                             await api(`/api/invoices/${inv.id}/payments`, { method: "POST", json: b });
+                             setPaying(false);
+                             reload();
+                           } finally {
+                             setBusy(false);
+                           }
+                         }} />
           )}
           {returning && <ReturnForm inv={inv} busy={busy} onCancel={() => setReturning(false)}
                                    onSubmit={async (b) => { if (await call("/credit-notes", b)) setReturning(false); }} />}
           {refunding && (
             <RefundForm title="Give money back" hint={`Owed back to the customer: ${money(inv.totals.refundable)}.`} amount={String(Number(inv.totals.refundable))} busy={busy}
-                        onCancel={() => setRefunding(false)} onSubmit={async (b) => { if (await call("/refund", { ...b, reason: undefined })) setRefunding(false); }} />
+                        onCancel={() => setRefunding(false)} onSubmit={async (b) => {
+                          setBusy(true);
+                          try {
+                            await api(`/api/invoices/${inv.id}/refund`, { method: "POST", json: { ...b, reason: undefined } });
+                            setRefunding(false);
+                            reload();
+                          } finally {
+                            setBusy(false);
+                          }
+                        }} />
           )}
           {voiding && <VoidForm busy={busy} onCancel={() => setVoiding(false)} onSubmit={async (reason) => { if (await call("/void", { reason })) router.push("/invoices"); }} />}
           <Notice>{error}</Notice>
@@ -123,7 +146,7 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
         </div>
 
         <div className="space-y-4">
-          <Totals inv={inv} />
+          <Totals inv={inv} live={draft && !counter ? live : null} />
           {inv.payments.length > 0 && <PaymentList title="Payments" payments={inv.payments} />}
           {inv.credit_notes.length > 0 && <CreditNotes notes={inv.credit_notes} />}
           {inv.visit ? <VehiclePanel carId={inv.visit.car_id} ownerId={inv.visit.customer_id} buyerId={inv.visit.buyer_id} />
@@ -163,14 +186,16 @@ function Lines({ inv }: { inv: Invoice }) {
   );
 }
 
-function WorkshopDraft({ inv, busy, call }: { inv: Invoice; busy: boolean; call: (path: string, json?: object, method?: string) => Promise<boolean> }) {
+function WorkshopDraft({ inv, busy, call, onLive }:
+  { inv: Invoice; busy: boolean; call: (path: string, json?: object, method?: string) => Promise<boolean>; onLive: (t: LiveTotals) => void }) {
   const [prices, setPrices] = useState<Record<string, string>>(() => Object.fromEntries(inv.lines.map((l) => [l.id, String(Number(l.unit_price))])));
   const [includeTax, setIncludeTax] = useState(inv.include_tax);
   const [discount, setDiscount] = useState(Number(inv.discount) ? String(Number(inv.discount)) : "");
   const [notes, setNotes] = useState(inv.notes);
   const [dirty, setDirty] = useState(false);
   const bad = inv.lines.filter((l) => !linePrice.safeParse(prices[l.id]).success).map((l) => l.id);
-  const preview = previewTotals(inv.lines.map((l) => ({ qty: l.qty, unit_price: prices[l.id] })), discount, includeTax, Number(inv.tax_rate));
+  const preview = previewTotals(inv.lines.map((l) => ({ kind: l.kind, qty: l.qty, unit_price: prices[l.id] })), discount, includeTax, Number(inv.tax_rate));
+  useEffect(() => { onLive({ ...preview, includeTax }); }, [preview.labour, preview.parts, preview.discount, preview.tax, preview.total, includeTax, onLive]);
 
   return (
     <>
@@ -212,29 +237,35 @@ function WorkshopDraft({ inv, busy, call }: { inv: Invoice; busy: boolean; call:
                   onClick={async () => { if (await call("", { prices, include_tax: includeTax, discount: discount || "0", notes, version: inv.version }, "PUT")) setDirty(false); }}>
             Save changes
           </Button>
-          <span className="num text-sm text-muted">New total {money(preview.total)}. Save before issuing.</span>
+          <span className="text-sm text-muted">Unsaved. The total on the right updates as you type.</span>
         </div>
       )}
     </>
   );
 }
 
-function Totals({ inv }: { inv: Invoice }) {
-  const t = inv.totals;
-  const row = (label: ReactNode, v: string, strong = false) => (
+function Totals({ inv, live }: { inv: Invoice; live?: LiveTotals | null }) {
+  const t = live
+    ? { labour: live.labour, parts: live.parts, discount: live.discount, tax: live.tax, total: live.total,
+        advance_held: Number(inv.totals.advance_held), credited: Number(inv.totals.credited), paid: Number(inv.totals.paid), balance: Number(inv.totals.balance) }
+    : { labour: Number(inv.totals.labour), parts: Number(inv.totals.parts), discount: Number(inv.totals.discount),
+        tax: Number(inv.totals.tax), total: Number(inv.totals.total), advance_held: Number(inv.totals.advance_held),
+        credited: Number(inv.totals.credited), paid: Number(inv.totals.paid), balance: Number(inv.totals.balance) };
+  const includeTax = live?.includeTax ?? inv.include_tax;
+  const row = (label: ReactNode, v: number, strong = false) => (
     <div className={`flex justify-between gap-4 py-1.5 ${strong ? "font-medium" : ""}`}><dt>{label}</dt><dd className="num">{money(v)}</dd></div>
   );
   return (
     <Card title="Total">
       <dl>
-        {Number(t.labour) > 0 && row("Labour", t.labour)}
+        {t.labour > 0 && row("Labour", t.labour)}
         {row("Parts", t.parts)}
-        {Number(t.discount) > 0 && row("Discount", `-${t.discount}`)}
-        {inv.include_tax && row(`Sales tax ${Number(inv.tax_rate)}%`, t.tax)}
+        {t.discount > 0 && row("Discount", -t.discount)}
+        {includeTax && row(`Sales tax ${Number(inv.tax_rate)}%`, t.tax)}
         <div className="mt-1 border-t border-rule pt-1">{row("Total", t.total, true)}</div>
-        {inv.status === "draft" && Number(t.advance_held) > 0 && row("Advance to apply", `-${t.advance_held}`)}
-        {inv.status === "issued" && Number(t.credited) > 0 && row("Credited (returns)", `-${t.credited}`)}
-        {inv.status === "issued" && <>{row("Paid so far", t.paid)}{Number(t.balance) < 0 ? row("Owed back to the customer", `${-Number(t.balance)}`, true) : row("Balance", t.balance, true)}</>}
+        {inv.status === "draft" && t.advance_held > 0 && row("Advance to apply", -t.advance_held)}
+        {inv.status === "issued" && t.credited > 0 && row("Credited (returns)", -t.credited)}
+        {inv.status === "issued" && <>{row("Paid so far", t.paid)}{t.balance < 0 ? row("Owed back to the customer", -t.balance, true) : row("Balance", t.balance, true)}</>}
       </dl>
     </Card>
   );
@@ -282,6 +313,12 @@ function ReturnForm({ inv, busy, onSubmit, onCancel }: { inv: Invoice; busy: boo
   const [tried, setTried] = useState(false);
   const picked = inv.lines.filter((l) => Number(qtys[l.id]) > 0);
   const badQty = (id: string, total: string) => Number(qtys[id]) > left(id, total);
+  const preview = previewTotals(
+    picked.map((l) => ({ kind: l.kind, qty: qtys[l.id], unit_price: l.unit_price })),
+    "0",
+    inv.include_tax,
+    Number(inv.tax_rate),
+  );
 
   return (
     <Card title="Return or correct">
@@ -310,6 +347,12 @@ function ReturnForm({ inv, busy, onSubmit, onCancel }: { inv: Invoice; busy: boo
           })}
         </ul>
         <Field label="Reason" error={tried && reason.trim().length < 3 ? "Say why" : undefined}><Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} /></Field>
+        {picked.length > 0 && (
+          <p className="num text-sm font-medium">
+            Credit note {money(preview.total)}
+            {inv.include_tax ? ` (includes ${money(preview.tax)} tax)` : ""}
+          </p>
+        )}
         {tried && !picked.length && <p role="alert" className="text-sm text-error">Enter a quantity on at least one line.</p>}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={busy}>{busy ? "Recording" : "Issue the credit note"}</Button>
