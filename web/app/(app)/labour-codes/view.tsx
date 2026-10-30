@@ -2,9 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, ChoiceSelect, Checkbox, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
-import { LABOUR_CATEGORIES } from "@/lib/lists";
+import { ListSelect } from "@/components/list-select";
 import { useSession } from "@/lib/session";
 
 type Code = { id: string; code: string; name: string; category: string; description: string; is_active: boolean; version: number };
@@ -38,7 +38,6 @@ function LabourCodes() {
         <div className="mb-6">
           <Card title={editing === "new" ? "New labour code" : `Edit ${editing.code}`}>
             <CodeForm key={editing === "new" ? "new" : editing.id} code={editing === "new" ? null : editing}
-                      categories={groups.map(([c]) => c)}
                       onDone={() => { setEditing(null); list.reload(); }} />
           </Card>
         </div>
@@ -76,7 +75,7 @@ function LabourCodes() {
   );
 }
 
-function CodeForm({ code, categories, onDone }: { code: Code | null; categories: string[]; onDone: () => void }) {
+function CodeForm({ code, onDone }: { code: Code | null; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -99,7 +98,7 @@ function CodeForm({ code, categories, onDone }: { code: Code | null; categories:
   return (
     <form onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
       {code && <Field label="Code" hint="Made by the system. It can't be changed."><Input value={code.code} disabled readOnly /></Field>}
-      <Field label="Category"><ChoiceSelect name="category" options={[...new Set([...LABOUR_CATEGORIES, ...categories])]} defaultValue={code?.category} placeholder="Choose a category" /></Field>
+      <Field label="Category"><ListSelect name="category" kind="labour_category" defaultValue={code?.category} placeholder="Choose a category" /></Field>
       <div className="sm:col-span-2"><Field label="Name"><Input name="name" defaultValue={code?.name} required placeholder="Paint one door" /></Field></div>
       <div className="sm:col-span-2"><Field label="Description (optional)"><Input name="description" defaultValue={code?.description} /></Field></div>
       {code && <div className="sm:col-span-2"><Checkbox name="is_active" defaultChecked={code.is_active} label="In use" hint="Retired codes stay on old documents but can't be picked." /></div>}

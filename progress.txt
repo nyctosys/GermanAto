@@ -100,7 +100,7 @@
 ## Team feedback round (US-1001 to US-1013)
 - Fetching nyctosys/GermanAto over HTTPS fails on this Mac (gh accounts lack access); `git fetch git@github.com:nyctosys/GermanAto.git dev` over SSH works.
 - ui.Field shows a red * unless the label says "(optional)"; CSS .req hides it outside <form> and .req-scope. Pass required={false} for conditionally-required fields.
-- ChoiceSelect (ui.tsx) posts its value via a hidden input, so it works with parseForm and FormData. Lists live in web/lib/lists.ts.
+- ListSelect (components/list-select.tsx) posts its value via a hidden input, so it works with parseForm and FormData. The lists are team-managed in the database (pick_list_entries, /api/lists/{kind}); defaults seed them once.
 - Forms must setBusy(false) after a successful save: the parent may keep them mounted, which looked like "stuck on Saving".
 - Partial advance refunds use Payment.refunded_amount and the Payment.held property: use p.held (not p.amount) wherever advance money is summed.
 - Several weekly days off: employees.days_off (array); weekly_off kept only for old rows. DayMark kind 'present' = 8 hours.

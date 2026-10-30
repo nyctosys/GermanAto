@@ -84,6 +84,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { href: "/admin/audit", label: "Audit log", permission: "audit" },
       { href: "/settings/branch", label: "Branch settings", permission: "settings" },
       { href: "/settings/money", label: "Money settings", permission: "settings" },
+      { href: "/settings/lists", label: "Pick-lists", permission: "settings" },
       { href: "/settings/messages", label: "Message wording", permission: "messages" },
       { href: "/settings/sync", label: "Cloud sync", permission: "sync" },
     ],

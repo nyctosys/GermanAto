@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Button, ChoiceSelect, Field, Input, Notice, Select } from "@/components/ui";
-import { PART_BRANDS, PART_CATEGORIES } from "@/lib/lists";
+import { Button, Field, Input, Notice, Select } from "@/components/ui";
+import { ListSelect } from "@/components/list-select";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -56,7 +56,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
   return (
     <form onSubmit={submit} className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3">
       <div className="sm:col-span-2"><Field required label="Name"><Input name="name" defaultValue={item?.name} required maxLength={160} placeholder="Oil filter" /></Field></div>
-      <Field label="Brand (optional)"><ChoiceSelect name="brand" options={PART_BRANDS} defaultValue={item?.brand} placeholder="Choose a brand" /></Field>
+      <Field label="Brand (optional)"><ListSelect name="brand" kind="part_brand" defaultValue={item?.brand} placeholder="Choose a brand" /></Field>
 
       <fieldset className="space-y-2 sm:col-span-2 shell:col-span-3">
         <legend className="mb-1 text-sm font-medium text-ink-2">Barcode or manufacturer part number</legend>
@@ -81,7 +81,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
         )}
       </fieldset>
 
-      <Field required label="Category"><ChoiceSelect name="category" options={PART_CATEGORIES} defaultValue={item?.category} placeholder="Choose a category" /></Field>
+      <Field required label="Category"><ListSelect name="category" kind="part_category" defaultValue={item?.category} placeholder="Choose a category" /></Field>
       <Field label="Unit">
         <Select name="unit" defaultValue={item?.unit ?? "pcs"}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select>
       </Field>

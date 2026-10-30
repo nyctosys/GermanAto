@@ -275,6 +275,19 @@ class ItemVendor(BranchScoped):
     unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
 
 
+class PickListEntry(BranchScoped):
+    """One entry in a team-managed pick-list (part brands, part categories, car makes, labour categories).
+    `key` is the lower-cased name, so "bosch" and "Bosch" are the same entry."""
+
+    __tablename__ = "pick_list_entries"
+    __table_args__ = (UniqueConstraint("branch_id", "kind", "key"),)
+
+    kind: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(60))
+    key: Mapped[str] = mapped_column(String(60))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
 class ItemCode(BranchScoped):
     """A barcode or manufacturer part number. Matching uses the normalised
     form, so "11-42 7.583" and "1142 7583" are the same part."""
