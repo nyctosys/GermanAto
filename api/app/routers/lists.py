@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth import Actor, current_actor
 from app.db import get_db
 from app.models import PickListEntry
-from app.pick_lists import DEFAULTS, PERMISSION, entries, lookalike, rename_on_records, tidy
+from app.pick_lists import DEFAULTS, PERMISSION, entries, lookalike, rename_on_records, squash, tidy
 
 router = APIRouter(prefix="/api", tags=["lists"])
 
@@ -45,7 +45,7 @@ def add_entry(kind: str, body: AddIn, actor: Actor = Depends(current_actor), db:
     if not name:
         raise HTTPException(422, "Type a name")
     rows = entries(db, actor.branch.id, kind, include_retired=True)
-    same = next((e for e in rows if e.key == name.lower()), None)
+    same = next((e for e in rows if squash(e.name) == squash(name)), None)
     if same:  # already there (maybe retired): use it, bring it back
         if not same.is_active:
             same.is_active = True
@@ -75,7 +75,7 @@ def edit_entry(kind: str, entry_id: uuid.UUID, body: EditIn, actor: Actor = Depe
         raise HTTPException(404, "Not found")
     if body.name is not None:
         name = tidy(body.name)
-        clash = next((x for x in entries(db, actor.branch.id, kind, include_retired=True) if x.key == name.lower() and x.id != e.id), None)
+        clash = next((x for x in entries(db, actor.branch.id, kind, include_retired=True) if squash(x.name) == squash(name) and x.id != e.id), None)
         if clash:
             raise HTTPException(409, f"{clash.name} is already in the list")
         if name != e.name:

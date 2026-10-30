@@ -49,3 +49,10 @@ def test_rename_carries_to_items_and_retire_hides(admin):
 
 def test_unknown_list_is_404(admin):
     assert admin.get("/api/lists/nothing").status_code == 404
+
+
+def test_spacing_and_punctuation_variants_reuse_the_entry(admin):
+    r = admin.post("/api/lists/part_brand", json={"name": "liqui-moly"})
+    assert r.status_code == 201 and r.json()["name"] == "Liqui Moly" and r.json()["created"] is False
+    r = admin.post("/api/lists/part_brand", json={"name": "Denzo"})
+    assert r.status_code == 409 and "Denso" in r.json()["detail"]

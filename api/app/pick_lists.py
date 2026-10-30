@@ -47,6 +47,11 @@ def tidy(name: str) -> str:
     return name.title() if name and name == name.lower() else name
 
 
+def squash(name: str) -> str:
+    """Spelling-blind form: "Liqui-Moly", "liqui moly" and "LiquiMoly" all become "liquimoly"."""
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
 def seed(db: Session, branch_id, kind: str) -> None:
     """Puts every default name on the list, plus anything already typed on records.
     Safe to call again: names that are already there (even if retired) are left alone, so a
@@ -77,9 +82,22 @@ def entries(db: Session, branch_id, kind: str, include_retired: bool = False) ->
 
 def lookalike(db: Session, branch_id, kind: str, name: str, ignore_id=None) -> str | None:
     """A spelling close to an existing entry ("Bosh" for "Bosch"), so a typo is caught before it becomes a second entry."""
-    pool = {e.key: e.name for e in entries(db, branch_id, kind, include_retired=True) if e.id != ignore_id}
-    close = get_close_matches(name.lower(), list(pool), n=1, cutoff=0.82)
+    pool = {squash(e.name): e.name for e in entries(db, branch_id, kind, include_retired=True) if e.id != ignore_id}
+    mine = squash(name)
+    close = get_close_matches(mine, list(pool), n=1, cutoff=0.75)
+    if not close:  # one letter wrong, missing, extra or swapped ("Sakuzi" for "Sakura") scores low on short names
+        close = [k for k in pool if len(k) >= 5 and one_slip(mine, k)][:1]
     return pool[close[0]] if close else None
+
+
+def one_slip(a: str, b: str) -> bool:
+    if a == b or abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        diff = [i for i in range(len(a)) if a[i] != b[i]]
+        return len(diff) == 1 or (len(diff) == 2 and diff[1] == diff[0] + 1 and a[diff[0]] == b[diff[1]] and a[diff[1]] == b[diff[0]])
+    short, long = sorted((a, b), key=len)
+    return any(long[:i] + long[i + 1:] == short for i in range(len(long)))
 
 
 def rename_on_records(db: Session, kind: str, old: str, new: str, branch_id) -> None:
