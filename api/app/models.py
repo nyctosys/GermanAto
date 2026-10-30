@@ -617,14 +617,14 @@ class Invoice(BranchScoped):
 
     __tablename__ = "invoices"
     __table_args__ = (
-        CheckConstraint("kind IN ('workshop', 'counter_sale')", name="invoice_kind"),
+        CheckConstraint("kind IN ('workshop', 'counter_sale', 'inspection')", name="invoice_kind"),
         CheckConstraint("status IN ('draft', 'issued', 'void')", name="invoice_status"),
-        CheckConstraint("kind = 'counter_sale' OR (visit_id IS NOT NULL AND repair_order_id IS NOT NULL)", name="invoice_workshop_links"),
+        CheckConstraint("kind = 'counter_sale' OR (visit_id IS NOT NULL AND (repair_order_id IS NOT NULL OR kind = 'inspection'))", name="invoice_workshop_links"),
         CheckConstraint("status <> 'issued' OR issued_at IS NOT NULL", name="invoice_issued_at"),
         CheckConstraint("discount >= 0", name="invoice_discount"),
         CheckConstraint("tax_rate >= 0 AND tax_rate <= 100", name="invoice_tax_rate"),
         # One live workshop invoice per visit (spec §2 rules).
-        Index("uq_invoice_visit", "visit_id", unique=True, postgresql_where=text("kind = 'workshop' AND status <> 'void'")),
+        Index("uq_invoice_visit", "visit_id", unique=True, postgresql_where=text("kind IN ('workshop', 'inspection') AND status <> 'void'")),
     )
 
     number: Mapped[str] = mapped_column(String(24), unique=True)

@@ -135,8 +135,8 @@ def operations(db: Session, branch: Branch, start: date, end: date) -> dict:
     channel = {"workshop": Z, "counter_sale": Z}
     for inv in invoices:
         t = totals(inv)
-        channel[inv.kind] += t["subtotal"] - t["discount"]
-    workshop = [i for i in invoices if i.kind == "workshop"]
+        channel["workshop" if inv.kind == "inspection" else inv.kind] += t["subtotal"] - t["discount"]
+    workshop = [i for i in invoices if i.kind in ("workshop", "inspection")]
 
     labour = db.execute(select(LabourCode.code, LabourCode.name, func.count(), func.sum(InvoiceLine.qty * InvoiceLine.unit_price))
                         .join(InvoiceLine, InvoiceLine.labour_code_id == LabourCode.id).join(Invoice, Invoice.id == InvoiceLine.invoice_id)

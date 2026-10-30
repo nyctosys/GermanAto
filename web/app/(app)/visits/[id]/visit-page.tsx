@@ -9,7 +9,7 @@ import { JobProgress, stepsOf } from "@/components/job-progress";
 import { linkButton, QuoteBadge, type QuoteStatus } from "@/components/estimates";
 import { RoBadge, type RoStatus } from "@/components/repairs";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { type VisitSummary, elapsed } from "@/components/visits";
 import { api, useApi } from "@/lib/api";
@@ -26,7 +26,7 @@ type Visit = VisitSummary & {
   job_card: { id: string; number: string; lines: number } | null;
   quotations: { id: string; number: string; revision: number; status: QuoteStatus | "revised"; expired: boolean }[];
   repair_order: { id: string; number: string; status: RoStatus } | null;
-  invoice: { id: string; number: string; status: string } | null;
+  invoice: { id: string; number: string; status: string; kind?: string; paid?: boolean } | null;
   handed_to: string; credit_reason: string;
   payments: { id: string; number: string; kind: string; status: string; amount: string }[];
 };
@@ -46,6 +46,17 @@ export default function VisitPage() {
 /** The one thing to do next on this visit, in plain words, worked out from where the visit has got to. */
 function nextStep(v: Visit): { text: string; href?: string; who: string } | null {
   if (v.status !== "open") return null;
+  if (v.kind === "pre_purchase") {
+    const report = v.inspections.find((i) => i.kind === "pre_purchase" && i.status === "signed");
+    const draft = v.inspections.find((i) => i.status === "draft");
+    const inv = v.invoice;
+    if (report && inv?.paid) return { text: "The fee is paid and the report is signed. Hand the report to the buyer below.", href: "#hand-over", who: "Inspector or front desk" };
+    if (report && inv?.status === "issued") return { text: "The inspection invoice is issued. Take the payment.", href: `/invoices/${inv.id}`, who: "Cashier" };
+    if (report && inv) return { text: "The inspection invoice is a draft. Check the price, then issue it.", href: `/invoices/${inv.id}`, who: "Cashier or manager" };
+    if (report) return { text: "The report is signed. Invoice the inspection fee: type the price for this inspection.", href: "#inspection-fee", who: "Cashier or manager" };
+    if (draft) return { text: "Finish the inspection: tick every check, add photos and sign the report.", href: `/inspections/${draft.id}`, who: "Inspector" };
+    return { text: "Start the pre-purchase inspection. It ends with a signed report for the buyer. There is no job card or quotation.", href: "#inspections", who: "Inspector" };
+  }
   const q = v.quotations.find((x) => x.status !== "revised");
   const ro = v.repair_order;
   if (v.invoice?.status === "issued") return { text: "The invoice is issued. Take any payment that is owed, then release the car with the gate pass below.", href: `/invoices/${v.invoice.id}`, who: "Cashier, then the guard" };
@@ -101,7 +112,7 @@ function VisitDetail() {
           <p className="font-medium">{v.number}</p>
           <Link href={`/print/visits/${v.id}`} target="_blank" className="text-sm underline">Print visit record</Link>
           {open ? <Badge tone="accent">In the workshop {elapsed(v.checked_in_at)}</Badge>
-            : v.status === "cancelled" ? <Badge>Cancelled</Badge> : <Badge tone="success">Delivered</Badge>}
+            : v.status === "cancelled" ? <Badge>Cancelled</Badge> : <Badge tone="success">{v.kind === "pre_purchase" ? "Report handed over" : "Delivered"}</Badge>}
         </div>
       </div>
 
@@ -114,7 +125,7 @@ function VisitDetail() {
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
-          <Card title="Inspections" flush>
+          <div id="inspections" className="scroll-mt-4"><Card title="Inspections" flush>
             {v.inspections.length > 0 && (
               <ul>
                 {v.inspections.map((i) => (
@@ -138,9 +149,9 @@ function VisitDetail() {
               </div>
             )}
             {actionError && <div className="px-4 pb-4"><Notice>{actionError}</Notice></div>}
-          </Card>
+          </Card></div>
 
-          <Estimate v={v} onError={setActionError} />
+          {v.kind === "pre_purchase" ? <InspectionFee v={v} onError={setActionError} /> : <Estimate v={v} onError={setActionError} />}
         </div>
 
         <div className="space-y-4">
@@ -175,7 +186,9 @@ function VisitDetail() {
             )}
           </Card>
 
-          {open ? <GatePass v={v} onDone={reload} /> : v.status === "closed" && <GatePassDone v={v} />}
+          {v.kind === "pre_purchase"
+            ? (open ? <HandOverReport v={v} onDone={reload} /> : v.status === "closed" && <Notice tone="success">Report handed to {v.handed_to}{v.close_note ? `. ${v.close_note}` : ""}.</Notice>)
+            : open ? <GatePass v={v} onDone={reload} /> : v.status === "closed" && <GatePassDone v={v} />}
           {open && (
             cancelling ? <CancelVisit id={v.id} onDone={() => { setCancelling(false); reload(); }} onCancel={() => setCancelling(false)} />
               : <Button variant="danger" onClick={() => setCancelling(true)}>Cancel this visit</Button>
@@ -184,6 +197,74 @@ function VisitDetail() {
         </div>
       </div>
     </>
+  );
+}
+
+function InspectionFee({ v, onError }: { v: Visit; onError: (m: string | null) => void }) {
+  const router = useRouter();
+  const { can } = useSession();
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    setBusy(true);
+    onError(null);
+    try {
+      const inv = await api<{ id: string }>(`/api/visits/${v.id}/inspection-invoice`, { method: "POST", json: { price: f.get("price"), include_tax: f.get("include_tax") === "on" } });
+      router.push(`/invoices/${inv.id}`);
+    } catch (err) {
+      onError((err as Error).message);
+      setBusy(false);
+    }
+  }
+  return (
+    <div id="inspection-fee" className="scroll-mt-4"><Card title="Inspection fee" flush={!!v.invoice}>
+      {v.invoice ? (
+        <Link href={`/invoices/${v.invoice.id}`} className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-3 row-link pr-10 shell:px-5 shell:pr-12 hover:bg-paper-2">
+          <span><span className="block font-medium">Invoice</span><span className="block text-sm text-muted">{v.invoice.number}</span></span>
+          <Badge tone={v.invoice.paid ? "success" : "warning"}>{v.invoice.paid ? "Paid" : v.invoice.status === "draft" ? "Draft" : "Not paid yet"}</Badge>
+        </Link>
+      ) : !can("invoices") || v.status !== "open" ? <p className="text-muted">No invoice for this inspection.</p> : (
+        <form onSubmit={submit} className="space-y-4">
+          <p className="text-muted">The fee for this inspection is billed to the buyer. Its price can be different each time.</p>
+          <Field required label="Price (Rs)"><Input name="price" type="number" inputMode="decimal" min={1} step="0.01" required /></Field>
+          <Checkbox name="include_tax" defaultChecked label="Add sales tax" />
+          <Button type="submit" disabled={busy}>Make the invoice</Button>
+        </form>
+      )}
+    </Card></div>
+  );
+}
+
+function HandOverReport({ v, onDone }: { v: Visit; onDone: () => void }) {
+  const { can } = useSession();
+  const [error, setError] = useState<string | null>(null);
+  const signed = v.inspections.some((i) => i.kind === "pre_purchase" && i.status === "signed");
+  const paid = !!v.invoice?.paid;
+  const onCredit = signed && v.invoice?.status === "issued" && !paid && can("release-on-credit");
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    try {
+      await api(`/api/visits/${v.id}/hand-over-report`, { method: "POST", json: { handed_to: f.get("handed_to"), note: f.get("note") ?? "", credit_reason: f.get("credit_reason") ?? "" }, toast: "Report handed over" });
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <div id="hand-over" className="scroll-mt-4"><Card title="Hand over the report">
+      {!signed ? <p className="text-muted">Sign the inspection report first. Then invoice the fee, take the payment, and give the report to the buyer here.</p>
+        : !paid && !onCredit ? <p className="text-muted">{v.invoice ? "Take the payment on the invoice first." : "Make the inspection invoice and take the payment first."}</p> : (
+        <form onSubmit={submit} className="space-y-4">
+          <Field required label="Handed to" hint="Usually the buyer."><Input name="handed_to" required minLength={2} maxLength={120} defaultValue={v.buyer?.name ?? ""} /></Field>
+          <Field label="Note (optional)"><Input name="note" maxLength={500} /></Field>
+          {onCredit && <Field required label="Why before it is paid" hint="Kept on the visit and in the audit log."><Input name="credit_reason" required minLength={5} maxLength={500} /></Field>}
+          <Notice>{error}</Notice>
+          <Button type="submit" variant="success">Hand over the report</Button>
+        </form>
+      )}
+    </Card></div>
   );
 }
 

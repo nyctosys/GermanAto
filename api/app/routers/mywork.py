@@ -67,7 +67,7 @@ def build(db: Session, actor: Actor) -> list[dict]:
         add("make-invoice", "Finished repairs: make the invoice", "Make the invoice from the repair order.",
             [{"label": r.number, "sub": cust(r.visit_id), "href": f"/repair-orders/{r.id}", "since": r.updated_at} for r in ros], "/repair-orders?status=ready")
     if can("invoice-issue"):
-        invs = db.scalars(select(Invoice).where(Invoice.branch_id == b.id, Invoice.status == "draft", Invoice.kind == "workshop").order_by(Invoice.created_at))
+        invs = db.scalars(select(Invoice).where(Invoice.branch_id == b.id, Invoice.status == "draft", Invoice.kind.in_(("workshop", "inspection"))).order_by(Invoice.created_at))
         add("issue-invoice", "Invoices to check and issue", "Check the prices, then issue it.",
             [{"label": i.number, "sub": cust(i.visit_id) if i.visit_id else "", "href": f"/invoices/{i.id}", "since": i.created_at} for i in invs], "/invoices?status=draft")
     if can("payments-in"):

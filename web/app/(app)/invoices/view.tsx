@@ -9,7 +9,7 @@ import { Card, EmptyState, ErrorState, PageHeader, SkeletonRows } from "@/compon
 import { useApi } from "@/lib/api";
 import { day, money } from "@/lib/format";
 
-type Row = { id: string; number: string; kind: "workshop" | "counter_sale"; status: string; pay_status: PayStatus; total: string;
+type Row = { id: string; number: string; kind: "workshop" | "counter_sale" | "inspection"; status: string; pay_status: PayStatus; total: string;
   balance: string; created_at: string; issued_at: string | null; customer: string };
 
 export default function InvoicesPage() {
@@ -55,7 +55,7 @@ function List() {
                   <tr key={r.id} className="border-t border-rule">
                     <td className="px-4 py-3 shell:px-5 max-sm:px-0">
                       <Link href={r.status === "draft" && r.kind === "counter_sale" ? `/counter-sales/${r.id}` : `/invoices/${r.id}`} className="font-medium underline">{r.number}</Link>
-                      <span className="block text-sm text-muted">{r.kind === "counter_sale" ? "Counter sale" : "Workshop"}, {day(r.issued_at ?? r.created_at)}</span>
+                      <span className="block text-sm text-muted">{r.kind === "counter_sale" ? "Counter sale" : r.kind === "inspection" ? "Inspection fee" : "Workshop"}, {day(r.issued_at ?? r.created_at)}</span>
                     </td>
                     <td data-label="Customer" className="px-4 py-3 max-sm:px-0">{r.customer}</td>
                     <td data-label="Status" className="px-4 py-3 max-sm:px-0"><PayBadge status={r.pay_status} /></td>

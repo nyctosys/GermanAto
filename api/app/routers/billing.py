@@ -16,7 +16,7 @@ from app import messaging
 from app.models import Car, Customer, Visit  # noqa: F811
 from app.db import get_db, utcnow
 from app.models import (
-    AuditLog, Car, CreditNote, CreditNoteLine, Customer, Inspection, Invoice, InvoiceLine, JobCard, MoneyEntry, Payment, Quotation,
+    AuditLog, Car, CreditNote, CreditNoteLine, Customer, Inspection, Invoice, InvoiceLine, JobCard, LabourCode, MoneyEntry, Payment, Quotation,
     RepairOrder, RepairOrderLine, StockMovement, User, Visit,
 )
 from app import posting
@@ -179,6 +179,39 @@ def refresh_invoice(invoice_id: uuid.UUID, actor: Actor = Depends(can_bill), db:
     return invoice_out(db, inv)
 
 
+# --- pre-purchase inspection invoice ----------------------------------------------------------
+
+class InspectionInvoiceIn(BaseModel):
+    price: Decimal = Field(gt=0, le=100_000_000, decimal_places=2)  # the fee differs for each inspection
+    include_tax: bool = True
+    notes: Text = Field(default="", max_length=3000)
+
+
+@router.post("/visits/{visit_id}/inspection-invoice", status_code=201)
+def start_inspection_invoice(visit_id: uuid.UUID, body: InspectionInvoiceIn, actor: Actor = Depends(can_bill), db: Session = Depends(get_db)):
+    """The fee for a pre-purchase inspection, billed to the buyer: one line, priced per inspection. No repair order behind it."""
+    v = _get_visit(db, actor, visit_id, lock=True)
+    _require_open(v)
+    if v.kind != "pre_purchase":
+        raise HTTPException(409, "Only a pre-purchase inspection is billed this way. A workshop visit is invoiced from its repair order.")
+    existing = db.scalar(select(Invoice).where(Invoice.visit_id == v.id, Invoice.kind.in_(("workshop", "inspection")), Invoice.status != "void"))
+    if existing:
+        raise HTTPException(409, {"message": f"This visit already has invoice {existing.number}", "invoice_id": str(existing.id)})
+    # the fee is a labour code the system keeps for it, so reports and credit notes treat it like any other labour
+    code = db.scalar(select(LabourCode).where(LabourCode.branch_id == actor.branch.id, LabourCode.code == "PRE-PURCHASE"))
+    if not code:
+        code = LabourCode(code="PRE-PURCHASE", name="Pre-purchase inspection", category="Diagnosis",
+                          description="Fee for inspecting a car before it is bought. The price is set on each invoice.")
+        db.add(code)
+        db.flush()
+    line = InvoiceLine(position=0, kind="labour", labour_code_id=code.id, description="Pre-purchase inspection", qty=1, unit_price=body.price)
+    inv = Invoice(number=next_number(db, actor.branch, "invoice"), kind="inspection", visit_id=v.id, customer_id=v.buyer_id or v.customer_id,
+                  car_id=v.car_id, include_tax=body.include_tax, tax_rate=actor.branch.tax_rate, notes=body.notes, lines=[line])
+    db.add(inv)
+    db.commit()
+    return invoice_out(db, inv)
+
+
 # --- counter sale ------------------------------------------------------------------------------
 
 class SaleLineIn(LineIn):
@@ -231,7 +264,7 @@ def start_counter_sale(body: CounterSaleIn, actor: Actor = Depends(can_bill), db
 # --- shared invoice actions ------------------------------------------------------------------------
 
 @router.get("/invoices")
-def list_invoices(kind: Literal["workshop", "counter_sale", "all"] = "all",
+def list_invoices(kind: Literal["workshop", "counter_sale", "inspection", "all"] = "all",
                   status: Literal["draft", "unpaid", "paid", "all"] = "all", q: str = "",
                   actor: Actor = Depends(can_bill), db: Session = Depends(get_db)):
     stmt = (select(Invoice, Customer).outerjoin(Customer, Customer.id == Invoice.customer_id)
@@ -273,9 +306,9 @@ class WorkshopInvoiceIn(BaseModel):
     version: int
 
 
-def _get_draft(db: Session, actor: Actor, invoice_id: uuid.UUID, kind: str, version: int | None) -> Invoice:
+def _get_draft(db: Session, actor: Actor, invoice_id: uuid.UUID, kind: str | tuple, version: int | None) -> Invoice:
     inv = _get_invoice(db, actor, invoice_id, lock=True)
-    if inv.kind != kind:
+    if inv.kind not in ((kind,) if isinstance(kind, str) else kind):
         raise HTTPException(404, "Invoice not found")
     if inv.status != "draft":
         raise HTTPException(409, "An issued invoice is locked. Corrections are made with a credit note.")
@@ -296,7 +329,7 @@ def save_counter_sale(invoice_id: uuid.UUID, body: CounterSaleIn, actor: Actor =
 def save_invoice(invoice_id: uuid.UUID, body: WorkshopInvoiceIn, actor: Actor = Depends(can_bill), db: Session = Depends(get_db)):
     """Final prices stay editable until the invoice is issued (spec §2). The
     lines themselves come from the repair order."""
-    inv = _get_draft(db, actor, invoice_id, "workshop", body.version)
+    inv = _get_draft(db, actor, invoice_id, ("workshop", "inspection"), body.version)
     for l in inv.lines:
         price = body.prices.get(l.id)
         if price is not None:
@@ -359,12 +392,13 @@ def issue_invoice(invoice_id: uuid.UUID, body: IssueIn, actor: Actor = Depends(c
         raise HTTPException(422, f"Enter a price for {', '.join(unpriced)}")
     total = totals(inv)["total"]
 
-    if inv.kind == "workshop":
+    if inv.kind in ("workshop", "inspection"):
         _require_open(db.get(Visit, inv.visit_id))
-        _check_matches_ro(db, inv)
+        if inv.kind == "workshop":
+            _check_matches_ro(db, inv)
         if body.payments:
             raise HTTPException(422, "Record payments on the issued invoice")
-        held = _held_advances(db, inv.visit_id)
+        held = _held_advances(db, inv.visit_id) if inv.kind == "workshop" else []
         if sum((p.held for p in held), Decimal(0)) > total:
             raise HTTPException(409, "The advances are more than the invoice. The difference must be refunded (admin approval) first.")
         for p in held:
@@ -499,6 +533,8 @@ def gate_pass(visit_id: uuid.UUID, body: GatePassIn, actor: Actor = Depends(can_
     release-on-credit approves with a reason (owner decision 3)."""
     v = _get_visit(db, actor, visit_id, lock=True)
     _require_open(v)
+    if v.kind == "pre_purchase":
+        raise HTTPException(409, "A pre-purchase inspection has no gate pass. Hand over the signed report instead.")
     check = gate_check(db, v)
     if check["blockers"]:
         raise HTTPException(409, " ".join(check["blockers"]))

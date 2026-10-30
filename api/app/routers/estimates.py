@@ -140,6 +140,8 @@ def job_card_out(db: Session, jc: JobCard) -> dict:
 def open_job_card(visit_id: uuid.UUID, response: Response, actor: Actor = Depends(can_job), db: Session = Depends(get_db)):
     """Opens the visit's job card, creating it the first time."""
     v = _get_visit(db, actor, visit_id, lock=True)
+    if v.kind == "pre_purchase":
+        raise HTTPException(409, "A pre-purchase inspection has no job card. It ends with the signed report for the buyer.")
     jc = db.scalar(select(JobCard).where(JobCard.visit_id == v.id))
     if not jc:
         _require_open(v)

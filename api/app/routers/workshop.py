@@ -205,6 +205,11 @@ def person(c: Customer | None) -> dict | None:
     return c and {"id": c.id, "name": c.name, "phone": c.phone, "number": c.number}
 
 
+def _is_paid(db: Session, inv: Invoice) -> bool:
+    from app.routers.billing import balance_of, pay_status
+    return inv.status == "issued" and pay_status(inv, balance_of(db, inv)) == "paid"
+
+
 def visit_summary(v: Visit, car: Car, customer: Customer, buyer: Customer | None = None) -> dict:
     return {"id": v.id, "number": v.number, "kind": v.kind, "status": v.status, "checked_in_at": v.checked_in_at,
             "closed_at": v.closed_at, "odometer_in": v.odometer_in, "complaint": v.complaint,
@@ -261,15 +266,18 @@ def list_visits(status: Literal["open", "closed", "cancelled", "all"] = "open", 
     rows = db.execute(stmt).all()
     ids = [v.id for v, _, _ in rows]
     cards = set(db.scalars(select(JobCard.visit_id).where(JobCard.visit_id.in_(ids))))
+    signed: dict = {}
+    for i in db.scalars(select(Inspection).where(Inspection.visit_id.in_(ids))):
+        signed.setdefault(i.visit_id, []).append({"status": i.status, "superseded": False})
     quotes: dict = {}
     for q in db.scalars(select(Quotation).where(Quotation.visit_id.in_(ids), Quotation.status != "revised")):
         quotes.setdefault(q.visit_id, []).append({"status": q.status})
     ros = {r.visit_id: {"status": r.status} for r in db.scalars(select(RepairOrder).where(RepairOrder.visit_id.in_(ids)))}
-    invs = {i.visit_id: {"status": i.status} for i in db.scalars(
-        select(Invoice).where(Invoice.visit_id.in_(ids), Invoice.kind == "workshop", Invoice.status != "void"))}
+    invs = {i.visit_id: {"status": i.status, "paid": _is_paid(db, i), "kind": i.kind} for i in db.scalars(
+        select(Invoice).where(Invoice.visit_id.in_(ids), Invoice.kind.in_(("workshop", "inspection")), Invoice.status != "void"))}
     # what the progress bar on each car needs, in the same shape as the visit page
     return [{**visit_summary(v, car, c, db.get(Customer, v.buyer_id) if v.buyer_id else None),
-             "progress": {"status": v.status, "job_card": v.id in cards, "quotations": quotes.get(v.id, []),
+             "progress": {"kind": v.kind, "inspections": signed.get(v.id, []), "status": v.status, "job_card": v.id in cards, "quotations": quotes.get(v.id, []),
                           "repair_order": ros.get(v.id), "invoice": invs.get(v.id)}}
             for v, car, c in rows]
 
@@ -297,12 +305,45 @@ def get_visit(visit_id: uuid.UUID, actor: Actor = Depends(can_visit), db: Sessio
         "quotations": [{"id": q.id, "number": q.number, "revision": q.revision, "status": q.status,
                         "expired": q.status == "sent" and q.valid_until < local_today()} for q in quotes],
         "repair_order": ro and {"id": ro.id, "number": ro.number, "status": ro.status},
-        "invoice": (inv := db.scalar(select(Invoice).where(Invoice.visit_id == v.id, Invoice.kind == "workshop", Invoice.status != "void")))
-                   and {"id": inv.id, "number": inv.number, "status": inv.status},
+        "invoice": (inv := db.scalar(select(Invoice).where(Invoice.visit_id == v.id, Invoice.kind.in_(("workshop", "inspection")), Invoice.status != "void")))
+                   and {"id": inv.id, "number": inv.number, "status": inv.status, "kind": inv.kind, "paid": _is_paid(db, inv)},
         "handed_to": v.handed_to, "credit_reason": v.credit_reason,
         "payments": [{"id": p.id, "number": p.number, "kind": p.kind, "status": p.status, "amount": p.amount,
                       "account": p.account, "received_at": p.received_at} for p in payments],
     }
+
+
+class HandOverIn(BaseModel):
+    handed_to: Text = Field(min_length=2, max_length=120)
+    note: Text = Field(default="", max_length=500)
+    credit_reason: Text = Field(default="", max_length=500)
+
+
+@router.post("/visits/{visit_id}/hand-over-report")
+def hand_over_report(visit_id: uuid.UUID, body: HandOverIn, actor: Actor = Depends(can_visit), db: Session = Depends(get_db)):
+    """A pre-purchase inspection ends with the signed report in the buyer's hands: no job card, quotation, repair or gate pass."""
+    v = _get_visit(db, actor, visit_id, lock=True)
+    _require_open(v)
+    if v.kind != "pre_purchase":
+        raise HTTPException(409, "Only a pre-purchase inspection ends this way. A workshop visit ends with the gate pass.")
+    report = db.scalar(select(Inspection.id).where(Inspection.visit_id == v.id, Inspection.kind == "pre_purchase", Inspection.status == "signed"))
+    if not report:
+        raise HTTPException(409, "Sign the pre-purchase inspection report first")
+    inv = db.scalar(select(Invoice).where(Invoice.visit_id == v.id, Invoice.kind == "inspection", Invoice.status != "void"))
+    if not inv or inv.status != "issued":
+        raise HTTPException(409, "Issue the inspection invoice first, then take the payment")
+    from app.routers.billing import balance_of
+    owed = balance_of(db, inv)["balance"]
+    if owed > 0:
+        if not actor.can("release-on-credit"):
+            raise HTTPException(409, f"The inspection fee is not paid yet: {owed:,.2f} is owed. An admin can release the report on credit.")
+        if len(body.credit_reason) < 5:
+            raise HTTPException(422, "Give the reason for handing over the report before it is paid")
+        v.credit_released_by, v.credit_reason = actor.user.id, body.credit_reason
+    v.status, v.closed_at, v.released_by = "closed", utcnow(), actor.user.id
+    v.handed_to, v.close_note = body.handed_to, body.note
+    db.commit()
+    return get_visit(v.id, actor, db)
 
 
 @router.put("/visits/{visit_id}")

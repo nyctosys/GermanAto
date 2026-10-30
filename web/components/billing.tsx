@@ -11,7 +11,7 @@ export type InvoiceLine = {
 };
 export type PayStatus = "draft" | "void" | "unpaid" | "partly_paid" | "paid";
 export type Invoice = {
-  id: string; number: string; kind: "workshop" | "counter_sale"; status: "draft" | "issued" | "void"; pay_status: PayStatus;
+  id: string; number: string; kind: "workshop" | "counter_sale" | "inspection"; status: "draft" | "issued" | "void"; pay_status: PayStatus;
   version: number; include_tax: boolean; tax_rate: string; discount: string; notes: string; created_at: string;
   issued_at: string | null; issued_by: string | null; repair_order_id: string | null;
   visit: { id: string; number: string; status: string; car_id: string; customer_id: string; buyer_id: string | null; odometer_in: number | null } | null;

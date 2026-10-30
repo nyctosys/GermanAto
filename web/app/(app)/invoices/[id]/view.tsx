@@ -75,7 +75,7 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
         <div>
           <h1>{counter ? "Counter sale" : "Invoice"} {inv.number}</h1>
           <p className="text-ink-2">{who}</p>
-          {inv.visit && <p className="text-muted">For <Link href={`/visits/${inv.visit.id}`} className="underline">{inv.visit.number}</Link>, from <Link href={`/repair-orders/${inv.repair_order_id}`} className="underline">the repair order</Link></p>}
+          {inv.visit && <p className="text-muted">For <Link href={`/visits/${inv.visit.id}`} className="underline">{inv.visit.number}</Link>, {inv.kind === "inspection" ? ", the pre-purchase inspection fee" : <>, from <Link href={`/repair-orders/${inv.repair_order_id}`} className="underline">the repair order</Link></>}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PayBadge status={inv.pay_status} />
@@ -87,9 +87,11 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
         ? <NextStep who={counter ? "Cashier" : "Cashier or manager"} target={counter ? undefined : "act-issue"} open={false} label={counter ? undefined : "Review and issue"}>{counter ? "Finish the sale, then take the payment." : "Check the prices, then press Issue the invoice. After that the prices are locked."}</NextStep>
         : inv.status === "issued" && inv.pay_status !== "paid"
           ? <NextStep who="Cashier" label={can("payments-in") ? "Take a payment" : undefined} onClick={() => setPaying(true)}>The invoice is issued. Take the customer&apos;s payment ({money(inv.totals.balance)} still to pay).</NextStep>
+          : inv.status === "issued" && inv.kind === "inspection"
+            ? <NextStep who="Inspector or front desk" href={`/visits/${inv.visit!.id}`} label="Open the visit">Paid in full. Hand the signed report to the buyer from the visit.</NextStep>
           : inv.status === "issued" && inv.kind === "workshop"
             ? <NextStep who="Guard" href="/gate" label="Cars ready to leave">Paid in full. The car can now leave: release it with the gate pass.</NextStep>
-            : inv.status === "issued" && inv.kind !== "workshop"
+            : inv.status === "issued" && inv.kind === "counter_sale"
               ? <NextStep who="Cashier" href={`/print/invoices/${inv.id}`} label="Print the invoice">Sale complete. Print the A4 invoice for the customer.</NextStep>
               : null)}
 
@@ -140,7 +142,7 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
               {draft && !counter && can("invoice-issue") && (
                 <Button id="act-issue" disabled={busy} onClick={() => call("/issue", { version: inv.version })}>Issue the invoice</Button>
               )}
-              {draft && !counter && <Button variant="secondary" disabled={busy} onClick={() => call("/refresh")}>Refresh from the repair order</Button>}
+              {draft && !counter && inv.kind === "workshop" && <Button variant="secondary" disabled={busy} onClick={() => call("/refresh")}>Refresh from the repair order</Button>}
               {draft && <Button variant="danger" onClick={() => setVoiding(true)}>Void this draft</Button>}
             </div>
           )}

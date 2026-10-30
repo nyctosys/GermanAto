@@ -12,6 +12,8 @@ const ICONS: Record<string, ReactNode> = {
   invoice: <path d="M7 3h10v18l-2.5-2-2.5 2-2.5-2L7 21zM10 8h4M10 12h4" />,
   paid: <><path d="M3 7h18v10H3z" /><circle cx="12" cy="12" r="2.5" /></>,
   left: <path d="M4 12h12M12 7l5 5-5 5M20 4v16" />,
+  inspect: <><circle cx="11" cy="11" r="6" /><path d="M16 16l4.5 4.5M8.5 11l2 2 3.5-4" /></>,
+  report: <path d="M6 3h9l3 3v15H6zM9 9h6M9 13h6M9 17h3" />,
 };
 
 export type Step = { key: keyof typeof ICONS; label: string; done: boolean };
@@ -48,15 +50,28 @@ export function JobProgress({ steps, flat = false }: { steps: Step[]; flat?: boo
 
 
 export type Progress = {
+  kind?: string;
+  inspections?: { status: string; supersedes_id?: string | null }[];
   status: string;
   job_card: unknown | null;
   quotations: { status: string }[];
   repair_order: { status: string } | null;
-  invoice: { status: string } | null;
+  invoice: { status: string; paid?: boolean } | null;
 };
 
 /** The steps of a visit, worked out from what exists so far. */
 export function stepsOf(v: Progress): Step[] {
+  if (v.kind === "pre_purchase") {
+    const ins = v.inspections ?? [];
+    return [
+      { key: "checkin", label: "Checked in", done: true },
+      { key: "inspect", label: "Inspecting the car", done: ins.length > 0 },
+      { key: "report", label: "Report signed", done: ins.some((i) => i.status === "signed") },
+      { key: "invoice", label: "Invoiced", done: !!v.invoice && v.invoice.status !== "draft" },
+      { key: "paid", label: "Paid", done: !!v.invoice?.paid || v.status === "closed" },
+      { key: "left", label: "Report handed over", done: v.status === "closed" },
+    ];
+  }
   const q = v.quotations.find((x) => x.status !== "revised");
   return [
     { key: "checkin", label: "Checked in", done: true },
@@ -66,7 +81,7 @@ export function stepsOf(v: Progress): Step[] {
     { key: "repair", label: "Repair", done: !!v.repair_order && v.repair_order.status !== "received" },
     { key: "ready", label: "Ready", done: ["ready", "delivered"].includes(v.repair_order?.status ?? "") },
     { key: "invoice", label: "Invoiced", done: !!v.invoice && v.invoice.status !== "draft" },
-    { key: "paid", label: "Paid", done: v.invoice?.status === "paid" || v.status === "closed" },
+    { key: "paid", label: "Paid", done: !!v.invoice?.paid || v.status === "closed" },
     { key: "left", label: "Left", done: v.status === "closed" },
   ];
 }

@@ -132,3 +132,35 @@ def test_details_come_from_central_records_and_freeze_at_signing(admin):
     titles = [e["title"] for e in admin.get(f"/api/cars/{car['id']}/history").json()]
     assert any(t.startswith("Workshop inspection INS-") for t in titles)
     assert any(t.startswith(f"Visit {visit['number']}") for t in titles)
+
+
+def test_pre_purchase_ends_with_the_signed_report_not_a_gate_pass(admin):
+    seller = new_customer(admin, name="Seller")
+    buyer = new_customer(admin, name="Buyer", phone="0333 9998887")
+    car = new_car(admin, seller["id"])
+    v = admin.post("/api/visits", json={"car_id": car["id"], "kind": "pre_purchase", "buyer_id": buyer["id"]}).json()
+    assert admin.post(f"/api/visits/{v['id']}/job-card").status_code == 409  # no job card
+    assert admin.post(f"/api/visits/{v['id']}/gate-pass", json={}).status_code == 409  # no gate pass
+    assert admin.post(f"/api/visits/{v['id']}/hand-over-report", json={"handed_to": "Buyer"}).status_code == 409  # report not signed
+    ins = admin.post(f"/api/visits/{v['id']}/inspections", json={"kind": "pre_purchase"}).json()
+    data = {**ins["data"], "assessment": {**ins["data"]["assessment"], "overall": "good", "recommendation": "recommended"}}
+    version = admin.put(f"/api/inspections/{ins['id']}", json={"data": data, "version": ins["version"]}).json()["version"]
+    admin.post(f"/api/inspections/{ins['id']}/sign", json={"inspector_signature_id": upload(admin, PNG + b"p"), "version": version})
+    row = next(x for x in admin.get("/api/visits").json() if x["id"] == v["id"])
+    assert row["progress"]["kind"] == "pre_purchase" and row["progress"]["inspections"][0]["status"] == "signed"
+    # the fee is invoiced at a price typed for this inspection, issued, and paid before the report goes out
+    assert admin.post(f"/api/visits/{v['id']}/hand-over-report", json={"handed_to": "Buyer"}).status_code == 409  # no invoice yet
+    r = admin.post(f"/api/visits/{v['id']}/inspection-invoice", json={"price": "12000", "include_tax": False})
+    assert r.status_code == 201, r.json()
+    inv = r.json()
+    assert inv["kind"] == "inspection" and inv["customer"]["id"] == buyer["id"] and float(inv["totals"]["total"]) == 12000
+    assert admin.post(f"/api/visits/{v['id']}/inspection-invoice", json={"price": "9000"}).status_code == 409  # one per visit
+    inv = admin.put(f"/api/invoices/{inv['id']}", json={"prices": {inv["lines"][0]["id"]: "15000"}, "include_tax": False,
+                                                        "discount": "0", "notes": "", "version": inv["version"]}).json()
+    assert float(inv["totals"]["total"]) == 15000
+    inv = admin.post(f"/api/invoices/{inv['id']}/issue", json={"version": inv["version"]}).json()
+    assert inv["status"] == "issued"
+    assert admin.post(f"/api/visits/{v['id']}/hand-over-report", json={"handed_to": "Buyer"}).status_code in (409, 422)  # not paid
+    assert admin.post(f"/api/invoices/{inv['id']}/payments", json={"amount": "15000", "account": "cash", "no_proof_reason": "Cash at the counter"}).status_code == 201
+    done = admin.post(f"/api/visits/{v['id']}/hand-over-report", json={"handed_to": "Buyer"}).json()
+    assert done["status"] == "closed" and done["handed_to"] == "Buyer" and done["invoice"]["status"] == "issued"

@@ -165,6 +165,7 @@ export const CHAPTERS: Chapter[] = [
         id: "inspection", title: "Do and sign an inspection", who: "Inspector or mechanic",
         steps: [
           "On the visit, start an inspection. Choose Workshop (at check-in or during diagnosis), Delivery (before the car leaves) or Pre-purchase.",
+          "A pre-purchase inspection has its own short path: check in, inspect, sign the report, make the Inspection fee invoice (type the price for this inspection), take the payment, then hand the report to the buyer. It has no job card, quotation, repair order or gate pass.",
           "Rate each check: G for good, A for average, NA for needs attention, NC for not checked. Add notes and photos where useful.",
           "Fill in the paint and tyre sections, the scan results, the battery checks (only for hybrid and electric cars), and the repairs you recommend with an estimated cost.",
           "Choose the overall condition and your recommendation. Press Sign. Signing locks the report.",
