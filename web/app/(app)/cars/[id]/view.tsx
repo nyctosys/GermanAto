@@ -118,7 +118,7 @@ function CarDetail() {
                     <span className="block text-sm text-muted">{day(o.since)} to {day(o.until)}</span>
                   </span>
                   <span className="flex flex-wrap gap-2">
-                    {o.proofs.map((p) => <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center text-accent underline">{p.name}</a>)}
+                    {o.proofs.map((p) => <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center text-primary underline">{p.name}</a>)}
                   </span>
                 </li>
               ))}

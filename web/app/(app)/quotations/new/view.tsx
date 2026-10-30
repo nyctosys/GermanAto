@@ -90,7 +90,7 @@ function Picker() {
         {list.error ? <ErrorState message={list.error} onRetry={list.reload} />
           : !list.data ? <SkeletonRows />
           : !list.data.length ? (
-            <EmptyState title="No cars in the workshop" action={<Link href="/visits/new" className="text-accent underline">Check in a car</Link>}>
+            <EmptyState title="No cars in the workshop" action={<Link href="/visits/new" className="text-primary underline">Check in a car</Link>}>
               {q ? `Nothing matches “${q}”.` : "Check a car in first, then make its quotation here."}
             </EmptyState>
           ) : (

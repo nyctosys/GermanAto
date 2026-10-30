@@ -40,7 +40,7 @@ function List() {
         {list.error ? <ErrorState message={list.error} onRetry={list.reload} />
           : !list.data ? <SkeletonRows />
           : !list.data.length ? (
-            <EmptyState title="No quotations here" action={<Link href="/quotations/new" className="text-accent underline">Make a quotation</Link>}>
+            <EmptyState title="No quotations here" action={<Link href="/quotations/new" className="text-primary underline">Make a quotation</Link>}>
               Pick a car that is in the workshop, write its job card if needed, then make the quotation.
             </EmptyState>
           ) : (

@@ -38,7 +38,7 @@ function Board() {
         : !list.data.length ? (
           <Card flush>
             <EmptyState title={status === "closed" ? "No cars delivered yet" : "The workshop is empty"}
-                        action={<Link href="/visits/new" className="text-accent underline">Check in a car</Link>}>
+                        action={<Link href="/visits/new" className="text-primary underline">Check in a car</Link>}>
               {q ? `Nothing matches “${q}”.` : "Checked-in cars appear here until they leave."}
             </EmptyState>
           </Card>
@@ -58,7 +58,7 @@ function Board() {
                   {v.complaint && <span className="line-clamp-2 text-sm text-muted">{v.complaint}</span>}
                   <span className="mt-auto flex items-center justify-between text-sm text-muted">
                     <span>{v.number}</span>
-                    {v.kind === "pre_purchase" && <span className="font-medium text-accent">Pre-purchase</span>}
+                    {v.kind === "pre_purchase" && <span className="font-medium text-primary">Pre-purchase</span>}
                   </span>
                 </Link>
               </li>

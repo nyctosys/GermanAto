@@ -41,7 +41,7 @@ function Board() {
       {list.error ? <Card flush><ErrorState message={list.error} onRetry={list.reload} /></Card>
         : !list.data ? <Card flush><SkeletonRows /></Card>
         : !list.data.length ? (
-          <Card flush><EmptyState title="No repair orders here" action={<Link href="/repair-orders/new" className="text-accent underline">Make a repair order</Link>}>Approve a quotation first, then make its repair order here.</EmptyState></Card>
+          <Card flush><EmptyState title="No repair orders here" action={<Link href="/repair-orders/new" className="text-primary underline">Make a repair order</Link>}>Approve a quotation first, then make its repair order here.</EmptyState></Card>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 shell:grid-cols-3">
             {list.data.map((r) => (
