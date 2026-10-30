@@ -44,6 +44,7 @@ function History() {
                     <span className="block">{when(r.left_at)}</span>
                     <span className="block">Taken by {r.handed_to || "not written down"}. Released by {r.released_by ?? "unknown"}.</span>
                     {r.on_credit && <Badge tone="warning">Left owing money: {r.credit_reason}</Badge>}
+                    <a href={`/print/gate-pass/${r.id}`} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-11 items-center text-primary underline">Print gate pass again</a>
                   </div>
                 </li>
               ))}

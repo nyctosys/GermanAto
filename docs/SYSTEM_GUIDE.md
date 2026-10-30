@@ -962,3 +962,4 @@ Kept current as each story lands (stories US-1001 to US-1013 in `prd.json`).
 - **Print pages and phone width checked.** The print toolbar button is teal (red means danger). All 26 list screens have no sideways scroll at 375 px.
 - Empty-state links and proof links use teal (`text-primary`), not the red accent.
 - Checked live: payroll Adjust (bonus or penalty, Rs or %, with a live "10% of base pay = Rs 2,600" hint), payslip print, throwing away a draft (notice now says "Draft thrown away"). "Please fill in:" keeps acronyms like CNIC in capitals. Employee details show "Not added" for empty fields.
+- **Cars that have left** (gate page) lists a "Print gate pass again" link on each row. Gate pass print checked live.
