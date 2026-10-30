@@ -9,7 +9,7 @@ import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, Sele
 import { api, useApi } from "@/lib/api";
 import { day, money, today } from "@/lib/format";
 import { fieldErrorsFromApi, useLiveErrors } from "@/lib/form";
-import { entrySchema, type FieldErrors, issuesToFieldErrors } from "@/lib/schemas";
+import { entrySchema, issuesToFieldErrors } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 import Link from "next/link";
 

@@ -52,7 +52,7 @@ function Body() {
       <Card title="Monthly pay" flush>
         <div className="flex flex-wrap items-end gap-3 border-b border-rule p-4 shell:px-5">
           <div className="min-w-48"><Field label="Month to pay"><Input type="month" value={month} max={lastMonth()} onChange={(e) => setMonth(e.target.value)} /></Field></div>
-          <Button onClick={start}>Calculate this month's pay</Button>
+          <Button onClick={start}>Calculate the month&apos;s pay</Button>
           {error && <div className="w-full"><Notice>{error}</Notice></div>}
         </div>
         {runs.error ? <ErrorState message={runs.error} onRetry={runs.reload} /> : !runs.data ? <SkeletonRows rows={3} />
