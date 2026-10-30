@@ -101,12 +101,12 @@ def estimate_catalog(q: str = Query(min_length=1, max_length=60), actor: Actor =
                        .order_by(LabourCode.code).limit(8)).all()
     by_code = select(ItemCode.item_id).where(ItemCode.branch_id == actor.branch.id, ItemCode.code_norm == norm)
     items = db.scalars(select(Item).where(Item.branch_id == actor.branch.id, Item.is_active,
-                                          or_(Item.id.in_(by_code), Item.name.ilike(like), Item.number.ilike(like)))
+                                          or_(Item.id.in_(by_code), Item.name.ilike(like), Item.number.ilike(like), Item.brand.ilike(like), Item.fitment.ilike(like)))
                        .order_by(Item.id.in_(by_code).desc(), Item.name).limit(8)).all()
     stock = on_hand_map(db, [i.id for i in items])
     return ([{"kind": "labour", "id": c.id, "code": c.code, "name": c.name, "category": c.category} for c in codes] +
             [{"kind": "part", "id": i.id, "code": i.number, "name": i.name, "unit": i.unit, "sale_price": i.sale_price,
-              "on_hand": stock.get(i.id, Decimal(0))} for i in items])
+              "brand": i.brand, "fitment": i.fitment, "on_hand": stock.get(i.id, Decimal(0))} for i in items])
 
 
 # --- job card ---------------------------------------------------------------------------------

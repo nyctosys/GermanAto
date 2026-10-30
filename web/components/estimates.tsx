@@ -7,7 +7,7 @@ import { money, qty } from "@/lib/format";
 
 // --- types mirroring app/routers/estimates.py ----------------------------------------------
 export type Pick = { kind: "labour" | "part"; id: string; code: string; name: string; category?: string; unit?: string;
-  sale_price?: string; on_hand?: string };
+  sale_price?: string; on_hand?: string; brand?: string; fitment?: string };
 type LineRef = {
   id: string; kind: "labour" | "part"; labour_code_id: string | null; item_id: string | null; qty: string;
   labour_code?: { code: string; name: string };
@@ -85,6 +85,9 @@ export function CatalogPicker({ onPick, partsOnly }: { onPick: (p: Pick) => void
                 <span className="flex gap-3 text-sm text-muted">
                   <span>{p.kind === "labour" ? "Labour" : "Part"}</span><span>{p.code}</span>
                 </span>
+                {p.kind === "part" && (p.brand || p.fitment) && (
+                  <span className="block whitespace-normal text-sm text-ink-2">{[p.brand, p.fitment && `fits ${p.fitment}`].filter(Boolean).join(" · ")}</span>
+                )}
               </span>
               {p.kind === "part" && (
                 <span className="num shrink-0 text-right text-sm text-muted">

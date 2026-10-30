@@ -30,7 +30,7 @@ export type Po = {
   vendor: { id: string; number: string; name: string; phone: string; address: string; contact_person: string; terms_days: number };
   lines: PoLine[]; receipts: Receipt[]; warnings?: string[];
 };
-export type PickItem = { id: string; number: string; name: string; unit: string; avg_cost: string; sale_price: string; on_hand: string; reorder_qty: string; codes: string[] };
+export type PickItem = { id: string; number: string; name: string; unit: string; avg_cost: string; sale_price: string; on_hand: string; reorder_qty: string; codes: string[]; brand?: string; fitment?: string };
 
 const PO: Record<PoStatus, [string, "neutral" | "success" | "warning" | "error" | "accent"]> = {
   draft: ["Draft", "warning"], sent: ["Sent, waiting for the goods", "accent"], partly_received: ["Part received", "accent"],
@@ -92,6 +92,7 @@ export function ItemPicker({ onPick, onNotFound }: { onPick: (i: PickItem) => vo
               <span className="min-w-0">
                 <span className="block font-medium">{i.name}</span>
                 <span className="block text-sm text-muted">{i.number}{i.codes[0] ? `, ${i.codes[0]}` : ""}</span>
+                {(i.brand || i.fitment) && <span className="block text-sm text-ink-2">{[i.brand, i.fitment && `fits ${i.fitment}`].filter(Boolean).join(" · ")}</span>}
               </span>
               <span className="num shrink-0 text-right text-sm text-muted">
                 <span className="block">Cost {money(i.avg_cost)}</span>
