@@ -84,7 +84,9 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
           ? <NextStep who="Cashier" label={can("payments-in") ? "Take a payment" : undefined} onClick={() => setPaying(true)}>The invoice is issued. Take the customer&apos;s payment ({money(inv.totals.balance)} still to pay).</NextStep>
           : inv.status === "issued" && inv.kind === "workshop"
             ? <NextStep who="Guard" href="/gate" label="Cars ready to leave">Paid in full. The car can now leave: release it with the gate pass.</NextStep>
-            : null)}
+            : inv.status === "issued" && inv.kind !== "workshop"
+              ? <NextStep who="Cashier" href={`/print/invoices/${inv.id}`} label="Print the invoice">Sale complete. Print the A4 invoice for the customer.</NextStep>
+              : null)}
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="space-y-4">
