@@ -584,7 +584,7 @@ class RepairOrderLine(Entity):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2))  # the agreed price
     in_quote: Mapped[bool] = mapped_column(Boolean, default=True)  # False: extra work added after approval
     state: Mapped[str] = mapped_column(String(8), default="pending")
-    technician_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    technician_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))
     # Extra work added after the quote records how the customer agreed to it.
     approval_method: Mapped[str | None] = mapped_column(String(10))
     approval_proof_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
@@ -1035,6 +1035,7 @@ class Employee(BranchScoped):
     left_on: Mapped[date | None] = mapped_column(Date)
     notes: Mapped[str] = mapped_column(Text, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_technician: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")  # offered when assigning repair work
 
 
 class AttendanceDevice(BranchScoped):

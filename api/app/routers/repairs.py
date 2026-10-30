@@ -15,7 +15,7 @@ from app import messaging
 from app.models import Car, Customer, Visit  # noqa: F811
 from app.db import get_db
 from app.models import (
-    RO_STAGES, Attachment, Car, Customer, Invoice, Quotation, RepairOrder, RepairOrderActivity, RepairOrderLine, StockMovement, User,
+    RO_STAGES, Attachment, Car, Customer, Employee, Invoice, Quotation, RepairOrder, RepairOrderActivity, RepairOrderLine, StockMovement, User,
     UserBranch, Visit,
 )
 from app.numbering import next_number
@@ -76,7 +76,7 @@ def _line(ro: RepairOrder, line_id: uuid.UUID) -> RepairOrderLine:
 def repair_order_out(db: Session, ro: RepairOrder) -> dict:
     v = db.get(Visit, ro.visit_id)
     q = db.get(Quotation, ro.quotation_id)
-    techs = {u.id: u.full_name for u in db.scalars(select(User).where(User.id.in_([l.technician_id for l in ro.lines if l.technician_id])))}
+    techs = {e.id: e.full_name for e in db.scalars(select(Employee).where(Employee.id.in_([l.technician_id for l in ro.lines if l.technician_id])))}
     lines = _line_refs(db, ro.lines)
     for out, l in zip(lines, ro.lines):
         out.update(description=l.description, unit_price=l.unit_price, amount=money(l.qty * l.unit_price), in_quote=l.in_quote,
@@ -162,10 +162,10 @@ def get_repair_order(ro_id: uuid.UUID, actor: Actor = Depends(can_repair), db: S
 
 @router.get("/technicians")
 def technicians(actor: Actor = Depends(can_repair), db: Session = Depends(get_db)):
-    """Active people at this branch, to assign work to."""
-    rows = db.scalars(select(User).join(UserBranch, UserBranch.user_id == User.id)
-                      .where(UserBranch.branch_id == actor.branch.id, User.is_active).order_by(User.full_name))
-    return [{"id": u.id, "name": u.full_name} for u in rows]
+    """Employees still working here who take repair work (Employees, "Offer for repair work"), to assign jobs to."""
+    rows = db.scalars(select(Employee).where(Employee.branch_id == actor.branch.id, Employee.is_active, Employee.is_technician,
+                                              Employee.left_on.is_(None)).order_by(Employee.full_name))
+    return [{"id": e.id, "name": e.full_name, "title": e.title} for e in rows]
 
 
 # --- status ------------------------------------------------------------------------------------
@@ -254,10 +254,10 @@ def update_line(ro_id: uuid.UUID, line_id: uuid.UUID, body: LineUpdate, actor: A
     line = _line(ro, line_id)
     if body.technician_id or body.clear_technician:
         _refuse_stage(ro, "assign a technician", {"received", "in_repair", "testing"})
-        tech = body.technician_id and db.scalar(select(User).join(UserBranch, UserBranch.user_id == User.id).where(
-            User.id == body.technician_id, UserBranch.branch_id == actor.branch.id, User.is_active))
+        tech = body.technician_id and db.scalar(select(Employee).where(
+            Employee.id == body.technician_id, Employee.branch_id == actor.branch.id, Employee.is_active, Employee.is_technician))
         if body.technician_id and not tech:
-            raise HTTPException(422, "That person isn't active at this branch")
+            raise HTTPException(422, "That person is not offered for repair work. Tick it on their Employees page.")
         line.technician_id = body.technician_id if not body.clear_technician else None
     if body.state and body.state != line.state:
         # In repair / testing only. Received is read-mostly; Ready+ is locked.

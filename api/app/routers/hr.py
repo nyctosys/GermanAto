@@ -45,6 +45,7 @@ class EmployeeIn(BaseModel):
     days_off: list[int] = Field(default=[6], max_length=6)  # Python weekdays, 0 Monday to 6 Sunday
     joined_on: date
     notes: Text = Field(default="", max_length=3000)
+    is_technician: bool = True  # untick for people who never take repair work (front desk, guard, cleaner)
 
     @model_validator(mode="after")
     def shift_makes_sense(self):
@@ -65,7 +66,7 @@ class EmployeeUpdate(EmployeeIn):
 
 def employee_out(e: Employee, user: User | None = None) -> dict:
     data = {k: getattr(e, k) for k in ("id", "number", "full_name", "title", "phone", "cnic", "user_id", "device_pin", "monthly_salary",
-                                       "shift_start", "shift_end", "days_off", "joined_on", "left_on", "notes", "is_active", "version")}
+                                       "shift_start", "shift_end", "days_off", "joined_on", "left_on", "notes", "is_active", "is_technician", "version")}
     data["username"] = user.username if user else None
     return data
 

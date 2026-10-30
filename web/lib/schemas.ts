@@ -290,6 +290,7 @@ export const employeeSchema = z.object({
   left_on: z.string().optional().transform((v) => v || null),
   user_id: z.string().optional().transform((v) => v || null),
   notes: text(),
+  is_technician: checkbox,
 }).superRefine((e, ctx) => {
   if (e.shift_end <= e.shift_start) ctx.addIssue({ code: "custom", path: ["shift_end"], message: "Must be after the shift starts" });
   if (e.left_on && e.left_on < e.joined_on) ctx.addIssue({ code: "custom", path: ["left_on"], message: "Before they joined" });

@@ -79,7 +79,12 @@ def test_status_rules_and_activity(admin):
     assert "Mark these done" in go("testing").json()["detail"]
     assert "Testing first" in go("ready").json()["detail"]
 
-    tech = admin.get("/api/technicians").json()[0]
+    assert admin.get("/api/technicians").json() == []  # only employees offered for repair work appear
+    admin.post("/api/employees", json={"full_name": "Bilal Ahmed", "title": "Technician", "joined_on": "2026-01-01"})
+    admin.post("/api/employees", json={"full_name": "Front Desk", "joined_on": "2026-01-01", "is_technician": False})
+    techs = admin.get("/api/technicians").json()
+    assert [t["name"] for t in techs] == ["Bilal Ahmed"]
+    tech = techs[0]
     for l in admin.get(url).json()["lines"]:
         if l["kind"] == "part":
             admin.post(f"{url}/lines/{l['id']}/issue", json={"qty": l["qty"]})

@@ -13,7 +13,7 @@ import { employeeSchema, issuesToFieldErrors, markSchema, parseForm, punchSchema
 export type Employee = {
   id: string; number: string; full_name: string; title: string; phone: string; cnic: string; user_id: string | null; username: string | null;
   device_pin: string; monthly_salary: string; shift_start: string; shift_end: string; days_off: number[]; joined_on: string; left_on: string | null;
-  notes: string; is_active: boolean; version: number;
+  notes: string; is_active: boolean; is_technician: boolean; version: number;
 };
 
 export const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -94,6 +94,10 @@ export function EmployeeForm({ employee, onSaved, onCancel }: { employee?: Emplo
         </Select>
       </Field>
       <div className="sm:col-span-2 shell:col-span-3"><Field label="Notes (optional)" error={errors.notes}><Input name="notes" defaultValue={employee?.notes} /></Field></div>
+      <label className="flex min-h-11 cursor-pointer items-center gap-3 sm:col-span-2 shell:col-span-3">
+        <input type="checkbox" name="is_technician" defaultChecked={employee?.is_technician ?? true} className="size-5 accent-accent" />
+        <span>Offer for repair work <span className="text-sm text-muted">(untick for people who never take a job, like the front desk, guard or cleaner, so they are left out of the Technician list)</span></span>
+      </label>
       {employee && (
         <label className="flex min-h-11 cursor-pointer items-center gap-3 sm:col-span-2 shell:col-span-3">
           <input type="checkbox" name="is_active" defaultChecked={employee.is_active} className="size-5 accent-accent" />

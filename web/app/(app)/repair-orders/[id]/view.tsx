@@ -50,7 +50,7 @@ function Loader() {
   return <View ro={fresh && fresh.version >= ro.data.version ? fresh : ro.data} techs={techs.data ?? []} onChange={setFresh} />;
 }
 
-function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; name: string }[]; onChange: (r: RepairOrder) => void }) {
+function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; name: string; title?: string }[]; onChange: (r: RepairOrder) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const working = ro.visit.status === "open" && ro.status !== "delivered";
@@ -212,7 +212,7 @@ function StatusCard({ ro, working, busy, onMove }:
 }
 
 function LineRow({ l, techs, working, actions, busy, call }:
-  { l: RoLine; techs: { id: string; name: string }[]; working: boolean; actions: ReturnType<typeof stageActions>;
+  { l: RoLine; techs: { id: string; name: string; title?: string }[]; working: boolean; actions: ReturnType<typeof stageActions>;
     busy: boolean; call: (path: string, method: string, json?: object) => Promise<boolean> }) {
   const [move, setMove] = useState<"issue" | "return" | null>(null);
   const [amount, setAmount] = useState("");
@@ -253,9 +253,10 @@ function LineRow({ l, techs, working, actions, busy, call }:
               <span className="mb-1 block text-sm text-muted">Technician</span>
               <Select value={l.technician_id ?? ""} disabled={busy}
                       onChange={(e) => call(url, "PATCH", e.target.value ? { technician_id: e.target.value } : { clear_technician: true })}>
-                <option value="">Not assigned</option>
-                {techs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                <option value="">{techs.length ? "Not assigned" : "No one to pick yet"}</option>
+                {techs.map((t) => <option key={t.id} value={t.id}>{t.name}{t.title ? `, ${t.title}` : ""}</option>)}
               </Select>
+              {!techs.length && <span className="mt-1 block text-sm text-muted">Add your mechanics under Employees. Tick &ldquo;Offer for repair work&rdquo; on each.</span>}
             </label>
           )}
           {l.item && !move && canIssue && <Button variant="secondary" onClick={() => { setMove("issue"); setAmount(String(remaining || 1)); }}>Issue from stock</Button>}
