@@ -9,6 +9,7 @@ import { useFormErrors } from "@/lib/form";
 import { parseForm, userSchema } from "@/lib/schemas";
 import { api, useApi } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { phone } from "@/lib/format";
 
 type User = {
   id: string; username: string; full_name: string; email: string | null; phone: string; role_id: string;
@@ -72,7 +73,7 @@ function Users() {
                       <span className="block text-sm text-muted">{u.username}</span>
                     </td>
                     <td data-label="Role" className="px-3 py-3 max-sm:px-0">{u.role_name}</td>
-                    <td data-label="Phone" className="num px-3 py-3 max-sm:px-0">{u.phone || "None"}</td>
+                    <td data-label="Phone" className="num px-3 py-3 max-sm:px-0">{u.phone ? phone(u.phone) : "Not added"}</td>
                     <td data-label="Last sign-in" className="px-3 py-3 max-sm:px-0">
                       {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "Never"}
                     </td>
