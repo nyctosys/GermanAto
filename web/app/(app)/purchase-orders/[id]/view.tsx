@@ -358,14 +358,14 @@ function ReceiveForm({ po, onDone }: { po: Po; onDone: (p: Po) => void }) {
                   <p className="font-medium">{l.name}</p>
                   <p className="text-sm text-muted">{l.number}. Ordered {qty(l.qty)}, received {qty(l.received)}, {qty(l.outstanding)} still expected. {qty(l.on_hand)} {l.unit} in stock now.</p>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid items-start gap-4 sm:grid-cols-3">
                   <Field required label="Arrived" error={tried ? qtyError(l) : undefined}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={rows[l.id].qty} onChange={(e) => set(l.id, { qty: e.target.value })} />
                   </Field>
                   <Field required label="Cost each (Rs)" error={tried ? costError(l) : undefined} hint={`Ordered at ${money(l.unit_cost)}`}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={rows[l.id].cost} onChange={(e) => set(l.id, { cost: e.target.value })} />
                   </Field>
-                  <Field label="New sale price (optional)" error={tried ? saleError(l) : undefined} hint={`Now ${money(l.sale_price)}`}>
+                  <Field label="New sale price" error={tried ? saleError(l) : undefined} hint={`Optional. Now ${money(l.sale_price)}`}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={rows[l.id].sale} onChange={(e) => set(l.id, { sale: e.target.value })} />
                   </Field>
                 </div>
