@@ -232,7 +232,7 @@ function Totals({ inv }: { inv: Invoice }) {
         <div className="mt-1 border-t border-rule pt-1">{row("Total", t.total, true)}</div>
         {inv.status === "draft" && Number(t.advance_held) > 0 && row("Advance to apply", `-${t.advance_held}`)}
         {inv.status === "issued" && Number(t.credited) > 0 && row("Credited (returns)", `-${t.credited}`)}
-        {inv.status === "issued" && <>{row("Paid so far", Number(t.paid) ? `-${t.paid}` : t.paid)}{Number(t.balance) < 0 ? row("Owed back to the customer", `${-Number(t.balance)}`, true) : row("Balance", t.balance, true)}</>}
+        {inv.status === "issued" && <>{row("Paid so far", t.paid)}{Number(t.balance) < 0 ? row("Owed back to the customer", `${-Number(t.balance)}`, true) : row("Balance", t.balance, true)}</>}
       </dl>
     </Card>
   );

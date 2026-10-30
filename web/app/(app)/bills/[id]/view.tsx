@@ -141,7 +141,7 @@ function View({ bill, onChange }: { bill: Bill; onChange: (b: Bill) => void }) {
               {row("Goods", bill.goods_value)}
               {Number(bill.adjustment) !== 0 && row(bill.adjustment_reason || "Adjustment", bill.adjustment)}
               <div className="mt-1 border-t border-rule pt-1">{row("Bill total", bill.total, true)}</div>
-              {live && <>{row("Paid so far", Number(bill.paid) ? `-${bill.paid}` : bill.paid)}{row("Still owed", bill.balance, true)}</>}
+              {live && <>{row("Paid so far", bill.paid)}{row("Still owed", bill.balance, true)}</>}
             </dl>
           </Card>
           {payments.length > 0 && (
