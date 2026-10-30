@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NextStep } from "@/components/next-step";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { type Car, CarForm, carTitle } from "@/components/cars";
@@ -41,6 +42,10 @@ function CustomerDetail() {
         description={`${data.number}${data.kind === "company" ? ", company or fleet" : ""}`}
         actions={!editing && <Button variant="secondary" onClick={() => setEditing(true)}>Edit details</Button>}
       />
+      {!editing && (current.length === 0
+        ? <NextStep who="Front desk" target="act-add-car" label="Add car">This customer has no car yet. Add the car, then check it in.</NextStep>
+        : <NextStep who="Front desk" href={`/visits/new?car=${current[0].id}`} label="Check in this car">The car is here? Check it in to start a job.</NextStep>)}
+
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <Card title="Contact">
           {editing ? (
@@ -66,7 +71,7 @@ function CustomerDetail() {
           )}
         </Card>
 
-        <Card title="Cars" actions={<Button variant="secondary" onClick={() => setAddingCar(true)}>Add car</Button>} flush>
+        <Card title="Cars" actions={<Button id="act-add-car" variant="secondary" onClick={() => setAddingCar(true)}>Add car</Button>} flush>
           {addingCar && (
             <div className="border-b border-rule p-4 shell:p-5">
               <CarForm ownerId={data.id} onCancel={() => setAddingCar(false)} onSaved={(c) => router.push(`/cars/${c.id}`)} />

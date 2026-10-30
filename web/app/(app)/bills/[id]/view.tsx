@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NextStep } from "@/components/next-step";
 import { useParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { type Payment, type PaymentBody, PaymentForm, PaymentList } from "@/components/payments";
@@ -88,6 +89,7 @@ function View({ bill, onChange }: { bill: Bill; onChange: (b: Bill) => void }) {
           {bill.overdue && <Badge tone="error">Overdue</Badge>}
         </div>
       </div>
+      {owing && !panel && can("payments-out") && <NextStep who="Accountant" target="act-pay-bill" label="Pay this bill">This bill is not paid yet ({money(bill.balance)} to pay{bill.due_on ? `, due ${day(bill.due_on)}` : ""}).</NextStep>}
       {bill.status === "void" && <div className="mb-4"><Notice tone="warning">Voided: {bill.void_reason}. The delivery can be billed again from its purchase order.</Notice></div>}
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
@@ -113,7 +115,7 @@ function View({ bill, onChange }: { bill: Bill; onChange: (b: Bill) => void }) {
           </Card>
 
           {panel === "pay" && (
-            <PaymentForm title="Pay this vendor" hint={`Still owed: ${money(bill.balance)}. A part payment is fine.`} suggested={String(Number(bill.balance))} busy={busy}
+            <PaymentForm out title="Pay this vendor" hint={`Still owed: ${money(bill.balance)}. A part payment is fine.`} suggested={String(Number(bill.balance))} busy={busy}
                          onCancel={() => setPanel(null)} onSubmit={async (b: PaymentBody) => { if (await call(`/api/bills/${bill.id}/payments`, b)) setPanel(null); }} />
           )}
           {panel === "void" && (
@@ -127,7 +129,7 @@ function View({ bill, onChange }: { bill: Bill; onChange: (b: Bill) => void }) {
           <Notice>{error}</Notice>
           {!panel && !voiding && live && (
             <div className="flex flex-wrap gap-2">
-              {owing && can("payments-out") && <Button onClick={() => setPanel("pay")}>Pay this bill</Button>}
+              {owing && can("payments-out") && <Button id="act-pay-bill" onClick={() => setPanel("pay")}>Pay this bill</Button>}
               {can("purchasing") && Number(bill.paid) === 0 && <Button variant="danger" onClick={() => setPanel("void")}>Void the bill</Button>}
             </div>
           )}
@@ -139,7 +141,7 @@ function View({ bill, onChange }: { bill: Bill; onChange: (b: Bill) => void }) {
               {row("Goods", bill.goods_value)}
               {Number(bill.adjustment) !== 0 && row(bill.adjustment_reason || "Adjustment", bill.adjustment)}
               <div className="mt-1 border-t border-rule pt-1">{row("Bill total", bill.total, true)}</div>
-              {live && <>{row("Paid", `-${bill.paid}`)}{row("Still owed", bill.balance, true)}</>}
+              {live && <>{row("Paid so far", Number(bill.paid) ? `-${bill.paid}` : bill.paid)}{row("Still owed", bill.balance, true)}</>}
             </dl>
           </Card>
           {payments.length > 0 && (

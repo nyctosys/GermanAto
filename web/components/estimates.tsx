@@ -39,7 +39,7 @@ export const lineCode = (l: LineRef) => (l.labour_code ? l.labour_code.code : l.
  * Add work to a job card or quotation: labour codes and stock items only, never
  * free text. Type to search, or scan a barcode (the scanner types it and Enter).
  */
-export function CatalogPicker({ onPick }: { onPick: (p: Pick) => void }) {
+export function CatalogPicker({ onPick, partsOnly }: { onPick: (p: Pick) => void; partsOnly?: boolean }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Pick[]>([]);
   const [active, setActive] = useState(0);
@@ -60,7 +60,7 @@ export function CatalogPicker({ onPick }: { onPick: (p: Pick) => void }) {
   return (
     <div className="relative">
       <input
-        role="combobox" aria-expanded={open} aria-controls={listId} aria-autocomplete="list" aria-label="Add labour or a part"
+        id="act-add-work" role="combobox" aria-expanded={open} aria-controls={listId} aria-autocomplete="list" aria-label={partsOnly ? "Add a part" : "Add labour or a part"}
         value={q}
         onChange={(e) => { setQ(e.target.value); if (!e.target.value.trim()) setOpen(false); }}
         onKeyDown={(e) => {
@@ -71,7 +71,7 @@ export function CatalogPicker({ onPick }: { onPick: (p: Pick) => void }) {
           if (e.key === "Escape") setOpen(false);
         }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Add labour or a part: name, code, or scan a barcode"
+        placeholder={partsOnly ? "Add a part: name, code, or scan a barcode" : "Add labour or a part: name, code, or scan a barcode"}
         enterKeyHint="search"
         className="min-h-11 w-full rounded-control border border-rule-strong bg-surface px-3 text-base placeholder:text-muted focus-visible:border-ink"
       />

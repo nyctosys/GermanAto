@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NextStep } from "@/components/next-step";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, startTransition, useOptimistic, useState, type FormEvent } from "react";
 import { type Uploaded, PhotoCapture } from "@/components/capture";
@@ -82,12 +83,26 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
         <RoBadge status={ro.status} />
       </div>
 
+      {working && (stage === "received"
+        ? <NextStep who="Manager or technician" target="act-move" label="Move to in repair">The car is here. Start the repair, then issue the parts and mark each job done.</NextStep>
+        : stage === "in_repair"
+          ? (pending > 0
+            ? <NextStep who="Technician" target="act-work" open={false} label="Go to the jobs">Do the jobs below. Issue each part from stock, then mark every line Done or Not done ({pending} left).</NextStep>
+            : <NextStep who="Technician" target="act-move" label="Move to testing">Every line is marked. Move the car to testing.</NextStep>)
+          : stage === "testing"
+            ? (pending > 0
+              ? <NextStep who="Technician" target="act-work" open={false} label="Go to the jobs">Mark the remaining lines Done or Not done.</NextStep>
+              : <NextStep who="Technician or manager" target="act-move" label="Move to ready">Check the work. If it is right, move the car to ready.</NextStep>)
+            : stage === "ready"
+              ? <NextStep who="Cashier" target="act-invoice" open={false} label="Make the invoice">The repair is finished. Make the invoice.</NextStep>
+              : null)}
+
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           <StatusCard ro={ro} working={working} busy={busy} onMove={(to, note) => call("/status", "POST", { to, note, version: ro.version })} />
           <Notice>{error}</Notice>
 
-          <Card title="Work and parts" actions={<span className="text-sm text-muted">{pending ? `${pending} to do` : "All lines marked"}</span>} flush>
+          <div id="act-work" tabIndex={-1}><Card title="Work and parts" actions={<span className="text-sm text-muted">{pending ? `${pending} to do` : "All lines marked"}</span>} flush>
             <ul>
               {ro.lines.map((l) => <LineRow key={l.id} l={l} techs={techs} working={working} actions={actions} busy={busy} call={call} />)}
             </ul>
@@ -101,7 +116,7 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
             {working && stage === "ready" && (
               <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Ready: lines are locked. You can still return unused parts before making the invoice.</p>
             )}
-          </Card>
+          </Card></div>
 
           <ActivityCard ro={ro} working={working} onAdd={(b) => call("/activity", "POST", b)} />
         </div>
@@ -176,7 +191,7 @@ function StatusCard({ ro, working, busy, onMove }:
             {ro.status === "on_hold"
               ? <Button onClick={() => onMove(ro.held_from!, "")} disabled={busy}>Resume</Button>
               : next && next !== "delivered" && (
-                <Button onClick={() => setTarget(next)} disabled={busy || nextBlocked}>Move to {STAGE[next].toLowerCase()}</Button>
+                <Button id="act-move" onClick={() => setTarget(next)} disabled={busy || nextBlocked}>Move to {STAGE[next].toLowerCase()}</Button>
               )}
             {ro.status !== "on_hold" && <Button variant="secondary" onClick={() => setTarget("on_hold")}>Put on hold</Button>}
             <label className="min-w-40">
@@ -397,7 +412,7 @@ function InvoiceStep({ ro }: { ro: RepairOrder }) {
   if (!can("invoices")) return <p className="mt-3 text-sm text-muted">Ready for the invoice.</p>;
   return (
     <div className="mt-4 space-y-2">
-      <Button disabled={busy} onClick={async () => {
+      <Button id="act-invoice" disabled={busy} onClick={async () => {
         setBusy(true);
         setError(null);
         try { router.push(`/invoices/${(await api<{ id: string }>(`/api/repair-orders/${ro.id}/invoice`, { method: "POST" })).id}`); }

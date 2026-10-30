@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NextStep } from "@/components/next-step";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { CatalogPicker, type JobLine, lineCode, lineName, linkButton, type Pick, QuoteBadge, type QuoteStatus } from "@/components/estimates";
@@ -113,6 +114,10 @@ function Editor({ initial }: { initial: JobCard }) {
         <p className="text-sm text-muted">{dirty ? "Unsaved changes" : `Saved ${when(card.updated_at)}`}</p>
       </div>
 
+      {!locked && (lines.length === 0
+        ? <NextStep who="Front desk" target="act-add-work" open={false} label="Add work">Add the work to be done: search for a labour code or a part.</NextStep>
+        : <NextStep who="Front desk" target="act-quote" open={false} label="Make the quotation">The list is ready? Make the quotation to price it for the customer.</NextStep>)}
+
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           <Card title="Work to do" flush>
@@ -164,7 +169,7 @@ function Editor({ initial }: { initial: JobCard }) {
             <div className="flex flex-wrap gap-2">
               {card.quotation
                 ? <Link href={`/quotations/${card.quotation.id}`} className={linkButton}>Open quotation {card.quotation.number}</Link>
-                : can("quotations") && <Button onClick={quote} disabled={busy || !lines.length}>Make the quotation</Button>}
+                : can("quotations") && <Button id="act-quote" onClick={quote} disabled={busy || !lines.length}>Make the quotation</Button>}
               <Button variant="success" onClick={save} disabled={busy || !dirty}>{busy ? "Saving" : "Save job card"}</Button>
             </div>
           )}

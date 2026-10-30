@@ -7,6 +7,7 @@ import { linkButton } from "@/components/estimates";
 import { type Item, ItemForm } from "@/components/inventory";
 import { ItemPicker, marginPct, type Po, ReasonForm, type PoLine, PoBadge, type Receipt, type Vendor } from "@/components/purchasing";
 import { PURCHASING, RequirePermission } from "@/components/shell";
+import { NextStep } from "@/components/next-step";
 import { Badge, Button, Card, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money, qty, today, qtyStep } from "@/lib/format";
@@ -69,7 +70,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
     setLines((ls) => (ls.some((l) => l.item_id === i.id)
       ? ls
       : [...ls, { key: crypto.randomUUID(), item_id: i.id, name: i.name, number: i.number, unit: i.unit, avg_cost: i.avg_cost, on_hand: i.on_hand,
-                  qty: Number(i.reorder_qty) > 0 ? String(Number(i.reorder_qty)) : "1", unit_cost: Number(i.avg_cost) > 0 ? String(Number(i.avg_cost)) : "" }]));
+                  qty: Number(i.reorder_qty) > 0 ? String(Number(i.reorder_qty)) : "1", unit_cost: Number(i.avg_cost) > 0 ? String(Math.round(Number(i.avg_cost) * 100) / 100) : "" }]));
     setDirty(true);
   };
   const edit = (key: string, patch: Partial<Line>) => { setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l))); setDirty(true); };
@@ -217,6 +218,16 @@ function View({ po, onChange, reload }: { po: Po; onChange: (p: Po) => void; rel
       </div>
       {po.closed_reason && <div className="mb-4"><Notice tone="warning">{po.status === "cancelled" ? "Cancelled" : "Closed early"}: {po.closed_reason}</Notice></div>}
       {po.warnings && po.warnings.length > 0 && <div className="mb-4 space-y-2">{po.warnings.map((w) => <Notice key={w} tone="warning">{w}</Notice>)}</div>}
+
+      {(() => {
+        const unbilled = po.receipts.filter((r) => !r.bill);
+        if (po.status === "cancelled" || po.status === "closed") return null;
+        if (unbilled.length && billing) return <NextStep who="Accountant">Type the number from the vendor&apos;s invoice, check the amount, and record the bill below.</NextStep>;
+        if (unbilled.length) return <NextStep who="Accountant" target={`act-bill-${unbilled[0].id}`} label="Record the vendor's bill">The goods are in. The vendor&apos;s bill is not recorded yet ({unbilled.length === 1 ? "one delivery" : `${unbilled.length} deliveries`}).</NextStep>;
+        if (po.status === "sent" || po.status === "partly_received") return <NextStep who="Inventory manager" target="act-receive" open={false} label="Count the goods in">Wait for the goods. When they arrive, count them in and put the stock in.</NextStep>;
+        if (po.status === "received") return <NextStep who="Accountant" href="/bills" label="Bills and payments">All goods are in and billed. Pay the bill when it is due.</NextStep>;
+        return null;
+      })()}
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="space-y-4">
@@ -369,7 +380,7 @@ function ReceiveForm({ po, onDone }: { po: Po; onDone: (p: Po) => void }) {
           <Field required label="Received on"><Input type="date" max={today()} value={on} onChange={(e) => setOn(e.target.value)} /></Field>
           <div className="flex flex-col gap-3 sm:col-span-2">
             <Notice>{error}</Notice>
-            <div><Button type="submit" disabled={busy}>{busy ? "Counting in" : "Put the stock in"}</Button></div>
+            <div><Button id="act-receive" type="submit" disabled={busy}>{busy ? "Counting in" : "Put the stock in"}</Button></div>
             <p className="text-sm text-muted">Putting the stock in cannot be undone here. It adds to stock and updates the average cost. Count before you confirm.</p>
           </div>
         </div>
@@ -395,7 +406,7 @@ function ReceiptRow({ r, po, billing, onBill, onCancel, canBill, reload }:
       </ul>
       {r.bill ? <Link href={`/bills/${r.bill.id}`} className="text-sm underline">Bill {r.bill.number}</Link>
         : billing ? <BillForm receipt={r} po={po} onCancel={onCancel} onDone={reload} />
-        : canBill ? <Button variant="secondary" onClick={onBill}>Record the vendor&apos;s bill</Button>
+        : canBill ? <Button id={`act-bill-${r.id}`} variant="secondary" onClick={onBill}>Record the vendor&apos;s bill</Button>
         : <Badge tone="warning">Not billed yet</Badge>}
     </li>
   );

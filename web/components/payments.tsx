@@ -72,13 +72,13 @@ const toBody = (r: Row, note = ""): PaymentBody => ({
   proof_id: r.proof[0]?.id ?? null, no_proof_reason: r.proof.length ? "" : r.reason.trim(),
 });
 
-function RowFields({ r, set, errors }: { r: Row; set: (p: Partial<Row>) => void; errors: FieldErrors }) {
+function RowFields({ r, set, errors, out }: { r: Row; set: (p: Partial<Row>) => void; errors: FieldErrors; out?: boolean }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="Amount (Rs)" error={errors.amount}>
         <Input type="number" inputMode="decimal" min="0" step="any" value={r.amount} onChange={(e) => set({ amount: e.target.value })} />
       </Field>
-      <Field label="Received into">
+      <Field label={out ? "Paid from" : "Received into"}>
         <Select value={r.account} onChange={(e) => set({ account: e.target.value })}>
           {Object.entries(ACCOUNT).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </Select>
@@ -96,8 +96,8 @@ function RowFields({ r, set, errors }: { r: Row; set: (p: Partial<Row>) => void;
 }
 
 /** Record one payment (an advance, or a payment on an invoice). */
-export function PaymentForm({ title, hint, suggested, busy, onSubmit, onCancel, note }:
-  { title: string; hint?: string; suggested?: string; busy: boolean; note?: ReactNode;
+export function PaymentForm({ title, hint, suggested, busy, onSubmit, onCancel, note, out }:
+  { title: string; hint?: string; suggested?: string; busy: boolean; note?: ReactNode; out?: boolean;
     onSubmit: (b: PaymentBody) => void; onCancel: () => void }) {
   const [row, setRow] = useState<Row>(() => newRow(suggested ?? ""));
   const { errors, activate, live } = useLiveErrors(row, rowErrors);
@@ -109,7 +109,7 @@ export function PaymentForm({ title, hint, suggested, busy, onSubmit, onCancel, 
         if (!Object.keys(rowErrors(row)).length) onSubmit(toBody(row));
       }}>
         {hint && <p className="text-sm text-muted">{hint}</p>}
-        <RowFields r={row} set={(p) => setRow((r) => ({ ...r, ...p }))} errors={errors} />
+        <RowFields out={out} r={row} set={(p) => setRow((r) => ({ ...r, ...p }))} errors={errors} />
         {note}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={busy}>{busy ? "Recording" : "Record the payment"}</Button>

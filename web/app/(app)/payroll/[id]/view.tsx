@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NextStep } from "@/components/next-step";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { linkButton } from "@/components/estimates";
@@ -62,6 +63,11 @@ function View({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
         <div><h1>Payroll for {title}</h1><p className="text-muted">{run.number}{run.approved_by ? `, approved by ${run.approved_by}` : ""}</p></div>
         <Badge tone={RUN[run.status][1]}>{RUN[run.status][0]}</Badge>
       </div>
+      {draft
+        ? <NextStep who="Accountant" target="act-approve-run" open={false} label="Review and approve">Check each person&apos;s days and any bonus or penalty (press Adjust on a line). When everything is right, approve the run.</NextStep>
+        : run.status === "approved" && run.lines.some((l) => !l.paid && Number(l.net_pay) > 0)
+          ? <NextStep who="Accountant">The run is approved. Press Pay next to each person to pay their salary.</NextStep>
+          : null}
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <Card title="Pay for the month"><p className="num text-xl">{money(run.totals.gross)}</p></Card>
         <Card title="Advances taken back"><p className="num text-xl">{money(run.totals.recovery)}</p></Card>
@@ -70,7 +76,7 @@ function View({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
 
       {paying && (
         <div className="mb-4">
-          <PaymentForm title={`Pay ${paying.employee.full_name}`} hint={`Net pay ${money(paying.net_pay)} for ${title}.`} suggested={String(Number(paying.net_pay))} busy={busy}
+          <PaymentForm out title={`Pay ${paying.employee.full_name}`} hint={`Net pay ${money(paying.net_pay)} for ${title}.`} suggested={String(Number(paying.net_pay))} busy={busy}
                        onCancel={() => setPaying(null)} onSubmit={async (b: PaymentBody) => { if (await call(`/lines/${paying.id}/pay`, "POST", { account: b.account, reference: b.reference, note: b.note, proof_id: b.proof_id, no_proof_reason: b.no_proof_reason })) setPaying(null); }} />
         </div>
       )}
@@ -112,7 +118,7 @@ function View({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
         {draft && (
           <>
             <div className="flex flex-wrap gap-2">
-              <Button disabled={busy} onClick={() => call("/approve")}>Approve the run</Button>
+              <Button id="act-approve-run" disabled={busy} onClick={() => call("/approve")}>Approve the run</Button>
               <Button variant="secondary" disabled={busy} onClick={() => call("/refresh")}>Refresh from attendance</Button>
               <Button variant="ghost" disabled={busy} onClick={async () => { if (await call("/void")) router.push("/payroll"); }}>Throw this draft away</Button>
             </div>

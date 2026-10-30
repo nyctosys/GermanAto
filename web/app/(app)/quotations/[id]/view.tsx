@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { type Uploaded } from "@/components/capture";
 import { CatalogPicker, lineCode, lineName, linkButton, type Pick, QuoteBadge, type QuoteLine, type QuoteStatus } from "@/components/estimates";
+import { NextStep } from "@/components/next-step";
 import { type Payment, type PaymentBody, PaymentForm, PaymentList, ProofInput, RefundForm } from "@/components/payments";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
@@ -97,6 +98,18 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="space-y-4">
+          {open && !panel && (() => {
+            const next = q.status === "draft" ? "Check the prices below, then press Send to the customer."
+              : q.status === "sent" ? "Wait for the customer. When they agree, press Record approval (or Customer said no)."
+              : q.status === "approved" ? "The customer agreed. Press Make the repair order so the work can start."
+              : q.status === "rejected" || q.status === "expired" ? "Press Revise to change the prices and send it again, or leave it."
+              : null;
+            const act = q.status === "draft" ? ["act-send-quote", "Review and send", false] as const
+              : q.status === "sent" ? ["act-approve", "Record approval", true] as const
+              : q.status === "approved" ? ["act-ro", "Make the repair order", false] as const
+              : ["act-revise", "Revise", true] as const;
+            return next && <NextStep who={q.status === "approved" ? "Manager" : "Front desk"} target={act[0]} label={act[1]} open={act[2]}>{next}</NextStep>;
+          })()}
           {draft ? <DraftEditor q={q} onSaved={reload} onSend={(v) => act("send", { version: v })} busy={busy} />
             : <LinesTable q={q} />}
           {q.status === "approved" && q.approval && (
@@ -128,20 +141,19 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
           {panel === "advance" && <AdvanceForm q={q} onCancel={() => setPanel(null)} onDone={() => { setPanel(null); reload(); }} />}
 
           <Notice>{error}</Notice>
-          {open && !panel && q.status === "sent" && <p className="text-ink-2">The customer has the quotation. <strong>When they agree, press Record approval</strong>. If they decline, press Customer said no. If they pay something first, press Take an advance. To change a price, press Revise.</p>}
           {open && !panel && q.status !== "draft" && (
             <div className="flex flex-wrap gap-2">
-              {q.status === "sent" && <Button onClick={() => setPanel("approve")}>Record approval</Button>}
+              {q.status === "sent" && <Button id="act-approve" onClick={() => setPanel("approve")}>Record approval</Button>}
               {q.status === "sent" && <Button variant="secondary" onClick={() => setPanel("reject")}>Customer said no</Button>}
               {["sent", "approved", "converted"].includes(q.status) && can("payments-in") && <Button variant="secondary" onClick={() => setPanel("advance")}>Take an advance</Button>}
               {["sent", "approved", "rejected", "expired"].includes(q.status) && (
-                <Button variant="ghost" disabled={busy} onClick={() => setPanel("revise")}>Revise</Button>
+                <Button id="act-revise" variant="ghost" disabled={busy} onClick={() => setPanel("revise")}>Revise</Button>
               )}
             </div>
           )}
           {q.status === "expired" && <Notice tone="warning">This quotation passed its validity date ({day(q.valid_until)}). Revise it to send updated prices.</Notice>}
           {q.status === "approved" && open && can("repair-orders") && !panel && (
-            <Button disabled={busy} onClick={async () => {
+            <Button id="act-ro" disabled={busy} onClick={async () => {
               setBusy(true);
               setError(null);
               try { router.push(`/repair-orders/${(await api<{ id: string }>(`/api/quotations/${q.id}/repair-order`, { method: "POST" })).id}`); }
@@ -307,7 +319,7 @@ function DraftEditor({ q, onSaved, onSend, busy }: { q: Quotation; onSaved: () =
       {dirty && <p className="text-sm text-muted">Lines before tax and discount come to {money(preview)}. Save to update the totals.</p>}
       <Notice>{error}</Notice>
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => save(true)} disabled={saving || busy}>{busy ? "Sending" : "Send to the customer"}</Button>
+        <Button id="act-send-quote" onClick={() => save(true)} disabled={saving || busy}>{busy ? "Sending" : "Send to the customer"}</Button>
         <Button variant="success" onClick={() => save(false)} disabled={saving || !dirty}>{saving ? "Saving" : "Save draft"}</Button>
       </div>
       <p className="text-sm text-muted">Sending locks the prices. The customer gets a WhatsApp message when it is switched on under Message wording; you can also print it.</p>

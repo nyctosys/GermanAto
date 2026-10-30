@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { carTitle, Plate } from "@/components/cars";
+import { NextStep } from "@/components/next-step";
 import { JobProgress, type Step } from "@/components/job-progress";
 import { linkButton, QuoteBadge, type QuoteStatus } from "@/components/estimates";
 import { RoBadge, type RoStatus } from "@/components/repairs";
@@ -124,12 +125,7 @@ function VisitDetail() {
 
       {(() => {
         const n = nextStep(v);
-        return n && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-card bg-surface px-4 py-3 shell:px-5">
-            <p><span className="font-medium">Next step: </span>{n.text} <span className="text-sm text-muted">For: {n.who}.</span></p>
-            {n.href && <Link href={n.href} className="inline-flex min-h-11 items-center font-medium underline underline-offset-4">{n.href.startsWith("#") ? "Go there" : "Open it"}</Link>}
-          </div>
-        );
+        return n && <NextStep who={n.who} href={n.href} label={n.href ? (n.href.startsWith("#") ? "Go there" : "Open it") : undefined}>{n.text}</NextStep>;
       })()}
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">

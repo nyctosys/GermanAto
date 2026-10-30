@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
 import { type CreditNote, type Invoice, PayBadge, previewTotals } from "@/components/billing";
 import { lineCode, linkButton } from "@/components/estimates";
+import { NextStep } from "@/components/next-step";
 import { type PaymentBody, PaymentForm, PaymentList, RefundForm } from "@/components/payments";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
@@ -77,6 +78,14 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
         </div>
       </div>
 
+      {!paying && !returning && !refunding && !voiding && (inv.status === "draft"
+        ? <NextStep who={counter ? "Cashier" : "Cashier or manager"} target={counter ? undefined : "act-issue"} open={false} label={counter ? undefined : "Review and issue"}>{counter ? "Finish the sale, then take the payment." : "Check the prices, then press Issue the invoice. After that the prices are locked."}</NextStep>
+        : inv.status === "issued" && inv.pay_status !== "paid"
+          ? <NextStep who="Cashier" label={can("payments-in") ? "Take a payment" : undefined} onClick={() => setPaying(true)}>The invoice is issued. Take the customer&apos;s payment ({money(inv.totals.balance)} still to pay).</NextStep>
+          : inv.status === "issued" && inv.kind === "workshop"
+            ? <NextStep who="Guard" href="/gate" label="Cars ready to leave">Paid in full. The car can now leave: release it with the gate pass.</NextStep>
+            : null)}
+
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           {draft && !counter ? <WorkshopDraft inv={inv} busy={busy} call={call} />
@@ -98,12 +107,11 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
           <Notice>{error}</Notice>
           {!paying && !voiding && !returning && !refunding && (
             <div className="flex flex-wrap gap-2">
-              {inv.status === "issued" && inv.pay_status === "paid" && inv.kind === "workshop" && <p className="text-ink-2">Paid in full. <strong>The car can now leave</strong>: open Cars ready to leave in the menu and release it with the gate pass.</p>}
               {inv.status === "issued" && can("credit-notes") && <Button variant="secondary" onClick={() => setReturning(true)}>Correct this invoice</Button>}
               {Number(inv.totals.refundable) > 0 && can("credit-notes") && <Button onClick={() => setRefunding(true)}>Give money back</Button>}
               {inv.status === "issued" && Number(inv.totals.balance) > 0 && can("payments-in") && <Button onClick={() => setPaying(true)}>Take a payment</Button>}
               {draft && !counter && can("invoice-issue") && (
-                <Button disabled={busy} onClick={() => call("/issue", { version: inv.version })}>Issue the invoice</Button>
+                <Button id="act-issue" disabled={busy} onClick={() => call("/issue", { version: inv.version })}>Issue the invoice</Button>
               )}
               {draft && !counter && <Button variant="secondary" disabled={busy} onClick={() => call("/refresh")}>Refresh from the repair order</Button>}
               {draft && <Button variant="danger" onClick={() => setVoiding(true)}>Void this draft</Button>}

@@ -1,5 +1,6 @@
 "use client";
 
+import { NextStep } from "@/components/next-step";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { type Invoice, previewTotals } from "@/components/billing";
@@ -92,6 +93,8 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
   }
 
   return (
+    <>
+    <NextStep who="Cashier" target={lines.length ? "act-finish-sale" : "act-add-work"} open={false} label={lines.length ? "Take the payment" : "Add a part"}>{lines.length ? "Check the parts and the total, then take the payment to finish the sale." : "Add the parts the customer is buying, then take the payment."}</NextStep>
     <div className="grid gap-4 shell:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]" onBlurCapture={() => setTried(true)}>
       <div className="space-y-4">
         <Card title="Customer">
@@ -120,7 +123,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
 
         <Card title="Parts" flush>
           <div className="border-b border-rule p-4 shell:px-5">
-            <CatalogPicker onPick={(p) => {
+            <CatalogPicker partsOnly onPick={(p) => {
               if (p.kind !== "part") { setError("A counter sale sells parts only. Labour goes through a visit."); return; }
               setError(null);
               setLines((ls) => [...ls, { key: crypto.randomUUID(), item_id: p.id, name: p.name, code: p.code, unit: p.unit!, on_hand: p.on_hand!,
@@ -167,7 +170,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
         )}
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
-          {can("invoice-issue") && can("payments-in") && <Button variant="success" disabled={busy || !lines.length} onClick={() => save(true)}>{busy ? "Working" : `Take ${money(t.total)} and finish`}</Button>}
+          {can("invoice-issue") && can("payments-in") && <Button id="act-finish-sale" variant="success" disabled={busy || !lines.length} onClick={() => save(true)}>{busy ? "Working" : `Take ${money(t.total)} and finish`}</Button>}
           <Button variant="success" disabled={busy || !lines.length} onClick={() => save(false)}>Save as draft</Button>
         </div>
       </div>
@@ -188,5 +191,6 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
         <p className="text-sm text-muted">Finishing takes the parts out of stock and records the payment in one step. A return later is made with a credit note.</p>
       </div>
     </div>
+    </>
   );
 }
