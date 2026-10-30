@@ -364,12 +364,15 @@ function ActivityCard({ ro, working, onAdd }: { ro: RepairOrder; working: boolea
           <div className="grid gap-3 sm:grid-cols-2">
             <label>
               <span className="mb-1 block text-sm text-muted">About a line (optional)</span>
-              <Select value={lineId} onChange={(e) => setLineId(e.target.value)}>
+              <Select className="min-h-12" value={lineId} onChange={(e) => setLineId(e.target.value)}>
                 <option value="">The whole job</option>
                 {ro.lines.map((l) => <option key={l.id} value={l.id}>{l.description}</option>)}
               </Select>
             </label>
-            <PhotoCapture value={photos} onChange={setPhotos} label="Add photos" note={`${ro.number} activity`} />
+            <div>
+              <span className="mb-1 block text-sm text-muted">Photos (optional)</span>
+              <PhotoCapture value={photos} onChange={setPhotos} label="Add photos" note={`${ro.number} activity`} />
+            </div>
           </div>
           {kind === "customer_update" && <p className="text-sm text-muted">Customer updates appear on the customer&apos;s copy of the visit record. Everything else stays internal.</p>}
           <Button type="submit" variant="secondary" disabled={body.trim().length < 2}>Add to activity</Button>
