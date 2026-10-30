@@ -97,6 +97,17 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
         </>
       )}
 
+      {item && (
+        <>
+          <Field label="Stock now" hint="Changes through Adjust stock or goods received, so the history stays right.">
+            <Input readOnly tabIndex={-1} value={`${Number(item.on_hand)} ${item.unit}`} className="bg-paper-3" />
+          </Field>
+          <Field label="Average cost per unit (PKR)" hint="Worked out from what you paid on each delivery.">
+            <Input readOnly tabIndex={-1} value={Number(item.avg_cost).toLocaleString()} className="bg-paper-3" />
+          </Field>
+        </>
+      )}
+
       <div className="flex flex-col gap-3 sm:col-span-2 shell:col-span-3">
         <Notice>{error}</Notice>
         <div className="flex flex-wrap gap-2">
