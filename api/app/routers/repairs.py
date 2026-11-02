@@ -19,7 +19,7 @@ from app.models import (
     UserBranch, Visit,
 )
 from app.numbering import next_number
-from app.routers.estimates import LineIn, Proof, _get_quote, _line_refs, _targets, money, status_of
+from app.routers.estimates import LineIn, Proof, _get_quote, _line_refs, _targets, attach_proofs, money, proof_payload, status_of
 from app.routers.workshop import _attach, _require_open, snapshot_of
 from app.stock import StockError, move
 from app.validators import Text
@@ -81,7 +81,7 @@ def repair_order_out(db: Session, ro: RepairOrder) -> dict:
     for out, l in zip(lines, ro.lines):
         out.update(description=l.description, unit_price=l.unit_price, amount=money(l.qty * l.unit_price), in_quote=l.in_quote,
                    approval=None if l.in_quote else {"method": l.approval_method, "reason": l.approval_reason,
-                                                    "proof_url": f"/api/attachments/{l.approval_proof_id}/file" if l.approval_proof_id else None},
+                                                    **proof_payload(db, "ro_line_approval", l.id, l.approval_proof_id)},
                    state=l.state, technician_id=l.technician_id, technician=techs.get(l.technician_id), issued_qty=l.issued_qty)
     entries = db.execute(select(RepairOrderActivity, User.full_name).outerjoin(User, User.id == RepairOrderActivity.created_by)
                          .where(RepairOrderActivity.repair_order_id == ro.id).order_by(RepairOrderActivity.created_at.desc())).all()
@@ -230,11 +230,10 @@ def add_line(ro_id: uuid.UUID, body: ExtraLineIn, actor: Actor = Depends(can_rep
     name = (codes[body.labour_code_id] if body.labour_code_id else items[body.item_id]).name
     line = RepairOrderLine(position=len(ro.lines), in_quote=False, description=name, approval_method=body.approval_method,
                            approval_proof_id=body.proof_id, approval_reason=body.no_proof_reason,
-                           **body.model_dump(exclude={"reason", "approval_method", "proof_id", "no_proof_reason"}))
+                           **body.model_dump(exclude={"reason", "approval_method", "proof_id", "proof_ids", "no_proof_reason"}))
     ro.lines.append(line)
     db.flush()
-    if body.proof_id:
-        _attach(db, actor, [body.proof_id], "ro_line_approval", line.id)
+    attach_proofs(db, actor, body.proof_ids, "ro_line_approval", line.id)
     _log(db, ro, "line", f"Added {name} (not in the quotation): {body.reason}. Customer agreed {body.approval_method.replace('_', ' ')}.", line_id=line.id)
     db.commit()
     return repair_order_out(db, ro)

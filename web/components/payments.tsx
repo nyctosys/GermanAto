@@ -8,16 +8,34 @@ import { useLiveErrors } from "@/lib/form";
 import { type FieldErrors, issuesToFieldErrors, paymentRowSchema } from "@/lib/schemas";
 
 export type Payment = { id: string; number: string; kind?: string; refunded?: boolean; held?: string; invoice_id?: string | null; status: string; account: string; reference: string; amount: string;
-  received_at: string; received_by: string | null; proof_url: string | null; no_proof_reason: string };
+  received_at: string; received_by: string | null; proof_url: string | null; proof_urls?: string[]; no_proof_reason: string };
 
 export const ACCOUNT: Record<string, string> = { cash: "Cash", bank: "Bank transfer", wallet: "Mobile wallet" };
 
-/** Proof is always asked for; with none, the person must say why (owner decision 4). */
+/** Links to every attached proof file (falls back to a single proof_url). */
+export function ProofLinks({ urls, url, reason, label = "Proof", className = "text-sm underline" }:
+  { urls?: string[] | null; url?: string | null; reason?: string | null; label?: string; className?: string }) {
+  const list = urls?.length ? urls : url ? [url] : [];
+  if (!list.length) {
+    return reason ? <span className="block text-sm text-warning">No proof: {reason}</span> : null;
+  }
+  return (
+    <span className="inline-flex flex-wrap gap-x-2 gap-y-1">
+      {list.map((u, i) => (
+        <a key={u} href={u} target="_blank" rel="noreferrer" className={className}>
+          {list.length === 1 ? label : `${label} ${i + 1}`}
+        </a>
+      ))}
+    </span>
+  );
+}
+
+/** Proof is always asked for; with none, the person must say why (owner decision 4). Several files are fine. */
 export function ProofInput({ proof, setProof, reason, setReason, error, example = "cash at the counter, no slip" }:
   { proof: Uploaded[]; setProof: (v: Uploaded[]) => void; reason: string; setReason: (v: string) => void; error?: string; example?: string }) {
   return (
     <div className="space-y-3">
-      <PhotoCapture value={proof} onChange={(v) => setProof(v.slice(-1))} label="Add proof: photo, screenshot or PDF" accept="image/*,application/pdf" note="Proof" />
+      <PhotoCapture value={proof} onChange={setProof} label="Add proof: photo, screenshot or PDF" accept="image/*,application/pdf" note="Proof" />
       {!proof.length && (
         <Field required label="No photo? Say why" hint={`A photo or screenshot is best. Without one, write why, for example: ${example}.`} error={error}>
           <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
@@ -39,8 +57,7 @@ export function PaymentList({ title, payments, footer, action }:
               <span className="block text-sm text-muted">{ACCOUNT[p.account]}{p.reference ? `, ref ${p.reference}` : ""}, {when(p.received_at)}{p.received_by ? `, ${p.received_by}` : ""}</span>
               {p.status === "voided" && <span className="block text-sm text-error">Voided</span>}
               {p.refunded && <span className="block text-sm text-warning">Refunded to the customer</span>}
-              {p.proof_url ? <a href={p.proof_url} target="_blank" rel="noreferrer" className="text-sm underline">Proof</a>
-                : <span className="block text-sm text-warning">No proof: {p.no_proof_reason}</span>}
+              <ProofLinks urls={p.proof_urls} url={p.proof_url} reason={p.no_proof_reason} />
             </span>
             <span className="flex shrink-0 flex-col items-end gap-1">
               <span className={`num ${p.status === "voided" ? "text-muted line-through" : ""}`}>{money(p.amount)}</span>
@@ -56,7 +73,7 @@ export function PaymentList({ title, payments, footer, action }:
 
 // --- taking money ----------------------------------------------------------------------------
 
-export type PaymentBody = { amount: string; account: string; reference: string; note: string; proof_id: string | null; no_proof_reason: string };
+export type PaymentBody = { amount: string; account: string; reference: string; note: string; proof_id: string | null; proof_ids: string[]; no_proof_reason: string };
 type Row = { key: string; amount: string; account: string; reference: string; proof: Uploaded[]; reason: string };
 
 const newRow = (amount = ""): Row => ({ key: crypto.randomUUID(), amount, account: "cash", reference: "", proof: [], reason: "" });
@@ -73,7 +90,7 @@ function rowErrors(r: Row, max?: number, maxError?: string): FieldErrors {
 
 const toBody = (r: Row, note = ""): PaymentBody => ({
   amount: r.amount.trim(), account: r.account, reference: r.reference.trim(), note,
-  proof_id: r.proof[0]?.id ?? null, no_proof_reason: r.proof.length ? "" : r.reason.trim(),
+  proof_id: r.proof[0]?.id ?? null, proof_ids: r.proof.map((p) => p.id), no_proof_reason: r.proof.length ? "" : r.reason.trim(),
 });
 
 function RowFields({ r, set, errors, out }: { r: Row; set: (p: Partial<Row>) => void; errors: FieldErrors; out?: boolean }) {

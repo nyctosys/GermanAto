@@ -18,8 +18,7 @@ from app.models import Employee, MoneyEntry, PayrollLine, PayrollRun, User
 from app.numbering import next_number
 from app.pricing import money
 from app.routers.cashclose import assert_day_open
-from app.routers.estimates import Proof
-from app.routers.workshop import _attach
+from app.routers.estimates import Proof, attach_proofs, proof_payload
 from app.validators import Text
 from app.config import local_today
 
@@ -53,9 +52,9 @@ class AdvanceIn(Proof):
     note: Text = Field(default="", max_length=500)
 
 
-def entry_out(e: MoneyEntry) -> dict:
+def entry_out(db: Session, e: MoneyEntry) -> dict:
     return {"id": e.id, "number": e.number, "kind": e.kind, "status": e.status, "occurred_on": e.occurred_on, "account": e.account, "amount": e.amount,
-            "reference": e.reference, "note": e.note, "proof_url": f"/api/attachments/{e.proof_id}/file" if e.proof_id else None,
+            "reference": e.reference, "note": e.note, **proof_payload(db, "money_entries", e.id, e.proof_id),
             "no_proof_reason": e.no_proof_reason, "employee_id": e.employee_id}
 
 
@@ -72,15 +71,13 @@ def give_advance(body: AdvanceIn, actor: Actor = Depends(can_pay), db: Session =
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet payment")
     assert_day_open(db, actor.branch.id, {body.account}, local_today())
     e = MoneyEntry(number=next_number(db, actor.branch, "salary_advance"), kind="salary_advance", occurred_on=local_today(), account=body.account,
-                   amount=body.amount, party=emp.full_name, reference=body.reference, note=body.note, proof_id=body.proof_id,
-                   no_proof_reason=body.no_proof_reason, employee_id=emp.id)
+                   amount=body.amount, party=emp.full_name, reference=body.reference, note=body.note, employee_id=emp.id, **body.record_fields())
     db.add(e)
     db.flush()
-    if body.proof_id:
-        _attach(db, actor, [body.proof_id], "money_entries", e.id)
+    attach_proofs(db, actor, body.proof_ids, "money_entries", e.id)
     posting.money_entry(db, actor.branch, e)
     db.commit()
-    return entry_out(e)
+    return entry_out(db, e)
 
 
 @router.get("/salary-advances")
@@ -95,7 +92,7 @@ def advances(employee_id: uuid.UUID | None = None, actor: Actor = Depends(can_pa
     if employee_id:
         stmt = stmt.where(MoneyEntry.employee_id == employee_id)
     names = {e.id: e.full_name for e in emps}
-    return {"employees": summary, "entries": [{**entry_out(m), "employee": names.get(m.employee_id, "")} for m in db.scalars(stmt)]}
+    return {"employees": summary, "entries": [{**entry_out(db, m), "employee": names.get(m.employee_id, "")} for m in db.scalars(stmt)]}
 
 
 # --- payroll runs ------------------------------------------------------------------------------------------
@@ -141,7 +138,7 @@ def line_out(db: Session, l: PayrollLine, e: Employee | None = None) -> dict:
                                            "base_pay", "deduction", "adjustment", "adjustment_reason", "advance_recovery", "net_pay")},
             "gross_pay": l.base_pay - l.deduction + l.adjustment, "outstanding_advance": outstanding(db, e.id)[0] - outstanding(db, e.id)[1],
             "paid": paid and {"id": paid.id, "number": paid.number, "account": paid.account, "occurred_on": paid.occurred_on,
-                              "proof_url": f"/api/attachments/{paid.proof_id}/file" if paid.proof_id else None, "no_proof_reason": paid.no_proof_reason}}
+                              **proof_payload(db, "money_entries", paid.id, paid.proof_id), "no_proof_reason": paid.no_proof_reason}}
 
 
 def run_out(db: Session, run: PayrollRun) -> dict:
@@ -315,12 +312,11 @@ def pay_line(run_id: uuid.UUID, line_id: uuid.UUID, body: PayIn, actor: Actor = 
     assert_day_open(db, actor.branch.id, {body.account}, local_today())
     emp = db.get(Employee, line.employee_id)
     e = MoneyEntry(number=next_number(db, actor.branch, "salary"), kind="salary", occurred_on=local_today(), account=body.account, amount=line.net_pay,
-                   party=emp.full_name, reference=body.reference, note=body.note or f"Salary {run.month}", proof_id=body.proof_id,
-                   no_proof_reason=body.no_proof_reason, employee_id=emp.id, payroll_line_id=line.id)
+                   party=emp.full_name, reference=body.reference, note=body.note or f"Salary {run.month}",
+                   employee_id=emp.id, payroll_line_id=line.id, **body.record_fields())
     db.add(e)
     db.flush()
-    if body.proof_id:
-        _attach(db, actor, [body.proof_id], "money_entries", e.id)
+    attach_proofs(db, actor, body.proof_ids, "money_entries", e.id)
     posting.money_entry(db, actor.branch, e)
     db.flush()
     paid_ids = set(db.scalars(select(MoneyEntry.payroll_line_id).where(MoneyEntry.payroll_line_id.in_([l.id for l in run.lines]), MoneyEntry.status == "posted")))

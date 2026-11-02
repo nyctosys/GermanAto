@@ -22,8 +22,7 @@ from app.models import (
 )
 from app import posting
 from app.numbering import next_number
-from app.routers.estimates import Proof
-from app.routers.workshop import _attach
+from app.routers.estimates import Proof, attach_proofs, proof_payload
 from app.stock import StockError, move, on_hand_map
 from app.validators import PersonOrEmpty, Email, Name, Phone, Text, normalize_code
 from app.config import local_today
@@ -425,7 +424,7 @@ def payment_out(db: Session, p: VendorPayment) -> dict:
     by = db.get(User, p.paid_by) if p.paid_by else None
     return {"id": p.id, "number": p.number, "status": p.status, "account": p.account, "reference": p.reference, "amount": p.amount,
             "paid_at": p.paid_at, "paid_by": by.full_name if by else None, "note": p.note, "void_reason": p.void_reason,
-            "proof_url": f"/api/attachments/{p.proof_id}/file" if p.proof_id else None, "no_proof_reason": p.no_proof_reason}
+            **proof_payload(db, "vendor_payments", p.id, p.proof_id), "no_proof_reason": p.no_proof_reason}
 
 
 def bill_out(db: Session, b: VendorBill) -> dict:
@@ -531,11 +530,11 @@ def pay_bill(bill_id: uuid.UUID, body: VendorPaymentIn, actor: Actor = Depends(c
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet payment")
     p = VendorPayment(number=next_number(db, actor.branch, "vendor_payment"), vendor_id=b.vendor_id, bill_id=b.id,
-                      paid_by=actor.user.id, **body.model_dump())
+                      paid_by=actor.user.id, amount=body.amount, account=body.account, reference=body.reference,
+                      note=body.note, **body.record_fields())
     db.add(p)
     db.flush()
-    if body.proof_id:
-        _attach(db, actor, [body.proof_id], "vendor_payments", p.id)
+    attach_proofs(db, actor, body.proof_ids, "vendor_payments", p.id)
     posting.vendor_payment(db, actor.branch, p)
     db.commit()
     return bill_out(db, b)

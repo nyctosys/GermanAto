@@ -197,7 +197,7 @@ def pack(period: str, actor: Actor = Depends(can_see), db: Session = Depends(get
     for direction in ("in", "out"):
         for r in moneybook._gather(db, actor, direction):  # type: ignore[arg-type]
             if start <= r["date"] <= end and r["status"] == "posted" and (r["source_type"], r["id"], direction if r["source"] != "transfer" else "x") not in {(e["source_type"], e["id"], e["direction"] if e["source"] != "transfer" else "x") for e in entries}:
-                entries.append({**{k: r[k] for k in ("number", "date", "source", "source_type", "id", "party", "account", "amount", "proof_url", "no_proof_reason", "signoff")}, "direction": direction})
+                entries.append({**{k: r[k] for k in ("number", "date", "source", "source_type", "id", "party", "account", "amount", "proof_url", "proof_urls", "no_proof_reason", "signoff")}, "direction": direction})
     entries.sort(key=lambda e: (e["date"], e["number"]))
     closes = [{"account": c.account, "close_date": c.close_date, "expected": c.expected, "counted": c.counted, "difference": c.difference, "reason": c.reason}
               for c in db.scalars(select(CashClose).where(CashClose.branch_id == branch.id, CashClose.close_date >= start, CashClose.close_date <= end).order_by(CashClose.close_date))]

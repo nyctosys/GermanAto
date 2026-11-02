@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { type Uploaded } from "@/components/capture";
-import { ACCOUNT, ProofInput } from "@/components/payments";
+import { ACCOUNT, ProofInput, ProofLinks } from "@/components/payments";
 import { ReasonForm } from "@/components/purchasing";
 import { SearchInput, useQueryParam } from "@/components/search";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
@@ -15,7 +15,7 @@ import Link from "next/link";
 
 type Row = {
   id: string; number: string; date: string; source: string; party: string; detail: string; account: string; reference: string; amount: string;
-  proof_url: string | null; no_proof_reason: string; missing_proof: boolean; status: "posted" | "voided"; link: string | null; by: string | null;
+  proof_url: string | null; proof_urls?: string[]; no_proof_reason: string; missing_proof: boolean; status: "posted" | "voided"; link: string | null; by: string | null;
   entry_id?: string; note?: string;
 };
 type Page = { rows: Row[]; count: number; total: string; by_account: Record<string, string>; by_source: Record<string, string>; missing_proof: number };
@@ -148,8 +148,7 @@ export function MoneyBook({ direction }: { direction: "in" | "out" }) {
                     <td data-label="From or to" className="px-4 py-3 max-sm:px-0">{r.party || <span className="text-muted">Not named</span>}{r.detail && <span className="block text-sm text-muted">{r.detail}</span>}</td>
                     <td data-label="Account" className="px-4 py-3 max-sm:px-0">{ACCOUNT[r.account]}{r.reference && <span className="block text-sm text-muted">Ref {r.reference}</span>}</td>
                     <td data-label="Proof" className="px-4 py-3 max-sm:px-0">
-                      {r.proof_url ? <a href={r.proof_url} target="_blank" rel="noreferrer" className="underline">View</a>
-                        : <span className="text-sm text-warning">No proof: {r.no_proof_reason}</span>}
+                      <ProofLinks urls={r.proof_urls} url={r.proof_url} reason={r.no_proof_reason} label="View" className="underline" />
                     </td>
                     <td data-label="Amount" className="px-4 py-3 text-right shell:pr-5 max-sm:px-0">
                       <span className={`num block ${r.status === "voided" ? "line-through" : ""}`}>{money(r.amount)}</span>
@@ -201,13 +200,13 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
     try {
       if (invoicePay) {
         await api(`/api/invoices/${invoiceId}/payments`, { method: "POST", json: { amount: v.amount.trim(), account: v.account, reference: v.reference, note: v.note,
-          proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : reason } });
+          proof_id: proof[0]?.id ?? null, proof_ids: proof.map((p) => p.id), no_proof_reason: proof.length ? "" : reason } });
         onDone();
         return;
       }
       await api("/api/money-entries", { method: "POST", json: { kind, amount: v.amount.trim(), account: v.account, to_account: transfer ? v.to_account : null,
         category_id: kind === "expense" ? v.category_id : null, party: v.party, reference: v.reference, note: v.note, occurred_on: v.occurred_on,
-        proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : reason } });
+        proof_id: proof[0]?.id ?? null, proof_ids: proof.map((p) => p.id), no_proof_reason: proof.length ? "" : reason } });
       onDone();
     } catch (err) {
       setError(applyApi(err));

@@ -22,10 +22,10 @@ from app.models import (
 from app import posting
 from app.numbering import next_number
 from app.routers.estimates import (
-    LineIn, Proof, _line_refs, _targets, job_card_out, money, payment_out, quotation_out, totals,
+    LineIn, Proof, _line_refs, _targets, attach_proofs, job_card_out, money, payment_out, proof_payload, quotation_out, totals,
 )
 from app.routers.repairs import _get_ro, _log, repair_order_out
-from app.routers.workshop import _attach, _get_visit, _require_open, get_visit, person
+from app.routers.workshop import _get_visit, _require_open, get_visit, person
 from app.stock import StockError, move
 from app.validators import Phone, Text
 from app.config import local_today
@@ -98,7 +98,7 @@ def invoice_out(db: Session, inv: Invoice) -> dict:
         out.update(description=l.description, unit_price=l.unit_price, amount=money(l.qty * l.unit_price), in_quote=l.in_quote,
                    repair_order_line_id=l.repair_order_line_id,
                    approval=ro_line and {"method": ro_line.approval_method, "reason": ro_line.approval_reason,
-                                         "proof_url": f"/api/attachments/{ro_line.approval_proof_id}/file" if ro_line.approval_proof_id else None})
+                                         **proof_payload(db, "ro_line_approval", ro_line.id, ro_line.approval_proof_id)})
     v = db.get(Visit, inv.visit_id) if inv.visit_id else None
     car = db.get(Car, inv.car_id) if inv.car_id else None
     customer = db.get(Customer, inv.customer_id) if inv.customer_id else None
@@ -356,11 +356,11 @@ def _record_payment(db: Session, actor: Actor, inv: Invoice, body: PaymentIn) ->
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet payment")
     p = Payment(number=next_number(db, actor.branch, "payment"), kind="invoice", customer_id=inv.customer_id,
-                visit_id=inv.visit_id, invoice_id=inv.id, received_by=actor.user.id, **body.model_dump())
+                visit_id=inv.visit_id, invoice_id=inv.id, received_by=actor.user.id,
+                amount=body.amount, account=body.account, reference=body.reference, note=body.note, **body.record_fields())
     db.add(p)
     db.flush()
-    if body.proof_id:
-        _attach(db, actor, [body.proof_id], "payments", p.id)
+    attach_proofs(db, actor, body.proof_ids, "payments", p.id)
     posting.customer_payment(db, actor.branch, p)
     return p
 
@@ -670,12 +670,10 @@ def _refund_entry(db: Session, actor: Actor, body: RefundIn, *, party: str, invo
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet refund")
     e = MoneyEntry(number=next_number(db, actor.branch, "refund"), kind="refund", occurred_on=local_today(), account=body.account, amount=body.amount,
-                   party=party, reference=body.reference, note=body.note, proof_id=body.proof_id, no_proof_reason=body.no_proof_reason,
-                   invoice_id=invoice_id, payment_id=payment_id)
+                   party=party, reference=body.reference, note=body.note, invoice_id=invoice_id, payment_id=payment_id, **body.record_fields())
     db.add(e)
     db.flush()
-    if body.proof_id:
-        _attach(db, actor, [body.proof_id], "money_entries", e.id)
+    attach_proofs(db, actor, body.proof_ids, "money_entries", e.id)
     posting.money_entry(db, actor.branch, e)
     return e
 

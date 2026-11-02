@@ -15,11 +15,10 @@ from sqlalchemy.orm import Session
 from app import posting
 from app.auth import Actor, current_actor, require
 from app.db import get_db
-from app.models import Customer, EvidenceSignoff, PayrollLine, PayrollRun, ExpenseCategory, Invoice, MoneyEntry, Payment, User, Vendor, VendorPayment
+from app.models import Attachment, Customer, EvidenceSignoff, PayrollLine, PayrollRun, ExpenseCategory, Invoice, MoneyEntry, Payment, User, Vendor, VendorPayment
 from app.numbering import next_number
 from app.routers.cashclose import assert_day_open
-from app.routers.estimates import Proof
-from app.routers.workshop import _attach
+from app.routers.estimates import Proof, attach_proofs, proof_payload
 from app.validators import Text
 from app.config import local_today
 
@@ -65,7 +64,7 @@ class EntryIn(Proof):
 def entry_out(db: Session, e: MoneyEntry) -> dict:
     return {"id": e.id, "number": e.number, "kind": e.kind, "status": e.status, "occurred_on": e.occurred_on, "account": e.account,
             "to_account": e.to_account, "amount": e.amount, "party": e.party, "reference": e.reference, "note": e.note,
-            "category_id": e.category_id, "proof_url": f"/api/attachments/{e.proof_id}/file" if e.proof_id else None,
+            "category_id": e.category_id, **proof_payload(db, "money_entries", e.id, e.proof_id),
             "no_proof_reason": e.no_proof_reason, "void_reason": e.void_reason}
 
 
@@ -87,11 +86,10 @@ def record_entry(body: EntryIn, actor: Actor = Depends(current_actor), db: Sessi
         if not cat.is_active:
             raise HTTPException(422, f"{cat.name} is retired. Pick another category.")
     e = MoneyEntry(number=next_number(db, actor.branch, body.kind), occurred_on=when,
-                   **body.model_dump(exclude={"occurred_on"}))
+                   **body.model_dump(exclude={"occurred_on", "proof_ids"}))
     db.add(e)
     db.flush()
-    if body.proof_id:
-        _attach(db, actor, [body.proof_id], "money_entries", e.id)
+    attach_proofs(db, actor, body.proof_ids, "money_entries", e.id)
     posting.money_entry(db, actor.branch, e)
     db.commit()
     return entry_out(db, e)
@@ -128,37 +126,58 @@ def void_entry(entry_id: uuid.UUID, body: VoidIn, actor: Actor = Depends(current
 # --- the two pages ---------------------------------------------------------------------------------------
 
 def _row(**kw) -> dict:
-    return {"missing_proof": kw.get("proof_url") is None, "detail": "", "link": None, "by": None, "signoff": None, **kw}
+    urls = kw.get("proof_urls") or ([kw["proof_url"]] if kw.get("proof_url") else [])
+    return {"missing_proof": not urls, "detail": "", "link": None, "by": None, "signoff": None,
+            "proof_url": urls[0] if urls else None, "proof_urls": urls, **{k: v for k, v in kw.items() if k not in ("proof_url", "proof_urls")}}
 
 
 def source_type(source: str) -> str:
     return {"advance": "payment", "invoice_payment": "payment", "vendor_payment": "vendor_payment"}.get(source, "money_entry")
 
 
+def _proof_map(db: Session, entity_type: str, ids: list[uuid.UUID]) -> dict[uuid.UUID, list[str]]:
+    out: dict[uuid.UUID, list[str]] = {i: [] for i in ids}
+    if not ids:
+        return out
+    for a in db.scalars(select(Attachment).where(Attachment.entity_type == entity_type, Attachment.entity_id.in_(ids))
+                        .order_by(Attachment.created_at)):
+        out.setdefault(a.entity_id, []).append(f"/api/attachments/{a.id}/file")
+    return out
+
+
 def _gather(db: Session, actor: Actor, direction: Literal["in", "out"]) -> list[dict]:
     branch = actor.branch.id
     users = {u.id: u.full_name for u in db.scalars(select(User))}
     rows: list[dict] = []
-    proof = lambda pid: f"/api/attachments/{pid}/file" if pid else None
+    pay_ids: list[uuid.UUID] = []
+    vpay_ids: list[uuid.UUID] = []
+    entry_ids: list[uuid.UUID] = []
     if direction == "in":
         names = {c.id: c.name for c in db.scalars(select(Customer))}
         for p in db.scalars(select(Payment).where(Payment.branch_id == branch)):
+            pay_ids.append(p.id)
             inv = db.get(Invoice, p.invoice_id) if p.invoice_id else None
             rows.append(_row(id=p.id, number=p.number, date=p.received_at.date(), source="advance" if p.kind == "advance" else "invoice_payment",
                              party=names.get(p.customer_id, inv.walk_in_name if inv and inv.walk_in_name else "Walk-in customer"),
                              detail=inv.number if inv else "Advance on a quotation", account=p.account, reference=p.reference, amount=p.amount,
-                             proof_url=proof(p.proof_id), no_proof_reason=p.no_proof_reason, status="posted" if p.status == "posted" else "voided",
-                             link=f"/invoices/{p.invoice_id}" if p.invoice_id else f"/quotations/{p.quotation_id}", by=users.get(p.received_by)))
+                             proof_url=f"/api/attachments/{p.proof_id}/file" if p.proof_id else None, no_proof_reason=p.no_proof_reason,
+                             status="posted" if p.status == "posted" else "voided",
+                             link=f"/invoices/{p.invoice_id}" if p.invoice_id else f"/quotations/{p.quotation_id}", by=users.get(p.received_by),
+                             _entity="payments"))
         entries = select(MoneyEntry).where(MoneyEntry.branch_id == branch, MoneyEntry.kind.in_(IN_KINDS + ("transfer",)))
     else:
         vendors = {v.id: v.name for v in db.scalars(select(Vendor))}
         for p in db.scalars(select(VendorPayment).where(VendorPayment.branch_id == branch)):
+            vpay_ids.append(p.id)
             rows.append(_row(id=p.id, number=p.number, date=p.paid_at.date(), source="vendor_payment", party=vendors.get(p.vendor_id, ""),
-                             account=p.account, reference=p.reference, amount=p.amount, proof_url=proof(p.proof_id), no_proof_reason=p.no_proof_reason,
-                             status="posted" if p.status == "posted" else "voided", link=f"/bills/{p.bill_id}", by=users.get(p.paid_by)))
+                             account=p.account, reference=p.reference, amount=p.amount,
+                             proof_url=f"/api/attachments/{p.proof_id}/file" if p.proof_id else None, no_proof_reason=p.no_proof_reason,
+                             status="posted" if p.status == "posted" else "voided", link=f"/bills/{p.bill_id}", by=users.get(p.paid_by),
+                             _entity="vendor_payments"))
         entries = select(MoneyEntry).where(MoneyEntry.branch_id == branch, MoneyEntry.kind.in_(("expense", "drawings", "transfer", "refund", "salary_advance", "salary")))
     cats = {c.id: c.name for c in db.scalars(select(ExpenseCategory))}
     for e in db.scalars(entries):
+        entry_ids.append(e.id)
         account = e.to_account if (direction == "in" and e.kind == "transfer") else e.account
         detail = cats.get(e.category_id) or (f"From {e.account} to {e.to_account}" if e.kind == "transfer" else "")
         link = None
@@ -167,10 +186,19 @@ def _gather(db: Session, actor: Actor, direction: Literal["in", "out"]) -> list[
             pay = db.get(Payment, e.payment_id) if e.payment_id else None
             link = f"/invoices/{e.invoice_id}" if e.invoice_id else f"/quotations/{pay.quotation_id}" if pay and pay.quotation_id else None
         rows.append(_row(id=e.id, number=e.number, date=e.occurred_on, source=e.kind, party=e.party, detail=detail, account=account,
-                         reference=e.reference, amount=e.amount, proof_url=proof(e.proof_id), no_proof_reason=e.no_proof_reason,
-                         status=e.status, entry_id=e.id, by=users.get(e.created_by), note=e.note, link=link))
+                         reference=e.reference, amount=e.amount,
+                         proof_url=f"/api/attachments/{e.proof_id}/file" if e.proof_id else None, no_proof_reason=e.no_proof_reason,
+                         status=e.status, entry_id=e.id, by=users.get(e.created_by), note=e.note, link=link, _entity="money_entries"))
+    by_entity = {
+        "payments": _proof_map(db, "payments", pay_ids),
+        "vendor_payments": _proof_map(db, "vendor_payments", vpay_ids),
+        "money_entries": _proof_map(db, "money_entries", entry_ids),
+    }
     signed = {(s.source_type, s.source_id): s for s in db.scalars(select(EvidenceSignoff).where(EvidenceSignoff.branch_id == branch))}
     for r in rows:
+        entity = r.pop("_entity", None)
+        urls = (by_entity.get(entity) or {}).get(r["id"]) or ([r["proof_url"]] if r.get("proof_url") else [])
+        r["proof_urls"], r["proof_url"], r["missing_proof"] = urls, urls[0] if urls else None, not urls
         r["source_type"] = source_type(r["source"])
         s = signed.get((r["source_type"], r["id"]))
         r["signoff"] = s and {"reason": s.reason, "by": users.get(s.created_by), "at": s.created_at}
@@ -269,7 +297,17 @@ PROOF_ENTITY = {"payment": "payments", "vendor_payment": "vendor_payments", "mon
 class AttachProofIn(BaseModel):
     source_type: Literal["payment", "vendor_payment", "money_entry"]
     source_id: uuid.UUID
-    proof_id: uuid.UUID
+    proof_id: uuid.UUID | None = None
+    proof_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def at_least_one(self):
+        ids = list(dict.fromkeys(([self.proof_id] if self.proof_id else []) + list(self.proof_ids)))
+        if not ids:
+            raise ValueError("Attach at least one proof file")
+        self.proof_ids = ids
+        self.proof_id = ids[0]
+        return self
 
 
 @router.post("/missing-evidence/attach", status_code=200)
@@ -283,7 +321,7 @@ def attach_proof(body: AttachProofIn, actor: Actor = Depends(see_money), db: Ses
         raise HTTPException(409, "This record is voided")
     if rec.proof_id:
         raise HTTPException(409, "This record already has proof")
-    _attach(db, actor, [body.proof_id], PROOF_ENTITY[body.source_type], rec.id)
+    attach_proofs(db, actor, body.proof_ids, PROOF_ENTITY[body.source_type], rec.id)
     rec.proof_id = body.proof_id
     db.commit()
-    return {"ok": True, "proof_url": f"/api/attachments/{body.proof_id}/file"}
+    return {"ok": True, **proof_payload(db, PROOF_ENTITY[body.source_type], rec.id, rec.proof_id)}

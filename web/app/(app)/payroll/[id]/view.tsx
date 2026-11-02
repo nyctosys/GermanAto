@@ -82,7 +82,7 @@ function View({ run, onChange }: { run: Run; onChange: (r: Run) => void }) {
                          try {
                            onChange(await api<Run>(`/api/payroll-runs/${run.id}/lines/${paying.id}/pay`, {
                              method: "POST",
-                             json: { account: b.account, reference: b.reference, note: b.note, proof_id: b.proof_id, no_proof_reason: b.no_proof_reason },
+                             json: { account: b.account, reference: b.reference, note: b.note, proof_id: b.proof_id, proof_ids: b.proof_ids, no_proof_reason: b.no_proof_reason },
                            }));
                            setPaying(null);
                          } finally {

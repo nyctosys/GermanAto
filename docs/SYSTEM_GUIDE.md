@@ -230,7 +230,7 @@ Three kinds: **Workshop** (at check-in or during diagnosis), **Delivery** (befor
 
 ### Approval
 - **How:** in person, WhatsApp reply or phone call.
-- **Proof is required**: a photo, screenshot or PDF. With none, a reason must be given ("approved on a phone call"). The record shows who recorded the approval and when.
+- **Proof is required**: one or more photos, screenshots or PDFs. With none, a reason must be given ("approved on a phone call"). The record shows who recorded the approval and when.
 - **Partial approval:** untick lines the customer declined. They stay on the quotation, struck through, and drop out of the total. At least one line must be approved; otherwise use **Customer said no**.
 
 ### Revisions
@@ -246,7 +246,7 @@ A4 quotation with the customer, car, lines (declined lines left out), totals, an
 
 - **Advance:** taken on a quotation once it is Sent or Approved (or after the repair order is made). It is held as the **customer's money**, not income, until the invoice uses it.
 - **Payment:** taken on an issued invoice, up to the balance.
-- Every record has the amount, where it went (**Cash**, **Bank transfer**, **Mobile wallet**), a reference, and **proof** (photo, screenshot or PDF) or a reason why there is none. Records without proof are shown with "No proof: …".
+- Every record has the amount, where it went (**Cash**, **Bank transfer**, **Mobile wallet**), a reference, and **proof** (one or more photos, screenshots or PDFs) or a reason why there is none. Records without proof are shown with "No proof: …".
 - A bank transfer or wallet payment needs its **transaction reference** or a screenshot.
 - Receipts are numbered `PAY-A1F3-000001`. Nothing is edited after it is recorded.
 - A visit holding money can't be cancelled. A held advance can be given back with admin approval (see Credit notes and refunds in section 21).
@@ -455,7 +455,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 ### Rules the code depends on
 - **Stock** changes only through `stock.move()`. Never `db.refresh()` an item after it (that discards the unflushed average cost).
 - **Money** is posted to the journal in the same transaction as the event, right before `db.commit()`, using a `posting.*` function. Journal tables are append-only (database trigger); mistakes are reversed, not edited. `post()` refuses unbalanced entries and entries dated in a closed month.
-- **Money records** carry proof or a written reason (CHECK constraint). A new route that records or voids money on a past date calls `cashclose.assert_day_open`.
+- **Money records** carry proof or a written reason (CHECK constraint). Proof may be several files (`proof_ids`, up to 10); the row keeps the first as `proof_id` and responses include `proof_url` plus `proof_urls`. A new route that records or voids money on a past date calls `cashclose.assert_day_open`.
 - **Concurrency:** every table has `version`; editing routes take the client's version and return 409 if it is stale.
 - **Migrations:** Alembic autogenerate does not see changed CHECK constraints; edit those by hand and name foreign keys so downgrades work. Run `alembic check` after each.
 - **Sync:** pulled changes are applied with Core statements so they skip the outbox hook and never echo back. Tests build tables with `create_all`, so database triggers are not exercised by them.
@@ -698,7 +698,7 @@ At the end of the day, count what is really in the **cash drawer**, the **bank**
 - This page lists **every** such record, money in and money out (customer payments and advances, vendor payments, expenses, owner money, transfers, refunds), each with the reason that was given. A transfer is listed once.
 - It shows how many are **waiting for an admin** and their total value.
 - An admin (needs `evidence-signoff`) can **Accept** a record with a reason. Their name and the reason are kept. The record still shows as having no proof, but it no longer counts as waiting: the alert on the Money in and Money out pages goes down, and month-end closing will not be blocked by it.
-- **Add proof** is optional: if the photo or document turns up later, anyone who can open this page can attach it (`POST missing-evidence/attach`). The record then leaves the list. You do not have to add proof — Accept still works without it.
+- **Add proof** is optional: if the photo or document turns up later, anyone who can open this page can attach one or more files (`POST missing-evidence/attach` with `proof_ids`). The record then leaves the list. You do not have to add proof — Accept still works without it.
 - **Waiting and accepted** shows both, so nothing that was accepted is hidden.
 
 ---

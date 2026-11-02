@@ -59,7 +59,7 @@ function Pack() {
       <Section title="4. Every payment, with its proof">
         <Grid head={["Date", "Record", "Kind", "From or to", "Account", "Proof", "Amount"]} right={[6]}
               rows={p.entries.map((e: Any) => [day(e.date), e.number, `${e.direction === "in" ? "In" : "Out"}: ${SOURCE[e.source] ?? e.source}`, e.party, ACCOUNT[e.account],
-                e.proof_url ? "Attached" : e.signoff ? `Accepted: ${e.signoff.reason}` : `None: ${e.no_proof_reason}`, money(e.amount)])} />
+                (e.proof_urls?.length || e.proof_url) ? (e.proof_urls?.length > 1 ? `${e.proof_urls.length} attached` : "Attached") : e.signoff ? `Accepted: ${e.signoff.reason}` : `None: ${e.no_proof_reason}`, money(e.amount)])} />
       </Section>
 
       {p.payroll.length > 0 && <Section title="5. Payroll"><Grid head={["Month", "Status", "Pay for the month", "Paid out"]} right={[2, 3]} rows={p.payroll.map((r: Any) => [r.month, r.status, money(r.gross), money(r.net)])} /></Section>}

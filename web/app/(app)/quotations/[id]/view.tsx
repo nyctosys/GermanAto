@@ -9,7 +9,7 @@ import { type Uploaded } from "@/components/capture";
 import { previewTotals } from "@/components/billing";
 import { CatalogPicker, lineCode, lineName, linkButton, type Pick, QuoteBadge, type QuoteLine, type QuoteStatus } from "@/components/estimates";
 import { NextStep } from "@/components/next-step";
-import { type Payment, type PaymentBody, PaymentForm, PaymentList, ProofInput, RefundForm } from "@/components/payments";
+import { type Payment, type PaymentBody, PaymentForm, PaymentList, ProofInput, ProofLinks, RefundForm } from "@/components/payments";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
@@ -24,7 +24,7 @@ type LiveTotals = ReturnType<typeof previewTotals> & { includeTax: boolean };
 type Quotation = {
   id: string; number: string; revision: number; status: QuoteStatus; version: number; include_tax: boolean; tax_rate: string;
   discount: string; valid_until: string; notes: string; sent_at: string | null; created_at: string; job_card_id: string;
-  approval: { at: string; by: string | null; method: string; note: string; no_proof_reason: string; proof_url: string | null } | null;
+  approval: { at: string; by: string | null; method: string; note: string; no_proof_reason: string; proof_url: string | null; proof_urls?: string[] } | null;
   rejected_reason: string;
   visit: { id: string; number: string; status: string; car_id: string; customer_id: string; buyer_id: string | null };
   lines: QuoteLine[];
@@ -126,8 +126,7 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
                 <Fact label="How">{METHOD[q.approval.method]}</Fact>
                 {q.approval.note && <Fact label="Note" wide>{q.approval.note}</Fact>}
                 <Fact label="Proof" wide>
-                  {q.approval.proof_url ? <a href={q.approval.proof_url} target="_blank" rel="noreferrer" className="underline">Open the proof</a>
-                    : <span>No proof: {q.approval.no_proof_reason}</span>}
+                  <ProofLinks urls={q.approval.proof_urls} url={q.approval.proof_url} reason={q.approval.no_proof_reason} label="Open the proof" className="underline" />
                 </Fact>
               </dl>
             </Card>
@@ -384,7 +383,7 @@ function ApproveForm({ q, busy, onSubmit, onCancel }:
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!confirming) { if (validate()) setConfirming(true); return; }
-    onSubmit({ method, note, declined_line_ids: declined, proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : reason });
+    onSubmit({ method, note, declined_line_ids: declined, proof_id: proof[0]?.id ?? null, proof_ids: proof.map((p) => p.id), no_proof_reason: proof.length ? "" : reason });
   }
   function validate() {
     if (!proof.length && reason.trim().length < 5) { setError("Attach proof, or explain why there is none"); return false; }

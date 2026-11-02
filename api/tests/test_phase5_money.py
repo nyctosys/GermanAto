@@ -492,6 +492,22 @@ def test_only_admins_with_the_permission_sign_off(admin):
     assert acct.post("/api/missing-evidence/sign", json={"source_type": "money_entry", "source_id": e["id"], "reason": "Not allowed to do this"}).status_code == 403
 
 
+def test_money_records_accept_several_proof_files(admin):
+    a = upload(admin, PNG + b"one")
+    b = upload(admin, PNG + b"two")
+    e = entry(admin, kind="other_income", amount="90", party="Scrap", proof_ids=[a, b], no_proof_reason="").json()
+    assert e["proof_url"] and len(e["proof_urls"]) == 2
+    listed = next(r for r in admin.get("/api/money-in").json()["rows"] if r["id"] == e["id"])
+    assert listed["proof_urls"] == e["proof_urls"]
+
+    later = entry(admin, kind="other_income", amount="12", party="Cash tip").json()
+    c, d = upload(admin, PNG + b"c"), upload(admin, PNG + b"d")
+    attached = admin.post("/api/missing-evidence/attach", json={
+        "source_type": "money_entry", "source_id": later["id"], "proof_ids": [c, d],
+    }).json()
+    assert len(attached["proof_urls"]) == 2
+
+
 def test_missing_evidence_can_optionally_attach_proof_later(admin):
     e = entry(admin, kind="other_income", amount="80", party="Scrap").json()
     before = admin.get("/api/missing-evidence").json()

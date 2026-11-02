@@ -8,7 +8,7 @@ export type Chapter = { id: string; title: string; intro: string; sops: Sop[] };
 
 export const RULES: string[] = [
   "Write everything into the system as it happens: every payment, every part, every customer approval. If it is not in the system, it did not happen.",
-  "Every payment or expense needs proof: a photo, a screenshot or a PDF. If there really is none, write the reason. For bank or wallet money, also write the transaction number.",
+  "Every payment or expense needs proof: one or more photos, screenshots or PDFs. If there really is none, write the reason. For bank or wallet money, also write the transaction number.",
   "Each customer and each car is saved once. To fix a wrong detail, press Edit on that record. Do not type it again somewhere else.",
   "Nobody types a stock number. Stock goes up when goods are received, and goes down when a part is used or sold.",
   "Labour has no fixed price. You type the price on each quotation.",
@@ -19,7 +19,7 @@ export const RULES: string[] = [
 
 // Everyday meanings of the words the system uses.
 export const WORDS: [string, string][] = [
-  ["Proof", "A photo, screenshot or PDF that shows a payment or an approval really happened."],
+  ["Proof", "One or more photos, screenshots or PDFs that show a payment or an approval really happened."],
   ["Void", "Cancel a record by mistake or correction. It is not deleted: it stays on the list, crossed out, with your reason."],
   ["Account", "A place money is kept: the cash drawer, the bank, or the mobile wallet."],
   ["Advance", "Money a customer pays before the work is finished. It is kept aside and taken off the final bill."],
@@ -210,7 +210,7 @@ export const CHAPTERS: Chapter[] = [
         id: "approval", title: "Record the customer's approval", who: "Service advisor",
         steps: [
           "On the sent quotation, press Record approval. Choose how the customer agreed: in person, WhatsApp reply, or phone call.",
-          "Attach proof: a photo, a screenshot of the WhatsApp reply, or a PDF. If there is none, write the reason, for example \"approved by phone at 3 pm\".",
+          "Attach proof: one or more photos, a WhatsApp screenshot, or PDFs. If there is none, write the reason, for example \"approved by phone at 3 pm\".",
           "If the customer refused some lines, untick them. At least one line must stay approved.",
           "If the customer refuses everything, press Customer said no and write the reason.",
         ],
@@ -403,7 +403,7 @@ export const CHAPTERS: Chapter[] = [
         steps: [
           "Go to Money, then Missing proof. Read the reason given for each record.",
           "If the reason is acceptable, press Accept and type why. If not, ask the person to bring proof.",
-          "Optional: if the photo or document turns up later, press Add proof and upload it. You do not have to — Accept still clears the wait.",
+          "Optional: if the photo or document turns up later, press Add proof and upload one or more files. You do not have to — Accept still clears the wait.",
         ],
         right: ["Accepted records no longer count as waiting, and they no longer stop the month from closing.", "A record with proof attached later leaves the list."],
       },

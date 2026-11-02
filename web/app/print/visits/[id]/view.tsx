@@ -28,8 +28,13 @@ function Dossier() {
   if (d.error) return <p className="p-8 text-error">{d.error}</p>;
   if (!d.data || !branch.data) return <p className="p-8">Loading</p>;
   const { visit: v, job_card: jc, quotations, repair_order: ro, invoices, payments, gate_pass: g, audit } = d.data;
-  const proofs = [...payments.filter((p: Any) => p.proof_url).map((p: Any) => ({ label: `${p.number}, ${money(p.amount)}`, url: p.proof_url })),
-                  ...quotations.filter((q: Any) => q.approval?.proof_url).map((q: Any) => ({ label: `Approval of ${q.number} rev ${q.revision}`, url: q.approval.proof_url }))];
+  const urlsOf = (urls?: string[], url?: string | null) => urls?.length ? urls : url ? [url] : [];
+  const proofs = [
+    ...payments.flatMap((p: Any) => urlsOf(p.proof_urls, p.proof_url).map((url: string, i: number, all: string[]) => (
+      { label: `${p.number}, ${money(p.amount)}${all.length > 1 ? ` (${i + 1})` : ""}`, url }))),
+    ...quotations.flatMap((q: Any) => urlsOf(q.approval?.proof_urls, q.approval?.proof_url).map((url: string, i: number, all: string[]) => (
+      { label: `Approval of ${q.number} rev ${q.revision}${all.length > 1 ? ` (${i + 1})` : ""}`, url }))),
+  ];
 
   return (
     <div className="mx-auto max-w-[210mm] px-4 py-4 sm:px-[12mm] sm:py-[10mm] text-[11px] leading-snug print:p-0">
@@ -73,7 +78,11 @@ function Dossier() {
             <Grid head={["Line", "Qty", "Price", "Amount"]} right={[1, 2, 3]}
                   rows={q.lines.map((l: Any) => [`${l.description}${l.declined ? " (declined)" : ""}`, qty(l.qty), money(l.unit_price), money(l.amount)])} />
             <p>Total {money(q.totals.total)}{q.include_tax ? `, including ${Number(q.tax_rate)}% tax` : ""}.
-              {q.approval && ` Approved ${METHOD[q.approval.method]} ${when(q.approval.at)}${q.approval.by ? ` (recorded by ${q.approval.by})` : ""}. ${q.approval.proof_url ? "Proof attached." : `No proof: ${q.approval.no_proof_reason}.`}`}
+              {q.approval && (() => {
+                const n = urlsOf(q.approval.proof_urls, q.approval.proof_url).length;
+                const proof = n ? (n > 1 ? `${n} proofs attached.` : "Proof attached.") : `No proof: ${q.approval.no_proof_reason}.`;
+                return ` Approved ${METHOD[q.approval.method]} ${when(q.approval.at)}${q.approval.by ? ` (recorded by ${q.approval.by})` : ""}. ${proof}`;
+              })()}
               {q.rejected_reason && ` Rejected: ${q.rejected_reason}.`}</p>
           </div>
         )) : <p className="text-muted">No quotation.</p>}
@@ -110,8 +119,11 @@ function Dossier() {
 
       <Section title="7. Money received">
         <Grid head={["Receipt", "Date", "Kind", "Method", "Reference", "Proof", "Amount"]} right={[6]}
-              rows={payments.map((p: Any) => [p.number, day(p.received_at), p.kind === "advance" ? "Advance" : "Payment", ACCOUNT[p.account], p.reference,
-                                              p.proof_url ? "Attached" : `None: ${p.no_proof_reason}`, money(p.amount)])} />
+              rows={payments.map((p: Any) => {
+                const n = urlsOf(p.proof_urls, p.proof_url).length;
+                return [p.number, day(p.received_at), p.kind === "advance" ? "Advance" : "Payment", ACCOUNT[p.account], p.reference,
+                        n ? (n > 1 ? `${n} attached` : "Attached") : `None: ${p.no_proof_reason}`, money(p.amount)];
+              })} />
       </Section>
 
       <Section title="8. Gate pass">

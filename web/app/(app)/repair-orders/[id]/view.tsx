@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, startTransition, useOptimistic, useState, type FormEvent } from "react";
 import { type Uploaded, PhotoCapture } from "@/components/capture";
 import { CatalogPicker, lineCode, linkButton, type Pick } from "@/components/estimates";
-import { ProofInput } from "@/components/payments";
+import { ProofInput, ProofLinks } from "@/components/payments";
 import { RO_STAGES, RoBadge, STAGE, stageActions, workStage, type RoLine, type RoStatus } from "@/components/repairs";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
@@ -233,7 +233,9 @@ function LineRow({ l, techs, working, actions, busy, call }:
           </p>
           {!l.in_quote && l.approval && (
             <p className="text-sm text-muted">Customer agreed {l.approval.method === "in_person" ? "in person" : l.approval.method === "whatsapp" ? "on WhatsApp" : "by phone"}
-              {l.approval.proof_url ? <>, <a href={l.approval.proof_url} target="_blank" rel="noreferrer" className="underline">proof</a></> : `. No proof: ${l.approval.reason}`}</p>
+              {l.approval.proof_url || (l.approval.proof_urls && l.approval.proof_urls.length)
+                ? <>, <ProofLinks urls={l.approval.proof_urls} url={l.approval.proof_url} label="proof" className="underline" /></>
+                : `. No proof: ${l.approval.reason}`}</p>
           )}
           {l.item && (
             <p className="text-sm text-ink-2">
@@ -297,7 +299,7 @@ function ExtraWork({ busy, onAdd }: { busy: boolean; onAdd: (b: object) => Promi
     setTried(true);
     if (!pick || !linePrice.safeParse(price).success || !lineQty.safeParse(amount).success || reason.trim().length < 3 || approvalBad) return;
     const ok = await onAdd({ kind: pick.kind, labour_code_id: pick.kind === "labour" ? pick.id : null, item_id: pick.kind === "part" ? pick.id : null,
-                             qty: amount, unit_price: price, reason, approval_method: method, proof_id: proof[0]?.id ?? null, no_proof_reason: proof.length ? "" : noProof });
+                             qty: amount, unit_price: price, reason, approval_method: method, proof_id: proof[0]?.id ?? null, proof_ids: proof.map((p) => p.id), no_proof_reason: proof.length ? "" : noProof });
     if (ok) { setPick(null); setPrice(""); setAmount("1"); setReason(""); setProof([]); setNoProof(""); setTried(false); }
   }
   return (

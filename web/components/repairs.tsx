@@ -9,7 +9,7 @@ export type RoLine = {
   item?: { number: string; name: string; unit: string; sale_price: string; on_hand: string; short: string };
   description: string; unit_price: string; amount: string; in_quote: boolean; state: "pending" | "done" | "not_done";
   technician_id: string | null; technician: string | null; issued_qty: string;
-  approval?: { method: string; reason: string; proof_url: string | null } | null;
+  approval?: { method: string; reason: string; proof_url: string | null; proof_urls?: string[] } | null;
 };
 
 export const RO_STAGES: RoStatus[] = ["received", "in_repair", "testing", "ready", "delivered"];

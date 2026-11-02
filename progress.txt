@@ -118,3 +118,13 @@
 ## Live quotation / invoice totals (30 Oct 2026)
 - Draft quotation and workshop invoice editors push `previewTotals` (now split labour/parts) into the right-hand Total card as qty/price/discount/tax change, so the panel updates without Save. Counter sales and PO drafts already did this in-page.
 - Same idea elsewhere: receive-goods shows delivery value; vendor bill form shows goods + adjustment; credit-note form shows credit total (+ tax); repair-order extra work shows line total. Cash close already showed the over/short live.
+
+## Multiple proof files (2 Nov 2026)
+- Shared `Proof` body accepts `proof_ids` (up to 10); `proof_id` alone still works and becomes the first. Row CHECK still uses the primary `proof_id`; `_attach` links every file. Responses add `proof_urls` beside `proof_url`.
+- UI: `ProofInput` no longer keeps only the last file; `ProofLinks` shows every attached file. Callers: payments, money book, quotation approval, repair-order extra work, missing-evidence attach, payroll pay.
+- Helpers: `attach_proofs` / `proof_payload` in `routers/estimates.py`.
+
+## Multiple proof files (2 Nov 2026)
+- Shared `Proof` body accepts `proof_ids` (up to 10); `proof_id` alone still works and becomes the first. Row CHECK still uses the primary `proof_id`; `_attach` links every file. Responses add `proof_urls` beside `proof_url`.
+- UI: `ProofInput` no longer keeps only the last file; `ProofLinks` shows every attached file. Callers: payments, money book, quotation approval, repair-order extra work, missing-evidence attach, payroll pay.
+- Helpers: `attach_proofs` / `proof_payload` in `routers/estimates.py`.

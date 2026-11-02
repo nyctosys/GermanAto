@@ -46,9 +46,9 @@ function List() {
     }
   }
 
-  async function attach(proofId: string) {
+  async function attach(proofIds: string[]) {
     try {
-      await api("/api/missing-evidence/attach", { method: "POST", json: { source_type: attaching!.source_type, source_id: attaching!.id, proof_id: proofId } });
+      await api("/api/missing-evidence/attach", { method: "POST", json: { source_type: attaching!.source_type, source_id: attaching!.id, proof_ids: proofIds } });
       setAttaching(null);
       list.reload();
     } catch (err) {
@@ -100,13 +100,13 @@ function List() {
 }
 
 function AttachProofForm({ number, busy, onSubmit, onCancel }:
-  { number: string; busy: boolean; onSubmit: (proofId: string) => void; onCancel: () => void }) {
+  { number: string; busy: boolean; onSubmit: (proofIds: string[]) => void; onCancel: () => void }) {
   const [proof, setProof] = useState<Uploaded[]>([]);
   return (
     <Card title={`Add proof for ${number}`}>
-      <p className="mb-4 text-sm text-muted">Optional. Only if you have the photo or document now — otherwise leave the record and Accept it instead.</p>
-      <form onSubmit={(e) => { e.preventDefault(); if (proof[0]) onSubmit(proof[0].id); }} className="space-y-4">
-        <PhotoCapture value={proof} onChange={(v) => setProof(v.slice(-1))} label="Photo, screenshot or PDF" accept="image/*,application/pdf" note="Proof" />
+      <p className="mb-4 text-sm text-muted">Optional. Only if you have the photo or document now — otherwise leave the record and Accept it instead. You can attach more than one file.</p>
+      <form onSubmit={(e) => { e.preventDefault(); if (proof.length) onSubmit(proof.map((p) => p.id)); }} className="space-y-4">
+        <PhotoCapture value={proof} onChange={setProof} label="Photo, screenshot or PDF" accept="image/*,application/pdf" note="Proof" />
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={busy || !proof.length}>Save proof</Button>
           <Button type="button" variant="secondary" onClick={onCancel}>Not now</Button>

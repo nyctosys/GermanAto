@@ -21,7 +21,7 @@ from app.models import (
 from app import posting
 from app.numbering import next_number
 from app.pricing import CENT, money, totals  # noqa: F401  (re-exported for the other routers)
-from app.routers.workshop import _attach, _get_inspection, _get_visit, _require_open, snapshot_of
+from app.routers.workshop import _attach, _files, _get_inspection, _get_visit, _require_open, snapshot_of
 from app.stock import on_hand_map
 from app.validators import Text, normalize_code
 from app.config import local_today
@@ -194,11 +194,24 @@ def advances_on(db: Session, visit_id: uuid.UUID) -> list[Payment]:
                            .order_by(Payment.received_at)))
 
 
+def proof_payload(db: Session, entity_type: str, entity_id: uuid.UUID, primary: uuid.UUID | None = None) -> dict:
+    """proof_url is the first file (compat); proof_urls lists every attached proof."""
+    urls = [f["url"] for f in _files(db, entity_type, entity_id)]
+    if not urls and primary:
+        urls = [f"/api/attachments/{primary}/file"]
+    return {"proof_url": urls[0] if urls else None, "proof_urls": urls}
+
+
+def attach_proofs(db: Session, actor: Actor, ids: list[uuid.UUID], entity_type: str, entity_id: uuid.UUID) -> None:
+    if ids:
+        _attach(db, actor, ids, entity_type, entity_id)
+
+
 def payment_out(db: Session, p: Payment) -> dict:
     by = db.get(User, p.received_by) if p.received_by else None
     return {"id": p.id, "number": p.number, "kind": p.kind, "status": p.status, "account": p.account, "reference": p.reference,
             "amount": p.amount, "received_at": p.received_at, "received_by": by.full_name if by else None, "note": p.note,
-            "proof_url": f"/api/attachments/{p.proof_id}/file" if p.proof_id else None, "no_proof_reason": p.no_proof_reason,
+            **proof_payload(db, "payments", p.id, p.proof_id), "no_proof_reason": p.no_proof_reason,
             "quotation_id": p.quotation_id, "refunded": p.refunded, "held": p.held, "invoice_id": p.invoice_id}
 
 
@@ -219,7 +232,7 @@ def quotation_out(db: Session, q: Quotation) -> dict:
         "approval": q.approved_at and {
             "at": q.approved_at, "by": approver.full_name if approver else None, "method": q.approval_method,
             "note": q.approval_note, "no_proof_reason": q.no_proof_reason,
-            "proof_url": f"/api/attachments/{q.approval_proof_id}/file" if q.approval_proof_id else None},
+            **proof_payload(db, "quotations", q.id, q.approval_proof_id)},
         "rejected_reason": q.rejected_reason,
         "visit": {"id": v.id, "number": v.number, "status": v.status, "car_id": v.car_id, "customer_id": v.customer_id,
                   "buyer_id": v.buyer_id},
@@ -353,15 +366,24 @@ def send_quotation(quotation_id: uuid.UUID, body: VersionIn, actor: Actor = Depe
 
 
 class Proof(BaseModel):
-    """Proof is always required; when there truly is none, say why (owner decision 4)."""
+    """Proof is always required; when there truly is none, say why (owner decision 4).
+    Clients send proof_ids (one or more). proof_id alone still works and becomes the first."""
     proof_id: uuid.UUID | None = None
+    proof_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)
     no_proof_reason: Text = Field(default="", max_length=500)
 
     @model_validator(mode="after")
     def proof_or_reason(self):
+        ids = list(dict.fromkeys(([self.proof_id] if self.proof_id else []) + list(self.proof_ids)))
+        self.proof_ids = ids
+        self.proof_id = ids[0] if ids else None
         if not self.proof_id and len(self.no_proof_reason) < 5:
             raise ValueError("Attach proof, or explain why there is none")
         return self
+
+    def record_fields(self) -> dict:
+        """Columns that sit on the money / approval row (primary proof only)."""
+        return {"proof_id": self.proof_id, "no_proof_reason": self.no_proof_reason}
 
 
 class ApproveIn(Proof):
@@ -386,8 +408,7 @@ def approve_quotation(quotation_id: uuid.UUID, body: ApproveIn, actor: Actor = D
         raise HTTPException(422, "Nothing is approved. Reject the quotation instead.")
     for l in q.lines:
         l.declined = l.id in declined
-    if body.proof_id:
-        _attach(db, actor, [body.proof_id], "quotations", q.id)
+    attach_proofs(db, actor, body.proof_ids, "quotations", q.id)
     q.status, q.approved_at, q.approved_by = "approved", utcnow(), actor.user.id
     q.approval_method, q.approval_note = body.method, body.note
     q.approval_proof_id, q.no_proof_reason = body.proof_id, body.no_proof_reason
@@ -455,11 +476,11 @@ def take_advance(quotation_id: uuid.UUID, body: AdvanceIn, actor: Actor = Depend
     if body.amount > room:
         raise HTTPException(422, f"An advance cannot be more than the quotation total. Rs {max(room, Decimal(0)):,.2f} can still be taken")
     p = Payment(number=next_number(db, actor.branch, "payment"), kind="advance", customer_id=v.buyer_id or v.customer_id,
-                visit_id=v.id, quotation_id=q.id, received_by=actor.user.id, **body.model_dump())
+                visit_id=v.id, quotation_id=q.id, received_by=actor.user.id,
+                amount=body.amount, account=body.account, reference=body.reference, note=body.note, **body.record_fields())
     db.add(p)
     db.flush()
-    if body.proof_id:
-        _attach(db, actor, [body.proof_id], "payments", p.id)
+    attach_proofs(db, actor, body.proof_ids, "payments", p.id)
     posting.customer_payment(db, actor.branch, p)
     db.commit()
     return payment_out(db, p)
