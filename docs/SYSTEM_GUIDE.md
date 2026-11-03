@@ -622,7 +622,7 @@ Every business event posts a **balanced journal entry** automatically, so the bo
 | Opening stock, stock found | Inventory | Opening balance equity (opening) or Stock write-offs and corrections (a count adjustment) |
 | Stock lost or written off | Stock write-offs and corrections | Inventory |
 | Goods received | Inventory | Goods received not billed |
-| Vendor bill | Goods received not billed (and freight as Purchase adjustments) | Payables to vendors |
+| Vendor bill | Goods received not billed (and freight or discount as Purchase adjustments — freight is a period expense, not added into stock cost) | Payables to vendors |
 | Vendor payment | Payables to vendors | Cash, bank or wallet |
 | Advance taken | Cash, bank or wallet | Customer advances |
 | Invoice issued | Receivables | Revenue: labour, Revenue: parts, Sales tax payable |
@@ -770,7 +770,7 @@ Each day is worked out from the punches: the **first punch is in, the last is ou
 | Profit and loss | Revenue (labour, parts, other), cost of parts sold, gross profit and margin, expenses by category, salaries, purchase adjustments, cash differences, net profit. Sales tax is shown separately: it belongs to the government, not to the business. Lines link to the records behind them. |
 | Cash flow | For the cash drawer, the bank and the wallet: at the start, what came in (by source), what went out (by source), at the end. The totals agree with each account's balance. |
 | Customers owe us | Every unpaid invoice, aged from the day it was issued (0-30, 31-60, 61-90, over 90 days). A customer who has overpaid shows as owed back. Totals equal the Receivables account. |
-| We owe vendors | Every unpaid bill, aged by how late it is (not yet due, then 1-30, 31-60, 61-90, over 90 days). Totals equal the Payables account. |
+| We owe vendors | Every unpaid bill, aged by how late it is (not yet due, then 1-30, 31-60, 61-90, over 90 days), plus goods received that are not yet billed. Totals equal Payables (2000) plus Goods received not billed (2100). |
 | Stock value | Each item's quantity, average cost and value; the total equals the Inventory account. |
 | Discounts and voids | Discounts given, by invoice and by the person who issued it; and every voided record with its reason. |
 
@@ -789,12 +789,12 @@ Each day is worked out from the punches: the **first punch is in, the last is ou
 
 ### Month end
 **Where:** Reports → Month end (needs `period-close`; the accountant has it).
-- Open a finished month to see its **checklist**: the month has ended; earlier months with activity are closed; every payment has proof or has been accepted by an admin; the books balance; the cash, bank and wallet were **counted and signed on the last day** (an account with no activity needs no count); payroll is not left as a draft. Two further items are shown but don't stop the close: payroll was run, and no draft invoices are left over.
+- Open a finished month to see its **checklist**: the month has ended; earlier months with activity are closed; every payment has proof or has been accepted by an admin; the books balance; the cash, bank and wallet were **counted and signed on the last day of the month** (an account with no money movement that month needs no count); payroll is not left as a draft. Further items shown but that don't stop the close: payroll was run, no draft invoices left over, and no repair orders with parts issued and no issued invoice (those distort monthly gross profit because cost hits when parts leave stock).
 - **Each item that isn't done has a Fix it link** to the screen that fixes it. **Close this month** is available only when every required item is done.
 - **Closing locks the month.** Nothing can be recorded dated inside it: the system refuses, with the month's name in the message. Corrections are made in the current month.
 - **Reopen** (needs `period-approve`, an admin permission) needs a reason, which is kept. Months reopen latest first, and a month inside a closed year can't be reopened until the year is.
-- **Closing pack:** a printable document with profit and loss, cash and bank by account with the signed counts, what customers owe and what vendors are owed, stock at cost, and **every payment with its proof status**, and the payroll summary. It prints and shares like any other document.
-- **Years:** once a year has ended and every month in it with activity is closed, the year can be closed, which locks the whole year. The yearly pack adds a month-by-month profit table.
+- **Closing pack:** a printable document with profit and loss, cash and bank by account with the signed counts, what customers owe and what vendors are owed **as of the last day of the period** (later payments do not rewrite the pack), stock at cost as of that day, equity (owner capital, drawings, and retained earnings as cumulative net profit — no year-end closing entry is posted, so period P&L stays readable), **every payment with its proof status**, and the payroll summary. It prints and shares like any other document.
+- **Years:** once a year has ended and every month in it with activity is closed, the year can be closed, which locks the whole year. The yearly pack adds a month-by-month profit table and the equity snapshot.
 
 ---
 

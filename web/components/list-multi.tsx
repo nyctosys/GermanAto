@@ -53,8 +53,9 @@ export function ListMulti({ name, kind, defaultValue = "", placeholder = "Search
         <ul className="flex flex-wrap gap-2">
           {picked.map((p) => (
             <li key={p} className="flex items-center gap-1 rounded-control border border-rule bg-paper-3 py-1 pl-3 pr-1 text-sm">
-              {p}
-              <button type="button" aria-label={`Remove ${p}`} className="rounded px-2 text-muted hover:text-error" onClick={() => toggle(p)}>×</button>
+              <span>{p}</span>
+              <button type="button" aria-label={`Remove ${p}`} className="rounded px-2 text-muted hover:text-error"
+                onClick={(e) => { e.stopPropagation(); toggle(p); }}>×</button>
             </li>
           ))}
         </ul>
@@ -63,12 +64,15 @@ export function ListMulti({ name, kind, defaultValue = "", placeholder = "Search
         onFocus={() => setOpen(true)} onChange={(e) => { setQ(e.target.value); setOpen(true); setNear(null); setError(null); }}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (q.trim() && !exact) void add(); } if (e.key === "Escape") setOpen(false); }} />
       {open && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-control border border-rule bg-paper shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-control border border-rule bg-paper shadow-lg" role="listbox" aria-multiselectable="true">
           {shown.map((n) => (
-            <label key={n} className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-paper-3">
-              <input type="checkbox" checked={has(n)} onChange={() => toggle(n)} className="size-4 accent-primary" />
+            <div key={n} role="option" aria-selected={has(n)}
+              className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-paper-3"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => toggle(n)}>
+              <input type="checkbox" tabIndex={-1} readOnly checked={has(n)} className="pointer-events-none size-4 accent-primary" />
               {n}
-            </label>
+            </div>
           ))}
           {!shown.length && !q.trim() && <p className="px-3 py-2 text-sm text-muted">Nothing in the list yet. Type a car to add it.</p>}
           {q.trim() && !exact && (

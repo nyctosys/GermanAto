@@ -143,11 +143,54 @@ def test_receivables_payables_and_stock_value_equal_the_books(admin):
     assert D(str(rec["total"])) == D(str(rows(admin)["1100"])) == 6530 and rec["by_bucket"] == {"0-30": 6530}
     vendor, item, po = sent_po(admin)
     grn = receive(admin, po, "10").json()["receipts"][0]
+    unbilled = admin.get("/api/reports/payables").json()
+    assert unbilled["by_bucket"] == {"not billed": 2000} and D(str(unbilled["total"])) == -D(str(rows(admin)["2100"])) == 2000
     admin.post(f"/api/goods-receipts/{grn['id']}/bill", json={"bill_date": date.today().isoformat()})
     pay = admin.get("/api/reports/payables").json()
-    assert D(str(pay["total"])) == -D(str(rows(admin)["2000"])) == 2000 and pay["rows"][0]["bucket"] == "not yet due"
+    b = rows(admin)
+    assert D(str(pay["total"])) == -(b["2000"] + b.get("2100", 0)) == 2000 and pay["rows"][0]["bucket"] == "not yet due"
     stock = admin.get("/api/reports/stock-value").json()
     assert D(str(stock["total"])) == D(str(rows(admin)["1200"]))
+
+
+def test_month_end_cash_count_must_be_on_the_last_day(admin):
+    september(admin)
+    for r in admin.get("/api/missing-evidence").json()["rows"]:
+        admin.post("/api/missing-evidence/sign", json={"source_type": r["source_type"], "source_id": r["id"], "reason": "Small cash items, no slips"})
+    assert admin.post("/api/cash-closes", json={"account": "cash", "close_date": "2026-10-01", "counted": "700"}).status_code == 201
+    cl = admin.get("/api/periods/2026-09/checklist").json()
+    assert any(i["key"] == "cash_cash" and not i["ok"] for i in cl["items"]) and not cl["can_close"]
+
+
+def test_closing_pack_freezes_owed_figures_and_shows_equity(admin):
+    """Payments after as_of must not clear receivables; the pack freezes AR/AP/stock at period end and shows equity."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from app import reports
+    from app.config import local_today
+    from app.db import SessionLocal
+    from app.models import Branch, Payment
+    from test_phase3_billing import CASH
+
+    visit, inv = a_busy_month(admin)
+    assert admin.post(f"/api/invoices/{inv['id']}/payments", json={"amount": "6530", **CASH}).status_code == 201
+    assert D(str(admin.get("/api/reports/receivables").json()["total"])) == 0
+    with SessionLocal() as db:
+        pay = db.scalar(select(Payment).where(Payment.invoice_id == inv["id"], Payment.kind == "invoice"))
+        pay.received_at = datetime.now(timezone.utc) + timedelta(days=2)
+        db.commit()
+        branch = db.scalar(select(Branch))
+        assert D(str(reports.receivables(db, branch, as_of=local_today())["total"])) == 6530
+        assert D(str(reports.stock_value(db, branch, as_of=local_today())["total"])) == D(str(rows(admin)["1200"]))
+    ready_to_close(admin)
+    pack = admin.get("/api/periods/2026-09/pack").json()
+    assert D(str(pack["pnl"]["net_profit"])) == 700
+    assert D(str(pack["equity"]["retained_earnings"])) == 700  # cumulative through 30 Sep = this month only here
+    assert D(str(pack["equity"]["net_equity"])) == D(str(pack["equity"]["owner_capital"])) - D(str(pack["equity"]["owner_drawings"])) + 700
+    assert pack["receivables"]["as_of"] == "2026-09-30" and D(str(pack["receivables"]["total"])) == 0
+    assert pack["stock"]["as_of"] == "2026-09-30"
 
 
 def test_operations_report_counts_the_workshop(admin):

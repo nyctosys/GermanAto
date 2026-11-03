@@ -119,12 +119,12 @@ function Cashflow({ range }: { range: Range }) {
   );
 }
 
-type Rec = { as_of: string; total: string; by_bucket: Record<string, string>; rows: { id: string; number: string; customer: string; vendor?: string; kind?: string; issued_on?: string; due_on?: string; days?: number; days_overdue?: number; bucket: string; balance: string }[] };
+type Rec = { as_of: string; total: string; by_bucket: Record<string, string>; rows: { id: string; number: string; customer: string; vendor?: string; kind?: string; purchase_order_id?: string; issued_on?: string; due_on?: string; days?: number; days_overdue?: number; bucket: string; balance: string }[] };
 
 function Aging({ kind }: { kind: "receivables" | "payables" }) {
   const rec = kind === "receivables";
-  const order = rec ? ["0-30", "31-60", "61-90", "90+", "credit"] : ["not yet due", "0-30", "31-60", "61-90", "90+"];
-  const names: Record<string, string> = { "0-30": rec ? "0 to 30 days" : "1 to 30 days late", "31-60": rec ? "31 to 60 days" : "31 to 60 days late", "61-90": rec ? "61 to 90 days" : "61 to 90 days late", "90+": rec ? "Over 90 days" : "Over 90 days late", credit: "Owed back to customers", "not yet due": "Not yet due" };
+  const order = rec ? ["0-30", "31-60", "61-90", "90+", "credit"] : ["not billed", "not yet due", "0-30", "31-60", "61-90", "90+"];
+  const names: Record<string, string> = { "0-30": rec ? "0 to 30 days" : "1 to 30 days late", "31-60": rec ? "31 to 60 days" : "31 to 60 days late", "61-90": rec ? "61 to 90 days" : "61 to 90 days late", "90+": rec ? "Over 90 days" : "Over 90 days late", credit: "Owed back to customers", "not yet due": "Not yet due", "not billed": "Received, not billed" };
   return (
     <Load<Rec> path={`/api/reports/${kind}`}>
       {(r) => (
@@ -135,17 +135,17 @@ function Aging({ kind }: { kind: "receivables" | "payables" }) {
           </div>
           <Card title={rec ? "Unpaid invoices" : "Unpaid bills"} actions={r.rows.length ? <ExportButton name={`${kind}-${r.as_of}`} headers={[rec ? "Invoice" : "Bill", rec ? "Customer" : "Vendor", rec ? "Issued" : "Due", "Age", "Balance"]}
             rows={r.rows.map((x) => [x.number, x.customer ?? x.vendor, x.issued_on ?? x.due_on, x.bucket, x.balance])} /> : undefined} flush>
-            {!r.rows.length ? <EmptyState title="Nothing outstanding">{rec ? "Every invoice is settled." : "Every bill is paid."}</EmptyState> : (
+            {!r.rows.length ? <EmptyState title="Nothing outstanding">{rec ? "Every invoice is settled." : "Every bill is paid and every delivery is billed."}</EmptyState> : (
               <table className="table-stack w-full">
-                <thead><tr className="text-left text-sm text-muted"><th className="px-4 py-2 font-normal shell:px-5">{rec ? "Invoice" : "Bill"}</th><th className="px-4 py-2 font-normal">{rec ? "Customer" : "Vendor"}</th>
+                <thead><tr className="text-left text-sm text-muted"><th className="px-4 py-2 font-normal shell:px-5">{rec ? "Invoice" : "Bill or receipt"}</th><th className="px-4 py-2 font-normal">{rec ? "Customer" : "Vendor"}</th>
                   <th className="px-4 py-2 font-normal">{rec ? "Issued" : "Due"}</th><th className="px-4 py-2 font-normal">Age</th><th className="px-4 py-2 text-right font-normal shell:pr-5">Balance</th></tr></thead>
                 <tbody>
                   {r.rows.map((x) => (
                     <tr key={x.id} className="border-t border-rule">
-                      <td className="px-4 py-3 shell:px-5 max-sm:px-0"><Link href={`/${rec ? "invoices" : "bills"}/${x.id}`} className="font-medium underline">{x.number}</Link></td>
+                      <td className="px-4 py-3 shell:px-5 max-sm:px-0"><Link href={rec ? `/invoices/${x.id}` : x.kind === "grn" ? `/purchase-orders/${x.purchase_order_id}` : `/bills/${x.id}`} className="font-medium underline">{x.number}</Link></td>
                       <td data-label={rec ? "Customer" : "Vendor"} className="px-4 py-3 max-sm:px-0">{x.customer ?? x.vendor}</td>
                       <td data-label={rec ? "Issued" : "Due"} className="px-4 py-3 max-sm:px-0">{day((x.issued_on ?? x.due_on)!)}</td>
-                      <td data-label="Age" className="px-4 py-3 max-sm:px-0"><Badge tone={["61-90", "90+"].includes(x.bucket) ? "error" : x.bucket === "31-60" ? "warning" : "neutral"}>{names[x.bucket]}</Badge></td>
+                      <td data-label="Age" className="px-4 py-3 max-sm:px-0"><Badge tone={["61-90", "90+"].includes(x.bucket) ? "error" : x.bucket === "31-60" || x.bucket === "not billed" ? "warning" : "neutral"}>{names[x.bucket]}</Badge></td>
                       <td data-label="Balance" className="num px-4 py-3 text-right shell:pr-5 max-sm:px-0">{money(x.balance)}</td>
                     </tr>
                   ))}

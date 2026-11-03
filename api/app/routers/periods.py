@@ -92,10 +92,12 @@ def checklist(db: Session, actor: Actor, month: str) -> dict:
     moved = journal.balances(db, actor.branch, since=start, as_of=end)
     for kind in KINDS:
         code = journal.MONEY_CODE[kind]
-        active = any(moved.get(code, (0, 0))) or any(tb.get(code, (0, 0))[0] - tb.get(code, (0, 0))[1] for _ in [0])
-        signed = db.scalar(select(func.max(CashClose.close_date)).where(CashClose.branch_id == actor.branch.id, CashClose.account == kind))
-        item(f"cash_{kind}", f"The {kind} account was counted and signed on the last day", (not active) or bool(signed and signed >= end),
-             f"Last signed count: {signed:%d %b %Y}." if signed and signed < end and active else "" if not active or (signed and signed >= end) else "Never counted.", link="/cash-close")
+        # Only activity in the month requires a count (a quiet account with a balance does not).
+        active = any(moved.get(code, (Decimal(0), Decimal(0))))
+        signed = db.scalar(select(CashClose.close_date).where(
+            CashClose.branch_id == actor.branch.id, CashClose.account == kind, CashClose.close_date == end))
+        item(f"cash_{kind}", f"The {kind} account was counted and signed on the last day", (not active) or bool(signed),
+             "" if not active or signed else "Count and sign on the last day of the month.", link="/cash-close")
 
     payroll = db.scalar(select(PayrollRun).where(PayrollRun.branch_id == actor.branch.id, PayrollRun.month == month, PayrollRun.status != "void"))
     item("payroll_draft", "Payroll for the month is not left as a draft", not (payroll and payroll.status == "draft"), "Approve or throw away the draft." if payroll and payroll.status == "draft" else "", link="/payroll")
@@ -106,6 +108,18 @@ def checklist(db: Session, actor: Actor, month: str) -> dict:
     drafts = db.scalar(select(func.count()).select_from(Invoice).where(Invoice.branch_id == actor.branch.id, Invoice.status == "draft",
                                                                          Invoice.created_at < datetime.combine(end, datetime.max.time()).astimezone()))
     item("drafts", "No draft invoices left over", drafts == 0, f"{drafts} draft invoice{'s' if drafts != 1 else ''}." if drafts else "", blocking=False, link="/invoices?status=draft")
+
+    # Parts issued with no issued invoice pull cost into the month without matching revenue (warning only).
+    from app.models import RepairOrder, RepairOrderLine
+    open_parts = db.execute(
+        select(func.count(func.distinct(RepairOrder.id)))
+        .select_from(RepairOrderLine).join(RepairOrder, RepairOrder.id == RepairOrderLine.repair_order_id)
+        .outerjoin(Invoice, (Invoice.visit_id == RepairOrder.visit_id) & (Invoice.status == "issued"))
+        .where(RepairOrder.branch_id == actor.branch.id, RepairOrderLine.kind == "part", RepairOrderLine.issued_qty > 0,
+               Invoice.id.is_(None))).scalar() or 0
+    item("uninvoiced_parts", "Parts issued have an invoice (or the job is still open on purpose)", open_parts == 0,
+         f"{open_parts} repair order{'s' if open_parts != 1 else ''} have parts out with no issued invoice." if open_parts else "",
+         blocking=False, link="/repair-orders")
 
     blockers = [i for i in items if i["blocking"] and not i["ok"]]
     return {"period": month, "label": label(month), "items": items, "can_close": not blockers, "blockers": len(blockers),
@@ -203,11 +217,22 @@ def pack(period: str, actor: Actor = Depends(can_see), db: Session = Depends(get
               for c in db.scalars(select(CashClose).where(CashClose.branch_id == branch.id, CashClose.close_date >= start, CashClose.close_date <= end).order_by(CashClose.close_date))]
     runs = [run_out(db, r) for r in db.scalars(select(PayrollRun).where(PayrollRun.branch_id == branch.id, PayrollRun.status != "void",
                                                                     PayrollRun.month >= start.strftime("%Y-%m"), PayrollRun.month <= end.strftime("%Y-%m")))]
+    as_of = min(end, local_today())
     months = [{"month": m, **{k: v for k, v in reports.pnl(db, branch, *attendance.month_range(m)).items() if k in ("revenue", "net_profit", "total_expenses")}}
               for m in months_between(start, end)] if kind == "year" else []
+    # Equity snapshot for the pack: capital and drawings from the journal; retained earnings =
+    # cumulative net profit through as_of (no year-end closing entry is posted, so P&L stays readable).
+    eq = journal.balances(db, branch, as_of=as_of)
+    capital = eq.get("3000", (Decimal(0), Decimal(0)))[1] - eq.get("3000", (Decimal(0), Decimal(0)))[0]
+    drawings = eq.get("3100", (Decimal(0), Decimal(0)))[0] - eq.get("3100", (Decimal(0), Decimal(0)))[1]
+    first = db.scalar(select(func.min(JournalEntry.entry_date)).where(JournalEntry.branch_id == branch.id)) or as_of
+    retained = reports.pnl(db, branch, first, as_of)["net_profit"]
     return {"period": period, "label": label(period), "kind": kind, "status": status_out(db, actor, kind, period),
             "pnl": reports.pnl(db, branch, start, end), "cashflow": reports.cashflow(db, branch, start, end), "months": months,
-            "receivables": reports.receivables(db, branch, min(end, local_today())), "payables": reports.payables(db, branch, min(end, local_today())),
-            "stock": {"total": reports.stock_value(db, branch)["total"]}, "cash_closes": closes, "entries": entries,
+            "receivables": reports.receivables(db, branch, as_of), "payables": reports.payables(db, branch, as_of),
+            "stock": {"total": reports.stock_value(db, branch, as_of=as_of)["total"], "as_of": as_of},
+            "equity": {"owner_capital": capital, "owner_drawings": drawings, "retained_earnings": retained,
+                       "net_equity": capital - drawings + retained},
+            "cash_closes": closes, "entries": entries,
             "payroll": [{"month": r["month"], "status": r["status"], "gross": r["totals"]["gross"], "net": r["totals"]["net"]} for r in runs],
-            "journal_balance": journal.balances(db, branch, as_of=end)}
+            "journal_balance": journal.balances(db, branch, as_of=as_of)}

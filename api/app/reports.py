@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 
 from app import journal
 from app.models import (
-    Branch, Car, CreditNote, Customer, Invoice, InvoiceLine, Item, LabourCode, MoneyEntry, Quotation, RepairOrder, RepairOrderActivity,
-    RepairOrderLine, StockMovement, User, Vendor, VendorBill, VendorPayment, Visit,
+    Branch, Car, CreditNote, Customer, GoodsReceipt, Invoice, InvoiceLine, Item, LabourCode, MoneyEntry, Payment, Quotation,
+    RepairOrder, RepairOrderActivity, RepairOrderLine, StockMovement, User, Vendor, VendorBill, VendorPayment, Visit,
 )
 from app.pricing import money, totals
 from app.config import local_today
@@ -24,6 +24,26 @@ BUCKETS = ("0-30", "31-60", "61-90", "90+")
 
 def bucket(days: int) -> str:
     return BUCKETS[0] if days <= 30 else BUCKETS[1] if days <= 60 else BUCKETS[2] if days <= 90 else BUCKETS[3]
+
+
+def _on_or_before(when: datetime | date, as_of: date) -> bool:
+    d = when.date() if isinstance(when, datetime) else when
+    return d <= as_of
+
+
+def invoice_balance_as_of(db: Session, inv: Invoice, as_of: date) -> Decimal | None:
+    """Outstanding on an issued invoice at as_of. None if the invoice did not exist yet."""
+    if inv.status != "issued" or not inv.issued_at or not _on_or_before(inv.issued_at, as_of):
+        return None
+    t = totals(inv)["total"]
+    credited = sum((totals(cn)["total"] for cn in db.scalars(select(CreditNote).where(CreditNote.invoice_id == inv.id))
+                    if _on_or_before(cn.created_at, as_of)), Z)
+    paid = sum((p.amount for p in db.scalars(select(Payment).where(Payment.invoice_id == inv.id, Payment.status == "posted"))
+                if _on_or_before(p.received_at, as_of)), Z)
+    refunded = db.scalar(select(func.coalesce(func.sum(MoneyEntry.amount), 0)).where(
+        MoneyEntry.invoice_id == inv.id, MoneyEntry.kind == "refund", MoneyEntry.status == "posted",
+        MoneyEntry.occurred_on <= as_of))
+    return t - credited - (paid - refunded)
 
 
 def pnl(db: Session, branch: Branch, start: date, end: date) -> dict:
@@ -60,46 +80,67 @@ def cashflow(db: Session, branch: Branch, start: date, end: date) -> dict:
 
 
 def receivables(db: Session, branch: Branch, as_of: date | None = None) -> dict:
-    """Every issued invoice that is not settled, aged from the day it was issued. A negative balance is money owed back."""
-    from app.routers.billing import balance_of
-    today = as_of or local_today()
+    """Every issued invoice that is not settled as of the date, aged from issue. A negative balance is money owed back."""
+    day = as_of or local_today()
     rows, by_bucket = [], defaultdict(lambda: Z)
     names = {c.id: c.name for c in db.scalars(select(Customer).where(Customer.id.in_(select(Invoice.customer_id).where(Invoice.branch_id == branch.id))))}
     for inv in db.scalars(select(Invoice).where(Invoice.branch_id == branch.id, Invoice.status == "issued").order_by(Invoice.issued_at)):
-        bal = balance_of(db, inv)["balance"]
-        if bal == 0:
+        bal = invoice_balance_as_of(db, inv, day)
+        if bal is None or bal == 0:
             continue
-        days = (today - inv.issued_at.date()).days
+        days = (day - inv.issued_at.date()).days
         rows.append({"id": inv.id, "number": inv.number, "kind": inv.kind, "customer": names.get(inv.customer_id, inv.walk_in_name or "Walk-in customer"),
                      "issued_on": inv.issued_at.date(), "days": days, "bucket": bucket(days) if bal > 0 else "credit", "balance": bal})
         by_bucket[bucket(days) if bal > 0 else "credit"] += bal
-    return {"as_of": today, "rows": rows, "by_bucket": dict(by_bucket), "total": sum((r["balance"] for r in rows), Z)}
+    return {"as_of": day, "rows": rows, "by_bucket": dict(by_bucket), "total": sum((r["balance"] for r in rows), Z)}
 
 
 def payables(db: Session, branch: Branch, as_of: date | None = None) -> dict:
-    from app.routers.purchasing import bill_totals
-    today = as_of or local_today()
+    """Posted vendor bills still owing as of the date, plus goods received that are not yet billed (account 2100)."""
+    day = as_of or local_today()
     rows, by_bucket = [], defaultdict(lambda: Z)
     names = {v.id: v.name for v in db.scalars(select(Vendor).where(Vendor.branch_id == branch.id))}
-    for b in db.scalars(select(VendorBill).where(VendorBill.branch_id == branch.id, VendorBill.status == "posted").order_by(VendorBill.due_on)):
-        bal = bill_totals(db, b)["balance"]
+    billed_grn = {b.goods_receipt_id for b in db.scalars(
+        select(VendorBill).where(VendorBill.branch_id == branch.id, VendorBill.status == "posted", VendorBill.bill_date <= day))}
+    for b in db.scalars(select(VendorBill).where(VendorBill.branch_id == branch.id, VendorBill.status == "posted",
+                                                 VendorBill.bill_date <= day).order_by(VendorBill.due_on)):
+        paid = sum((p.amount for p in db.scalars(select(VendorPayment).where(VendorPayment.bill_id == b.id, VendorPayment.status == "posted"))
+                    if _on_or_before(p.paid_at, day)), Z)
+        bal = b.goods_value + b.adjustment - paid
         if bal <= 0:
             continue
-        overdue = max((today - b.due_on).days, 0)
+        overdue = max((day - b.due_on).days, 0)
         label = "not yet due" if overdue == 0 else bucket(overdue)
-        rows.append({"id": b.id, "number": b.number, "vendor": names[b.vendor_id], "due_on": b.due_on, "days_overdue": overdue, "bucket": label, "balance": bal})
+        rows.append({"id": b.id, "number": b.number, "kind": "bill", "vendor": names[b.vendor_id], "due_on": b.due_on,
+                     "days_overdue": overdue, "bucket": label, "balance": bal})
         by_bucket[label] += bal
-    return {"as_of": today, "rows": rows, "by_bucket": dict(by_bucket), "total": sum((r["balance"] for r in rows), Z)}
+    for g in db.scalars(select(GoodsReceipt).where(GoodsReceipt.branch_id == branch.id, GoodsReceipt.received_on <= day)
+                        .order_by(GoodsReceipt.received_on)):
+        if g.id in billed_grn:
+            continue
+        value = sum((money(l.qty * l.unit_cost) for l in g.lines), Z)
+        if value <= 0:
+            continue
+        rows.append({"id": g.id, "number": g.number, "kind": "grn", "vendor": names.get(g.vendor_id, ""),
+                     "purchase_order_id": g.purchase_order_id, "due_on": g.received_on,
+                     "days_overdue": 0, "bucket": "not billed", "balance": value})
+        by_bucket["not billed"] += value
+    return {"as_of": day, "rows": rows, "by_bucket": dict(by_bucket), "total": sum((r["balance"] for r in rows), Z)}
 
 
-def stock_value(db: Session, branch: Branch) -> dict:
-    """Quantity and value per item: the sum of its movements at the cost each moved at, so it equals the Inventory account."""
-    rows = db.execute(select(Item.id, Item.number, Item.name, Item.unit, Item.reorder_level, func.sum(StockMovement.qty), func.sum(StockMovement.qty * StockMovement.unit_cost))
-                      .join(StockMovement, StockMovement.item_id == Item.id).where(Item.branch_id == branch.id)
-                      .group_by(Item.id, Item.number, Item.name, Item.unit, Item.reorder_level).order_by(Item.name)).all()
+def stock_value(db: Session, branch: Branch, as_of: date | None = None) -> dict:
+    """Quantity and value per item from movements (optionally only those on or before as_of), matching the Inventory account."""
+    stmt = (select(Item.id, Item.number, Item.name, Item.unit, Item.reorder_level, func.sum(StockMovement.qty),
+                   func.sum(StockMovement.qty * StockMovement.unit_cost))
+            .join(StockMovement, StockMovement.item_id == Item.id).where(Item.branch_id == branch.id)
+            .group_by(Item.id, Item.number, Item.name, Item.unit, Item.reorder_level).order_by(Item.name))
+    if as_of is not None:
+        stmt = stmt.where(StockMovement.created_at < datetime.combine(as_of + timedelta(days=1), datetime.min.time()).astimezone())
+    rows = db.execute(stmt).all()
     items = [{"id": i, "number": n, "name": nm, "unit": u, "on_hand": q, "value": money(v), "avg_cost": money(v / q) if q else Z, "low": rl > 0 and q <= rl}
              for i, n, nm, u, rl, q, v in rows if q or v]
-    return {"items": items, "total": sum((i["value"] for i in items), Z), "low_stock": sum(1 for i in items if i["low"])}
+    return {"as_of": as_of or local_today(), "items": items, "total": sum((i["value"] for i in items), Z),
+            "low_stock": sum(1 for i in items if i["low"])}
 
 
 def discounts_and_voids(db: Session, branch: Branch, start: date, end: date) -> dict:

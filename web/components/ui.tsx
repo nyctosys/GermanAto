@@ -43,7 +43,9 @@ export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSe
   return <select className={`${field} pr-8 ${className}`} {...props} />;
 }
 
-/** A labelled control. `error` (from parseForm / liveForm) replaces the hint and outlines the control in red. */
+/** A labelled control. `error` (from parseForm / liveForm) replaces the hint and outlines the control in red.
+ *  Uses a group, not a <label>: wrapping buttons/checkboxes in a label makes the browser treat the first
+ *  button as the labelled control, so a click near Fits chips removed a car without pressing ×. */
 export function Field({ label, hint, error, required, children }: { label: string; hint?: string; error?: string; required?: boolean; children: ReactNode }) {
   // A star only where the control is really required (or the form says so with `required`).
   const childRequired = Children.toArray(children).some((c) => isValidElement(c) && !!(c.props as { required?: boolean }).required);
@@ -52,12 +54,12 @@ export function Field({ label, hint, error, required, children }: { label: strin
     return cloneElement(child as ReactElement<{ "aria-invalid"?: boolean }>, { "aria-invalid": !!error || undefined });
   });
   return (
-    <label className={`flex min-w-0 flex-col gap-1.5 ${error ? "[&_:is(input,select,textarea)]:border-error" : ""}`}>
+    <div role="group" className={`flex min-w-0 flex-col gap-1.5 ${error ? "[&_:is(input,select,textarea)]:border-error" : ""}`}>
       <span className="text-[0.9375rem] font-medium text-ink-2">{label}{(required ?? childRequired) && <span className="req ml-0.5 text-error" aria-hidden="true">*</span>}</span>
       {marked}
       {error ? <span role="alert" className="text-sm text-error">{error === "Required" ? `Please fill in: ${label.replace(/\s*\(.*\)\s*$/, "").replace(/\b(?![A-Z]{2,}\b)\w+/g, (w) => w.toLowerCase())}` : error}</span>
         : hint && <span className="text-sm text-muted">{hint}</span>}
-    </label>
+    </div>
   );
 }
 

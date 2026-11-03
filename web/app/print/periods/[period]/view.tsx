@@ -51,9 +51,14 @@ function Pack() {
       </Section>
 
       <Section title="3. Owed to us and by us">
-        <Grid head={["Customers owe us", "Amount"]} right={[1]} rows={[...Object.entries(p.receivables.by_bucket).map(([k, v]) => [`${k} days`, money(v as string)]), [<b key="t">Total</b>, <b key="v">{money(p.receivables.total)}</b>]]} />
+        <p className="text-muted">As of {day(p.receivables.as_of)} (later payments do not change these figures).</p>
+        <Grid head={["Customers owe us", "Amount"]} right={[1]} rows={[...Object.entries(p.receivables.by_bucket).map(([k, v]) => [k === "credit" ? "Owed back" : `${k} days`, money(v as string)]), [<b key="t">Total</b>, <b key="v">{money(p.receivables.total)}</b>]]} />
         <Grid head={["We owe vendors", "Amount"]} right={[1]} rows={[...Object.entries(p.payables.by_bucket).map(([k, v]) => [k, money(v as string)]), [<b key="t">Total</b>, <b key="v">{money(p.payables.total)}</b>]]} />
         <p>Stock at cost: <b>{money(p.stock.total)}</b></p>
+        {p.equity && <Grid head={["Equity", "Amount"]} right={[1]} rows={[
+          ["Owner capital", money(p.equity.owner_capital)], ["Owner drawings", `-${money(p.equity.owner_drawings)}`],
+          ["Retained earnings (cumulative net profit)", money(p.equity.retained_earnings)],
+          [<b key="e">Net equity</b>, <b key="ev">{money(p.equity.net_equity)}</b>]]} />}
       </Section>
 
       <Section title="4. Every payment, with its proof">
