@@ -7,7 +7,7 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { type CreditNote, type Invoice, PayBadge, previewTotals } from "@/components/billing";
 import { lineCode, linkButton } from "@/components/estimates";
 import { NextStep } from "@/components/next-step";
-import { type PaymentBody, PaymentForm, PaymentList, RefundForm } from "@/components/payments";
+import { type Payment, type PaymentBody, PaymentForm, PaymentList, RefundForm } from "@/components/payments";
 import { RequirePermission } from "@/components/shell";
 import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
@@ -15,6 +15,12 @@ import { api, useApi } from "@/lib/api";
 import { money, phone, qty, when } from "@/lib/format";
 import { linePrice } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
+
+/** How much of a held advance still applies, how much is left to pay, and any excess. */
+function advanceSplit(total: number, held: number) {
+  const applied = Math.min(Math.max(held, 0), Math.max(total, 0));
+  return { applied, balanceDue: Math.max(0, total - held), excess: Math.max(0, held - total) };
+}
 
 export default function InvoicePage() {
   return (
@@ -45,9 +51,12 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
   const [voiding, setVoiding] = useState(false);
   const [returning, setReturning] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  const [refundingExcess, setRefundingExcess] = useState(false);
   const [live, setLive] = useState<LiveTotals | null>(null);
   const draft = inv.status === "draft";
   const counter = inv.kind === "counter_sale";
+  const previewTotal = live?.total ?? Number(inv.totals.total);
+  const { balanceDue, excess } = advanceSplit(previewTotal, Number(inv.totals.advance_held));
 
   async function call(path: string, json?: object, method = "POST") {
     setBusy(true);
@@ -83,8 +92,12 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
         </div>
       </div>
 
-      {!paying && !returning && !refunding && !voiding && (inv.status === "draft"
-        ? <NextStep who={counter ? "Cashier" : "Cashier or manager"} target={counter ? undefined : "act-issue"} open={false} label={counter ? undefined : "Review and issue"}>{counter ? "Finish the sale, then take the payment." : "Check the prices, then press Issue the invoice. After that the prices are locked."}</NextStep>
+      {!paying && !returning && !refunding && !refundingExcess && !voiding && (inv.status === "draft"
+        ? (excess > 0
+          ? <NextStep who="Administrator" target="act-excess" open={false} label={can("advance-refund") ? "Refund the excess" : undefined} onClick={can("advance-refund") ? () => setRefundingExcess(true) : undefined}>
+              The advances ({money(inv.totals.advance_held)}) are more than this invoice ({money(previewTotal)}). Refund the excess ({money(excess)}) before issuing.
+            </NextStep>
+          : <NextStep who={counter ? "Cashier" : "Cashier or manager"} target={counter ? undefined : "act-issue"} open={false} label={counter ? undefined : "Review and issue"}>{counter ? "Finish the sale, then take the payment." : "Check the prices, then press Issue the invoice. After that the prices are locked."}</NextStep>)
         : inv.status === "issued" && inv.pay_status !== "paid"
           ? <NextStep who="Cashier" label={can("payments-in") ? "Take a payment" : undefined} onClick={() => setPaying(true)}>The invoice is issued. Take the customer&apos;s payment ({money(inv.totals.balance)} still to pay).</NextStep>
           : inv.status === "issued" && inv.kind === "inspection"
@@ -132,25 +145,43 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
                           }
                         }} />
           )}
+          {refundingExcess && (
+            <ExcessAdvanceRefund excess={excess} advances={inv.held_advances ?? []} busy={busy}
+                                 onCancel={() => setRefundingExcess(false)}
+                                 onDone={() => { setRefundingExcess(false); reload(); }}
+                                 onBusy={setBusy} onError={setError} />
+          )}
           {voiding && <VoidForm busy={busy} onCancel={() => setVoiding(false)} onSubmit={async (reason) => { if (await call("/void", { reason })) router.push("/invoices"); }} />}
           <Notice>{error}</Notice>
-          {!paying && !voiding && !returning && !refunding && (
+          {!paying && !voiding && !returning && !refunding && !refundingExcess && (
             <div className="flex flex-wrap gap-2">
               {inv.status === "issued" && can("credit-notes") && <Button variant="secondary" onClick={() => setReturning(true)}>Correct this invoice</Button>}
               {Number(inv.totals.refundable) > 0 && can("credit-notes") && <Button onClick={() => setRefunding(true)}>Give money back</Button>}
               {inv.status === "issued" && Number(inv.totals.balance) > 0 && can("payments-in") && <Button onClick={() => setPaying(true)}>Take a payment</Button>}
               {draft && !counter && can("invoice-issue") && (
-                <Button id="act-issue" disabled={busy} onClick={() => call("/issue", { version: inv.version })}>Issue the invoice</Button>
+                <Button id="act-issue" disabled={busy || excess > 0} onClick={() => call("/issue", { version: inv.version })}>Issue the invoice</Button>
               )}
               {draft && !counter && inv.kind === "workshop" && <Button variant="secondary" disabled={busy} onClick={() => call("/refresh")}>Refresh from the repair order</Button>}
               {draft && <Button variant="danger" onClick={() => setVoiding(true)}>Void this draft</Button>}
             </div>
           )}
-          {draft && !counter && <p className="text-sm text-muted">Issuing locks the prices and applies the advances held on this visit. After that, corrections need a credit note.</p>}
+          {draft && !counter && excess > 0 && (
+            <p className="text-sm text-muted">Issue is blocked until the excess advance ({money(excess)}) is given back. Use the Total card or Refund the excess above.</p>
+          )}
+          {draft && !counter && excess <= 0 && (
+            <p className="text-sm text-muted">
+              Issuing locks the prices and applies the advances held on this visit
+              {Number(inv.totals.advance_held) > 0 ? ` (${money(advanceSplit(previewTotal, Number(inv.totals.advance_held)).applied)} of ${money(inv.totals.advance_held)}; balance due ${money(balanceDue)})` : ""}.
+              After that, corrections need a credit note.
+            </p>
+          )}
         </div>
 
         <div className="space-y-4">
-          <Totals inv={inv} live={draft && !counter ? live : null} />
+          <Totals inv={inv} live={draft && !counter ? live : null}
+                  canRefundExcess={can("advance-refund")}
+                  refundingExcess={refundingExcess}
+                  onRefundExcess={() => setRefundingExcess(true)} />
           {inv.payments.length > 0 && <PaymentList title="Payments" payments={inv.payments} />}
           {inv.credit_notes.length > 0 && <CreditNotes notes={inv.credit_notes} />}
           {inv.visit ? <VehiclePanel carId={inv.visit.car_id} ownerId={inv.visit.customer_id} buyerId={inv.visit.buyer_id} />
@@ -223,6 +254,28 @@ function WorkshopDraft({ inv, busy, call, onLive }:
         </ul>
         <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Lines come from the repair order: labour marked done and parts as issued. Prices start at the quotation&apos;s.</p>
       </Card>
+      {(inv.unused_lines?.length ?? 0) > 0 && (
+        <Card title="Not used on this invoice" flush>
+          <ul>
+            {inv.unused_lines!.map((l, i) => (
+              <li key={`${l.description}-${i}`} className="flex flex-wrap items-start justify-between gap-3 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5">
+                <div className="min-w-0">
+                  <p className="font-medium">{l.description}</p>
+                  <p className="flex flex-wrap gap-3 text-sm text-muted">
+                    <span>{l.kind === "labour" ? "Labour" : "Part"}</span>
+                    <span className="num">Qty {qty(l.qty)}</span>
+                    <Badge tone="neutral">{l.why}</Badge>
+                  </p>
+                </div>
+                <span className="num text-sm text-muted">{money(Number(l.qty) * Number(l.unit_price))}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">
+            These stay off the bill. To change what was used, go back to the repair order (return unused parts or mark lines) and press Refresh from the repair order.
+          </p>
+        </Card>
+      )}
       <Card title="Terms">
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Discount (Rs)"><Input type="number" inputMode="decimal" min="0" step="any" value={discount} onChange={(e) => { setDiscount(e.target.value); setDirty(true); }} /></Field>
@@ -248,30 +301,107 @@ function WorkshopDraft({ inv, busy, call, onLive }:
   );
 }
 
-function Totals({ inv, live }: { inv: Invoice; live?: LiveTotals | null }) {
+function Totals({ inv, live, canRefundExcess, refundingExcess, onRefundExcess }: {
+  inv: Invoice; live?: LiveTotals | null; canRefundExcess?: boolean; refundingExcess?: boolean; onRefundExcess?: () => void;
+}) {
   const t = live
-    ? { labour: live.labour, parts: live.parts, discount: live.discount, tax: live.tax, total: live.total,
+    ? { labour: live.labour, parts: live.parts, subtotal: live.subtotal, discount: live.discount, tax: live.tax, total: live.total,
         advance_held: Number(inv.totals.advance_held), credited: Number(inv.totals.credited), paid: Number(inv.totals.paid), balance: Number(inv.totals.balance) }
-    : { labour: Number(inv.totals.labour), parts: Number(inv.totals.parts), discount: Number(inv.totals.discount),
-        tax: Number(inv.totals.tax), total: Number(inv.totals.total), advance_held: Number(inv.totals.advance_held),
-        credited: Number(inv.totals.credited), paid: Number(inv.totals.paid), balance: Number(inv.totals.balance) };
+    : { labour: Number(inv.totals.labour), parts: Number(inv.totals.parts), subtotal: Number(inv.totals.subtotal),
+        discount: Number(inv.totals.discount), tax: Number(inv.totals.tax), total: Number(inv.totals.total),
+        advance_held: Number(inv.totals.advance_held), credited: Number(inv.totals.credited), paid: Number(inv.totals.paid),
+        balance: Number(inv.totals.balance) };
   const includeTax = live?.includeTax ?? inv.include_tax;
+  const { applied, balanceDue, excess } = advanceSplit(t.total, t.advance_held);
   const row = (label: ReactNode, v: number, strong = false) => (
     <div className={`flex justify-between gap-4 py-1.5 ${strong ? "font-medium" : ""}`}><dt>{label}</dt><dd className="num">{money(v)}</dd></div>
   );
+  const rule = <div className="my-1 border-t border-rule" aria-hidden />;
+  const draftAdvances = inv.status === "draft" && t.advance_held > 0;
   return (
-    <Card title="Total">
-      <dl>
+    <Card title="Total" actions={includeTax ? <Badge tone="neutral">Tax ON</Badge> : undefined}>
+      <dl id="act-excess">
         {t.labour > 0 && row("Labour", t.labour)}
         {row("Parts", t.parts)}
         {t.discount > 0 && row("Discount", -t.discount)}
-        {includeTax && row(`Sales tax ${Number(inv.tax_rate)}%`, t.tax)}
-        <div className="mt-1 border-t border-rule pt-1">{row("Total", t.total, true)}</div>
-        {inv.status === "draft" && t.advance_held > 0 && row("Advance to apply", -t.advance_held)}
+        {includeTax ? (
+          <>
+            {rule}
+            {row("Subtotal", t.subtotal)}
+            {row(`Sales tax (${Number(inv.tax_rate)}%)`, t.tax)}
+            {rule}
+            {row("Total", t.total, true)}
+            {draftAdvances && row("Advance applied", -applied)}
+            {draftAdvances && rule}
+            {draftAdvances && row("Balance due", balanceDue, true)}
+            {draftAdvances && excess > 0 && row("Excess advance", excess)}
+          </>
+        ) : (
+          <>
+            {rule}
+            {row("Total", t.total, true)}
+            {draftAdvances && (
+              <>
+                {row("Advance applied", -applied)}
+                {rule}
+                {row("Balance due", balanceDue, true)}
+                {excess > 0 && row("Excess advance", excess)}
+              </>
+            )}
+          </>
+        )}
         {inv.status === "issued" && t.credited > 0 && row("Credited (returns)", -t.credited)}
-        {inv.status === "issued" && <>{row("Paid so far", t.paid)}{t.balance < 0 ? row("Owed back to the customer", -t.balance, true) : row("Balance", t.balance, true)}</>}
+        {inv.status === "issued" && <>{row("Paid so far", t.paid)}{rule}{t.balance < 0 ? row("Owed back to the customer", -t.balance, true) : row("Balance due", t.balance, true)}</>}
       </dl>
+      {inv.status === "draft" && excess > 0 && !refundingExcess && (
+        <div className="mt-4 space-y-3 border-t border-rule pt-4">
+          <p className="text-sm font-medium text-ink-2">Excess advance action</p>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-control px-1 py-2 hover:bg-paper-2">
+            <input type="radio" name="excess-advance" className="size-5 accent-accent" checked readOnly />
+            <span>Refund to customer</span>
+          </label>
+          {canRefundExcess
+            ? <Button type="button" variant="secondary" onClick={onRefundExcess}>Confirm</Button>
+            : <p className="text-sm text-muted">An administrator with advance-refund permission must give the excess back before this invoice can be issued.</p>}
+        </div>
+      )}
     </Card>
+  );
+}
+
+/** Give back the excess held advance so the invoice can be issued. */
+function ExcessAdvanceRefund({ excess, advances, busy, onCancel, onDone, onBusy, onError }:
+  { excess: number; advances: Payment[]; busy: boolean; onCancel: () => void; onDone: () => void;
+    onBusy: (b: boolean) => void; onError: (m: string | null) => void }) {
+  const pick = [...advances].sort((a, b) => Number(b.held ?? b.amount) - Number(a.held ?? a.amount))
+    .find((p) => Number(p.held ?? p.amount) > 0);
+  const maxOnPick = pick ? Number(pick.held ?? pick.amount) : 0;
+  const amount = Math.min(excess, maxOnPick);
+  if (!pick || amount <= 0) {
+    return (
+      <Card title="Refund excess advance">
+        <p className="text-sm text-muted">No held advance is left to refund. Reload the page.</p>
+        <Button type="button" variant="secondary" className="mt-3" onClick={onCancel}>Close</Button>
+      </Card>
+    );
+  }
+  return (
+    <RefundForm title="Refund excess advance" needsReason
+                hint={`Refund ${money(amount)} of advance ${pick.number} so the held money matches this invoice.${amount < excess ? ` ${money(excess - amount)} will still be excess — confirm again after this.` : ""}`}
+                amount={String(amount)} fixedAmount busy={busy} onCancel={onCancel}
+                onSubmit={async (b) => {
+                  onBusy(true);
+                  onError(null);
+                  try {
+                    await api(`/api/advances/${pick.id}/refund`, { method: "POST", json: b });
+                    onDone();
+                  } catch (err) {
+                    onError((err as Error).message);
+                    throw err;
+                  } finally {
+                    onBusy(false);
+                  }
+                }} />
   );
 }
 

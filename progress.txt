@@ -128,3 +128,25 @@
 - Shared `Proof` body accepts `proof_ids` (up to 10); `proof_id` alone still works and becomes the first. Row CHECK still uses the primary `proof_id`; `_attach` links every file. Responses add `proof_urls` beside `proof_url`.
 - UI: `ProofInput` no longer keeps only the last file; `ProofLinks` shows every attached file. Callers: payments, money book, quotation approval, repair-order extra work, missing-evidence attach, payroll pay.
 - Helpers: `attach_proofs` / `proof_payload` in `routers/estimates.py`.
+
+## Job card: add missing part from picker (4 Nov 2026)
+- CatalogPicker empty state offers Add to inventory (inventory permission); modal uses ItemForm with presetName from the search text; on save the new part is picked onto the card. Cancelled demo visit VIS-4131-000001 (DB101) from the workshop list.
+
+## Advance amount first digit eaten (5 Nov 2026)
+- useLiveErrors woke on input capture before the controlled amount onChange, so the first digit validated against empty and the error UI ate the keystroke. Input/change wake is now queueMicrotask-deferred; Field errors use aria-live=polite instead of role=alert so live messages do not steal focus.
+
+## Advance amount first digit (retry, 5 Nov 2026)
+- Removed useLiveErrors wake on input/change (blur/submit/API only); once active, re-render revalidates. Payment amount uses text+inputMode decimal instead of type=number so the controlled empty value cannot drop the first keystroke.
+
+## Advance amount first digit (uncontrolled, 5 Nov 2026)
+- Still lost the first digit with blur wake + controlled amount. useLiveErrors now wakes only on submit/API (no blur). Amount on PaymentForm/RowFields and money-book entry is uncontrolled (`defaultValue` + onChange); refunds with a fixed amount stay read-only.
+
+## Finding → add extra part/labour (5 Nov 2026)
+- Repair order Activity → Finding shows the same Extra work picker (In repair / Testing): customer asks for something more, add it there; finding text prefills the reason. Received stage shows a short hint to move to In repair first.
+
+## Extra work: no agreement proof (5 Nov 2026)
+- Extra lines no longer need customer-agreement method/proof; "Why is it needed?" is optional. After Add to the repair order the picker offers another item. Migration 0034 drops `ro_line_extra_approved`.
+
+## Invoice totals + unused lines (5 Nov 2026)
+- Draft workshop invoice Total: labour/parts → Total → Advance applied → Balance due; Excess advance + Refund to customer when held > total. Unused RO lines listed. API adds `unused_lines` and `held_advances`.
+- With tax on: Tax ON badge; Labour/Parts → Subtotal → Sales tax (rate%) → Total → Advance applied → Balance due.

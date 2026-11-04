@@ -8,8 +8,55 @@ from sqlalchemy.orm import Session
 
 from app.models import Car, Item, LabourCode, PickListEntry
 
+# Common make + model names for Fits. Search narrows as you type ("bm" → BMW M5, BMW 3 Series, …).
+# The team can still add more; registered cars (year make model) are merged in on seed too.
+FITMENT_CARS = [
+    # Honda
+    "Honda Civic", "Honda City", "Honda Accord", "Honda BR-V", "Honda HR-V", "Honda Vezel", "Honda Fit", "Honda Freed",
+    "Honda N-Wgn", "Honda Grace", "Honda Insight", "Honda CR-V", "Honda Odyssey", "Honda Jade",
+    # Toyota
+    "Toyota Corolla", "Toyota Yaris", "Toyota Camry", "Toyota Fortuner", "Toyota Hilux", "Toyota Revo", "Toyota Prado",
+    "Toyota Land Cruiser", "Toyota Aqua", "Toyota Prius", "Toyota Vitz", "Toyota Passo", "Toyota Rush", "Toyota Raize",
+    "Toyota Corolla Cross", "Toyota RAV4", "Toyota Crown", "Toyota Mark X", "Toyota Premio", "Toyota Allion",
+    "Toyota Hiace", "Toyota Coaster", "Toyota Surf", "Toyota Axio", "Toyota Fielder",
+    # Suzuki
+    "Suzuki Alto", "Suzuki Cultus", "Suzuki Swift", "Suzuki Wagon R", "Suzuki Bolan", "Suzuki Ravi", "Suzuki Mehran",
+    "Suzuki Jimny", "Suzuki Every", "Suzuki Vitara", "Suzuki Ciaz", "Suzuki Baleno", "Suzuki Spacia", "Suzuki Hustler",
+    "Suzuki Carry", "Suzuki APV", "Suzuki Ertiga", "Suzuki SX4",
+    # Daihatsu / Nissan / Mitsubishi
+    "Daihatsu Mira", "Daihatsu Cuore", "Daihatsu Move", "Daihatsu Hijet", "Daihatsu Tanto", "Daihatsu Cast",
+    "Nissan Dayz", "Nissan Note", "Nissan Sunny", "Nissan Patrol", "Nissan X-Trail", "Nissan Clipper", "Nissan Juke",
+    "Nissan Leaf", "Nissan Skyline", "Mitsubishi Pajero", "Mitsubishi Lancer", "Mitsubishi Mirage", "Mitsubishi Outlander",
+    "Mitsubishi Ek Wagon", "Mitsubishi Minicab",
+    # Korean / Chinese popular here
+    "Hyundai Tucson", "Hyundai Elantra", "Hyundai Sonata", "Hyundai Santa Fe", "Hyundai Staria", "Hyundai Ioniq",
+    "Hyundai Porter", "Kia Sportage", "Kia Picanto", "Kia Carnival", "Kia Sorento", "Kia Stonic", "Kia Grand Carnival",
+    "Changan Alsvin", "Changan Karvaan", "Changan Oshan X7", "Changan M9", "MG HS", "MG ZS", "MG 5", "MG 4",
+    "Haval Jolion", "Haval H6", "BYD Atto 3", "BYD Seal", "BYD Sealion", "Proton Saga", "Proton X70", "Proton X50",
+    "FAW V2", "DFSK Glory 580", "Isuzu D-Max",
+    # German / European (workshop focus)
+    "BMW 1 Series", "BMW 2 Series", "BMW 3 Series", "BMW 4 Series", "BMW 5 Series", "BMW 6 Series", "BMW 7 Series",
+    "BMW 8 Series", "BMW X1", "BMW X2", "BMW X3", "BMW X4", "BMW X5", "BMW X6", "BMW X7",
+    "BMW M2", "BMW M3", "BMW M4", "BMW M5", "BMW M8", "BMW iX", "BMW i4", "BMW i7", "BMW Z4",
+    "Mercedes-Benz A-Class", "Mercedes-Benz B-Class", "Mercedes-Benz C-Class", "Mercedes-Benz E-Class",
+    "Mercedes-Benz S-Class", "Mercedes-Benz CLA", "Mercedes-Benz CLS", "Mercedes-Benz GLA", "Mercedes-Benz GLB",
+    "Mercedes-Benz GLC", "Mercedes-Benz GLE", "Mercedes-Benz GLS", "Mercedes-Benz G-Class", "Mercedes-Benz V-Class",
+    "Audi A1", "Audi A3", "Audi A4", "Audi A5", "Audi A6", "Audi A7", "Audi A8", "Audi Q2", "Audi Q3", "Audi Q5",
+    "Audi Q7", "Audi Q8", "Audi TT", "Audi e-tron", "Audi RS5", "Audi RS6", "Audi RS7",
+    "Volkswagen Golf", "Volkswagen Passat", "Volkswagen Tiguan", "Volkswagen Polo", "Volkswagen Arteon",
+    "Porsche Cayenne", "Porsche Macan", "Porsche Panamera", "Porsche 911", "Porsche Taycan",
+    "Land Rover Range Rover", "Land Rover Discovery", "Land Rover Defender", "Land Rover Evoque", "Land Rover Velar",
+    "Jaguar XF", "Jaguar XE", "Jaguar F-Pace", "Volvo XC40", "Volvo XC60", "Volvo XC90", "Volvo S60", "Volvo S90",
+    "Peugeot 2008", "Peugeot 3008", "Peugeot 5008", "Renault Duster", "Renault Koleos",
+    # Other common
+    "Lexus RX", "Lexus LX", "Lexus ES", "Lexus NX", "Lexus GX", "Mazda CX-5", "Mazda 3", "Mazda 6", "Mazda CX-30",
+    "Subaru Forester", "Subaru XV", "Subaru Impreza", "Subaru Legacy", "Ford Ranger", "Ford Everest", "Ford Mustang",
+    "Jeep Wrangler", "Jeep Grand Cherokee", "Jeep Compass", "Chevrolet Captiva", "Tesla Model 3", "Tesla Model Y",
+    "Tesla Model S", "Tesla Model X", "MINI Cooper",
+]
+
 DEFAULTS: dict[str, list[str]] = {
-    "fitment": [],  # grows as the team adds cars a part fits ("Audi e-tron", "BMW 5 Series F10")
+    "fitment": FITMENT_CARS,
     "car_make": [
         "Toyota", "Honda", "Suzuki", "Nissan", "Mitsubishi", "Daihatsu", "Mazda", "Subaru", "Lexus", "Hyundai", "Kia", "Changan", "MG",
         "Proton", "Haval", "DFSK", "FAW", "Isuzu", "BMW", "Mercedes-Benz", "Audi", "Volkswagen", "Porsche", "Land Rover", "Jaguar",
@@ -53,6 +100,11 @@ def split_fits(value: str | None) -> list[str]:
     return [p.strip() for p in re.split(r"[;,]", value or "") if p.strip()]
 
 
+def car_fit_label(year: int | None, make: str, model: str) -> str:
+    """Same shape as the car title on screen: '2014 Honda Civic'."""
+    return " ".join(p for p in ([str(year)] if year else []) + [make or "", model or ""] if p).strip()
+
+
 def squash(name: str) -> str:
     """Spelling-blind form: "Liqui-Moly", "liqui moly" and "LiquiMoly" all become "liquimoly"."""
     return re.sub(r"[^a-z0-9]", "", name.lower())
@@ -72,6 +124,8 @@ def seed(db: Session, branch_id, kind: str) -> None:
     used = [v for v in db.scalars(select(col).distinct()) if v and v.strip()]
     if kind == "fitment":
         used = [p for v in used for p in split_fits(v)]
+        # Every car on file appears as a Fits choice (year make model), so stock pickers match the Cars list.
+        used += [car_fit_label(c.year, c.make, c.model) for c in db.scalars(select(Car))]
     for name in [*DEFAULTS[kind], *(tidy(v) for v in used)]:
         key = name.lower()
         if name and key not in known:

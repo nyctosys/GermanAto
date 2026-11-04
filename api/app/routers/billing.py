@@ -97,13 +97,20 @@ def invoice_out(db: Session, inv: Invoice) -> dict:
         ro_line = db.get(RepairOrderLine, l.repair_order_line_id) if l.repair_order_line_id and not l.in_quote else None
         out.update(description=l.description, unit_price=l.unit_price, amount=money(l.qty * l.unit_price), in_quote=l.in_quote,
                    repair_order_line_id=l.repair_order_line_id,
-                   approval=ro_line and {"method": ro_line.approval_method, "reason": ro_line.approval_reason,
-                                         **proof_payload(db, "ro_line_approval", ro_line.id, ro_line.approval_proof_id)})
+                   approval=(ro_line and ro_line.approval_method and {
+                       "method": ro_line.approval_method, "reason": ro_line.approval_reason,
+                       **proof_payload(db, "ro_line_approval", ro_line.id, ro_line.approval_proof_id)}))
     v = db.get(Visit, inv.visit_id) if inv.visit_id else None
     car = db.get(Car, inv.car_id) if inv.car_id else None
     customer = db.get(Customer, inv.customer_id) if inv.customer_id else None
     issuer = db.get(User, inv.issued_by) if inv.issued_by else None
-    held = sum((p.held for p in _held_advances(db, v.id)), Decimal(0)) if v and inv.status == "draft" else Decimal(0)
+    held_rows = _held_advances(db, v.id) if v and inv.status == "draft" else []
+    held = sum((p.held for p in held_rows), Decimal(0))
+    unused: list[dict] = []
+    if inv.status == "draft" and inv.repair_order_id:
+        ro = db.get(RepairOrder, inv.repair_order_id)
+        if ro:
+            unused = _unused_from_ro(ro)
     credit = v and v.credit_released_by and db.get(User, v.credit_released_by)
     return {
         "id": inv.id, "number": inv.number, "kind": inv.kind, "status": inv.status, "pay_status": pay_status(inv, b),
@@ -114,7 +121,8 @@ def invoice_out(db: Session, inv: Invoice) -> dict:
                         "buyer_id": v.buyer_id, "odometer_in": v.odometer_in},
         "customer": person(customer), "walk_in_name": inv.walk_in_name, "walk_in_phone": inv.walk_in_phone,
         "car": car and {"id": car.id, "plate": car.plate, "make": car.make, "model": car.model, "year": car.year, "vin": car.vin},
-        "lines": lines, "totals": {**b, "advance_held": held},
+        "lines": lines, "unused_lines": unused, "held_advances": [payment_out(db, p) for p in held_rows],
+        "totals": {**b, "advance_held": held},
         "payments": [payment_out(db, p) for p in _payments(db, inv)],
         "credit_notes": [credit_note_out(db, cn) for cn in _credit_notes(db, inv)],
         "credit_release": credit and {"by": credit.full_name, "reason": v.credit_reason},
@@ -134,6 +142,29 @@ def _lines_from_ro(ro: RepairOrder, prices: dict[uuid.UUID, Decimal] | None = No
         out.append(InvoiceLine(position=len(out), kind=l.kind, labour_code_id=l.labour_code_id, item_id=l.item_id,
                                repair_order_line_id=l.id, description=l.description, qty=qty, in_quote=l.in_quote,
                                unit_price=(prices or {}).get(l.id, l.unit_price)))
+    return out
+
+
+def _unused_from_ro(ro: RepairOrder) -> list[dict]:
+    """Lines (or leftover qty) that will not be billed: not done, not issued, or left unused."""
+    out = []
+    for l in ro.lines:
+        if l.kind == "labour":
+            if l.state == "done":
+                continue
+            why = "Not done" if l.state == "not_done" else "Still to do"
+            out.append({"description": l.description, "kind": l.kind, "qty": l.qty, "unit_price": l.unit_price, "why": why})
+            continue
+        left = l.qty - l.issued_qty
+        if left <= 0:
+            continue
+        if l.state == "not_done":
+            why = "Not done"
+        elif l.issued_qty == 0:
+            why = "Not issued"
+        else:
+            why = "Left unused"
+        out.append({"description": l.description, "kind": l.kind, "qty": left, "unit_price": l.unit_price, "why": why})
     return out
 
 

@@ -128,8 +128,8 @@ Purchasing deliberately splits the work: the person who orders and counts the go
 **One record per customer and per car, used everywhere.** Check-in, inspections, quotations, repair orders and invoices all read the same customer and car records, and the **Vehicle and people** panel on each of those pages has **Edit** buttons that change the central record. A correction made in one place shows everywhere.
 
 ### Customers
-- Name, type (individual or company), mobile (required), other phone, email, CNIC, address, notes, "Don't send WhatsApp messages".
-- Phones are stored as `+92…` whatever the format typed (`0300-1234567`, `92300…`). CNIC is stored as `35202-1234567-1`.
+- Name, type (individual or company), mobile (required), other phone, email, CNIC (optional, individuals) or NTN (optional, companies), address, notes, "Don't send WhatsApp messages".
+- Phones are stored as `+92…` whatever the format typed (`0300-1234567`, `92300…`). CNIC, when given, is stored as `35202-1234567-1`. Company NTN is stored as 7 digits (or `1234567-8` with the check digit).
 - **Duplicate phone:** saving a customer whose phone is already on file shows the existing record first. A second record is only made if you confirm it really is someone else (for example, family sharing a phone).
 - Inactive customers are hidden from searches but keep their history.
 - Numbers: `CUS-A1F3-000001`.
@@ -152,7 +152,7 @@ The car page lists, newest first: owners, visits, signed inspections, issued inv
 - **No price on the code.** The price is entered on each quotation (owner decision 6).
 
 ### Inventory
-- Each item has an internal number (`ITM-A1F3-000001`), name, brand, category, unit, fitment, shelf location, **sale price** (set by hand), reorder level and quantity, and any number of **barcodes and manufacturer part numbers**. A scanned code finds its item wherever there is a search box.
+- Each item has an internal number (`ITM-A1F3-000001`), name, brand, category, unit, fitment (the cars it fits: a seeded catalogue of common make + model names, plus every car on file as year + make + model; type to filter, e.g. `BM` for BMW), shelf location, **sale price** (set by hand), reorder level and quantity, and any number of **barcodes and manufacturer part numbers**. A scanned code finds its item wherever there is a search box.
 - **Stock is never typed in.** The quantity on hand is the sum of stock movements: opening stock, adjustments, goods received, parts issued and returned on repair orders, counter sales.
 - Stock can't go below zero. Two people taking the last unit at once can't both succeed.
 - Parts leave stock at **average cost**; the average is recalculated when stock comes in.
@@ -199,6 +199,7 @@ Three kinds: **Workshop** (at check-in or during diagnosis), **Delivery** (befor
 
 - The work to quote: **labour codes and stock items only**, never free text, so every job is priced and costed the same way.
 - Add lines by typing a name or code, or by **scanning a part's barcode**.
+- When the search finds nothing, **Add to inventory** (needs `inventory`) opens a modal with the item form; saving adds the new part to the job card (or quotation picker). Labour codes are still added under Labour codes.
 - Each part shows how many are in stock; a shortage is flagged in red. Shortages don't stop the quotation.
 - Each line has a quantity and an optional note.
 - **Make the quotation** saves the job card and creates the quotation from it.
@@ -279,12 +280,12 @@ Received → In repair → Testing → Ready → (Delivered at the gate pass)
 - Each line: Done / Not done / To do, and the **technician** who did it.
 - **Parts are issued from stock here**, at average cost, up to the quantity on the line. **Return unused** puts them back at the cost they left at, so the stock value doesn't drift.
 - A part can't be marked Done before it is issued, or Not done while issued parts are still out.
-- **Extra work** (In repair / Testing): labour code or part, price, and a reason, flagged **"Not in the quotation"**. It also records **how the customer agreed** (in person, WhatsApp or phone) with **proof or a written reason**; this shows on the repair order and carries to the invoice. Only those added lines can be removed.
+- **Extra work** (In repair / Testing): labour code or part, qty and price, flagged **"Not in the quotation"** (optional note for why). After one item is added, the picker stays open to add another. Only those added lines can be removed. The same box appears under **Activity → Finding**.
 
 ### Activity
 One timeline of everything that happened, newest first, with who and when:
 - automatic: status changes (with the note), parts issued and returned, lines marked or added;
-- written: **Note**, **Finding** (what was found), **Customer update** (marked "Customer can see"), each optionally about one line and with photos.
+- written: **Note**, **Finding** (what was found — and from here, while In repair or Testing, add a part or labour the customer asked for), **Customer update** (marked "Customer can see"), each optionally about one line and with photos.
 
 ---
 
@@ -294,7 +295,7 @@ One timeline of everything that happened, newest first, with who and when:
 
 - Lines come from the repair order: **labour marked Done**, and **parts at the quantity issued** (not the quantity quoted). Prices start at the agreed prices. Lines added after approval are labelled.
 - **Draft:** prices, discount, tax switch and notes can be changed. If the repair order changes after the draft was made (a part returned, a line marked differently), issuing is refused until you press **Refresh from the repair order**; edited prices are kept.
-- **Issue** (permission `invoice-issue`): locks the prices and **applies the advances held on the visit**. If the advances are more than the invoice, issuing is refused until the difference is refunded.
+- **Issue** (permission `invoice-issue`): locks the prices and **applies the advances held on the visit**. The Total card shows labour, parts, then total (and with tax on: **Tax ON**, Subtotal, Sales tax (rate%), Total), then **Advance applied** (capped at the invoice), **Balance due**, and if the advances are higher, **Excess advance** with a **Refund to customer** action (needs `advance-refund`). Issuing is refused until the excess is refunded. A draft workshop invoice also lists **Not used on this invoice** (repair lines not done, not issued, or left unused).
 - After issuing: **Unpaid**, **Partly paid** or **Paid**; take payments up to the balance. An issued invoice is never edited; returns and corrections are made with a credit note (section 21).
 - A draft can be **voided** with a reason (its number stays on record). One live workshop invoice per visit.
 - Numbers: `INV-A1F3-000001`.
@@ -380,7 +381,7 @@ It is an **internal** record and includes notes the customer doesn't see.
 
 ## 17. Rules that protect the data
 
-- **Validated twice.** Forms check what is typed before sending (phone, CNIC, VIN / chassis, amounts, quantities) and show the problem beside the field as they type or leave the field; the server checks everything again. Payment forms also refuse an amount above the remaining balance / advance room on the spot (`PaymentForm` `max`). A refusal the person can fix is mapped back onto that field (`web/lib/form.ts` `fieldErrorsFromApi` / `useFormErrors` / `useLiveErrors`); only problems that are not about one field stay as a banner.
+- **Validated twice.** Forms check what is typed before sending (phone, CNIC, VIN / chassis, amounts, quantities) and show the problem beside the field; the server checks everything again. Native FormData screens (`useFormErrors` / `liveForm`) light up as they type or leave the field. Controlled money screens (`useLiveErrors` on payments and the money book) show field errors after Record / Give back or an API refusal, then update as they keep typing — they must not wake on the first keystroke, or the amount box loses that digit. Payment amount is an uncontrolled text box (`inputMode=decimal`); payment forms also refuse an amount above the remaining balance / advance room (`PaymentForm` `max`). A refusal the person can fix is mapped back onto that field (`fieldErrorsFromApi`); only problems that are not about one field stay as a banner.
 - **Live money previews.** While editing a draft quotation, workshop invoice, counter sale or purchase order, the Total panel recalculates as qty/price/discount/tax change (`previewTotals` in `web/components/billing.tsx`). Receiving goods, recording a vendor bill, issuing a credit note and adding extra repair work also show a running amount before save.
 - **No silent overwrites.** Two people editing the same record: the second save is refused with "changed on another device, reload".
 - **Gap-free numbers** per branch and document kind, even with many people working at once.
@@ -492,6 +493,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | 0022 | Idempotency keys (retry protection for writes) |
 | 0023 | Quotation terms and conditions on the branch |
 | 0024 | Repair order stages simplified: received → in_repair → testing → ready → delivered |
+| 0034 | Extra work on a repair order no longer needs customer-agreement proof (drops `ro_line_extra_approved`) |
 
 ### API by module
 All under `/api`. Every route checks the permission named in [section 3](#3-signing-in-roles-and-permissions).
@@ -951,7 +953,7 @@ Each person gets **one** role, holding only the permissions for their part. Seve
 Kept current as each story lands (stories US-1001 to US-1013 in `prd.json`).
 
 - **US-1001 look and feel.** Cancel buttons use the red `danger` variant. Sidebar section titles are bold. `Field` shows a red asterisk unless its label contains "(optional)"; pass `required` to force it. The visit page has a progress bar (`JobProgress`: checked in, job card, quotation, approved, repair, ready, invoiced, paid, left). Back also shows on report, settings and admin pages. A repair order can only go to Ready from Testing.
-- **US-1002 to US-1005.** Brand, category and car make are pick-lists (`ListSelect`, see the pick-lists entry below). Counted units (pcs, set, pair, box) take whole numbers only; litre, kg and metre take decimals (`qtyStep`). Labour codes are made by the system (LAB-0001, ...). CNIC is required for customers (API and form). Customer pickers have "+ New customer" (a dialog). Forms reset their Saving state after a successful save. Quotation: Revise and Approve ask to confirm; an advance cannot take the held advances past the quotation total.
+- **US-1002 to US-1005.** Brand, category and car make are pick-lists (`ListSelect`, see the pick-lists entry below). Counted units (pcs, set, pair, box) take whole numbers only; litre, kg and metre take decimals (`qtyStep`). Labour codes are made by the system (LAB-0001, ...). Customer CNIC is optional (API and form); when typed it must be 13 digits. Customer pickers have "+ New customer" (a dialog). Forms reset their Saving state after a successful save. Quotation: Revise and Approve ask to confirm; an advance cannot take the held advances past the quotation total.
 - **US-1007 attendance.** An employee has several weekly days off (`days_off`, migration 0025). A day can be marked **present** (counts as 8 hours) besides paid or unpaid leave. Missed punch, leave and mark present live on the Attendance screen ("Add or fix a day by hand"). Each device has an **Activity log** (`device_logs`, migration 0026): punches received and refused calls.
 - **US-1008 to US-1011.** Payroll adjustments have a Bonus/Penalty switch and each amount can be rupees or a percentage (of base pay for bonus and penalty, of what is owed for the advance take-back). A held advance can be refunded in parts (`payments.refunded_amount`, `Payment.held`, migration 0027); voiding a refund puts the money back on hold. `/gate` shows **Cars that have left** (`GET /api/gate/history`). Items can have several vendors (`item_vendors`, migration 0028, `PUT /api/items/{id}/vendors`); the purchase order's "Add everything below its reorder level" adds only that vendor's items (and items with no vendor set) at the vendor's last price, and suggests a quantity of twice the reorder level less what is in stock. How much to order is decided on the purchase order, so the item form no longer asks for a reorder quantity.
 - **US-1012 money.** Money out has **Add a daily expense** (category pick-list, today's total shown) apart from **Record other money out** (owner drawings, transfers). Money in starts with **Payment for an invoice**: pick the unpaid invoice from a list and the amount fills in. The red `*` on a field label shows only inside a form (CSS `.req`), so search and filter boxes stay clean.
@@ -963,7 +965,7 @@ Kept current as each story lands (stories US-1001 to US-1013 in `prd.json`).
 - **Print pages and phone width checked.** The print toolbar button is teal (red means danger). All 26 list screens have no sideways scroll at 375 px.
 - Empty-state links and proof links use teal (`text-primary`), not the red accent.
 - Checked live: payroll Adjust (bonus or penalty, Rs or %, with a live "10% of base pay = Rs 2,600" hint), payslip print, throwing away a draft (notice now says "Draft thrown away"). "Please fill in:" keeps acronyms like CNIC in capitals. Employee details show "Not added" for empty fields.
-- **Cars that have left** (gate page) lists a "Print gate pass again" link on each row. Gate pass print checked live.
+- **Cars that have left** (gate page) lists a "Reprint GatePass" link on each row. Gate pass print checked live.
 - A paid counter sale invoice shows a **Print the invoice** next step. "Paid so far" shows a plain amount (no minus sign) on invoices and bills. Counter sale end to end checked live (a payment without proof needs a reason).
 - Recording a quotation approval gives its own "no proof" example (`ProofInput example`). Checked live: quotation make, send, record approval with confirm step ("Go back and edit"), repair order made, jumping straight to Ready is blocked with a reason, repair order / job card / quotation at 375 px.
 - **Team-managed pick-lists (replaces the fixed lists).** Part brands, part categories, car makes and labour categories live in the `pick_list_entries` table (migration 0029; `app/pick_lists.py`, `app/routers/lists.py`, `web/components/list-select.tsx`). Part-brand `DEFAULTS` always include the company list (Audi, BMW, BYD, Changan, Chevrolet, Daihatsu, Ford, Haval, Honda, Hyundai, Isuzu, Jaguar, Jeep, Kia, Land Rover, Lexus, Mazda, Mercedes-Benz, MG, MINI, Mitsubishi, Nissan, Peugeot, Porsche, Renault, Subaru, Suzuki, Toyota, Volkswagen, Volvo) plus common aftermarket / genuine lines; opening the list also adds any missing default and values already typed on items. In a form, "+ Add a new one to the list" lets staff add more (spelling tidy + “Did you mean …?”; spacing and punctuation variants such as liqui-moly reuse the existing entry, and one letter wrong, missing or swapped on a name of 5+ letters, or a similarity of 0.75, asks first). **Settings, Pick-lists** renames, hides or shows entries. Permissions follow the form: inventory for brands and categories, customers for car makes, labour-codes for labour categories. Tests: `test_pick_lists.py`.

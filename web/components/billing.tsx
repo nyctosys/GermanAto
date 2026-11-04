@@ -18,6 +18,10 @@ export type Invoice = {
   customer: { id: string; name: string; phone: string; number: string } | null; walk_in_name: string; walk_in_phone: string;
   car: { id: string; plate: string; make: string; model: string; year: number | null; vin: string } | null;
   lines: InvoiceLine[];
+  /** Draft workshop only: repair-order lines (or leftover qty) that are not billed. */
+  unused_lines?: { description: string; kind: "labour" | "part"; qty: string; unit_price: string; why: string }[];
+  /** Draft workshop only: advances still held on the visit (for excess refund). */
+  held_advances?: Payment[];
   totals: Record<"labour" | "parts" | "subtotal" | "discount" | "tax" | "total" | "paid" | "balance" | "advance_held" | "credited" | "refundable", string>;
   payments: Payment[];
   credit_notes: CreditNote[];

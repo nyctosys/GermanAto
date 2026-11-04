@@ -113,9 +113,12 @@ export function useFormErrors(schema: SchemaOrFn) {
 }
 
 /**
- * Controlled forms (payments, money book): as soon as a field is typed or left,
- * every wrong value shows beside its control and updates as they keep typing.
- * Server refusals land on the same fields via applyApi; clearServer when the person edits.
+ * Controlled forms (payments, money book): after submit or an API refusal, wrong
+ * values show beside their controls and update as they keep typing.
+ * Do not wake on input/change/blur — waking during the first keystroke races the
+ * amount field's update, validates the previous empty value, and the re-render
+ * eats that digit (Take an advance, pay, money in/out).
+ * Once `active`, any value change already re-runs validate via render.
  */
 export function useLiveErrors<T>(value: T, validate: (v: T) => FieldErrors) {
   const [active, setActive] = useState(false);
@@ -138,10 +141,7 @@ export function useLiveErrors<T>(value: T, validate: (v: T) => FieldErrors) {
     activate: wake,
     clearServer,
     applyApi,
-    live: {
-      onBlurCapture: wake,
-      onInputCapture: wake,
-      onChangeCapture: wake,
-    },
+    // No form-level listeners: activate() on submit / applyApi on refusal only.
+    live: {},
   };
 }

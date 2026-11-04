@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, startTransition, useOptimistic, useState, type FormEvent } from "react";
 import { type Uploaded, PhotoCapture } from "@/components/capture";
 import { CatalogPicker, lineCode, linkButton, type Pick } from "@/components/estimates";
-import { ProofInput, ProofLinks } from "@/components/payments";
+import { ProofLinks } from "@/components/payments";
 import { RO_STAGES, RoBadge, STAGE, stageActions, workStage, type RoLine, type RoStatus } from "@/components/repairs";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
@@ -120,7 +120,9 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
             )}
           </Card></div>
 
-          <ActivityCard ro={ro} working={working} onAdd={(b) => call("/activity", "POST", b)} />
+          <ActivityCard ro={ro} working={working} busy={busy} canExtra={actions.extraWork}
+                        onAdd={(b) => call("/activity", "POST", b)}
+                        onExtra={(b) => call("/lines", "POST", b)} />
         </div>
 
         <div className="space-y-4">
@@ -282,55 +284,75 @@ function LineRow({ l, techs, working, actions, busy, call }:
   );
 }
 
-function ExtraWork({ busy, onAdd }: { busy: boolean; onAdd: (b: object) => Promise<boolean> }) {
+function ExtraWork({ busy, onAdd, embedded, suggestedReason }: {
+  busy: boolean; onAdd: (b: object) => Promise<boolean>; embedded?: boolean; suggestedReason?: string;
+}) {
   const [pick, setPick] = useState<Pick | null>(null);
   const [price, setPrice] = useState("");
   const [amount, setAmount] = useState("1");
   const [reason, setReason] = useState("");
-  const [method, setMethod] = useState("phone");
-  const [proof, setProof] = useState<Uploaded[]>([]);
-  const [noProof, setNoProof] = useState("");
   const [tried, setTried] = useState(false);
-  const approvalBad = !proof.length && noProof.trim().length < 5;
+  const [justAdded, setJustAdded] = useState<string | null>(null);
   const lineTotal = (Number(amount) || 0) * (Number(price) || 0);
+
+  function resetForm(keepReason = false) {
+    setPick(null);
+    setPrice("");
+    setAmount("1");
+    if (!keepReason) setReason("");
+    setTried(false);
+  }
+
+  function choose(p: Pick) {
+    setJustAdded(null);
+    setPick(p);
+    setPrice(p.kind === "part" && Number(p.sale_price) ? String(Number(p.sale_price)) : "");
+    if (!reason.trim() && suggestedReason?.trim()) setReason(suggestedReason.trim().slice(0, 500));
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setTried(true);
-    if (!pick || !linePrice.safeParse(price).success || !lineQty.safeParse(amount).success || reason.trim().length < 3 || approvalBad) return;
+    if (!pick || !linePrice.safeParse(price).success || !lineQty.safeParse(amount).success) return;
+    const name = pick.name;
     const ok = await onAdd({ kind: pick.kind, labour_code_id: pick.kind === "labour" ? pick.id : null, item_id: pick.kind === "part" ? pick.id : null,
-                             qty: amount, unit_price: price, reason, approval_method: method, proof_id: proof[0]?.id ?? null, proof_ids: proof.map((p) => p.id), no_proof_reason: proof.length ? "" : noProof });
-    if (ok) { setPick(null); setPrice(""); setAmount("1"); setReason(""); setProof([]); setNoProof(""); setTried(false); }
+                             qty: amount, unit_price: price, reason: reason.trim() });
+    if (ok) { setJustAdded(name); resetForm(true); }
   }
   return (
-    <div className="border-t border-rule p-4 shell:px-5">
+    <div className={embedded ? "space-y-3" : "border-t border-rule p-4 shell:px-5"}>
+      {justAdded && (
+        <p className="text-sm text-success" role="status">{justAdded} added to the repair order. Add another below, or leave it.</p>
+      )}
       {!pick ? (
         <>
-          <p className="mb-2 text-sm font-medium text-ink-2">Extra work found during the repair</p>
-          <CatalogPicker onPick={(p) => { setPick(p); setPrice(p.kind === "part" && Number(p.sale_price) ? String(Number(p.sale_price)) : ""); }} />
+          <p className="mb-2 text-sm font-medium text-ink-2">
+            {embedded
+              ? (justAdded ? "Add another part or labour" : "Add a part or labour to this repair")
+              : (justAdded ? "Add another item" : "Extra work found during the repair")}
+          </p>
+          {embedded && !justAdded && (
+            <p className="mb-2 text-sm text-muted">When the customer asks for something extra, pick it here. It is marked not in the quotation.</p>
+          )}
+          <CatalogPicker onPick={choose} />
         </>
       ) : (
         <form onSubmit={submit} onBlurCapture={() => setTried(true)} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_6rem_9rem]">
           <p className="font-medium sm:col-span-3">{pick.name} <span className="text-sm font-normal text-muted">{pick.code}</span></p>
-          <Field label="Why is it needed?" error={tried && reason.trim().length < 3 ? "Required" : undefined}>
+          <Field required={false} label="Why is it needed? (optional)">
             <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} autoFocus />
           </Field>
           <Field label="Qty" error={tried && !lineQty.safeParse(amount).success ? "More than 0" : undefined}>
-            <Input type="number" inputMode="decimal" min="0" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <Input inputMode="decimal" autoComplete="off" name="qty" defaultValue={amount} onChange={(e) => setAmount(e.target.value)} />
           </Field>
           <Field label="Price (Rs)" error={tried && !linePrice.safeParse(price).success ? "Enter the price" : undefined}>
-            <Input type="number" inputMode="decimal" min="0" step="any" value={price} onChange={(e) => setPrice(e.target.value)} />
+            <Input key={pick.id} inputMode="decimal" autoComplete="off" name="unit_price" defaultValue={price} onChange={(e) => setPrice(e.target.value)} />
           </Field>
           {lineTotal > 0 && <p className="num text-sm font-medium text-ink-2 sm:col-span-3">Line total {money(lineTotal)}</p>}
-          <div className="space-y-3 sm:col-span-3">
-            <p className="text-sm font-medium text-ink-2">The customer agreed to the extra work</p>
-            <Segments value={method} onChange={setMethod} options={[{ value: "in_person", label: "In person" }, { value: "whatsapp", label: "WhatsApp" }, { value: "phone", label: "Phone call" }]} />
-            <ProofInput proof={proof} setProof={setProof} reason={noProof} setReason={setNoProof} error={tried && approvalBad ? "Attach proof, or explain why there is none" : undefined} />
-          </div>
-          <p className="text-sm text-muted sm:col-span-3">It is marked “not in the quotation”, with how the customer agreed, and carries to the invoice.</p>
+          <p className="text-sm text-muted sm:col-span-3">It is marked “not in the quotation” and carries to the invoice.</p>
           <div className="flex flex-wrap gap-2 sm:col-span-3">
             <Button type="submit" variant="secondary" disabled={busy}>Add to the repair order</Button>
-            <Button type="button" variant="ghost" onClick={() => setPick(null)}>Cancel</Button>
+            <Button type="button" variant="ghost" onClick={() => { resetForm(); setJustAdded(null); }}>Cancel</Button>
           </div>
         </form>
       )}
@@ -340,7 +362,10 @@ function ExtraWork({ busy, onAdd }: { busy: boolean; onAdd: (b: object) => Promi
 
 const KINDS: Record<string, string> = { note: "Note", finding: "Finding", customer_update: "Customer update" };
 
-function ActivityCard({ ro, working, onAdd }: { ro: RepairOrder; working: boolean; onAdd: (b: object) => Promise<boolean> }) {
+function ActivityCard({ ro, working, busy, canExtra, onAdd, onExtra }: {
+  ro: RepairOrder; working: boolean; busy: boolean; canExtra: boolean;
+  onAdd: (b: object) => Promise<boolean>; onExtra: (b: object) => Promise<boolean>;
+}) {
   const [kind, setKind] = useState("note");
   const [body, setBody] = useState("");
   const [lineId, setLineId] = useState("");
@@ -355,30 +380,39 @@ function ActivityCard({ ro, working, onAdd }: { ro: RepairOrder; working: boolea
   return (
     <Card title="Activity">
       {working && (
-        <form onSubmit={submit} className="mb-5 space-y-3">
-          <Segments value={kind} onChange={setKind} options={Object.entries(KINDS).map(([value, label]) => ({ value, label }))} />
-          <label className="block">
-            <span className="sr-only">{KINDS[kind]}</span>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={3000}
-                      placeholder={kind === "finding" ? "What did you find?" : kind === "customer_update" ? "What the customer should know, e.g. ready by 5pm" : "What happened"}
-                      className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-ink" />
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label>
-              <span className="mb-1 block text-sm text-muted">About a line (optional)</span>
-              <Select className="min-h-12" value={lineId} onChange={(e) => setLineId(e.target.value)}>
-                <option value="">The whole job</option>
-                {ro.lines.map((l) => <option key={l.id} value={l.id}>{l.description}</option>)}
-              </Select>
+        <div className="mb-5 space-y-3">
+          <form onSubmit={submit} className="space-y-3">
+            <Segments value={kind} onChange={setKind} options={Object.entries(KINDS).map(([value, label]) => ({ value, label }))} />
+            <label className="block">
+              <span className="sr-only">{KINDS[kind]}</span>
+              <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={3000}
+                        placeholder={kind === "finding" ? "What did you find?" : kind === "customer_update" ? "What the customer should know, e.g. ready by 5pm" : "What happened"}
+                        className="w-full rounded-control border border-rule-strong bg-surface px-3 py-2.5 text-base focus-visible:border-ink" />
             </label>
-            <div>
-              <span className="mb-1 block text-sm text-muted">Photos (optional)</span>
-              <PhotoCapture value={photos} onChange={setPhotos} label="Add photos" note={`${ro.number} activity`} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label>
+                <span className="mb-1 block text-sm text-muted">About a line (optional)</span>
+                <Select className="min-h-12" value={lineId} onChange={(e) => setLineId(e.target.value)}>
+                  <option value="">The whole job</option>
+                  {ro.lines.map((l) => <option key={l.id} value={l.id}>{l.description}</option>)}
+                </Select>
+              </label>
+              <div>
+                <span className="mb-1 block text-sm text-muted">Photos (optional)</span>
+                <PhotoCapture value={photos} onChange={setPhotos} label="Add photos" note={`${ro.number} activity`} />
+              </div>
             </div>
-          </div>
-          {kind === "customer_update" && <p className="text-sm text-muted">Customer updates appear on the customer&apos;s copy of the visit record. Everything else stays internal.</p>}
-          <Button type="submit" variant="secondary" disabled={body.trim().length < 2}>Add to activity</Button>
-        </form>
+            {kind === "customer_update" && <p className="text-sm text-muted">Customer updates appear on the customer&apos;s copy of the visit record. Everything else stays internal.</p>}
+            <Button type="submit" variant="secondary" disabled={body.trim().length < 2}>Add to activity</Button>
+          </form>
+          {kind === "finding" && (
+            <div className="rounded-control border border-rule bg-paper-2 p-3 shell:p-4">
+              {canExtra
+                ? <ExtraWork embedded busy={busy} suggestedReason={body} onAdd={onExtra} />
+                : <p className="text-sm text-muted">Move the job to In repair first, then you can add a part or labour here when the customer asks for something extra.</p>}
+            </div>
+          )}
+        </div>
       )}
       <ol className="space-y-4">
         {ro.activity.map((a) => (

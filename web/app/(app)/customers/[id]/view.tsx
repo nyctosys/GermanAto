@@ -57,7 +57,7 @@ function CustomerDetail() {
                 ["Mobile", <a key="p" href={`tel:${data.phone}`} className="num underline">{phone(data.phone)}</a>],
                 ["Other phone", data.phone_alt ? phone(data.phone_alt) : null],
                 ["Email", data.email || null],
-                ["CNIC", data.cnic || null],
+                ...(data.kind === "company" ? [["NTN", data.ntn || null] as const] : [["CNIC", data.cnic || null] as const]),
                 ["Address", data.address || null],
                 ["Notes", data.notes || null],
               ].map(([label, value]) => (

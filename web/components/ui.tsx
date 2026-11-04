@@ -57,7 +57,7 @@ export function Field({ label, hint, error, required, children }: { label: strin
     <div role="group" className={`flex min-w-0 flex-col gap-1.5 ${error ? "[&_:is(input,select,textarea)]:border-error" : ""}`}>
       <span className="text-[0.9375rem] font-medium text-ink-2">{label}{(required ?? childRequired) && <span className="req ml-0.5 text-error" aria-hidden="true">*</span>}</span>
       {marked}
-      {error ? <span role="alert" className="text-sm text-error">{error === "Required" ? `Please fill in: ${label.replace(/\s*\(.*\)\s*$/, "").replace(/\b(?![A-Z]{2,}\b)\w+/g, (w) => w.toLowerCase())}` : error}</span>
+      {error ? <span aria-live="polite" className="text-sm text-error">{error === "Required" ? `Please fill in: ${label.replace(/\s*\(.*\)\s*$/, "").replace(/\b(?![A-Z]{2,}\b)\w+/g, (w) => w.toLowerCase())}` : error}</span>
         : hint && <span className="text-sm text-muted">{hint}</span>}
     </div>
   );

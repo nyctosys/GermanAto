@@ -93,11 +93,14 @@ const toBody = (r: Row, note = ""): PaymentBody => ({
   proof_id: r.proof[0]?.id ?? null, proof_ids: r.proof.map((p) => p.id), no_proof_reason: r.proof.length ? "" : r.reason.trim(),
 });
 
-function RowFields({ r, set, errors, out }: { r: Row; set: (p: Partial<Row>) => void; errors: FieldErrors; out?: boolean }) {
+function RowFields({ r, set, errors, out, amountLocked }: { r: Row; set: (p: Partial<Row>) => void; errors: FieldErrors; out?: boolean; amountLocked?: boolean }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="Amount (Rs)" error={errors.amount}>
-        <Input type="number" inputMode="decimal" min="0" step="any" value={r.amount} onChange={(e) => set({ amount: e.target.value })} />
+        {/* Uncontrolled: a controlled empty value re-render (live errors, proof, etc.) was eating the first digit. */}
+        {amountLocked
+          ? <Input inputMode="decimal" autoComplete="off" readOnly value={r.amount} />
+          : <Input inputMode="decimal" autoComplete="off" name="amount" defaultValue={r.amount} onChange={(e) => set({ amount: e.target.value })} />}
       </Field>
       <Field label={out ? "Paid from" : "Received into"}>
         <Select value={r.account} onChange={(e) => set({ account: e.target.value })}>
@@ -225,7 +228,7 @@ export function RefundForm({ title, hint, amount, fixedAmount, needsReason, busy
       }}>
         {hint && <p className="text-sm text-muted">{hint}</p>}
         {needsReason && <Field label="Why is it being refunded?" error={active && whyBad ? "Say why" : undefined}><Input value={why} onChange={(e) => { setWhy(e.target.value); clearServer(); setBanner(null); }} maxLength={500} /></Field>}
-        <RowFields r={row} set={patch} errors={errors} />
+        <RowFields r={row} set={patch} errors={errors} amountLocked={fixedAmount} />
         <Notice>{banner}</Notice>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="danger" disabled={busy}>{busy ? "Recording" : "Give the money back"}</Button>

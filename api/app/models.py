@@ -174,6 +174,7 @@ class Customer(Entity):
     phone_alt: Mapped[str] = mapped_column(String(20), default="")
     email: Mapped[str] = mapped_column(String(120), default="")
     cnic: Mapped[str] = mapped_column(String(15), default="")
+    ntn: Mapped[str] = mapped_column(String(15), default="")  # company National Tax Number; blank for individuals
     address: Mapped[str] = mapped_column(String(300), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     whatsapp_opt_out: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -570,7 +571,6 @@ class RepairOrderLine(Entity):
         CheckConstraint("unit_price >= 0", name="ro_line_price"),
         CheckConstraint("state IN ('pending', 'done', 'not_done')", name="ro_line_state"),
         CheckConstraint("approval_method IS NULL OR approval_method IN ('in_person', 'whatsapp', 'phone')", name="ro_line_approval_method"),
-        CheckConstraint("in_quote OR (approval_method IS NOT NULL AND (approval_proof_id IS NOT NULL OR approval_reason <> ''))", name="ro_line_extra_approved"),
         CheckConstraint("issued_qty >= 0 AND (kind = 'part' OR issued_qty = 0)", name="ro_line_issued"),
     )
 
@@ -582,10 +582,10 @@ class RepairOrderLine(Entity):
     description: Mapped[str] = mapped_column(String(200))
     qty: Mapped[Decimal] = mapped_column(Numeric(12, 3))
     unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2))  # the agreed price
-    in_quote: Mapped[bool] = mapped_column(Boolean, default=True)  # False: extra work added after approval
+    in_quote: Mapped[bool] = mapped_column(Boolean, default=True)  # False: extra work added after the quotation
     state: Mapped[str] = mapped_column(String(8), default="pending")
     technician_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))
-    # Extra work added after the quote records how the customer agreed to it.
+    # Kept for older rows that recorded customer agreement; new extra work leaves these empty.
     approval_method: Mapped[str | None] = mapped_column(String(10))
     approval_proof_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attachments.id"))
     approval_reason: Mapped[str] = mapped_column(Text, default="")

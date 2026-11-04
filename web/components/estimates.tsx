@@ -1,9 +1,12 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useId, useState } from "react";
-import { Badge } from "@/components/ui";
+import { type Item, ItemForm } from "@/components/inventory";
+import { Badge, Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { money, qty } from "@/lib/format";
+import { useSession } from "@/lib/session";
 
 // --- types mirroring app/routers/estimates.py ----------------------------------------------
 export type Pick = { kind: "labour" | "part"; id: string; code: string; name: string; category?: string; unit?: string;
@@ -35,26 +38,37 @@ export const linkButton = "flex min-h-11 items-center rounded-control border bor
 export const lineName = (l: LineRef) => (l.labour_code ? l.labour_code.name : l.item!.name);
 export const lineCode = (l: LineRef) => (l.labour_code ? l.labour_code.code : l.item!.number);
 
+function itemToPick(i: Item): Pick {
+  return {
+    kind: "part", id: i.id, code: i.number, name: i.name, unit: i.unit,
+    sale_price: i.sale_price, on_hand: i.on_hand, brand: i.brand, fitment: i.fitment,
+  };
+}
+
 /**
  * Add work to a job card or quotation: labour codes and stock items only, never
  * free text. Type to search, or scan a barcode (the scanner types it and Enter).
+ * When nothing matches, inventory staff can add the part here in a modal.
  */
 export function CatalogPicker({ onPick, partsOnly }: { onPick: (p: Pick) => void; partsOnly?: boolean }) {
+  const { can } = useSession();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Pick[]>([]);
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const listId = useId();
+  const canAddPart = can("inventory");
 
   useEffect(() => {
     if (!q.trim()) return;
     const t = setTimeout(() => {
       api<Pick[]>(`/api/estimate-catalog?${new URLSearchParams({ q: q.trim() })}`)
-        .then((r) => { setResults(r); setActive(0); setOpen(true); })
+        .then((r) => { setResults(partsOnly ? r.filter((x) => x.kind === "part") : r); setActive(0); setOpen(true); })
         .catch(() => setResults([]));
     }, 180);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, partsOnly]);
 
   const pick = (p: Pick) => { onPick(p); setQ(""); setOpen(false); };
   return (
@@ -96,8 +110,34 @@ export function CatalogPicker({ onPick, partsOnly }: { onPick: (p: Pick) => void
                 </span>
               )}
             </li>
-          )) : <li className="px-3 py-3 text-muted">Nothing matches “{q}”. Add it under Labour codes or Inventory first.</li>}
+          )) : (
+            <li className="px-3 py-3">
+              <p className="text-muted">Nothing matches “{q.trim()}”.</p>
+              {canAddPart ? (
+                <Button type="button" variant="secondary" className="mt-2"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => { setOpen(false); setAdding(true); }}>
+                  Add to inventory
+                </Button>
+              ) : (
+                <p className="mt-1 text-sm text-muted">Ask someone with inventory permission to add the part, or add a labour code under Labour codes.</p>
+              )}
+            </li>
+          )}
         </ul>
+      )}
+      {adding && createPortal(
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-ink/40 p-4" role="dialog" aria-modal="true" aria-label="Add to inventory">
+          <div className="my-8 w-full max-w-3xl rounded-card bg-surface p-5">
+            <h2 className="mb-4 text-lg font-semibold">Add to inventory</h2>
+            <ItemForm
+              presetName={q.trim()}
+              onCancel={() => setAdding(false)}
+              onSaved={(item) => { setAdding(false); pick(itemToPick(item)); }}
+            />
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

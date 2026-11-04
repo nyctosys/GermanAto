@@ -64,7 +64,7 @@ export function ListMulti({ name, kind, defaultValue = "", placeholder = "Search
         onFocus={() => setOpen(true)} onChange={(e) => { setQ(e.target.value); setOpen(true); setNear(null); setError(null); }}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (q.trim() && !exact) void add(); } if (e.key === "Escape") setOpen(false); }} />
       {open && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-control border border-rule bg-paper shadow-lg" role="listbox" aria-multiselectable="true">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-auto rounded-control border border-rule bg-paper shadow-lg" role="listbox" aria-multiselectable="true">
           {shown.map((n) => (
             <div key={n} role="option" aria-selected={has(n)}
               className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-paper-3"
@@ -75,6 +75,9 @@ export function ListMulti({ name, kind, defaultValue = "", placeholder = "Search
             </div>
           ))}
           {!shown.length && !q.trim() && <p className="px-3 py-2 text-sm text-muted">Nothing in the list yet. Type a car to add it.</p>}
+          {q.trim() && !shown.length && (
+            <p className="px-3 py-2 text-sm text-muted">No match for “{q.trim()}”.</p>
+          )}
           {q.trim() && !exact && (
             <button type="button" disabled={busy} onClick={() => add()} className="block w-full border-t border-rule px-3 py-2 text-left font-medium text-primary hover:bg-paper-3">
               + Add “{q.trim()}” to the list

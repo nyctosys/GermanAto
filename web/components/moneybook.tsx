@@ -175,6 +175,8 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
   const [invoiceError, setInvoiceError] = useState<string | undefined>();
   const [kind, setKind] = useState(kinds[0] ?? "other_income");
   const [v, setV] = useState({ amount: "", account: "cash", to_account: "", category_id: "", party: "", reference: "", note: "", occurred_on: today() });
+  // Remount the uncontrolled amount box when an invoice pick fills it in.
+  const [amountKey, setAmountKey] = useState(0);
   const [proof, setProof] = useState<Uploaded[]>([]);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -229,14 +231,19 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
               const inv = owing.data?.find((i) => i.id === e.target.value);
               setInvoiceId(e.target.value);
               setInvoiceError(undefined);
-              if (inv) set({ amount: String(Number(inv.balance)) });
+              if (inv) {
+                set({ amount: String(Number(inv.balance)) });
+                setAmountKey((k) => k + 1);
+              }
             }}>
               <option value="">{owing.data?.length === 0 ? "No invoice is waiting for payment" : "Choose an invoice"}</option>
               {owing.data?.map((i) => <option key={i.id} value={i.id}>{i.number}, {i.customer}, owes {money(i.balance)}</option>)}
             </Select>
           </Field>
         )}
-        <Field required label="Amount (Rs)" error={errors.amount}><Input inputMode="decimal" value={v.amount} onChange={(e) => set({ amount: e.target.value })} autoFocus /></Field>
+        <Field required label="Amount (Rs)" error={errors.amount}>
+          <Input key={amountKey} inputMode="decimal" autoComplete="off" name="amount" defaultValue={v.amount} onChange={(e) => set({ amount: e.target.value })} autoFocus />
+        </Field>
         <Field label={transfer ? "From" : direction === "in" ? "Received into" : "Paid from"}>
           <Select value={v.account} onChange={(e) => set({ account: e.target.value })}>
             {Object.entries(ACCOUNT).map(([k, l]) => <option key={k} value={k}>{l}</option>)}

@@ -47,6 +47,15 @@ const cnicOrEmpty = z.string().transform((v, ctx) => {
 
 const cnic = cnicOrEmpty.refine(Boolean, "Required");
 
+const ntnOrEmpty = z.string().transform((v, ctx) => {
+  const d = v.replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length === 7) return d;
+  if (d.length === 8) return `${d.slice(0, 7)}-${d[7]}`;
+  ctx.addIssue({ code: "custom", message: "A company NTN has 7 digits, e.g. 1234567-8" });
+  return z.NEVER;
+});
+
 /** A 17-character VIN or a local chassis number (NZE141-6012345): the same field. */
 const vin = z.string().transform((v) => v.toUpperCase().replace(/\s/g, ""))
   .refine((v) => !v || /^[A-Z0-9-]{5,30}$/.test(v), "Use the VIN or chassis number: 5 to 30 letters, digits or dashes")
@@ -72,12 +81,13 @@ export const customerSchema = z.object({
   phone,
   phone_alt: phoneOrEmpty,
   email,
-  cnic,
+  cnic: cnicOrEmpty,
+  ntn: ntnOrEmpty,
   address: text(300),
   notes: text(),
   whatsapp_opt_out: checkbox,
   is_active: checkbox,
-});
+}).transform((c) => (c.kind === "company" ? c : { ...c, ntn: "" }));
 
 export const carSchema = z.object({
   plate: text(20),

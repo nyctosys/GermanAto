@@ -6,7 +6,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -14,7 +14,7 @@ from app.auth import Actor, require
 from app.db import get_db
 from app.models import Attachment, AuditLog, Car, CarOwnership, Customer, Inspection, Invoice, User, Visit
 from app.numbering import next_number
-from app.validators import Cnic, Email, Name, Phone, Text, Upper, Vin, normalize_plate
+from app.validators import Cnic, Email, Name, Ntn, Phone, Text, Upper, Vin, normalize_plate
 from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["customers"])
@@ -31,11 +31,18 @@ class CustomerIn(BaseModel):
     phone: Phone = Field(min_length=1)
     phone_alt: Phone = ""
     email: Email = ""
-    cnic: Cnic = Field(min_length=1)  # required: identifies the customer
+    cnic: Cnic = ""  # optional; when given, must be 13 digits
+    ntn: Ntn = ""  # company only; cleared for individuals
     address: Text = Field(default="", max_length=300)
     notes: Text = Field(default="", max_length=2000)
     whatsapp_opt_out: bool = False
     allow_duplicate_phone: bool = False  # the form asks first, then resends with this set
+
+    @model_validator(mode="after")
+    def ntn_only_for_companies(self):
+        if self.kind != "company":
+            self.ntn = ""
+        return self
 
 
 class CustomerUpdate(CustomerIn):
@@ -73,7 +80,7 @@ class TransferIn(BaseModel):
 
 
 def customer_out(c: Customer) -> dict:
-    return {k: getattr(c, k) for k in ("id", "number", "kind", "name", "phone", "phone_alt", "email", "cnic",
+    return {k: getattr(c, k) for k in ("id", "number", "kind", "name", "phone", "phone_alt", "email", "cnic", "ntn",
                                        "address", "notes", "whatsapp_opt_out", "is_active", "version", "created_at")}
 
 

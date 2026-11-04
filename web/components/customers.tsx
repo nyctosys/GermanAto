@@ -13,7 +13,7 @@ import { customerSchema, parseForm } from "@/lib/schemas";
 
 export type Customer = {
   id: string; number: string; kind: "individual" | "company"; name: string; phone: string; phone_alt: string;
-  email: string; cnic: string; address: string; notes: string; whatsapp_opt_out: boolean; is_active: boolean; version: number;
+  email: string; cnic: string; ntn: string; address: string; notes: string; whatsapp_opt_out: boolean; is_active: boolean; version: number;
 };
 
 /** Search-as-you-type customer picker. Arrow keys and Enter work; every row is a 44px target. */
@@ -106,6 +106,7 @@ export function CustomerForm({ customer, onSaved, onCancel }:
   const { errors, setErrors, live, applyApi } = useFormErrors(customerSchema);
   const [matches, setMatches] = useState<Customer[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<"individual" | "company">(customer?.kind ?? "individual");
   const form = useRef<HTMLFormElement>(null);
 
   async function save(allowDuplicate = false) {
@@ -135,7 +136,7 @@ export function CustomerForm({ customer, onSaved, onCancel }:
     <form ref={form} noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); e.stopPropagation(); save(); }} className="grid gap-5 sm:grid-cols-2" {...live}>
       <Field error={errors.name} label="Name"><Input name="name" defaultValue={customer?.name} required maxLength={120} autoComplete="off" /></Field>
       <Field error={errors.kind} label="Type">
-        <Select name="kind" defaultValue={customer?.kind ?? "individual"}>
+        <Select name="kind" value={kind} onChange={(e) => setKind(e.target.value as "individual" | "company")}>
           <option value="individual">Individual</option>
           <option value="company">Company or fleet</option>
         </Select>
@@ -143,7 +144,11 @@ export function CustomerForm({ customer, onSaved, onCancel }:
       <Field error={errors.phone} label="Mobile" hint="Used for WhatsApp updates."><PhoneInput name="phone" defaultValue={customer?.phone} required /></Field>
       <Field error={errors.phone_alt} label="Other phone (optional)"><PhoneInput name="phone_alt" defaultValue={customer?.phone_alt} /></Field>
       <Field error={errors.email} label="Email (optional)"><Input name="email" type="email" defaultValue={customer?.email} /></Field>
-      <Field error={errors.cnic} label="CNIC" hint="13 digits, e.g. 35202-1234567-1"><Input name="cnic" defaultValue={customer?.cnic} required inputMode="numeric" /></Field>
+      {kind === "individual"
+        ? <Field error={errors.cnic} label="CNIC (optional)" hint="13 digits, e.g. 35202-1234567-1"><Input name="cnic" defaultValue={customer?.cnic} inputMode="numeric" /></Field>
+        : <Field error={errors.ntn} label="NTN (optional)" hint="7 digits, e.g. 1234567-8"><Input name="ntn" defaultValue={customer?.ntn} inputMode="numeric" /></Field>}
+      {kind === "company" && <input type="hidden" name="cnic" value="" />}
+      {kind === "individual" && <input type="hidden" name="ntn" value="" />}
       <div className="sm:col-span-2"><Field error={errors.address} label="Address (optional)"><Input name="address" defaultValue={customer?.address} maxLength={300} /></Field></div>
       <div className="sm:col-span-2"><Field error={errors.notes} label="Notes (optional)"><Input name="notes" defaultValue={customer?.notes} /></Field></div>
       <div className="sm:col-span-2">

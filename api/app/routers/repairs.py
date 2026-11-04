@@ -19,7 +19,7 @@ from app.models import (
     UserBranch, Visit,
 )
 from app.numbering import next_number
-from app.routers.estimates import LineIn, Proof, _get_quote, _line_refs, _targets, attach_proofs, money, proof_payload, status_of
+from app.routers.estimates import LineIn, _get_quote, _line_refs, _targets, money, proof_payload, status_of
 from app.routers.workshop import _attach, _require_open, snapshot_of
 from app.stock import StockError, move
 from app.validators import Text
@@ -79,9 +79,12 @@ def repair_order_out(db: Session, ro: RepairOrder) -> dict:
     techs = {e.id: e.full_name for e in db.scalars(select(Employee).where(Employee.id.in_([l.technician_id for l in ro.lines if l.technician_id])))}
     lines = _line_refs(db, ro.lines)
     for out, l in zip(lines, ro.lines):
+        approval = None
+        if not l.in_quote and l.approval_method:
+            approval = {"method": l.approval_method, "reason": l.approval_reason,
+                        **proof_payload(db, "ro_line_approval", l.id, l.approval_proof_id)}
         out.update(description=l.description, unit_price=l.unit_price, amount=money(l.qty * l.unit_price), in_quote=l.in_quote,
-                   approval=None if l.in_quote else {"method": l.approval_method, "reason": l.approval_reason,
-                                                    **proof_payload(db, "ro_line_approval", l.id, l.approval_proof_id)},
+                   approval=approval,
                    state=l.state, technician_id=l.technician_id, technician=techs.get(l.technician_id), issued_qty=l.issued_qty)
     entries = db.execute(select(RepairOrderActivity, User.full_name).outerjoin(User, User.id == RepairOrderActivity.created_by)
                          .where(RepairOrderActivity.repair_order_id == ro.id).order_by(RepairOrderActivity.created_at.desc())).all()
@@ -212,29 +215,28 @@ def change_status(ro_id: uuid.UUID, body: StatusIn, actor: Actor = Depends(can_r
 
 # --- lines -------------------------------------------------------------------------------------
 
-class ExtraLineIn(LineIn, Proof):
-    """Extra work needs the customer's go-ahead: how they agreed, with proof or a reason."""
+class ExtraLineIn(LineIn):
+    """Extra part or labour found during the repair. Flagged not in the quotation."""
     unit_price: Decimal = Field(gt=0, le=100_000_000, decimal_places=2)
-    reason: Text = Field(min_length=3, max_length=500)
-    approval_method: Literal["in_person", "whatsapp", "phone"]
+    reason: Text = Field(default="", max_length=500)  # optional note (why it is needed)
 
 
 @router.post("/repair-orders/{ro_id}/lines", status_code=201)
 def add_line(ro_id: uuid.UUID, body: ExtraLineIn, actor: Actor = Depends(can_repair), db: Session = Depends(get_db)):
-    """Extra work found during the repair. Flagged 'not in quote' so the
-    invoice and the customer both see it was added after approval."""
+    """Extra work found during the repair. Flagged 'not in quote' on the order and invoice."""
     ro = _get_ro(db, actor, ro_id, lock=True)
     _require_working(db, ro)
     _refuse_stage(ro, "add extra work", {"in_repair", "testing"})
     codes, items = _targets(db, actor, [body])
     name = (codes[body.labour_code_id] if body.labour_code_id else items[body.item_id]).name
-    line = RepairOrderLine(position=len(ro.lines), in_quote=False, description=name, approval_method=body.approval_method,
-                           approval_proof_id=body.proof_id, approval_reason=body.no_proof_reason,
-                           **body.model_dump(exclude={"reason", "approval_method", "proof_id", "proof_ids", "no_proof_reason"}))
+    line = RepairOrderLine(position=len(ro.lines), in_quote=False, description=name,
+                           **body.model_dump(exclude={"reason"}))
     ro.lines.append(line)
     db.flush()
-    attach_proofs(db, actor, body.proof_ids, "ro_line_approval", line.id)
-    _log(db, ro, "line", f"Added {name} (not in the quotation): {body.reason}. Customer agreed {body.approval_method.replace('_', ' ')}.", line_id=line.id)
+    note = f"Added {name} (not in the quotation)"
+    if body.reason.strip():
+        note += f": {body.reason.strip()}"
+    _log(db, ro, "line", note, line_id=line.id)
     db.commit()
     return repair_order_out(db, ro)
 

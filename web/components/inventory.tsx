@@ -19,8 +19,8 @@ export const UNITS = ["pcs", "set", "pair", "litre", "kg", "metre", "box"];
 type CodeRow = { kind: "barcode" | "mpn"; code: string };
 
 /** Add or edit a stock item. Every item needs at least one barcode or part number. */
-export function ItemForm({ item, presetCode, onSaved, onCancel }:
-  { item?: Item; presetCode?: string; onSaved: (i: Item) => void; onCancel: () => void }) {
+export function ItemForm({ item, presetCode, presetName, onSaved, onCancel }:
+  { item?: Item; presetCode?: string; presetName?: string; onSaved: (i: Item) => void; onCancel: () => void }) {
   const { can } = useSession();
   const [codes, setCodes] = useState<CodeRow[]>(item?.codes.map(({ kind, code }) => ({ kind, code })) ?? [{ kind: "barcode", code: presetCode ?? "" }]);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
 
   return (
     <form onSubmit={submit} className="grid gap-5 sm:grid-cols-2 shell:grid-cols-3">
-      <div className="sm:col-span-2"><Field required label="Name"><Input name="name" defaultValue={item?.name} required maxLength={160} placeholder="Oil filter" /></Field></div>
+      <div className="sm:col-span-2"><Field required label="Name"><Input name="name" defaultValue={item?.name ?? presetName} required maxLength={160} placeholder="Oil filter" /></Field></div>
       <Field label="Brand (optional)"><ListSelect name="brand" kind="part_brand" defaultValue={item?.brand} placeholder="Choose a brand" /></Field>
 
       <fieldset className="space-y-2 sm:col-span-2 shell:col-span-3">
@@ -87,7 +87,7 @@ export function ItemForm({ item, presetCode, onSaved, onCancel }:
         <Select name="unit" defaultValue={item?.unit ?? "pcs"}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select>
       </Field>
       <Field label="Shelf or bin"><Input name="location" defaultValue={item?.location} placeholder="A3" /></Field>
-      <div className="sm:col-span-2"><Field label="Fits" hint="Pick every car it fits. A car not in the list yet is added with one click and is there next time."><ListMulti name="fitment" kind="fitment" defaultValue={item?.fitment} /></Field></div>
+      <div className="sm:col-span-2"><Field label="Fits" hint="Type to narrow the list (e.g. BM for BMW). Tick every car this part fits; a name not listed yet is added with one click."><ListMulti name="fitment" kind="fitment" defaultValue={item?.fitment} /></Field></div>
       <Field required label="Sale price (PKR)"><Input name="sale_price" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={item?.sale_price ?? ""} required /></Field>
       <Field label="Reorder when stock reaches" hint="How much to order is decided on the purchase order."><Input name="reorder_level" type="number" inputMode="decimal" min={0} step="0.001" defaultValue={item ? Number(item.reorder_level) : ""} /></Field>
 

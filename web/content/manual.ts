@@ -140,7 +140,7 @@ export const CHAPTERS: Chapter[] = [
         id: "customer-car", title: "Add a customer and a car", who: "Front desk",
         steps: [
           "Go to Customers and press Add customer.",
-          "Type the name, choose Individual or Company, and type a mobile number. You can add the CNIC and address now or later.",
+          "Type the name, choose Individual or Company, and type a mobile number. For a company you can add the NTN; for a person you can add the CNIC. Address can wait until later.",
           "If the system shows a customer with the same phone number, open that customer. Only make a second record if it is really a different person, for example a family member who shares the phone.",
           "From the customer's page, add the car: number plate, make, model, year, fuel, colour, VIN or chassis number (one box for both), engine number and odometer.",
           "Tick \"Don't send WhatsApp messages\" if the customer does not want messages.",
@@ -190,10 +190,11 @@ export const CHAPTERS: Chapter[] = [
         steps: [
           "On the visit, press Start the job card. You can also send repairs from a signed inspection.",
           "Add each job by typing its name or code. For a part, you can scan its barcode. You can only add labour codes and parts that are already in the system.",
+          "If nothing matches, press Add to inventory (needs inventory permission): a window opens to create the part, then it is added to the job card.",
           "Set the quantity. Add a note if needed. A red stock number means there is not enough in stock. You can still make the quotation.",
           "Press Make the quotation.",
         ],
-        avoid: ["You cannot type a free-text job. If a labour code or a part is missing, add it first under Labour codes or Inventory."],
+        avoid: ["You cannot type a free-text labour job. Missing labour codes still have to be added under Labour codes first."],
       },
       {
         id: "quotation", title: "Price and send a quotation", who: "Service advisor",
@@ -237,6 +238,7 @@ export const CHAPTERS: Chapter[] = [
           "Press Issue on each part line to take the part out of stock.",
           "Choose the mechanic on each line. Mark the line Done or Not done when finished.",
           "Write notes in the activity list: a Note, a Finding, or a Customer update (the customer can see this one).",
+          "On Finding, while the job is In repair or Testing, you can also add a part or labour if the customer asks for something extra (same rules as Extra work).",
           "When all lines are finished, move the job to Ready. Every line must be marked Done or Not done first.",
         ],
         right: ["The activity list shows who did what, and when."],
@@ -245,11 +247,11 @@ export const CHAPTERS: Chapter[] = [
       {
         id: "extra-work", title: "Add extra work found during the repair", who: "Service advisor",
         steps: [
-          "On the repair order, use the Extra work found during the repair box. Choose the labour code or part. Type the price and the reason.",
-          "Record how the customer agreed: in person, WhatsApp or phone. Attach proof, or write the reason.",
-          "The line is marked Not in the quotation and appears on the invoice with the approval details.",
+          "On the repair order, use the Extra work found during the repair box under Work and parts, or open Activity → Finding and use Add a part or labour to this repair.",
+          "Choose the labour code or part, set quantity and price, and optionally write why it is needed. Press Add to the repair order. You can add another item straight away.",
+          "The line is marked Not in the quotation and appears on the invoice.",
         ],
-        avoid: ["Do not add extra work before the customer agrees. Call the customer first, then record it."],
+        avoid: ["You can only add extra work once the job is In repair or Testing."],
       },
     ],
   },
@@ -260,11 +262,12 @@ export const CHAPTERS: Chapter[] = [
       {
         id: "invoice", title: "Make and issue an invoice", who: "Billing clerk",
         steps: [
-          "On a repair order that is Ready, press Make the invoice. The jobs marked Done and the parts really used come across.",
-          "Check the prices, the discount and the tax switch.",
+          "On a repair order that is Ready, press Make the invoice. The jobs marked Done and the parts really used come across. Lines not used appear under Not used on this invoice.",
+          "Check the prices, the discount and the tax switch. With tax on, the Total shows Subtotal, Sales tax and Total, then Advance applied and Balance due.",
+          "If the advances are more than the invoice, Excess advance appears. An administrator must refund the excess (Confirm under Excess advance action) before Issue works.",
           "If the screen says the repair order changed, press Refresh from the repair order. Prices you edited are kept.",
-          "Press Issue. Prices are now locked, and any advance is taken off automatically.",
-          "Press Take a payment. Type the amount, choose the account, attach proof or write the reason. Repeat for each part payment.",
+          "Press Issue. Prices are now locked, and the advance applied is taken off automatically.",
+          "If Balance due is more than zero, press Take a payment. Type the amount, choose the account, attach proof or write the reason. Repeat for each part payment.",
         ],
         right: ["The invoice shows Paid when nothing is left to pay."],
         avoid: ["An issued invoice cannot be edited. Use Return or correct to make a credit note.", "You can cancel (void) a draft invoice with a reason. Its number stays on record."],
@@ -304,7 +307,10 @@ export const CHAPTERS: Chapter[] = [
       },
       {
         id: "advance-refund", title: "Give back an unused advance", who: "Administrator (advance-refund permission)",
-        steps: ["On the quotation, press Give back next to the advance. Write the reason, choose the account and attach proof. Change the amount to give back part of it; the rest stays held for the customer."],
+        steps: [
+          "On the quotation, press Give back next to the advance. Write the reason, choose the account and attach proof. Change the amount to give back part of it; the rest stays held for the customer.",
+          "Or on a draft invoice, when Excess advance shows, press Confirm under Excess advance action (Refund to customer) and record the refund there.",
+        ],
       },
     ],
   },

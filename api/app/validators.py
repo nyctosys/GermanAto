@@ -64,6 +64,18 @@ def normalize_cnic(value: str) -> str:
     return f"{digits[:5]}-{digits[5:12]}-{digits[12]}"
 
 
+def normalize_ntn(value: str) -> str:
+    """Company National Tax Number: 7 digits, optionally with a check digit (1234567-8). Empty stays empty."""
+    digits = re.sub(r"\D", "", value)
+    if not digits:
+        return ""
+    if len(digits) == 7:
+        return digits
+    if len(digits) == 8:
+        return f"{digits[:7]}-{digits[7]}"
+    raise ValueError("A company NTN has 7 digits, e.g. 1234567-8")
+
+
 def _strip(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
@@ -86,6 +98,7 @@ Email = Annotated[str, AfterValidator(lambda v: v.strip().lower()),
 Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
 Vin = Annotated[str, AfterValidator(normalize_vin)]
 Cnic = Annotated[str, AfterValidator(normalize_cnic)]
+Ntn = Annotated[str, AfterValidator(normalize_ntn)]
 Upper = Annotated[str, AfterValidator(lambda v: re.sub(r"\s+", " ", v).strip().upper())]
 
 

@@ -103,17 +103,17 @@ def test_extra_work_is_flagged_and_removable(admin):
     _, item, code, q = approved_quote(admin)
     ro = admin.post(f"/api/quotations/{approve(admin, q)['id']}/repair-order").json()
     url = f"/api/repair-orders/{ro['id']}"
-    base = {"kind": "labour", "labour_code_id": code["id"], "unit_price": "1500", "reason": "Found a leaking sump plug"}
-    assert admin.post(f"{url}/lines", json={**base, "approval_method": "phone", "no_proof_reason": "Agreed on a call"}).status_code == 409  # still Received
+    base = {"kind": "labour", "labour_code_id": code["id"], "unit_price": "1500"}
+    assert admin.post(f"{url}/lines", json=base).status_code == 409  # still Received
     ro = admin.post(f"{url}/status", json={"to": "in_repair", "version": ro["version"]}).json()
-    assert admin.post(f"{url}/lines", json={**base, "reason": "", "approval_method": "phone", "no_proof_reason": "Agreed on a call"}).status_code == 422  # reason
-    assert admin.post(f"{url}/lines", json={**base}).status_code == 422  # how did the customer agree?
-    assert admin.post(f"{url}/lines", json={**base, "approval_method": "phone"}).status_code == 422  # proof or a reason
-    ro = admin.post(f"{url}/lines", json={**base, "approval_method": "phone", "no_proof_reason": "Agreed on a call"}).json()
+    assert admin.post(f"{url}/lines", json={**base, "unit_price": "0"}).status_code == 422  # price required
+    ro = admin.post(f"{url}/lines", json=base).json()  # reason optional; no customer-agreement proof
     extra = ro["lines"][-1]
-    assert extra["in_quote"] is False and extra["approval"] == {"method": "phone", "reason": "Agreed on a call", "proof_url": None}
+    assert extra["in_quote"] is False and extra["approval"] is None
+    with_note = admin.post(f"{url}/lines", json={**base, "reason": "Customer asked for a second polish"}).json()["lines"][-1]
+    assert with_note["in_quote"] is False
     assert admin.delete(f"{url}/lines/{ro['lines'][0]['id']}").status_code == 409  # approved lines stay
-    assert len(admin.delete(f"{url}/lines/{extra['id']}").json()["lines"]) == 2
+    assert len(admin.delete(f"{url}/lines/{extra['id']}").json()["lines"]) == 3  # quote lines + second extra remain
 
 
 
