@@ -48,6 +48,30 @@ def balance_on(db: Session, branch, kind: str, on: date) -> Decimal:
     return d - c
 
 
+def day_net(db: Session, branch, kind: str, on: date) -> Decimal:
+    """Money that hit this account on `on` only (end-of-day books minus the day before)."""
+    prev = on - timedelta(days=1)
+    return balance_on(db, branch, kind, on) - balance_on(db, branch, kind, prev)
+
+
+def prior_close_before(db: Session, actor: Actor, kind: str, on: date) -> CashClose | None:
+    return db.scalar(select(CashClose).where(
+        CashClose.branch_id == actor.branch.id, CashClose.account == kind, CashClose.close_date < on)
+        .order_by(CashClose.close_date.desc(), CashClose.sequence.desc()).limit(1))
+
+
+def expected_for_close(db: Session, actor: Actor, kind: str, on: date) -> Decimal:
+    """What to count when signing `on`.
+
+    The first close ever for an account takes everything through that day (opening balance and
+    older untallied days). After a prior day has been signed, each new day counts only that
+    day's net movement — yesterday's receipts stay on yesterday and are not added into today.
+    """
+    if prior_close_before(db, actor, kind, on) is None:
+        return balance_on(db, actor.branch, kind, on)
+    return day_net(db, actor.branch, kind, on)
+
+
 def next_close_date(last: date | None, today: date) -> date | None:
     """The next new day this account should be signed. None means already closed through today
     (a post-closing recount may still be needed if money moved after the last sign)."""
@@ -106,15 +130,15 @@ def movements_since(db: Session, actor: Actor, kind: str, since) -> list[dict]:
 
 
 def post_closing_detail(db: Session, actor: Actor, kind: str, by_name: str | None = None) -> dict | None:
-    """If today was signed and money moved afterwards, return original close / movements / books now."""
+    """If today was signed and money moved afterwards, return original close / movements / today's net now."""
     today = local_today()
     rows = closes_on(db, actor, kind, today)
     if not rows:
         return None
     latest = rows[-1]
     moves = movements_since(db, actor, kind, latest.created_at)
-    books = journal.money_balance(db, actor.branch, kind)
-    if not moves and books == latest.counted:
+    to_count = expected_for_close(db, actor, kind, today)
+    if not moves and to_count == latest.counted:
         return None
     first = rows[0]
     return {
@@ -128,9 +152,9 @@ def post_closing_detail(db: Session, actor: Actor, kind: str, by_name: str | Non
              "difference": c.difference, "at": c.created_at} for c in rows
         ],
         "movements": moves,
-        "books_now": books,
+        "books_now": to_count,
         "last_signed": latest.counted,
-        "change_since_sign": books - latest.counted,
+        "change_since_sign": to_count - latest.counted,
     }
 
 
@@ -146,9 +170,9 @@ def day_sign_state(db: Session, actor: Actor, account: str, on: date) -> dict:
     post_closing = False
     if already and on == local_today():
         latest = rows[-1]
-        books = journal.money_balance(db, actor.branch, account)
         moves = movements_since(db, actor, account, latest.created_at)
-        post_closing = bool(moves) or books != latest.counted
+        to_count = expected_for_close(db, actor, account, on)
+        post_closing = bool(moves) or to_count != latest.counted
     if post_closing:
         can_sign = True
     elif already:
@@ -194,7 +218,7 @@ def status(actor: Actor = Depends(can_see), db: Session = Depends(get_db)):
             "closed_today": closed_today and not (detail and detail["needed"]),
             "signed_today": closed_today,
             "next_close_date": nxt,
-            "expected_on_next": balance_on(db, actor.branch, kind, nxt) if nxt else None,
+            "expected_on_next": expected_for_close(db, actor, kind, nxt) if nxt else None,
             "days_behind": (today - nxt).days if nxt and nxt < today else 0,
             "may_close_earlier": last is None and nxt == today,
             "post_closing": detail,
@@ -205,14 +229,13 @@ def status(actor: Actor = Depends(can_see), db: Session = Depends(get_db)):
 @router.get("/cash-closes/expected")
 def expected_for_day(account: Literal["cash", "bank", "wallet"], on: date,
                      actor: Actor = Depends(can_see), db: Session = Depends(get_db)):
-    """Books balance for one account at the end of a day — used when catching up or post-closing."""
+    """What to count for one account on a day — that day's net once a prior day is signed."""
     if on > local_today():
         raise HTTPException(422, "A day can't be closed before it has happened")
     ensure_money_setup(db, actor.branch)
     db.commit()
     return {
-        "account": account, "close_date": on, "expected": balance_on(db, actor.branch, account, on)
-        if on < local_today() else journal.money_balance(db, actor.branch, account),
+        "account": account, "close_date": on, "expected": expected_for_close(db, actor, account, on),
         **day_sign_state(db, actor, account, on),
     }
 
@@ -269,7 +292,7 @@ def missed_closes(actor: Actor = Depends(can_see), db: Session = Depends(get_db)
     out = []
     for d in sorted(by_day.keys(), reverse=True)[:60]:
         accounts = [k for k in KINDS if k in by_day[d]]
-        lines = [{"account": k, "name": names[k], "expected": balance_on(db, actor.branch, k, d)} for k in accounts]
+        lines = [{"account": k, "name": names[k], "expected": expected_for_close(db, actor, k, d)} for k in accounts]
         out.append({
             "date": d, "accounts": accounts, "names": [names[k] for k in accounts],
             "lines": lines, "total": sum((line["expected"] for line in lines), Decimal(0)),
@@ -311,10 +334,7 @@ def close(body: CloseIn, actor: Actor = Depends(can_close), db: Session = Depend
     gap = state["gap_fill"]
     post_closing = state["post_closing"]
     seq = state["close_count"] + 1
-    if day < local_today() or gap:
-        expected = balance_on(db, actor.branch, body.account, day)
-    else:
-        expected = journal.money_balance(db, actor.branch, body.account)
+    expected = expected_for_close(db, actor, body.account, day)
     diff = body.counted - expected
     if diff != 0 and len(body.reason) < 5:
         raise HTTPException(422, f"The count is {abs(diff):,.2f} {'over' if diff > 0 else 'short'}. Say why before signing.")

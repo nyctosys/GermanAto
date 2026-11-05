@@ -423,7 +423,7 @@ def test_closing_a_day_signs_the_count_and_posts_the_difference(admin):
 
 
 def test_a_missed_day_is_closed_before_today_with_its_own_books(admin):
-    """Yesterday and today each get their own signed count; today's books include today's takings only after yesterday is signed."""
+    """Yesterday and today each get their own signed count; after yesterday is signed, today counts only today's takings."""
     yesterday = date.today() - timedelta(days=1)
     entry(admin, kind="other_income", amount="100", occurred_on=yesterday.isoformat())
     entry(admin, kind="other_income", amount="40")
@@ -432,8 +432,8 @@ def test_a_missed_day_is_closed_before_today_with_its_own_books(admin):
     assert admin.post("/api/cash-closes", json={"account": "cash", "close_date": yesterday.isoformat(), "counted": "100"}).status_code == 201
     st = next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")
     assert st["next_close_date"] == date.today().isoformat() and st["days_behind"] == 0 and not st["closed_today"]
-    assert D(str(st["expected_on_next"])) == 140
-    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "140"}).status_code == 201
+    assert D(str(st["expected_on_next"])) == 40  # today's 40 only — yesterday's 100 stays on yesterday
+    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "40"}).status_code == 201
     assert next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")["closed_today"] is True
 
 

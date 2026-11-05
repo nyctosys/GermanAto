@@ -419,12 +419,12 @@ export const CHAPTERS: Chapter[] = [
       {
         id: "cash-close", title: "Close the day (count the money)", who: "Accountant (cash-close permission). Every evening.",
         steps: [
-          "Go to Money, then Cash close. If yesterday was missed, the screen says Close previous day first and shows yesterday's book totals (not today's).",
+          "Go to Money, then Cash close. If yesterday was missed, the screen says Close previous day first and shows what to count for yesterday only (not today's money).",
           "Press Close [that day] first. You see cash, bank and mobile wallet with that day's books. Count and sign each one.",
           "When that day is fully signed, press Close today next. Today's totals appear. Count and sign cash, bank and wallet again for today.",
           "If urgent money must be recorded after today is signed, record it as usual. Cash close then shows the original close, the new transactions, and the updated total — sign a post-closing count so the books match again. The first close stays in the history.",
         ],
-        right: ["Any difference is recorded as Cash over and short. The next day starts from the amount you counted.", "Yesterday and today each have their own signed count with their own book figures.", "Post-closing recounts keep the original signed amount and add a second signed count."],
+        right: ["Any difference is recorded as Cash over and short.", "Yesterday and today each have their own signed count — today only includes today's money in and out.", "Post-closing recounts keep the original signed amount and add a second signed count."],
         avoid: ["A signed close cannot be edited. Use a post-closing recount after late transactions.", "Do not skip days when catching up. Month end still needs a count on the last day of the month."],
       },
     ],

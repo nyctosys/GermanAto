@@ -227,13 +227,13 @@ function Body() {
                     <p className="font-medium">{s.name}</p>
                     {showCatchUp ? (
                       <>
-                        <p className="mt-1 text-sm text-muted">Books at end of {day(nextDay!)}</p>
+                        <p className="mt-1 text-sm text-muted">To count for {day(nextDay!)}</p>
                         <p className="num text-lg">{moneyExact(forDay)}</p>
-                        <p className="mt-2 text-sm text-muted">Today now: {moneyExact(s.expected)} (closes after {day(nextDay!)})</p>
+                        <p className="mt-2 text-sm text-muted">Running total now: {moneyExact(s.expected)} (closes after {day(nextDay!)})</p>
                       </>
                     ) : (
                       <>
-                        <p className="mt-1 text-sm text-muted">{nextDay === today() ? "Books for today" : "Books now"}</p>
+                        <p className="mt-1 text-sm text-muted">{nextDay === today() ? "To count for today" : "To count"}</p>
                         <p className="num text-lg">{moneyExact(s.expected_on_next ?? s.expected)}</p>
                       </>
                     )}
@@ -379,8 +379,8 @@ function DaySession({ closeDate, accounts, canClose, onDone, onLeave, onContinue
           {postClosing
             ? "Original closes are kept. Sign each account that still has new transactions after the last sign."
             : isToday
-              ? "These are today's book totals. Sign cash, bank and mobile wallet."
-              : `These are the books as of the end of ${day(closeDate)}. Sign each account that still needs this day — including a skipped month-end day after later closes.`}
+              ? "Count only today's money in and out for each account (yesterday's signed day stays on yesterday)."
+              : `Count only the money in and out on ${day(closeDate)} for each account that still needs this day — including a skipped month-end day after later closes.`}
         </p>
       </Card>
       <div className="grid gap-4 shell:grid-cols-3">
@@ -449,7 +449,7 @@ function AccountForDay({ s, closeDate, canClose, onDone }: { s: Status; closeDat
 
   return (
     <Card title={s.name}>
-      <p className="text-sm text-muted">{info?.post_closing ? "Updated books now (after new transactions)" : `Books at the end of ${day(closeDate)}`}</p>
+      <p className="text-sm text-muted">{info?.post_closing ? "Updated total for today (after new transactions)" : `To count for ${day(closeDate)}`}</p>
       <p className="num text-xl">{loading && expected == null ? "…" : moneyExact(expected ?? 0)}</p>
       {expected != null && expected < 0 && (
         <p className="mt-1 text-sm text-error">Less than nothing? The opening balance may be missing. The owner can set it under Money settings.</p>
@@ -489,7 +489,7 @@ function AccountForDay({ s, closeDate, canClose, onDone }: { s: Status; closeDat
 
       {counting && expected != null && (
         <form noValidate onSubmit={submit} className="mt-4 space-y-4" {...live}>
-          <Field label="What was really in it (Rs)" error={errors.counted}>
+          <Field label="What you counted for this day (Rs)" error={errors.counted}>
             <Input inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} autoFocus />
           </Field>
           {diff !== null && diff !== 0 && (
