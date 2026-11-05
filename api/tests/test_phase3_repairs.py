@@ -69,15 +69,15 @@ def test_status_rules_and_activity(admin):
     url = f"/api/repair-orders/{ro['id']}"
     go = lambda to, **kw: admin.post(f"{url}/status", json={"to": to, "version": admin.get(url).json()["version"], **kw})
     assert go("in_repair").status_code == 200
-    assert go("received").status_code == 422  # backwards needs a note
-    assert go("received", note="Still booking the bay").status_code == 200
+    assert go("received").status_code == 200  # revisiting an earlier stage is allowed
+    assert "in repair" in go("testing").json()["detail"].lower()  # cannot skip ahead
     assert go("in_repair").status_code == 200
     assert go("on_hold").status_code == 422
     held = go("on_hold", note="Waiting for parts").json()
     assert held["status"] == "on_hold" and held["held_from"] == "in_repair"
     assert go("in_repair").status_code == 200  # resuming needs no note
     assert "Mark these done" in go("testing").json()["detail"]
-    assert "Testing first" in go("ready").json()["detail"]
+    assert "testing" in go("ready").json()["detail"].lower()  # still cannot skip to Ready
 
     assert admin.get("/api/technicians").json() == []  # only employees offered for repair work appear
     admin.post("/api/employees", json={"full_name": "Bilal Ahmed", "title": "Technician", "joined_on": "2026-01-01"})

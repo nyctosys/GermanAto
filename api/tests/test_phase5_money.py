@@ -407,6 +407,7 @@ def test_closing_a_day_signs_the_count_and_posts_the_difference(admin):
     entry(admin, kind="other_income", amount="2500")
     st = next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")
     assert D(str(st["expected"])) == 12500 and st["last_close"] is None and not st["closed_today"]
+    assert st["next_close_date"] == date.today().isoformat() and st["may_close_earlier"] is True and st["days_behind"] == 0
 
     assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "12300"}).status_code == 422  # short without a reason
     done = admin.post("/api/cash-closes", json={"account": "cash", "counted": "12300", "reason": "Change given wrongly to a customer"})
@@ -416,8 +417,32 @@ def test_closing_a_day_signs_the_count_and_posts_the_difference(admin):
     b = rows(admin)
     assert b["1010"] == 12300 and b["6910"] == 200  # the books now say what was counted; the shortage is an expense
     assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "12300"}).status_code == 409  # once a day
-    assert next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")["closed_today"] is True
+    done_st = next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")
+    assert done_st["closed_today"] is True and done_st["next_close_date"] is None
     assert admin.get("/api/cash-closes", params={"account": "cash"}).json()[0]["difference"] == -200
+
+
+def test_a_missed_day_is_closed_before_today_with_its_own_books(admin):
+    """Yesterday and today each get their own signed count; today's books include today's takings only after yesterday is signed."""
+    yesterday = date.today() - timedelta(days=1)
+    entry(admin, kind="other_income", amount="100", occurred_on=yesterday.isoformat())
+    entry(admin, kind="other_income", amount="40")
+    exp_y = admin.get("/api/cash-closes/expected", params={"account": "cash", "on": yesterday.isoformat()})
+    assert exp_y.status_code == 200 and D(str(exp_y.json()["expected"])) == 100
+    assert admin.post("/api/cash-closes", json={"account": "cash", "close_date": yesterday.isoformat(), "counted": "100"}).status_code == 201
+    st = next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")
+    assert st["next_close_date"] == date.today().isoformat() and st["days_behind"] == 0 and not st["closed_today"]
+    assert D(str(st["expected_on_next"])) == 140
+    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "140"}).status_code == 201
+    assert next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")["closed_today"] is True
+
+
+def test_status_shows_days_behind_when_a_day_was_skipped(admin):
+    two_ago = date.today() - timedelta(days=2)
+    entry(admin, kind="other_income", amount="10", occurred_on=two_ago.isoformat())
+    assert admin.post("/api/cash-closes", json={"account": "cash", "close_date": two_ago.isoformat(), "counted": "10"}).status_code == 201
+    st = next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")
+    assert st["next_close_date"] == (date.today() - timedelta(days=1)).isoformat() and st["days_behind"] == 1
 
 
 def test_a_surplus_is_income_and_an_exact_count_posts_nothing(admin):

@@ -9,6 +9,7 @@ import { type Uploaded } from "@/components/capture";
 import { previewTotals } from "@/components/billing";
 import { CatalogPicker, lineCode, lineName, linkButton, type Pick, QuoteBadge, type QuoteLine, type QuoteStatus } from "@/components/estimates";
 import { NextStep } from "@/components/next-step";
+import { PartsToOrder } from "@/components/parts-to-order";
 import { type Payment, type PaymentBody, PaymentForm, PaymentList, ProofInput, ProofLinks, RefundForm } from "@/components/payments";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
@@ -130,6 +131,9 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
                 </Fact>
               </dl>
             </Card>
+          )}
+          {["approved", "converted"].includes(q.status) && (
+            <PartsToOrder mode="quotation" lines={q.lines} hint="Parts from this quotation that are out of stock or low. Save a draft, then send it from Purchase orders." />
           )}
           {q.status === "rejected" && <Notice tone="warning">Rejected: {q.rejected_reason}</Notice>}
 
@@ -454,3 +458,4 @@ function AdvanceForm({ q, onDone, onCancel }: { q: Quotation; onDone: () => void
                  note={<p className="text-sm text-muted">An advance is the customer&apos;s money until the invoice uses it. A refund needs an admin&apos;s approval.</p>} />
   );
 }
+

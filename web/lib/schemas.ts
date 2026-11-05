@@ -284,7 +284,7 @@ export const closeSchema = (expected: number) => z.object({
   reason: z.string().trim(),
   note: text(500),
 }).superRefine((c, ctx) => {
-  const diff = Math.round((Number(c.counted) - expected) * 100) / 100;
+  const diff = (Math.round(Number(c.counted) * 100) - Math.round(expected * 100)) / 100;
   if (/^\d/.test(c.counted) && diff !== 0 && c.reason.length < 5) ctx.addIssue({ code: "custom", path: ["reason"], message: "Say why the count differs" });
 });
 

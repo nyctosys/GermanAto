@@ -34,6 +34,19 @@ def last_close(db: Session, actor: Actor, kind: str) -> CashClose | None:
                      .order_by(CashClose.close_date.desc()).limit(1))
 
 
+def balance_on(db: Session, branch, kind: str, on: date) -> Decimal:
+    d, c = journal.balances(db, branch, as_of=on).get(journal.MONEY_CODE[kind], (Decimal(0), Decimal(0)))
+    return d - c
+
+
+def next_close_date(last: date | None, today: date) -> date | None:
+    """The next day this account should be signed. None means already closed through today."""
+    if last is None:
+        return today
+    nxt = last + timedelta(days=1)
+    return None if nxt > today else nxt
+
+
 def assert_day_open(db: Session, branch_id, accounts: set, on: date) -> None:
     """A signed count is final: nothing may be recorded or voided on a day that account has already closed."""
     hit = db.scalar(select(func.max(CashClose.close_date)).where(CashClose.branch_id == branch_id, CashClose.account.in_(accounts - {None}),
@@ -49,17 +62,38 @@ def close_out(c: CashClose, by: str | None) -> dict:
 
 @router.get("/cash-closes/status")
 def status(actor: Actor = Depends(can_see), db: Session = Depends(get_db)):
-    """For each account: what the books say now, and the last signed count."""
+    """For each account: books now, last signed count, and the next day to close (with books as of that day)."""
     ensure_money_setup(db, actor.branch)
     db.commit()
+    today = local_today()
     names = {a.kind: a.name for a in db.scalars(select(Account).where(Account.branch_id == actor.branch.id))}
     out = []
     for kind in KINDS:
         last = last_close(db, actor, kind)
-        out.append({"account": kind, "name": names[kind], "expected": journal.money_balance(db, actor.branch, kind),
-                    "last_close": last and {"close_date": last.close_date, "counted": last.counted, "difference": last.difference},
-                    "closed_today": bool(last and last.close_date == local_today())})
+        nxt = next_close_date(last.close_date if last else None, today)
+        out.append({
+            "account": kind, "name": names[kind],
+            "expected": journal.money_balance(db, actor.branch, kind),
+            "last_close": last and {"close_date": last.close_date, "counted": last.counted, "difference": last.difference},
+            "closed_today": bool(last and last.close_date == today),
+            # Catch-up: next day to sign, with the books frozen at that day's end (today's takings stay for today's close).
+            "next_close_date": nxt,
+            "expected_on_next": balance_on(db, actor.branch, kind, nxt) if nxt else None,
+            "days_behind": (today - nxt).days if nxt and nxt < today else 0,
+            "may_close_earlier": last is None and nxt == today,
+        })
     return out
+
+
+@router.get("/cash-closes/expected")
+def expected_for_day(account: Literal["cash", "bank", "wallet"], on: date,
+                     actor: Actor = Depends(can_see), db: Session = Depends(get_db)):
+    """Books balance for one account at the end of a day — used when catching up a missed close."""
+    if on > local_today():
+        raise HTTPException(422, "A day can't be closed before it has happened")
+    ensure_money_setup(db, actor.branch)
+    db.commit()
+    return {"account": account, "close_date": on, "expected": balance_on(db, actor.branch, account, on)}
 
 
 @router.get("/cash-closes")

@@ -189,16 +189,17 @@ def change_status(ro_id: uuid.UUID, body: StatusIn, actor: Actor = Depends(can_r
     if body.to == ro.status:
         raise HTTPException(422, f"It is already {STAGE_NAMES[ro.status].lower()}")
     current = ro.held_from if ro.status == "on_hold" else ro.status
-    backwards = body.to != "on_hold" and WORKING.index(body.to) < WORKING.index(current)
-    if (body.to == "on_hold" or backwards) and len(body.note) < 3:
-        raise HTTPException(422, "Say why: a note is needed to put a job on hold or move it back a stage")
-    if body.to == "ready" and current != "testing":
-        raise HTTPException(422, "A car cannot go straight to Ready. Move it to Testing first, check the work, then Ready")
-    # Leaving In repair for Testing, or Testing for Ready, needs every line Done or Not done.
-    if body.to in ("testing", "ready") and not backwards:
-        pending = [l.description for l in ro.lines if l.state == "pending"]
-        if pending:
-            raise HTTPException(422, f"Mark these done or not done first: {', '.join(pending)}")
+    if body.to == "on_hold" and len(body.note) < 3:
+        raise HTTPException(422, "Say why: a note is needed to put a job on hold")
+    if body.to != "on_hold":
+        cur_i, to_i = WORKING.index(current), WORKING.index(body.to)
+        if to_i > cur_i + 1:
+            raise HTTPException(422, f"Finish {STAGE_NAMES[WORKING[cur_i + 1]].lower()} before moving further ahead")
+        # Leaving In repair for Testing, or Testing for Ready, needs every line Done or Not done.
+        if to_i == cur_i + 1 and body.to in ("testing", "ready"):
+            pending = [l.description for l in ro.lines if l.state == "pending"]
+            if pending:
+                raise HTTPException(422, f"Mark these done or not done first: {', '.join(pending)}")
     ro.held_from = current if body.to == "on_hold" else None
     _log(db, ro, "status", body.note, from_status=ro.status, to_status=body.to, customer_visible=body.customer_visible)
     ro.status = body.to

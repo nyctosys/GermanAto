@@ -20,7 +20,8 @@ def setup_job(admin):
 def test_job_card_lists_codes_and_items_and_flags_shortage(admin):
     _, jc, _, _ = setup_job(admin)
     assert jc["number"].startswith("JC-") and [l["kind"] for l in jc["lines"]] == ["labour", "part"]
-    assert Decimal(jc["lines"][1]["item"]["short"]) == 2
+    part = jc["lines"][1]["item"]
+    assert Decimal(part["short"]) == 2 and part["low_stock"] is False and "reorder_level" in part and "avg_cost" in part
     bad = admin.put(f"/api/job-cards/{jc['id']}", json={"lines": [{"kind": "labour", "item_id": jc["lines"][1]["item_id"]}],
                                                        "version": jc["version"]})
     assert bad.status_code == 422  # free text or the wrong target is refused

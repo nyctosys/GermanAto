@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, startTransition, useOptimistic, useState, type FormEvent } from "react";
 import { type Uploaded, PhotoCapture } from "@/components/capture";
 import { CatalogPicker, lineCode, linkButton, type Pick } from "@/components/estimates";
+import { PartsToOrder } from "@/components/parts-to-order";
 import { ProofLinks } from "@/components/payments";
 import { RO_STAGES, RoBadge, STAGE, stageActions, workStage, type RoLine, type RoStatus } from "@/components/repairs";
 import { Segments } from "@/components/search";
@@ -104,6 +105,18 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
           <StatusCard ro={ro} working={working} busy={busy} onMove={(to, note) => call("/status", "POST", { to, note, version: ro.version })} />
           <Notice>{error}</Notice>
 
+          {working && (
+            <PartsToOrder
+              mode="repair"
+              hint="Parts still to issue that are out of stock or low. Save a draft, then send it from Purchase orders."
+              lines={ro.lines.map((l) => ({
+                ...l,
+                // Only the quantity still waiting to be issued counts toward the shortage.
+                qty: l.kind === "part" ? String(Math.max(Number(l.qty) - Number(l.issued_qty), 0)) : l.qty,
+              }))}
+            />
+          )}
+
           <div id="act-work" tabIndex={-1}><Card title="Work and parts" actions={<span className="text-sm text-muted">{pending ? `${pending} to do` : "All lines marked"}</span>} flush>
             <ul>
               {ro.lines.map((l) => <LineRow key={l.id} l={l} techs={techs} working={working} actions={actions} busy={busy} call={call} />)}
@@ -147,12 +160,16 @@ function StatusCard({ ro, working, busy, onMove }:
   { ro: RepairOrder; working: boolean; busy: boolean; onMove: (to: RoStatus, note: string) => Promise<boolean> }) {
   const [target, setTarget] = useState<RoStatus | null>(null);
   const [note, setNote] = useState("");
+  const locked = ro.status === "delivered";
   const current = ro.status === "on_hold" ? ro.held_from! : ro.status;
   const at = RO_STAGES.indexOf(current);
   const next = RO_STAGES[at + 1];
-  const needsNote = target === "on_hold" || (target != null && RO_STAGES.indexOf(target) < at);
+  const needsNote = target === "on_hold";
   const pending = ro.lines.filter((l) => l.state === "pending");
-  const needsLinesDone = (to: RoStatus | null) => to === "testing" || to === "ready";
+  const needsLinesDone = (to: RoStatus | null) => {
+    if (!to || to === "on_hold") return false;
+    return (to === "testing" || to === "ready") && RO_STAGES.indexOf(to) > at;
+  };
   const nextBlocked = needsLinesDone(next) && pending.length > 0;
   const targetBlocked = needsLinesDone(target) && pending.length > 0;
 
@@ -164,13 +181,26 @@ function StatusCard({ ro, working, busy, onMove }:
   return (
     <Card title="Progress">
       <ol className="mb-4 flex flex-wrap gap-1" aria-label="Stages">
-        {RO_STAGES.map((s, i) => (
-          <li key={s} aria-current={s === current ? "step" : undefined}
-              className={`rounded-control px-2.5 py-1 text-sm ${s === current ? "bg-ink text-surface" : i < at ? "bg-paper-3 text-ink-2" : "text-muted"}`}>
-            {STAGE[s]}
-          </li>
-        ))}
+        {RO_STAGES.map((s, i) => {
+          const isCurrent = s === current;
+          // Earlier stages can be revisited; forward only to the next incomplete stage. Delivered stays locked.
+          const canPick = working && !locked && !isCurrent && (i < at || s === next) && s !== "delivered";
+          const tone = isCurrent ? "bg-ink text-surface" : i < at ? "bg-paper-3 text-ink-2" : "text-muted";
+          return (
+            <li key={s} aria-current={isCurrent ? "step" : undefined}>
+              {canPick ? (
+                <button type="button" onClick={() => { setTarget(s); setNote(""); }}
+                        className={`rounded-control px-2.5 py-1 text-sm underline-offset-2 hover:underline ${tone}`}>
+                  {STAGE[s]}
+                </button>
+              ) : (
+                <span className={`inline-block rounded-control px-2.5 py-1 text-sm ${tone}`}>{STAGE[s]}</span>
+              )}
+            </li>
+          );
+        })}
       </ol>
+      {locked && <div className="mb-4"><Notice>Delivered. Stages are locked; the repair order is closed.</Notice></div>}
       {ro.status === "on_hold" && <div className="mb-4"><Notice tone="warning">On hold. It resumes at {STAGE[ro.held_from!].toLowerCase()}.</Notice></div>}
       {working && nextBlocked && (
         <div className="mb-4">
@@ -198,16 +228,10 @@ function StatusCard({ ro, working, busy, onMove }:
                 <Button id="act-move" onClick={() => setTarget(next)} disabled={busy || nextBlocked}>Move to {STAGE[next].toLowerCase()}</Button>
               )}
             {ro.status !== "on_hold" && <Button variant="secondary" onClick={() => setTarget("on_hold")}>Put on hold</Button>}
-            <label className="min-w-40">
-              <span className="sr-only">Move to another stage</span>
-              <Select value="" onChange={(e) => e.target.value && setTarget(e.target.value as RoStatus)}>
-                <option value="">Other stage</option>
-                {RO_STAGES.filter((s) => s !== current && s !== "delivered").map((s) => <option key={s} value={s}>{STAGE[s]}</option>)}
-              </Select>
-            </label>
+            <p className="w-full text-sm text-muted">Press an earlier stage above to go back. You can only move forward one stage at a time. Delivered is set only by the gate pass.</p>
           </div>
         )
-      ) : <p className="text-muted">{ro.status === "delivered" ? "Delivered. This repair order is closed." : "The visit is closed."}</p>}
+      ) : !locked && <p className="text-muted">The visit is closed.</p>}
       {ro.status === "ready" && <InvoiceStep ro={ro} />}
     </Card>
   );
@@ -284,77 +308,123 @@ function LineRow({ l, techs, working, actions, busy, call }:
   );
 }
 
-function ExtraWork({ busy, onAdd, embedded, suggestedReason }: {
-  busy: boolean; onAdd: (b: object) => Promise<boolean>; embedded?: boolean; suggestedReason?: string;
+type ExtraDraft = { key: string; pick: Pick; qty: string; unit_price: string };
+
+function ExtraWork({ busy, onAdd, embedded, suggestedReason, onDismiss }: {
+  busy: boolean; onAdd: (b: object) => Promise<boolean>; embedded?: boolean; suggestedReason?: string; onDismiss?: () => void;
 }) {
-  const [pick, setPick] = useState<Pick | null>(null);
-  const [price, setPrice] = useState("");
-  const [amount, setAmount] = useState("1");
+  const [rows, setRows] = useState<ExtraDraft[]>([]);
   const [reason, setReason] = useState("");
   const [tried, setTried] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
-  const lineTotal = (Number(amount) || 0) * (Number(price) || 0);
+  const total = rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.unit_price) || 0), 0);
+  const qtyBad = (r: ExtraDraft) => r.pick.kind === "part" && !lineQty.safeParse(r.qty).success;
+  const priceBad = (r: ExtraDraft) => !linePrice.safeParse(r.unit_price).success;
 
   function resetForm(keepReason = false) {
-    setPick(null);
-    setPrice("");
-    setAmount("1");
+    setRows([]);
     if (!keepReason) setReason("");
     setTried(false);
   }
 
   function choose(p: Pick) {
     setJustAdded(null);
-    setPick(p);
-    setPrice(p.kind === "part" && Number(p.sale_price) ? String(Number(p.sale_price)) : "");
+    setRows((rs) => {
+      if (rs.some((r) => r.pick.id === p.id)) return rs;
+      return [...rs, {
+        key: crypto.randomUUID(), pick: p, qty: "1", // labour is always one line; qty is only edited for parts
+        unit_price: p.kind === "part" && Number(p.sale_price) ? String(Number(p.sale_price)) : "",
+      }];
+    });
     if (!reason.trim() && suggestedReason?.trim()) setReason(suggestedReason.trim().slice(0, 500));
+  }
+
+  function edit(key: string, patch: Partial<ExtraDraft>) {
+    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+
+  function cancel() {
+    resetForm();
+    setJustAdded(null);
+    onDismiss?.();
   }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setTried(true);
-    if (!pick || !linePrice.safeParse(price).success || !lineQty.safeParse(amount).success) return;
-    const name = pick.name;
-    const ok = await onAdd({ kind: pick.kind, labour_code_id: pick.kind === "labour" ? pick.id : null, item_id: pick.kind === "part" ? pick.id : null,
-                             qty: amount, unit_price: price, reason: reason.trim() });
-    if (ok) { setJustAdded(name); resetForm(true); }
+    if (!rows.length || rows.some((r) => qtyBad(r) || priceBad(r))) return;
+    const names: string[] = [];
+    const done = new Set<string>();
+    for (const r of rows) {
+      const ok = await onAdd({
+        kind: r.pick.kind, labour_code_id: r.pick.kind === "labour" ? r.pick.id : null,
+        item_id: r.pick.kind === "part" ? r.pick.id : null,
+        qty: r.pick.kind === "labour" ? "1" : r.qty, unit_price: r.unit_price, reason: reason.trim(),
+      });
+      if (!ok) {
+        setRows((rs) => rs.filter((x) => !done.has(x.key)));
+        if (names.length) setJustAdded(names.length === 1 ? names[0] : `${names.length} items`);
+        return;
+      }
+      done.add(r.key);
+      names.push(r.pick.name);
+    }
+    setJustAdded(names.length === 1 ? names[0] : `${names.length} items`);
+    resetForm(true);
   }
+
   return (
     <div className={embedded ? "space-y-3" : "border-t border-rule p-4 shell:px-5"}>
       {justAdded && (
-        <p className="text-sm text-success" role="status">{justAdded} added to the repair order. Add another below, or leave it.</p>
+        <p className="text-sm text-success" role="status">{justAdded} added to the repair order. Add more below, or leave it.</p>
       )}
-      {!pick ? (
-        <>
-          <p className="mb-2 text-sm font-medium text-ink-2">
-            {embedded
-              ? (justAdded ? "Add another part or labour" : "Add a part or labour to this repair")
-              : (justAdded ? "Add another item" : "Extra work found during the repair")}
-          </p>
-          {embedded && !justAdded && (
-            <p className="mb-2 text-sm text-muted">When the customer asks for something extra, pick it here. It is marked not in the quotation.</p>
-          )}
-          <CatalogPicker onPick={choose} />
-        </>
-      ) : (
-        <form onSubmit={submit} onBlurCapture={() => setTried(true)} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_6rem_9rem]">
-          <p className="font-medium sm:col-span-3">{pick.name} <span className="text-sm font-normal text-muted">{pick.code}</span></p>
-          <Field required={false} label="Why is it needed? (optional)">
-            <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} autoFocus />
+      <p className="text-sm font-medium text-ink-2">
+        {embedded
+          ? (justAdded ? "Add more parts or labour" : "Add parts or labour to this repair")
+          : (justAdded ? "Add more items" : "Extra work found during the repair")}
+      </p>
+      {embedded && !justAdded && (
+        <p className="text-sm text-muted">Search and pick several labour codes or inventory parts, then add them together. Extra work is marked not in the quotation.</p>
+      )}
+      <CatalogPicker onPick={choose} />
+      {rows.length > 0 && (
+        <form onSubmit={submit} onBlurCapture={() => setTried(true)} className="space-y-3">
+          <ul className="rounded-control border border-rule">
+            {rows.map((r) => (
+              <li key={r.key} className={`grid gap-3 border-t border-rule px-3 py-3 first:border-t-0 sm:items-end ${r.pick.kind === "part" ? "sm:grid-cols-[minmax(0,1fr)_5rem_8rem_auto]" : "sm:grid-cols-[minmax(0,1fr)_8rem_auto]"}`}>
+                <div className="min-w-0 self-center">
+                  <p className="font-medium">{r.pick.name}</p>
+                  <p className="text-sm text-muted">{r.pick.kind === "labour" ? "Labour" : "Part"} · {r.pick.code}</p>
+                </div>
+                {r.pick.kind === "part" && (
+                  <Field label="Qty" error={tried && qtyBad(r) ? "More than 0" : undefined}>
+                    <Input type="number" inputMode="decimal" min="0" step="any" value={r.qty} onChange={(e) => edit(r.key, { qty: e.target.value })} />
+                  </Field>
+                )}
+                <Field label="Price (Rs)" error={tried && priceBad(r) ? "Enter the price" : undefined}>
+                  <Input type="number" inputMode="decimal" min="0" step="any" value={r.unit_price} onChange={(e) => edit(r.key, { unit_price: e.target.value })} />
+                </Field>
+                <Button type="button" variant="danger" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>Remove</Button>
+              </li>
+            ))}
+          </ul>
+          <Field required={false} label="Why are these needed? (optional)">
+            <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
           </Field>
-          <Field label="Qty" error={tried && !lineQty.safeParse(amount).success ? "More than 0" : undefined}>
-            <Input inputMode="decimal" autoComplete="off" name="qty" defaultValue={amount} onChange={(e) => setAmount(e.target.value)} />
-          </Field>
-          <Field label="Price (Rs)" error={tried && !linePrice.safeParse(price).success ? "Enter the price" : undefined}>
-            <Input key={pick.id} inputMode="decimal" autoComplete="off" name="unit_price" defaultValue={price} onChange={(e) => setPrice(e.target.value)} />
-          </Field>
-          {lineTotal > 0 && <p className="num text-sm font-medium text-ink-2 sm:col-span-3">Line total {money(lineTotal)}</p>}
-          <p className="text-sm text-muted sm:col-span-3">It is marked “not in the quotation” and carries to the invoice.</p>
-          <div className="flex flex-wrap gap-2 sm:col-span-3">
-            <Button type="submit" variant="secondary" disabled={busy}>Add to the repair order</Button>
-            <Button type="button" variant="ghost" onClick={() => { resetForm(); setJustAdded(null); }}>Cancel</Button>
+          {total > 0 && <p className="num text-sm font-medium text-ink-2">Total {money(total)}</p>}
+          <p className="text-sm text-muted">Each is marked “not in the quotation” and carries to the invoice.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="secondary" disabled={busy}>
+              {busy ? "Adding" : rows.length === 1 ? "Add to the repair order" : `Add ${rows.length} to the repair order`}
+            </Button>
+            <Button type="button" variant="ghost" onClick={cancel}>{onDismiss ? "Cancel" : "Clear"}</Button>
           </div>
         </form>
+      )}
+      {!rows.length && onDismiss && (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="ghost" onClick={cancel}>{justAdded ? "Done" : "Cancel"}</Button>
+        </div>
       )}
     </div>
   );
@@ -370,6 +440,12 @@ function ActivityCard({ ro, working, busy, canExtra, onAdd, onExtra }: {
   const [body, setBody] = useState("");
   const [lineId, setLineId] = useState("");
   const [photos, setPhotos] = useState<Uploaded[]>([]);
+  const [addingExtra, setAddingExtra] = useState(false);
+
+  function setActivityKind(next: string) {
+    setKind(next);
+    if (next !== "finding") setAddingExtra(false);
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -382,7 +458,7 @@ function ActivityCard({ ro, working, busy, canExtra, onAdd, onExtra }: {
       {working && (
         <div className="mb-5 space-y-3">
           <form onSubmit={submit} className="space-y-3">
-            <Segments value={kind} onChange={setKind} options={Object.entries(KINDS).map(([value, label]) => ({ value, label }))} />
+            <Segments value={kind} onChange={setActivityKind} options={Object.entries(KINDS).map(([value, label]) => ({ value, label }))} />
             <label className="block">
               <span className="sr-only">{KINDS[kind]}</span>
               <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={3000}
@@ -407,9 +483,18 @@ function ActivityCard({ ro, working, busy, canExtra, onAdd, onExtra }: {
           </form>
           {kind === "finding" && (
             <div className="rounded-control border border-rule bg-paper-2 p-3 shell:p-4">
-              {canExtra
-                ? <ExtraWork embedded busy={busy} suggestedReason={body} onAdd={onExtra} />
-                : <p className="text-sm text-muted">Move the job to In repair first, then you can add a part or labour here when the customer asks for something extra.</p>}
+              {canExtra ? (
+                addingExtra
+                  ? <ExtraWork embedded busy={busy} suggestedReason={body} onAdd={onExtra} onDismiss={() => setAddingExtra(false)} />
+                  : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted">If this finding needs extra labour or parts, add them here. Same as extra work under Work and parts.</p>
+                      <Button type="button" variant="secondary" onClick={() => setAddingExtra(true)}>Add labour or part</Button>
+                    </div>
+                  )
+              ) : (
+                <p className="text-sm text-muted">Move the job to In repair first, then you can add labour or parts here when extra work is needed.</p>
+              )}
             </div>
           )}
         </div>

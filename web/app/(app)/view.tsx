@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { CashHero, MonthMoneyCharts, WorkshopKpiCharts } from "@/components/dashboard-charts";
 import { HowItWorks } from "@/components/how-it-works";
 import { MyWork } from "@/components/my-work";
-import { Stat, StatGroup } from "@/components/reports";
 import { Card, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
 import { useApi } from "@/lib/api";
-import { money } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
 type Dash = {
@@ -16,7 +15,7 @@ type Dash = {
     receivables: string; overdue_receivables: string; payables: string; overdue_payables: string; stock_value: string };
   alerts?: { missing_proof: number; unclosed_months: string[]; low_stock: number; overdue_bills: number; overdue_invoices: number };
 };
-const ACCOUNT: Record<string, string> = { cash: "Cash", bank: "Bank", wallet: "Wallet" };
+
 const monthName = (m: string) => new Date(`${m}-01`).toLocaleDateString("en-PK", { month: "long", year: "numeric" });
 
 export default function Dashboard() {
@@ -34,60 +33,78 @@ export default function Dashboard() {
     ...(a.unclosed_months.length ? [[`${monthName(a.unclosed_months[0])} is not closed${a.unclosed_months.length > 1 ? `, and ${a.unclosed_months.length - 1} more` : ""}`, "/periods", "Month-end closing"] as [string, string, string]] : []),
   ] : (d.data.stock.low_stock ? [[`${d.data.stock.low_stock} item${d.data.stock.low_stock === 1 ? "" : "s"} at or below the reorder level`, "/inventory?stock=low", "Time to order"]] : []);
 
+  const today = new Date().toLocaleDateString("en-PK", { weekday: "long", day: "numeric", month: "long" });
+
+  const needsAttention = (
+    <Card flush>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-rule px-4 py-3 shell:px-5">
+        <h2>Needs attention</h2>
+        {todo.length > 0 && (
+          <span className="inline-flex min-w-7 items-center justify-center rounded-full bg-action px-2 py-0.5 text-sm font-medium text-action-ink">{todo.length}</span>
+        )}
+      </header>
+      {!todo.length ? <p className="px-4 py-4 text-success shell:px-5">Nothing needs attention.</p> : (
+        <ul className="space-y-2 p-3 shell:p-4">
+          {todo.map(([text, href, hint]) => (
+            <li key={text}>
+              <Link href={href} className="row-link flex min-h-14 flex-col justify-center rounded-control bg-warning-soft px-4 py-2.5 pr-10 hover:bg-paper-3 shell:pr-12">
+                <span className="font-medium">{text}</span>
+                <span className="text-sm text-muted">{hint}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+
   return (
     <>
       <PageHeader title="Dashboard"
-        description={`${branch.name}. ${todo.length ? `${todo[0][0]}${todo.length > 1 ? `, and ${todo.length - 1} more thing${todo.length > 2 ? "s" : ""} to look at` : ""}.` : "Everything is up to date."}`}
+        description={`${branch.name} · ${today}${todo.length ? ` · ${todo[0][0]}${todo.length > 1 ? `, and ${todo.length - 1} more thing${todo.length > 2 ? "s" : ""} to look at` : ""}` : ""}`}
         actions={can("visits") ? <Link href="/visits/new" className="flex min-h-11 items-center rounded-control bg-action px-5 font-medium text-action-ink hover:bg-action-2 active:bg-action-3 active:duration-0">Check in a car</Link> : undefined} />
 
-      <HowItWorks />
-      <h2 className="mb-2">My work</h2>
+      {overview && (
+        <section aria-label="Key figures" className="mb-6 space-y-4">
+          {m && (
+            <CashHero
+              cash={m.cash} cashTotal={m.cash_total}
+              receivables={m.receivables} overdueReceivables={m.overdue_receivables}
+              payables={m.payables} overduePayables={m.overdue_payables}
+              stockValue={m.stock_value}
+            />
+          )}
+
+          <div className={`grid gap-4 ${m ? "shell:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : ""}`}>
+            {m && (
+              <MonthMoneyCharts
+                revenue={m.revenue_month} profit={m.profit_month}
+                moneyIn={m.money_in_month} moneyOut={m.money_out_month}
+              />
+            )}
+            <div className={!m ? "mb-0" : undefined} aria-label="Needs attention">
+              {needsAttention}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="mb-2">In the workshop</h2>
+            <WorkshopKpiCharts
+              carsIn={w.cars_in} openQuotes={w.open_quotes} quotesWaiting={w.quotes_waiting}
+              repairOrders={w.repair_orders} ready={w.ready_for_pickup} onHold={w.on_hold}
+              lowStock={d.data.stock.low_stock} items={d.data.stock.items}
+            />
+          </div>
+        </section>
+      )}
+
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h2>My work</h2>
+        <p className="text-sm text-muted">Follow the car: quote, repair, release.</p>
+      </div>
       <div className="mb-6"><MyWork /></div>
 
-      {overview && <>
-      <section aria-label="Needs attention" className="mb-4">
-        <Card title="Needs attention" flush>
-          {!todo.length ? <p className="px-4 py-4 text-success shell:px-5">Nothing needs attention.</p> : (
-            <ul>
-              {todo.map(([text, href, hint]) => (
-                <li key={text}>
-                  <Link href={href} className="row-link flex min-h-14 flex-col justify-center border-t border-rule px-4 py-2.5 pr-10 first:border-t-0 hover:bg-paper-2 shell:px-5 shell:pr-12">
-                    <span className="font-medium">{text}</span><span className="text-sm text-muted">{hint}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </section>
-
-      <h2 className="mb-2">In the workshop</h2>
-      <div className="mb-6"><StatGroup>
-        <Stat label="Cars in the workshop" value={w.cars_in} href="/visits" />
-        <Stat label="Quotations open" value={w.open_quotes} hint={`${w.quotes_waiting} waiting for the customer`} href="/quotations?status=sent" />
-        <Stat label="Repair orders under way" value={w.repair_orders} hint={`${w.ready_for_pickup} ready, ${w.on_hold} on hold`} href="/repair-orders" />
-        <Stat label="Low on stock" value={d.data.stock.low_stock} hint={`of ${d.data.stock.items} items`} href="/inventory?stock=low" tone={d.data.stock.low_stock ? "warning" : undefined} />
-      </StatGroup></div>
-
-      {m && (
-        <>
-          <h2 className="mb-2">Money this month</h2>
-          <div className="mb-6"><StatGroup>
-            <Stat label="Revenue" value={money(m.revenue_month)} href="/reports/finance?r=pnl" />
-            <Stat label="Profit" value={money(m.profit_month)} hint="Revenue less cost of parts and expenses" href="/reports/finance?r=pnl" tone={Number(m.profit_month) < 0 ? "error" : undefined} />
-            <Stat label="Money in" value={money(m.money_in_month)} href="/money-in" />
-            <Stat label="Money out" value={money(m.money_out_month)} href="/money-out" />
-          </StatGroup></div>
-          <h2 className="mb-2">Where the money is</h2>
-          <div className="mb-6"><StatGroup>
-            <Stat label="Cash, bank and wallet" value={money(m.cash_total)} hint={Object.entries(m.cash).map(([k, v]) => `${ACCOUNT[k]} ${money(v)}`).join(", ")} href="/reports/finance?r=cashflow" />
-            <Stat label="Customers owe us" value={money(m.receivables)} hint={Number(m.overdue_receivables) ? `${money(m.overdue_receivables)} over 30 days` : "Nothing overdue"} href="/reports/finance?r=receivables" tone={Number(m.overdue_receivables) ? "warning" : undefined} />
-            <Stat label="We owe vendors" value={money(m.payables)} hint={Number(m.overdue_payables) ? `${money(m.overdue_payables)} past due` : "Nothing past due"} href="/reports/finance?r=payables" tone={Number(m.overdue_payables) ? "warning" : undefined} />
-            <Stat label="Stock at cost" value={money(m.stock_value)} href="/reports/finance?r=stock" />
-          </StatGroup></div>
-        </>
-      )}
-      </>}
+      <HowItWorks />
     </>
   );
 }

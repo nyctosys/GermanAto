@@ -233,6 +233,7 @@ Three kinds: **Workshop** (at check-in or during diagnosis), **Delivery** (befor
 - **How:** in person, WhatsApp reply or phone call.
 - **Proof is required**: one or more photos, screenshots or PDFs. With none, a reason must be given ("approved on a phone call"). The record shows who recorded the approval and when.
 - **Partial approval:** untick lines the customer declined. They stay on the quotation, struck through, and drop out of the total. At least one line must be approved; otherwise use **Customer said no**.
+- **Parts to order:** after approval, part lines that are out of stock, short for the job, or at/below reorder show in a **Parts to order** list. On the repair order, the list includes parts still to issue that are out of stock or low (already issued lines are omitted). Anyone with `purchasing` can press **Make a purchase order draft**: a modal asks for the vendor, quantity and cost, saves a draft purchase order and opens it.
 
 ### Revisions
 - **Revise** makes revision 2 (same number, `QT-A1F3-000001`) as a new draft with the same lines and prices. The earlier version stays, approval and all, but no longer counts; the new one needs its own approval.
@@ -265,8 +266,9 @@ A4 quotation with the customer, car, lines (declined lines left out), totals, an
 Received → In repair → Testing → Ready → (Delivered at the gate pass)
                     On hold (from any stage)
 ```
-- **Moving back a stage or putting the job on hold needs a note.** Resume returns the job to the stage it was paused at.
-- **Moving to Testing or Ready** needs every line marked **Done** or **Not done** first (no line left as To do).
+- Until delivery you can **revisit any earlier stage** on the Progress bar (a note is optional). Forward progress is one stage at a time — you cannot skip ahead. **Putting the job on hold needs a note.** Resume returns the job to the stage it was paused at.
+- **Moving forward to Testing or Ready** needs every line marked **Done** or **Not done** first (no line left as To do).
+- **Delivered** is set only by the gate pass. Once delivered, stages and the repair order are locked.
 
 ### Lines (what you can do depends on the stage)
 | Stage | Work and parts | Issue / return stock | Mark Done / Not done |
@@ -279,13 +281,14 @@ Received → In repair → Testing → Ready → (Delivered at the gate pass)
 
 - Each line: Done / Not done / To do, and the **technician** who did it.
 - **Parts are issued from stock here**, at average cost, up to the quantity on the line. **Return unused** puts them back at the cost they left at, so the stock value doesn't drift.
+- **Parts to order** (while the visit is open): parts that still have to be issued and that are out of stock or low. Already-issued lines are left out. **Make a purchase order draft** works the same as on the quotation.
 - A part can't be marked Done before it is issued, or Not done while issued parts are still out.
-- **Extra work** (In repair / Testing): labour code or part, qty and price, flagged **"Not in the quotation"** (optional note for why). After one item is added, the picker stays open to add another. Only those added lines can be removed. The same box appears under **Activity → Finding**.
+- **Extra work** (In repair / Testing): search and pick several labour codes or parts at once, set qty and price on each, then add them together; flagged **"Not in the quotation"** (optional shared note for why). Only those added lines can be removed. Under **Activity → Finding**, press **Add labour or part** for the same picker.
 
 ### Activity
 One timeline of everything that happened, newest first, with who and when:
 - automatic: status changes (with the note), parts issued and returned, lines marked or added;
-- written: **Note**, **Finding** (what was found — and from here, while In repair or Testing, add a part or labour the customer asked for), **Customer update** (marked "Customer can see"), each optionally about one line and with photos.
+- written: **Note**, **Finding** (what was found — and from here, while In repair or Testing, **Add labour or part** opens the extra-work search), **Customer update** (marked "Customer can see"), each optionally about one line and with photos.
 
 ---
 
@@ -519,7 +522,7 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Reports and month end | `GET dashboard`, `GET reports/pnl`, `…/cashflow`, `…/receivables`, `…/payables`, `…/stock-value`, `…/discounts`, `…/operations`, `…/hr`, `GET periods`, `GET periods/{p}/checklist`, `POST periods/{p}/close`, `…/reopen`, `GET periods/{p}/pack` |
 | People | `GET/POST employees`, `GET/PUT employees/{id}`, `GET employee-logins`, `GET/POST attendance-devices`, `PUT attendance-devices/{id}`, `POST attendance-devices/{id}/secret`, `GET attendance`, `GET attendance/{employee}`, `GET attendance/unmatched`, `POST attendance/punches`, `POST attendance/punches/{id}/void`, `POST/DELETE attendance/marks`, `GET/POST salary-advances`, `GET/POST payroll-runs`, `GET payroll-runs/{id}`, `PUT payroll-runs/{id}/lines/{line}`, `POST payroll-runs/{id}/refresh`, `…/approve`, `…/void`, `POST payroll-runs/{id}/lines/{line}/pay`, `GET payroll-runs/{id}/lines/{line}` |
 | Device push (no login) | `GET/POST /iclock/cdata`, `GET /iclock/getrequest` |
-| Cash close | `GET cash-closes/status`, `GET cash-closes`, `POST cash-closes` |
+| Cash close | `GET cash-closes/status`, `GET cash-closes/expected`, `GET cash-closes`, `POST cash-closes` |
 | Credit notes | `POST invoices/{id}/credit-notes`, `POST invoices/{id}/refund`, `POST advances/{id}/refund` |
 | Purchasing | `GET/POST vendors`, `GET/PUT vendors/{id}`, `GET purchase-catalog`, `GET/POST purchase-orders`, `GET/PUT purchase-orders/{id}`, `POST purchase-orders/{id}/send`, `…/cancel`, `…/close`, `…/receive`, `POST goods-receipts/{id}/bill`, `GET bills`, `GET bills/{id}`, `POST bills/{id}/payments`, `POST bills/{id}/void`, `POST vendor-payments/{id}/void` |
 
@@ -688,10 +691,11 @@ One page for **every payment received**, whatever its source:
 ### Daily cash close
 **Where:** Money → Cash close (needs `cash-close`; the accountant has it).
 At the end of the day, count what is really in the **cash drawer**, the **bank** and the **mobile wallet**, and sign each one off.
-- Each account shows what **the books say there should be** and when it was last counted.
-- **Count and close**: type what is really there. If it differs from the books, the screen shows how much it is **over or short** and you must say **why** before you can sign.
-- **Signing is final.** The close can't be edited, and the day is **locked** for that account: nothing can be recorded or voided on or before that date (record it today instead). Days close in order, once per account per day.
-- A difference is **posted to the books** as *Cash over and short* (a shortage is an expense, a surplus is income), so tomorrow starts from what you counted and the books match the drawer.
+- Each account shows what **the books say there should be now** and when it was last counted. Amounts on this screen show **paisa**, so the count matches the books exactly.
+- **Missed days first.** If yesterday (or an earlier day) was not signed, the account shows how many days it is behind and **Count and close** signs that day next, using the books **as of the end of that day**. Today's takings stay for today's close. Days close in order, once per account per day. If nothing has been closed yet, you can **Close an earlier day first** (for example for month end) before closing today.
+- **Count and close**: type what is really there for the day being signed. If it differs from the books, the screen shows how much it is **over or short** and you must say **why** before you can sign.
+- **Signing is final.** The close can't be edited, and the day is **locked** for that account: nothing can be recorded or voided on or before that date (record it today instead).
+- A difference is **posted to the books** as *Cash over and short* (a shortage is an expense, a surplus is income), so the next day starts from what you counted and the books match the drawer.
 - **Past closes** lists every signed count: the day, who signed, what the books said, what was counted, the difference and the reason.
 
 ### Missing proof
@@ -760,7 +764,9 @@ Each day is worked out from the punches: the **first punch is in, the last is ou
 
 ### Dashboard
 **Where:** Dashboard (the first page).
+- **KPIs on top** (for people who may see the overview): cash/bank/wallet on a dark card with a share bar, month money as sparkline charts (revenue, profit, money in, money out), and workshop counts as chart tiles. No chart library: plain SVG in `web/components/dashboard-charts.tsx`.
 - **Needs attention:** payments with no proof waiting for an admin, invoices unpaid for over 30 days, vendor bills past due, items at or below their reorder level, and months not yet closed. Each line opens the screen that fixes it. "Nothing needs attention" when all is well.
+- **My work:** numbered columns for the car flow (quote → repair → release), then the other queues as cards.
 - **In the workshop:** cars in the workshop, open quotations (and how many wait for the customer), repair orders under way (ready, on hold), items low on stock.
 - **Money this month** and **Where the money is** (for people who may see finance): revenue, profit, money in and out, cash by account, what customers owe, what vendors are owed, stock at cost. Every tile opens the report behind it.
 - People without finance permission see only the workshop and stock tiles.
@@ -941,7 +947,7 @@ Each person gets **one** role, holding only the permissions for their part. Seve
 | Month ends | Accountant | **Months to close** |
 
 ### My work
-**Where:** the Dashboard, first section. It lists only the queues for the work **the signed-in person's permissions allow**, each with a count, the oldest items (and how long they have waited) and a "See all" link. Nothing there to do: "Nothing is waiting for you." People whose work is not the overview (guard, technician, cashier) see only My work; owners, managers and accountants also see the overview numbers below it. Queues are worked out from the records themselves (`api/app/routers/mywork.py`, `GET /api/my-work`), so they depend on **permissions, not role names**, and a custom role gets exactly the queues its permissions imply. Each visit also shows **Next step ... For: Cashier** at the top.
+**Where:** the Dashboard, under the KPI charts and Needs attention (or alone for people without the overview). It lists only the queues for the work **the signed-in person's permissions allow**, each with a count, the oldest items (and how long they have waited) and a "See all" link. Nothing there to do: "Nothing is waiting for you." People whose work is not the overview (guard, technician, cashier) see only My work; owners, managers and accountants also see the overview charts above it. Queues are worked out from the records themselves (`api/app/routers/mywork.py`, `GET /api/my-work`), so they depend on **permissions, not role names**, and a custom role gets exactly the queues its permissions imply. Each visit also shows **Next step ... For: Cashier** at the top.
 
 ### Cars ready to leave (guard)
 **Where:** Cars ready to leave (needs `gate` or `visits`; endpoint `GET /api/gate/queue`). Each car shows its plate, car, customer and invoice. **Release this car** opens a short form (odometer now, who is taking the car); a car that still owes money shows "Do not release" instead, because only a person holding `release-on-credit` may release it on credit, from the visit page.

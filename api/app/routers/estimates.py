@@ -86,7 +86,9 @@ def _line_refs(db: Session, lines) -> list[dict]:
             i = items[l.item_id]
             have = stock.get(i.id, Decimal(0))
             ref["item"] = {"number": i.number, "name": i.name, "unit": i.unit, "sale_price": i.sale_price,
-                           "on_hand": have, "short": max(l.qty - have, Decimal(0))}
+                           "on_hand": have, "short": max(l.qty - have, Decimal(0)),
+                           "reorder_level": i.reorder_level, "avg_cost": i.avg_cost,
+                           "low_stock": i.reorder_level > 0 and have <= i.reorder_level}
         out.append(ref)
     return out
 

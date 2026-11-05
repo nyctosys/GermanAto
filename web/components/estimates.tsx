@@ -14,7 +14,8 @@ export type Pick = { kind: "labour" | "part"; id: string; code: string; name: st
 type LineRef = {
   id: string; kind: "labour" | "part"; labour_code_id: string | null; item_id: string | null; qty: string;
   labour_code?: { code: string; name: string };
-  item?: { number: string; name: string; unit: string; sale_price: string; on_hand: string; short: string };
+  item?: { number: string; name: string; unit: string; sale_price: string; on_hand: string; short: string;
+    reorder_level?: string; avg_cost?: string; low_stock?: boolean };
 };
 export type JobLine = LineRef & { note: string; proposed_price?: string | null };
 export type QuoteLine = LineRef & { description: string; unit_price: string; amount: string; declined: boolean };
