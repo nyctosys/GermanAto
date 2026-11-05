@@ -972,18 +972,23 @@ class CreditNoteLine(Entity):
 
 class CashClose(BranchScoped):
     """A signed count of one account at the end of a day. Once signed it is never changed; any
-    difference is posted to the books as cash over or short, so tomorrow starts from what was counted."""
+    difference is posted to the books as cash over or short, so tomorrow starts from what was counted.
+
+    Sequence 1 is the first close of the day. Later sequences are post-closing recounts after urgent
+    transactions were recorded on an already-signed day — the earlier rows stay as history."""
 
     __tablename__ = "cash_closes"
     __table_args__ = (
         CheckConstraint("account IN ('cash', 'bank', 'wallet')", name="close_account"),
         CheckConstraint("difference = counted - expected", name="close_difference"),
         CheckConstraint("difference = 0 OR reason <> ''", name="close_reason"),
-        UniqueConstraint("branch_id", "account", "close_date"),
+        CheckConstraint("sequence >= 1", name="close_sequence"),
+        UniqueConstraint("branch_id", "account", "close_date", "sequence", name="uq_cash_close_day_seq"),
     )
 
     account: Mapped[str] = mapped_column(String(8))
     close_date: Mapped[date] = mapped_column(Date, index=True)
+    sequence: Mapped[int] = mapped_column(Integer, default=1)  # 1 = first close; 2+ = post-closing recount
     expected: Mapped[Decimal] = mapped_column(Numeric(14, 2))  # what the books said was in the account
     counted: Mapped[Decimal] = mapped_column(Numeric(14, 2))   # what was actually there
     difference: Mapped[Decimal] = mapped_column(Numeric(14, 2))

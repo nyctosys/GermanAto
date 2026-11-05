@@ -13,7 +13,7 @@ from app.auth import Actor, require
 from app.db import get_db
 from app.models import Item, ItemCode, ItemVendor, LabourCode, StockMovement, User, Vendor
 from app.numbering import next_number
-from app.stock import StockError, move, on_hand, on_hand_map
+from app.stock import StockError, move, on_hand, on_hand_map, require_qty
 from app.validators import Name, Text, normalize_code
 
 router = APIRouter(prefix="/api", tags=["catalog"])
@@ -241,10 +241,24 @@ def lookup_item(code: str, actor: Actor = Depends(can_stock), db: Session = Depe
     return item_out(item, on_hand(db, item.id))
 
 
+def _check_item_qtys(unit: str, *, opening_qty: Decimal | None = None, reorder_level: Decimal | None = None,
+                     reorder_qty: Decimal | None = None) -> None:
+    try:
+        if opening_qty is not None:
+            require_qty(opening_qty, unit, label="Opening stock")
+        if reorder_level is not None:
+            require_qty(reorder_level, unit, label="Reorder level")
+        if reorder_qty is not None:
+            require_qty(reorder_qty, unit, label="Reorder quantity")
+    except StockError as e:
+        raise HTTPException(422, str(e))
+
+
 @router.post("/items", status_code=201)
 def create_item(body: ItemCreate, actor: Actor = Depends(can_stock), db: Session = Depends(get_db)):
     if body.opening_qty and not actor.can("stock-adjust"):
         raise HTTPException(403, "Setting opening stock needs the stock-adjust permission")
+    _check_item_qtys(body.unit, opening_qty=body.opening_qty, reorder_level=body.reorder_level, reorder_qty=body.reorder_qty)
     item = Item(number=next_number(db, actor.branch, "item"),
                 **body.model_dump(exclude={"codes", "opening_qty", "opening_cost"}))
     db.add(item)
@@ -272,6 +286,7 @@ def update_item(item_id: uuid.UUID, body: ItemUpdate, actor: Actor = Depends(can
     item = _get_item(db, actor, item_id)
     if body.version != item.version:
         raise HTTPException(409, "Someone else changed this item. Reload and try again.")
+    _check_item_qtys(body.unit, reorder_level=body.reorder_level, reorder_qty=body.reorder_qty)
     for key, value in body.model_dump(exclude={"version", "codes"}).items():
         setattr(item, key, value)
     _set_codes(db, actor, item, body.codes)

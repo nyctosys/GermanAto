@@ -13,11 +13,11 @@ import { PartsToOrder } from "@/components/parts-to-order";
 import { type Payment, type PaymentBody, PaymentForm, PaymentList, ProofInput, ProofLinks, RefundForm } from "@/components/payments";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, QtyInput, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, useApi } from "@/lib/api";
-import { day, money, qty, when, qtyStep } from "@/lib/format";
-import { linePrice, lineQty } from "@/lib/schemas";
+import { day, money, qty, when } from "@/lib/format";
+import { linePrice, lineQtyFor } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 type LiveTotals = ReturnType<typeof previewTotals> & { includeTax: boolean };
@@ -262,11 +262,11 @@ function DraftEditor({ q, onSaved, onSend, busy, onLive }:
   const edit = (id: string, patch: Partial<Draft>) => { setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l))); setDirty(true); };
   const add = (p: Pick) => {
     setLines((ls) => [...ls, { id: crypto.randomUUID(), kind: p.kind, labour_code_id: p.kind === "labour" ? p.id : null, item_id: p.kind === "part" ? p.id : null,
-      name: p.name, code: p.code, qty: "1", unit_price: p.kind === "part" && Number(p.sale_price) ? String(Number(p.sale_price)) : "" }]);
+      name: p.name, code: p.code, unit: p.unit, qty: "1", unit_price: p.kind === "part" && Number(p.sale_price) ? String(Number(p.sale_price)) : "" }]);
     setDirty(true);
   };
   const priceBad = (l: Draft) => !linePrice.safeParse(l.unit_price).success;
-  const qtyBad = (l: Draft) => !lineQty.safeParse(l.qty).success;
+  const qtyBad = (l: Draft) => !lineQtyFor(l.unit).safeParse(l.qty).success;
   const preview = previewTotals(lines, discount, includeTax, Number(q.tax_rate));
   useEffect(() => { onLive({ ...preview, includeTax }); }, [preview.labour, preview.parts, preview.discount, preview.tax, preview.total, includeTax, onLive]);
 
@@ -302,8 +302,8 @@ function DraftEditor({ q, onSaved, onSend, busy, onLive }:
                 <p className="font-medium">{l.name}</p>
                 <p className="flex gap-3 text-sm text-muted"><span>{l.kind === "labour" ? "Labour" : "Part"}</span><span>{l.code}</span></p>
               </div>
-              <Field label="Qty" error={showErrors && qtyBad(l) ? "More than 0" : undefined}>
-                <Input type="number" inputMode="decimal" min="0" step={qtyStep(l.unit)} value={l.qty} onChange={(e) => edit(l.id, { qty: e.target.value })} />
+              <Field label="Qty" error={showErrors && qtyBad(l) ? "Enter a whole number" : undefined}>
+                <QtyInput unit={l.unit} value={l.qty} onChange={(qty) => edit(l.id, { qty })} />
               </Field>
               <Field label="Price (Rs)" error={showErrors && priceBad(l) ? "Enter the price" : undefined}>
                 <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_price} placeholder={l.kind === "labour" ? "Labour price" : ""}

@@ -385,10 +385,16 @@ function GatePass({ v, onDone }: { v: Visit; onDone: () => void }) {
     if (!data) return;
     setBusy(true);
     setError(null);
+    // Open the gate-pass tab from this click so the browser does not block it after the request.
+    const passWin = typeof window !== "undefined" ? window.open("about:blank", "_blank") : null;
     try {
       await api(`/api/visits/${v.id}/gate-pass`, { method: "POST", json: data });
+      const href = `/print/gate-pass/${v.id}`;
+      if (passWin) passWin.location.href = href;
+      else window.open(href, "_blank", "noopener");
       onDone();
     } catch (err) {
+      passWin?.close();
       setError(applyApi(err));
       setBusy(false);
     }

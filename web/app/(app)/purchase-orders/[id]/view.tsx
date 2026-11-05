@@ -9,11 +9,11 @@ import { type Item, ItemForm } from "@/components/inventory";
 import { ItemPicker, marginPct, type Po, ReasonForm, type PoLine, PoBadge, type Receipt, type Vendor } from "@/components/purchasing";
 import { PURCHASING, RequirePermission } from "@/components/shell";
 import { NextStep } from "@/components/next-step";
-import { Badge, Button, Card, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, ErrorState, Field, Input, Notice, QtyInput, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
-import { day, money, qty, today, qtyStep } from "@/lib/format";
+import { day, money, qty, qtyWhole, today } from "@/lib/format";
 import { liveForm } from "@/lib/form";
-import { billSchema, type FieldErrors, lineQty, parseForm, unitCost } from "@/lib/schemas";
+import { billSchema, type FieldErrors, lineQtyFor, parseForm, unitCost } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 export default function PurchaseOrderPage() {
@@ -75,7 +75,7 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
     setDirty(true);
   };
   const edit = (key: string, patch: Partial<Line>) => { setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l))); setDirty(true); };
-  const qtyBad = (l: Line) => !lineQty.safeParse(l.qty).success;
+  const qtyBad = (l: Line) => !lineQtyFor(l.unit).safeParse(l.qty).success;
   const costBad = (l: Line) => !unitCost.safeParse(l.unit_cost).success;
   const total = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unit_cost) || 0), 0);
 
@@ -138,8 +138,8 @@ function Editor({ initial, onSaved }: { initial: Po | null; onSaved?: (p: Po) =>
                     <p className="flex flex-wrap gap-3 text-sm text-muted"><span>{l.number}</span><span>{qty(l.on_hand)} {l.unit} in stock</span>
                       {Number(l.avg_cost) > 0 && <span className="num">Average cost {money(l.avg_cost)}</span>}</p>
                   </div>
-                  <Field required label="Qty" error={tried && qtyBad(l) ? "More than 0" : undefined}>
-                    <Input type="number" inputMode="decimal" min="0" step={qtyStep(l.unit)} value={l.qty} onChange={(e) => edit(l.key, { qty: e.target.value })} />
+                  <Field required label="Qty" error={tried && qtyBad(l) ? (qtyWhole(l.unit) ? "Enter a whole number" : "More than 0") : undefined}>
+                    <QtyInput unit={l.unit} value={l.qty} onChange={(qty) => edit(l.key, { qty })} />
                   </Field>
                   <Field required label="Cost each (Rs)" error={tried && costBad(l) ? "Enter the cost" : undefined}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_cost} onChange={(e) => edit(l.key, { unit_cost: e.target.value })} />
@@ -313,8 +313,11 @@ function ReceiveForm({ po, onDone }: { po: Po; onDone: (p: Po) => void }) {
   const goods = open.reduce((s, l) => s + (Number(rows[l.id]?.qty) || 0) * (Number(rows[l.id]?.cost) || 0), 0);
 
   const qtyError = (l: PoLine) => {
-    const q = Number(rows[l.id].qty);
-    return rows[l.id].qty === "" || !Number.isFinite(q) || q < 0 ? "Enter the quantity" : q > Number(l.outstanding) ? `Only ${qty(l.outstanding)} expected` : undefined;
+    const raw = rows[l.id].qty;
+    const q = Number(raw);
+    if (raw === "" || !Number.isFinite(q) || q < 0) return "Enter the quantity";
+    if (q > 0 && !lineQtyFor(l.unit).safeParse(raw).success) return qtyWhole(l.unit) ? "Enter a whole number" : "Enter the quantity";
+    return q > Number(l.outstanding) ? `Only ${qty(l.outstanding)} expected` : undefined;
   };
   const costError = (l: PoLine) => (Number(rows[l.id].qty) > 0 && !unitCost.safeParse(rows[l.id].cost).success ? "Enter the cost" : undefined);
   const saleError = (l: PoLine) => (rows[l.id].sale && !/^\d{1,9}(\.\d{1,2})?$/.test(rows[l.id].sale) ? "Enter a price" : undefined);
@@ -360,7 +363,7 @@ function ReceiveForm({ po, onDone }: { po: Po; onDone: (p: Po) => void }) {
                 </div>
                 <div className="grid items-start gap-4 sm:grid-cols-3">
                   <Field required label="Arrived" error={tried ? qtyError(l) : undefined}>
-                    <Input type="number" inputMode="decimal" min="0" step="any" value={rows[l.id].qty} onChange={(e) => set(l.id, { qty: e.target.value })} />
+                    <QtyInput unit={l.unit} min={0} value={rows[l.id].qty} onChange={(qty) => set(l.id, { qty })} />
                   </Field>
                   <Field required label="Cost each (Rs)" error={tried ? costError(l) : undefined} hint={`Ordered at ${money(l.unit_cost)}`}>
                     <Input type="number" inputMode="decimal" min="0" step="any" value={rows[l.id].cost} onChange={(e) => set(l.id, { cost: e.target.value })} />

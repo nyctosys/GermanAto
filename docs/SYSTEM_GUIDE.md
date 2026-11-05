@@ -153,6 +153,7 @@ The car page lists, newest first: owners, visits, signed inspections, issued inv
 
 ### Inventory
 - Each item has an internal number (`ITM-A1F3-000001`), name, brand, category, unit, fitment (the cars it fits: a seeded catalogue of common make + model names, plus every car on file as year + make + model; type to filter, e.g. `BM` for BMW), shelf location, **sale price** (set by hand), reorder level and quantity, and any number of **barcodes and manufacturer part numbers**. A scanned code finds its item wherever there is a search box.
+- **Units:** pcs, set, pair and box are counted whole (API `require_qty`; every qty field uses `QtyInput` so decimals cannot be typed); litre, kg and metre may use thousandths.
 - **Stock is never typed in.** The quantity on hand is the sum of stock movements: opening stock, adjustments, goods received, parts issued and returned on repair orders, counter sales.
 - Stock can't go below zero. Two people taking the last unit at once can't both succeed.
 - Parts leave stock at **average cost**; the average is recalculated when stock comes in.
@@ -276,7 +277,7 @@ Received → In repair → Testing → Ready → (Delivered at the gate pass)
 | Received | Shown; mostly read | Issue allowed (early); return allowed | Locked |
 | In repair | Full edit | Main issue window; return unused | Labour and parts |
 | Testing | Shown | Top-up issue and return unused | Finish remaining lines |
-| Ready | Read-only lines | Return unused only (before the invoice) | Locked |
+| Ready | Read-only lines | None (move back to Testing to return unused) | Locked |
 | Delivered | Closed | Locked | Locked |
 
 - Each line: Done / Not done / To do, and the **technician** who did it.
@@ -336,7 +337,7 @@ It also warns (without blocking) about an inspection left as an unsigned draft.
 
 **Balance outstanding:** the car can't leave while the invoice has a balance, unless someone with `release-on-credit` releases it **with a reason**. The release is recorded with their name on the invoice, the gate pass and the audit log.
 
-**Release the car:** odometer at exit (can't be lower than at check-in; updates the car's odometer), who collected it, and a note. The visit closes, the repair order becomes **Delivered**, and the gate pass prints as a slip for the gate, with customer and security signature lines.
+**Release the car:** odometer at exit (can't be lower than at check-in; updates the car's odometer), who collected it, and a note. The visit closes, the repair order becomes **Delivered**, and the gate pass opens on screen (A4 slip for the gate, with customer and security signature lines — use Print on the bar when ready). From Cars ready to leave the car then appears under Cars that have left.
 
 ---
 
@@ -459,7 +460,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 ### Rules the code depends on
 - **Stock** changes only through `stock.move()`. Never `db.refresh()` an item after it (that discards the unflushed average cost).
 - **Money** is posted to the journal in the same transaction as the event, right before `db.commit()`, using a `posting.*` function. Journal tables are append-only (database trigger); mistakes are reversed, not edited. `post()` refuses unbalanced entries and entries dated in a closed month.
-- **Money records** carry proof or a written reason (CHECK constraint). Proof may be several files (`proof_ids`, up to 10); the row keeps the first as `proof_id` and responses include `proof_url` plus `proof_urls`. A new route that records or voids money on a past date calls `cashclose.assert_day_open`.
+- **Money records** carry proof or a written reason (CHECK constraint). Proof may be several files (`proof_ids`, up to 10); the row keeps the first as `proof_id` and responses include `proof_url` plus `proof_urls`. Routes that record or void money call `cashclose.assert_day_open`, which allows posting on a signed day and returns the closed accounts so the response can set `post_closing`.
 - **Concurrency:** every table has `version`; editing routes take the client's version and return 409 if it is stale.
 - **Migrations:** Alembic autogenerate does not see changed CHECK constraints; edit those by hand and name foreign keys so downgrades work. Run `alembic check` after each.
 - **Sync:** pulled changes are applied with Core statements so they skip the outbox hook and never echo back. Tests build tables with `create_all`, so database triggers are not exercised by them.
@@ -522,7 +523,7 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Reports and month end | `GET dashboard`, `GET reports/pnl`, `…/cashflow`, `…/receivables`, `…/payables`, `…/stock-value`, `…/discounts`, `…/operations`, `…/hr`, `GET periods`, `GET periods/{p}/checklist`, `POST periods/{p}/close`, `…/reopen`, `GET periods/{p}/pack` |
 | People | `GET/POST employees`, `GET/PUT employees/{id}`, `GET employee-logins`, `GET/POST attendance-devices`, `PUT attendance-devices/{id}`, `POST attendance-devices/{id}/secret`, `GET attendance`, `GET attendance/{employee}`, `GET attendance/unmatched`, `POST attendance/punches`, `POST attendance/punches/{id}/void`, `POST/DELETE attendance/marks`, `GET/POST salary-advances`, `GET/POST payroll-runs`, `GET payroll-runs/{id}`, `PUT payroll-runs/{id}/lines/{line}`, `POST payroll-runs/{id}/refresh`, `…/approve`, `…/void`, `POST payroll-runs/{id}/lines/{line}/pay`, `GET payroll-runs/{id}/lines/{line}` |
 | Device push (no login) | `GET/POST /iclock/cdata`, `GET /iclock/getrequest` |
-| Cash close | `GET cash-closes/status`, `GET cash-closes/expected`, `GET cash-closes`, `POST cash-closes` |
+| Cash close | `GET cash-closes/status` (includes `post_closing`), `GET cash-closes/expected`, `GET cash-closes/missed`, `GET cash-closes`, `POST cash-closes` (sequence 1+ for post-closing recounts) |
 | Credit notes | `POST invoices/{id}/credit-notes`, `POST invoices/{id}/refund`, `POST advances/{id}/refund` |
 | Purchasing | `GET/POST vendors`, `GET/PUT vendors/{id}`, `GET purchase-catalog`, `GET/POST purchase-orders`, `GET/PUT purchase-orders/{id}`, `POST purchase-orders/{id}/send`, `…/cancel`, `…/close`, `…/receive`, `POST goods-receipts/{id}/bill`, `GET bills`, `GET bills/{id}`, `POST bills/{id}/payments`, `POST bills/{id}/void`, `POST vendor-payments/{id}/void` |
 
@@ -690,22 +691,24 @@ One page for **every payment received**, whatever its source:
 
 ### Daily cash close
 **Where:** Money → Cash close (needs `cash-close`; the accountant has it).
-At the end of the day, count what is really in the **cash drawer**, the **bank** and the **mobile wallet**, and sign each one off.
-- Each account shows what **the books say there should be now** and when it was last counted. Amounts on this screen show **paisa**, so the count matches the books exactly.
-- **Missed days first.** If yesterday (or an earlier day) was not signed, the account shows how many days it is behind and **Count and close** signs that day next, using the books **as of the end of that day**. Today's takings stay for today's close. Days close in order, once per account per day. If nothing has been closed yet, you can **Close an earlier day first** (for example for month end) before closing today.
-- **Count and close**: type what is really there for the day being signed. If it differs from the books, the screen shows how much it is **over or short** and you must say **why** before you can sign.
-- **Signing is final.** The close can't be edited, and the day is **locked** for that account: nothing can be recorded or voided on or before that date (record it today instead).
-- A difference is **posted to the books** as *Cash over and short* (a shortage is an expense, a surplus is income), so the next day starts from what you counted and the books match the drawer.
-- **Past closes** lists every signed count: the day, who signed, what the books said, what was counted, the difference and the reason.
+At the end of the day, open **one day** to close, then count what is really in the **cash drawer**, the **bank** and the **mobile wallet**, and sign each one off.
+- **Missed days first.** If yesterday is still open, the overview says **Close previous day first** and shows each account's books **as of the end of that day** (for example yesterday cash 5,000 / bank 3,000), with today's running total shown only as a note. **Close [that day] first** opens all three accounts with those day-end figures. After they are signed, **Close today next** unlocks today's close with today's figures.
+- **Month-end Fix it.** Closing the month needs a signed count **on the last day** of that month. **Fix it** only appears after that day has ended, and opens Cash close on that date (`?on=YYYY-MM-DD`). A future last day is never offered as Fix it (the checklist marks the cash/bank/wallet lines as not required until the month ends). If `?on=` is still in the future, Cash close explains that and does not open a close session. If later days were already signed, that day can still be gap-filled: the signature is recorded for the checklist without moving today's books.
+- **Missed days** (`GET /api/cash-closes/missed`) lists skipped days (gaps between signed dates, and unsigned month-ends that had movement). Each row shows which of cash / bank / wallet is still missing and opens that day to sign.
+- Amounts show **paisa**, so the count matches the books exactly. Days close in order, once per account per day. If nothing has been closed yet, you can **Close an even earlier day first** (for example for month end) before closing today.
+- **Count and sign**: type what is really there. If it differs from the books, the screen shows how much it is **over or short** and you must say **why** before you can sign.
+- **Signing is final for that row.** A signed close is never edited. Urgent money may still be recorded after signing (money in/out, salary, voids): the API returns `post_closing` and Cash close shows the **original close**, **new transactions** (with timestamps), and **updated books**, then asks for a **post-closing recount** (sequence 2+). The first close stays in history.
+- A difference on a normal or post-closing count is **posted to the books** as *Cash over and short* (a shortage is an expense, a surplus is income), so the next day starts from what you counted.
+- **Past closes** lists every signed count (including post-closing sequences): the day, time, who signed, what the books said, what was counted, the difference and the reason.
 
 ### Missing proof
 **Where:** Money → Missing proof.
 - **Proof is always asked for.** When there truly is none, the person gives a written reason instead, and the record is flagged **no proof**.
 - This page lists **every** such record, money in and money out (customer payments and advances, vendor payments, expenses, owner money, transfers, refunds), each with the reason that was given. A transfer is listed once.
-- It shows how many are **waiting for an admin** and their total value.
+- It shows how many are **waiting for an admin** and their total value. The Dashboard alert uses this same open count.
 - An admin (needs `evidence-signoff`) can **Accept** a record with a reason. Their name and the reason are kept. The record still shows as having no proof, but it no longer counts as waiting: the alert on the Money in and Money out pages goes down, and month-end closing will not be blocked by it.
 - **Add proof** is optional: if the photo or document turns up later, anyone who can open this page can attach one or more files (`POST missing-evidence/attach` with `proof_ids`). The record then leaves the list. You do not have to add proof — Accept still works without it.
-- **Waiting and accepted** shows both, so nothing that was accepted is hidden.
+- **Waiting** lists only records not yet accepted. **Accepted** lists only those an admin has signed off (they still have no proof on file; Add proof remains available).
 
 ---
 
@@ -765,7 +768,7 @@ Each day is worked out from the punches: the **first punch is in, the last is ou
 ### Dashboard
 **Where:** Dashboard (the first page).
 - **KPIs on top** (for people who may see the overview): cash/bank/wallet on a dark card with a share bar, month money as sparkline charts (revenue, profit, money in, money out), and workshop counts as chart tiles. No chart library: plain SVG in `web/components/dashboard-charts.tsx`.
-- **Needs attention:** payments with no proof waiting for an admin, invoices unpaid for over 30 days, vendor bills past due, items at or below their reorder level, and months not yet closed. Each line opens the screen that fixes it. "Nothing needs attention" when all is well.
+- **Needs attention:** payments with no proof waiting for an admin (same open count as Money → Missing proof, every unpaid-proof record, not only this month), invoices unpaid for over 30 days, vendor bills past due, items at or below their reorder level, and months not yet closed. Each line opens the screen that fixes it. "Nothing needs attention" when all is well.
 - **My work:** numbered columns for the car flow (quote → repair → release), then the other queues as cards.
 - **In the workshop:** cars in the workshop, open quotations (and how many wait for the customer), repair orders under way (ready, on hold), items low on stock.
 - **Money this month** and **Where the money is** (for people who may see finance): revenue, profit, money in and out, cash by account, what customers owe, what vendors are owed, stock at cost. Every tile opens the report behind it.
@@ -798,7 +801,7 @@ Each day is worked out from the punches: the **first punch is in, the last is ou
 ### Month end
 **Where:** Reports → Month end (needs `period-close`; the accountant has it).
 - Open a finished month to see its **checklist**: the month has ended; earlier months with activity are closed; every payment has proof or has been accepted by an admin; the books balance; the cash, bank and wallet were **counted and signed on the last day of the month** (an account with no money movement that month needs no count); payroll is not left as a draft. Further items shown but that don't stop the close: payroll was run, no draft invoices left over, and no repair orders with parts issued and no issued invoice (those distort monthly gross profit because cost hits when parts leave stock).
-- **Each item that isn't done has a Fix it link** to the screen that fixes it. **Close this month** is available only when every required item is done.
+- **Fix it** appears only when something can be done now: an open earlier month opens that month's page; missing proof opens Missing proof; cash/bank/wallet after the month has ended open Cash close on the last day. Items that must wait (the month has not ended yet; last-day counts before that day) stay on the list without a Fix it link, and last-day counts before month end do not block the close. **Close this month** is available only when every required item is done.
 - **Closing locks the month.** Nothing can be recorded dated inside it: the system refuses, with the month's name in the message. Corrections are made in the current month.
 - **Reopen** (needs `period-approve`, an admin permission) needs a reason, which is kept. Months reopen latest first, and a month inside a closed year can't be reopened until the year is.
 - **Closing pack:** a printable document with profit and loss, cash and bank by account with the signed counts, what customers owe and what vendors are owed **as of the last day of the period** (later payments do not rewrite the pack), stock at cost as of that day, equity (owner capital, drawings, and retained earnings as cumulative net profit — no year-end closing entry is posted, so period P&L stays readable), **every payment with its proof status**, and the payroll summary. It prints and shares like any other document.
@@ -950,7 +953,7 @@ Each person gets **one** role, holding only the permissions for their part. Seve
 **Where:** the Dashboard, under the KPI charts and Needs attention (or alone for people without the overview). It lists only the queues for the work **the signed-in person's permissions allow**, each with a count, the oldest items (and how long they have waited) and a "See all" link. Nothing there to do: "Nothing is waiting for you." People whose work is not the overview (guard, technician, cashier) see only My work; owners, managers and accountants also see the overview charts above it. Queues are worked out from the records themselves (`api/app/routers/mywork.py`, `GET /api/my-work`), so they depend on **permissions, not role names**, and a custom role gets exactly the queues its permissions imply. Each visit also shows **Next step ... For: Cashier** at the top.
 
 ### Cars ready to leave (guard)
-**Where:** Cars ready to leave (needs `gate` or `visits`; endpoint `GET /api/gate/queue`). Each car shows its plate, car, customer and invoice. **Release this car** opens a short form (odometer now, who is taking the car); a car that still owes money shows "Do not release" instead, because only a person holding `release-on-credit` may release it on credit, from the visit page.
+**Where:** Cars ready to leave (needs `gate` or `visits`; endpoint `GET /api/gate/queue`). Each car shows its plate, car, customer and invoice. **Release this car** opens a short form (odometer now, who is taking the car); on success the gate pass opens on screen (no auto-print) and the car moves to **Cars that have left**. A car that still owes money shows "Do not release" instead, because only a person holding `release-on-credit` may release it on credit, from the visit page.
 
 ---
 
@@ -959,7 +962,7 @@ Each person gets **one** role, holding only the permissions for their part. Seve
 Kept current as each story lands (stories US-1001 to US-1013 in `prd.json`).
 
 - **US-1001 look and feel.** Cancel buttons use the red `danger` variant. Sidebar section titles are bold. `Field` shows a red asterisk unless its label contains "(optional)"; pass `required` to force it. The visit page has a progress bar (`JobProgress`: checked in, job card, quotation, approved, repair, ready, invoiced, paid, left). Back also shows on report, settings and admin pages. A repair order can only go to Ready from Testing.
-- **US-1002 to US-1005.** Brand, category and car make are pick-lists (`ListSelect`, see the pick-lists entry below). Counted units (pcs, set, pair, box) take whole numbers only; litre, kg and metre take decimals (`qtyStep`). Labour codes are made by the system (LAB-0001, ...). Customer CNIC is optional (API and form); when typed it must be 13 digits. Customer pickers have "+ New customer" (a dialog). Forms reset their Saving state after a successful save. Quotation: Revise and Approve ask to confirm; an advance cannot take the held advances past the quotation total.
+- **US-1002 to US-1005.** Brand, category and car make are pick-lists (`ListSelect`, see the pick-lists entry below). Counted units (pcs, set, pair, box) take whole numbers only (`QtyInput` blocks `.` while typing; API `require_qty`); litre, kg and metre take decimals. Labour codes are made by the system (LAB-0001, ...). Customer CNIC is optional (API and form); when typed it must be 13 digits. Customer pickers have "+ New customer" (a dialog). Forms reset their Saving state after a successful save. Quotation: Revise and Approve ask to confirm; an advance cannot take the held advances past the quotation total.
 - **US-1007 attendance.** An employee has several weekly days off (`days_off`, migration 0025). A day can be marked **present** (counts as 8 hours) besides paid or unpaid leave. Missed punch, leave and mark present live on the Attendance screen ("Add or fix a day by hand"). Each device has an **Activity log** (`device_logs`, migration 0026): punches received and refused calls.
 - **US-1008 to US-1011.** Payroll adjustments have a Bonus/Penalty switch and each amount can be rupees or a percentage (of base pay for bonus and penalty, of what is owed for the advance take-back). A held advance can be refunded in parts (`payments.refunded_amount`, `Payment.held`, migration 0027); voiding a refund puts the money back on hold. `/gate` shows **Cars that have left** (`GET /api/gate/history`). Items can have several vendors (`item_vendors`, migration 0028, `PUT /api/items/{id}/vendors`); the purchase order's "Add everything below its reorder level" adds only that vendor's items (and items with no vendor set) at the vendor's last price, and suggests a quantity of twice the reorder level less what is in stock. How much to order is decided on the purchase order, so the item form no longer asks for a reorder quantity.
 - **US-1012 money.** Money out has **Add a daily expense** (category pick-list, today's total shown) apart from **Record other money out** (owner drawings, transfers). Money in starts with **Payment for an invoice**: pick the unpaid invoice from a list and the amount fills in. The red `*` on a field label shows only inside a form (CSS `.req`), so search and filter boxes stay clean.

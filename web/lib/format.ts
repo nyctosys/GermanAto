@@ -22,3 +22,20 @@ export const phone = (v: string) => (v?.startsWith("+92") && v.length === 13 ? `
 
 /** Pieces, sets, pairs and boxes are counted whole; litres, kilograms and metres can be part-filled. */
 export const qtyStep = (unit?: string) => (["litre", "kg", "metre"].includes(unit ?? "") ? "any" : "1");
+/** True when this unit must be typed as a whole number (pcs, set, pair, box). */
+export const qtyWhole = (unit?: string) => qtyStep(unit) === "1";
+export const qtyInputMode = (unit?: string) => (qtyWhole(unit) ? "numeric" : "decimal");
+/** Smallest positive amount the browser should accept for this unit. */
+export const qtyMin = (unit?: string) => (qtyWhole(unit) ? 1 : 0.001);
+
+/** Strip anything the unit does not allow while the person is typing. Whole units: digits only (pasting 12.5 keeps 12). */
+export function sanitizeQty(raw: string, unit?: string): string {
+  if (qtyWhole(unit)) {
+    const cut = raw.search(/[.,]/);
+    return (cut >= 0 ? raw.slice(0, cut) : raw).replace(/\D/g, "");
+  }
+  let s = raw.replace(/[^\d.]/g, "");
+  const dot = s.indexOf(".");
+  if (dot >= 0) s = `${s.slice(0, dot + 1)}${s.slice(dot + 1).replace(/\./g, "").slice(0, 3)}`;
+  return s;
+}

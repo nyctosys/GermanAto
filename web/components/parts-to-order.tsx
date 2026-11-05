@@ -4,10 +4,10 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { type Po, type Vendor } from "@/components/purchasing";
-import { Badge, Button, Card, Field, Input, Notice, Select } from "@/components/ui";
+import { Badge, Button, Card, Field, Input, Notice, QtyInput, Select } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
-import { qty, qtyStep } from "@/lib/format";
-import { lineQty, unitCost } from "@/lib/schemas";
+import { qty } from "@/lib/format";
+import { lineQtyFor, unitCost } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 /** Part lines that may need ordering (quotation or repair order). */
@@ -121,7 +121,7 @@ function PoDraftModal({ lines, hint, onClose }: {
   const [error, setError] = useState<string | null>(null);
 
   const edit = (id: string, patch: Partial<DraftLine>) => setRows((rs) => rs.map((r) => (r.item_id === id ? { ...r, ...patch } : r)));
-  const qtyBad = (r: DraftLine) => !lineQty.safeParse(r.qty).success;
+  const qtyBad = (r: DraftLine) => !lineQtyFor(r.unit).safeParse(r.qty).success;
   const costBad = (r: DraftLine) => !unitCost.safeParse(r.unit_cost).success;
 
   async function save() {
@@ -165,8 +165,8 @@ function PoDraftModal({ lines, hint, onClose }: {
                   <p className="font-medium">{r.name}</p>
                   <p className="text-sm text-muted">{r.number}</p>
                 </div>
-                <Field required label="Qty" error={tried && qtyBad(r) ? "More than 0" : undefined}>
-                  <Input type="number" inputMode="decimal" min="0" step={qtyStep(r.unit)} value={r.qty} onChange={(e) => edit(r.item_id, { qty: e.target.value })} />
+                <Field required label="Qty" error={tried && qtyBad(r) ? "Enter a whole number" : undefined}>
+                  <QtyInput unit={r.unit} value={r.qty} onChange={(qty) => edit(r.item_id, { qty })} />
                 </Field>
                 <Field required label="Cost each (Rs)" error={tried && costBad(r) ? "Enter the cost" : undefined}>
                   <Input type="number" inputMode="decimal" min="0" step="any" value={r.unit_cost} onChange={(e) => edit(r.item_id, { unit_cost: e.target.value })} />

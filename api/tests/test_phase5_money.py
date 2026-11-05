@@ -455,16 +455,38 @@ def test_a_surplus_is_income_and_an_exact_count_posts_nothing(admin):
     assert D(str(over["difference"])) == 60 and rows(admin)["6910"] == -60 and rows(admin)["1010"] == 560
 
 
-def test_a_closed_day_is_locked_and_days_close_in_order(admin):
+def test_a_closed_day_allows_gap_fill_and_post_closing_voids(admin):
     entry(admin, kind="other_income", amount="100")
     assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "100"}).status_code == 201
     yesterday = (date.today() - timedelta(days=1)).isoformat()
-    assert entry(admin, kind="other_income", amount="50", occurred_on=yesterday).status_code == 409  # backdating into a closed day
-    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "100", "close_date": yesterday}).status_code == 409  # out of order
+    # A skipped earlier day can still be signed (gap fill) so month-end can get the last-day count.
+    gap = admin.post("/api/cash-closes", json={"account": "cash", "counted": "0", "close_date": yesterday})
+    assert gap.status_code == 201, gap.json()
+    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "0", "close_date": yesterday}).status_code == 409  # same day twice without new movement
     future = (date.today() + timedelta(days=1)).isoformat()
     assert admin.post("/api/cash-closes", json={"account": "bank", "counted": "0", "close_date": future}).status_code == 422
     first = next(r for r in admin.get("/api/money-in").json()["rows"] if r["source"] == "other_income")
-    assert admin.post(f"/api/money-entries/{first['entry_id']}/void", json={"reason": "Mistake"}).status_code == 409  # voiding into a closed day
+    # Urgent money may still be voided after close; the original close stays and a post-closing recount is needed.
+    assert admin.post(f"/api/money-entries/{first['entry_id']}/void", json={"reason": "Mistake"}).status_code == 200
+
+
+def test_post_closing_transactions_keep_the_original_close_and_need_a_recount(admin):
+    """After today is signed, urgent money is still allowed; the first close is kept and a second sequence recounts."""
+    entry(admin, kind="other_income", amount="500")
+    assert admin.post("/api/cash-closes", json={"account": "cash", "counted": "500"}).status_code == 201
+    late = entry(admin, kind="other_income", amount="50")
+    assert late.status_code == 201 and late.json().get("post_closing") is True
+    st = next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")
+    assert st["signed_today"] and st["post_closing"] and st["post_closing"]["needed"]
+    assert D(str(st["post_closing"]["original"]["counted"])) == 500
+    assert D(str(st["post_closing"]["books_now"])) == 550
+    assert st["post_closing"]["movements"]
+    again = admin.post("/api/cash-closes", json={"account": "cash", "counted": "550"})
+    assert again.status_code == 201 and again.json()["sequence"] == 2 and again.json()["post_closing"] is True
+    done = next(s for s in admin.get("/api/cash-closes/status").json() if s["account"] == "cash")
+    assert done["closed_today"] and not done["post_closing"]
+    hist = admin.get("/api/cash-closes", params={"account": "cash"}).json()
+    assert {c["sequence"] for c in hist if c["close_date"] == date.today().isoformat()} >= {1, 2}
 
 
 def test_only_cash_close_users_sign_counts(admin):
@@ -491,6 +513,8 @@ def test_missing_evidence_lists_every_record_without_proof_and_an_admin_signs_it
     assert {r["source"] for r in page["rows"]} == {"advance", "other_income", "transfer"}
     money_in = admin.get("/api/money-in").json()
     assert money_in["missing_proof"] == 3
+    # Dashboard Needs attention uses the same open count (all time, not only this month).
+    assert admin.get("/api/dashboard").json()["alerts"]["missing_proof"] == page["open"]
 
     target = next(r for r in page["rows"] if r["source"] == "other_income")
     body = {"source_type": target["source_type"], "source_id": target["id"]}
@@ -500,9 +524,12 @@ def test_missing_evidence_lists_every_record_without_proof_and_an_admin_signs_it
     after = admin.get("/api/missing-evidence").json()
     assert after["open"] == 2 and after["signed_off"] == 1
     assert admin.get("/api/money-in").json()["missing_proof"] == 2  # the sign-off clears the alert count
-    both = admin.get("/api/missing-evidence", params={"include_signed": True}).json()
-    signed = next(r for r in both["rows"] if r["id"] == target["id"])
+    accepted = admin.get("/api/missing-evidence", params={"status": "accepted"}).json()
+    assert len(accepted["rows"]) == 1 and accepted["rows"][0]["id"] == target["id"]
+    signed = accepted["rows"][0]
     assert signed["signoff"]["reason"] == "Small cash sale, no slip given" and signed["signoff"]["by"] == "Administrator"
+    assert all(r["signoff"] for r in accepted["rows"])
+    assert all(not r["signoff"] for r in after["rows"])
     ok = next(r for r in admin.get("/api/money-in").json()["rows"] if r["id"] == with_proof["id"])
     assert admin.post("/api/missing-evidence/sign", json={"source_type": "money_entry", "source_id": ok["id"], "reason": "Not needed here"}).status_code == 409  # it has proof
 

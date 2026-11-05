@@ -4,16 +4,16 @@ import { VisitProgress } from "@/components/job-progress";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
-import { type CreditNote, type Invoice, PayBadge, previewTotals } from "@/components/billing";
+import { type CreditNote, type Invoice, type InvoiceLine, PayBadge, previewTotals } from "@/components/billing";
 import { lineCode, linkButton } from "@/components/estimates";
 import { NextStep } from "@/components/next-step";
 import { type Payment, type PaymentBody, PaymentForm, PaymentList, RefundForm } from "@/components/payments";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, QtyInput, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, useApi } from "@/lib/api";
-import { money, phone, qty, when } from "@/lib/format";
-import { linePrice } from "@/lib/schemas";
+import { money, phone, qty, qtyWhole, when } from "@/lib/format";
+import { linePrice, lineQtyFor } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 /** How much of a held advance still applies, how much is left to pay, and any excess. */
@@ -446,7 +446,16 @@ function ReturnForm({ inv, busy, onSubmit, onCancel }: { inv: Invoice; busy: boo
   const [reason, setReason] = useState("");
   const [tried, setTried] = useState(false);
   const picked = inv.lines.filter((l) => Number(qtys[l.id]) > 0);
-  const badQty = (id: string, total: string) => Number(qtys[id]) > left(id, total);
+  const badQty = (l: InvoiceLine) => {
+    const v = qtys[l.id];
+    if (!v || !(Number(v) > 0)) return false;
+    if (Number(v) > left(l.id, l.qty)) return true;
+    return l.kind === "part" && !lineQtyFor(l.item?.unit).safeParse(v).success;
+  };
+  const qtyMsg = (l: InvoiceLine) => {
+    if (Number(qtys[l.id]) > left(l.id, l.qty)) return `At most ${qty(left(l.id, l.qty))}`;
+    return qtyWhole(l.item?.unit) ? "Enter a whole number" : "Enter the quantity";
+  };
   const preview = previewTotals(
     picked.map((l) => ({ kind: l.kind, qty: qtys[l.id], unit_price: l.unit_price })),
     "0",
@@ -459,7 +468,7 @@ function ReturnForm({ inv, busy, onSubmit, onCancel }: { inv: Invoice; busy: boo
       <form noValidate className="space-y-5" onBlurCapture={() => setTried(true)} onSubmit={(e) => {
         e.preventDefault();
         setTried(true);
-        if (!picked.length || reason.trim().length < 3 || picked.some((l) => badQty(l.id, l.qty))) return;
+        if (!picked.length || reason.trim().length < 3 || picked.some((l) => badQty(l))) return;
         onSubmit({ reason: reason.trim(), lines: picked.map((l) => ({ invoice_line_id: l.id, qty: qtys[l.id], restock: l.kind === "part" && !!restock[l.id] })) });
       }}>
         <p className="text-sm text-muted">The invoice stays as it was. A credit note reverses the part you choose, and the customer&apos;s balance changes with it.</p>
@@ -473,8 +482,8 @@ function ReturnForm({ inv, busy, onSubmit, onCancel }: { inv: Invoice; busy: boo
                   <p className="text-sm text-muted">{l.kind === "labour" ? "Labour" : "Part"}, {qty(l.qty)} at {money(l.unit_price)}{max < Number(l.qty) ? `, ${qty(max)} left to credit` : ""}</p>
                   {l.kind === "part" && max > 0 && <Checkbox checked={!!restock[l.id]} onChange={(e) => setRestock((r) => ({ ...r, [l.id]: e.target.checked }))} label="Put it back in stock" />}
                 </div>
-                <Field label="Credit qty" error={tried && badQty(l.id, l.qty) ? `At most ${qty(max)}` : undefined}>
-                  <Input type="number" inputMode="decimal" min="0" max={max} step="any" disabled={max <= 0} value={qtys[l.id] ?? ""} onChange={(e) => setQtys((q) => ({ ...q, [l.id]: e.target.value }))} />
+                <Field label="Credit qty" error={tried && badQty(l) ? qtyMsg(l) : undefined}>
+                  <QtyInput unit={l.item?.unit} min={0} disabled={max <= 0} value={qtys[l.id] ?? ""} onChange={(qty) => setQtys((q) => ({ ...q, [l.id]: qty }))} />
                 </Field>
               </li>
             );

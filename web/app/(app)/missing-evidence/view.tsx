@@ -31,7 +31,8 @@ export default function MissingEvidencePage() {
 function List() {
   const { can } = useSession();
   const [view, setView] = useQueryParam("show");
-  const list = useApi<Page>(`/api/missing-evidence?include_signed=${view === "all"}`);
+  const accepted = view === "accepted" || view === "all"; // "all" kept so old links still open Accepted
+  const list = useApi<Page>(`/api/missing-evidence?status=${accepted ? "accepted" : "open"}`);
   const [signing, setSigning] = useState<Row | null>(null);
   const [attaching, setAttaching] = useState<Row | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,14 +65,19 @@ function List() {
           <Card title="Accepted"><p className="num text-xl">{list.data.signed_off}</p><p className="text-sm text-muted">signed off with a reason</p></Card>
         </div>
       )}
-      <div className="mb-4"><Segments value={view || "open"} onChange={(v) => setView(v === "open" ? "" : v)} options={[{ value: "open", label: "Waiting" }, { value: "all", label: "Waiting and accepted" }]} /></div>
+      <div className="mb-4"><Segments value={accepted ? "accepted" : "open"} onChange={(v) => setView(v === "open" ? "" : "accepted")} options={[{ value: "open", label: "Waiting" }, { value: "accepted", label: "Accepted" }]} /></div>
       {signing && <div className="mb-4"><ReasonForm title={`Accept ${signing.number} without proof`} hint="Your name and this reason are kept with the record. It will still show as having no proof." confirm="Accept it" busy={false} onCancel={() => setSigning(null)} onSubmit={sign} /></div>}
       {attaching && <div className="mb-4"><AttachProofForm number={attaching.number} busy={false} onCancel={() => setAttaching(null)} onSubmit={attach} /></div>}
       {error && <div className="mb-4"><Notice>{error}</Notice></div>}
       <Card flush>
         {list.error ? <ErrorState message={list.error} onRetry={list.reload} /> : !list.data ? <SkeletonRows />
-          : !list.data.rows.length ? <EmptyState title="Nothing is missing proof">Every payment has a photo or document, or has been accepted by an admin.</EmptyState>
-          : (
+          : !list.data.rows.length ? (
+            <EmptyState title={accepted ? "Nothing accepted yet" : "Nothing is waiting"}>
+              {accepted
+                ? "Accepted records (no proof, signed off by an admin) will show here."
+                : "Every payment has a photo or document, or has been accepted by an admin."}
+            </EmptyState>
+          ) : (
             <ul>
               {list.data.rows.map((r) => (
                 <li key={`${r.source_type}-${r.id}`} className="flex flex-wrap items-start justify-between gap-3 border-t border-rule px-4 py-4 first:border-t-0 shell:px-5">

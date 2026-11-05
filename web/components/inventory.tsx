@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Button, Field, Input, Notice, Select } from "@/components/ui";
+import { Button, Field, Input, Notice, QtyInput, Select } from "@/components/ui";
 import { ListMulti } from "@/components/list-multi";
 import { ListSelect } from "@/components/list-select";
 import { api } from "@/lib/api";
+import { qtyWhole } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
 export type Item = {
@@ -23,6 +24,7 @@ export function ItemForm({ item, presetCode, presetName, onSaved, onCancel }:
   { item?: Item; presetCode?: string; presetName?: string; onSaved: (i: Item) => void; onCancel: () => void }) {
   const { can } = useSession();
   const [codes, setCodes] = useState<CodeRow[]>(item?.codes.map(({ kind, code }) => ({ kind, code })) ?? [{ kind: "barcode", code: presetCode ?? "" }]);
+  const [unit, setUnit] = useState(item?.unit ?? "pcs");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -84,16 +86,20 @@ export function ItemForm({ item, presetCode, presetName, onSaved, onCancel }:
 
       <Field required label="Category"><ListSelect name="category" kind="part_category" defaultValue={item?.category} placeholder="Choose a category" /></Field>
       <Field label="Unit">
-        <Select name="unit" defaultValue={item?.unit ?? "pcs"}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select>
+        <Select name="unit" value={unit} onChange={(e) => setUnit(e.target.value)}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select>
       </Field>
       <Field label="Shelf or bin"><Input name="location" defaultValue={item?.location} placeholder="A3" /></Field>
       <div className="sm:col-span-2"><Field label="Fits" hint="Type to narrow the list (e.g. BM for BMW). Tick every car this part fits; a name not listed yet is added with one click."><ListMulti name="fitment" kind="fitment" defaultValue={item?.fitment} /></Field></div>
       <Field required label="Sale price (PKR)"><Input name="sale_price" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={item?.sale_price ?? ""} required /></Field>
-      <Field label="Reorder when stock reaches" hint="How much to order is decided on the purchase order."><Input name="reorder_level" type="number" inputMode="decimal" min={0} step="0.001" defaultValue={item ? Number(item.reorder_level) : ""} /></Field>
+      <Field label="Reorder when stock reaches" hint={qtyWhole(unit) ? "Whole numbers only — decimals are blocked." : "How much to order is decided on the purchase order."}>
+        <QtyInput key={`reorder-${unit}`} name="reorder_level" unit={unit} min={0} defaultValue={item ? Number(item.reorder_level) : ""} />
+      </Field>
 
       {!item && can("stock-adjust") && (
         <>
-          <Field label="Opening stock" hint="What's on the shelf today."><Input name="opening_qty" type="number" inputMode="decimal" min={0} step="0.001" /></Field>
+          <Field label="Opening stock" hint={qtyWhole(unit) ? "Whole numbers only — decimals are blocked." : "What's on the shelf today."}>
+            <QtyInput key={`opening-${unit}`} name="opening_qty" unit={unit} min={0} />
+          </Field>
           <Field label="Cost per unit (PKR)" hint="What you paid, for the stock value."><Input name="opening_cost" type="number" inputMode="decimal" min={0} step="0.01" /></Field>
         </>
       )}

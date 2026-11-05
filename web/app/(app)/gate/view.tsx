@@ -44,7 +44,7 @@ function History() {
                     <span className="block">{when(r.left_at)}</span>
                     <span className="block">Taken by {r.handed_to || "not written down"}. Released by {r.released_by ?? "unknown"}.</span>
                     {r.on_credit && <Badge tone="warning">Left owing money: {r.credit_reason}</Badge>}
-                    <a href={`/print/gate-pass/${r.id}`} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-11 items-center text-primary underline">Reprint GatePass</a>
+                    <a href={`/print/gate-pass/${r.id}?from=gate`} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-11 items-center text-primary underline">Reprint gate pass</a>
                   </div>
                 </li>
               ))}
@@ -96,10 +96,16 @@ function Release({ car, onDone, onCancel }: { car: Car; onDone: () => void; onCa
     if (!data) return;
     setBusy(true);
     setError(null);
+    // Open the gate-pass tab from this click so the browser does not block it after the request.
+    const passWin = typeof window !== "undefined" ? window.open("about:blank", "_blank") : null;
     try {
       await api(`/api/visits/${car.id}/gate-pass`, { method: "POST", json: data, toast: `${car.plate} released` });
+      const href = `/print/gate-pass/${car.id}?from=gate`;
+      if (passWin) passWin.location.href = href;
+      else window.open(href, "_blank", "noopener");
       onDone();
     } catch (err) {
+      passWin?.close();
       setError(applyApi(err));
       setBusy(false);
     }

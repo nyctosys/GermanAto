@@ -32,7 +32,7 @@ export function stageActions(stage: RoStatus) {
     markLabour: stage === "in_repair" || stage === "testing",
     markPart: stage === "in_repair" || stage === "testing",
     issue: stage === "received" || stage === "in_repair" || stage === "testing",
-    returnStock: stage === "received" || stage === "in_repair" || stage === "testing" || stage === "ready",
+    returnStock: stage === "received" || stage === "in_repair" || stage === "testing",
     assignTech: stage === "received" || stage === "in_repair" || stage === "testing",
     extraWork: stage === "in_repair" || stage === "testing",
     removeExtra: stage === "in_repair" || stage === "testing",

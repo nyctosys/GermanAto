@@ -167,6 +167,16 @@ export function fieldErrorAt(schema: z.ZodType, form: HTMLFormElement, name: str
 // coerce: the API sends saved quantities and prices as numbers, which must count as valid just like typed text.
 export const lineQty = z.coerce.string().trim().refine((v) => Number(v) > 0 && Number(v) <= 10000, "More than 0");
 
+/** Same as lineQty, but pcs/set/pair/box must be whole numbers (matches api/app/stock.require_qty). */
+export function lineQtyFor(unit?: string) {
+  const whole = !unit || !["litre", "kg", "metre"].includes(unit);
+  return z.coerce.string().trim().refine((v) => {
+    const n = Number(v);
+    if (!(n > 0 && n <= 10000)) return false;
+    return !whole || Number.isInteger(n);
+  }, whole ? "Enter a whole number" : "More than 0");
+}
+
 /** A price typed on a quotation line: whole rupees or paisa, more than zero to send. */
 export const linePrice = z.coerce.string().trim().refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(v) && Number(v) > 0, "Enter the price");
 

@@ -91,6 +91,7 @@ def dashboard(actor: Actor = Depends(require("dashboard")), db: Session = Depend
         rec, pay = reports.receivables(db, branch), reports.payables(db, branch)
         mi = moneybook.page(db, actor, "in", date_from=month_start, date_to=today, source=None, account=None, q="", missing_proof=False, limit=1)
         mo = moneybook.page(db, actor, "out", date_from=month_start, date_to=today, source=None, account=None, q="", missing_proof=False, limit=1)
+        missing_open = moneybook.missing_proof_summary(db, actor)["open"]
         from app.routers.periods import checklist, months_between
         first = db.scalar(select(func.min(journal.JournalEntry.entry_date)).where(journal.JournalEntry.branch_id == branch.id))
         unclosed = [m for m in months_between(first, today)[:-1] if m not in {p for (p,) in db.execute(select(journal.PeriodClose.period).where(journal.PeriodClose.branch_id == branch.id, journal.PeriodClose.kind == "month", journal.PeriodClose.status == "closed"))}] if first else []
@@ -99,6 +100,6 @@ def dashboard(actor: Actor = Depends(require("dashboard")), db: Session = Depend
                         "overdue_receivables": sum((r["balance"] for r in rec["rows"] if r["bucket"] in ("31-60", "61-90", "90+")), Decimal(0)),
                         "payables": pay["total"], "overdue_payables": sum((r["balance"] for r in pay["rows"] if r["days_overdue"] > 0), Decimal(0)),
                         "stock_value": stock["total"]}
-        out["alerts"] = {"missing_proof": mi["missing_proof"] + mo["missing_proof"], "unclosed_months": unclosed, "low_stock": stock["low_stock"],
+        out["alerts"] = {"missing_proof": missing_open, "unclosed_months": unclosed, "low_stock": stock["low_stock"],
                          "overdue_bills": sum(1 for r in pay["rows"] if r["days_overdue"] > 0), "overdue_invoices": sum(1 for r in rec["rows"] if r["bucket"] in ("31-60", "61-90", "90+"))}
     return out

@@ -7,11 +7,11 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { CatalogPicker, type JobLine, lineCode, lineName, linkButton, type Pick, QuoteBadge, type QuoteStatus } from "@/components/estimates";
 import { RequirePermission } from "@/components/shell";
-import { Button, Card, EmptyState, ErrorState, Input, Notice, SkeletonRows } from "@/components/ui";
+import { Button, Card, EmptyState, ErrorState, Input, Notice, QtyInput, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, ApiError, useApi } from "@/lib/api";
-import { money, qty, when, qtyStep } from "@/lib/format";
-import { lineQty } from "@/lib/schemas";
+import { money, qty, when } from "@/lib/format";
+import { lineQtyFor } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 type JobCard = {
@@ -66,7 +66,7 @@ function Editor({ initial }: { initial: JobCard }) {
   }, [dirty]);
 
   const change = (fn: (ls: JobLine[]) => JobLine[]) => { setLines(fn); setDirty(true); };
-  const bad = lines.filter((l) => !lineQty.safeParse(l.qty).success).map((l) => l.id);
+  const bad = lines.filter((l) => !lineQtyFor(l.item?.unit).safeParse(l.qty).success).map((l) => l.id);
 
   async function save(): Promise<JobCard | null> {
     if (bad.length) { setError("Fix the quantities marked in red."); return null; }
@@ -147,9 +147,9 @@ function Editor({ initial }: { initial: JobCard }) {
                     <div className="flex items-end gap-2 sm:flex-col sm:items-stretch">
                       <label className="flex-1">
                         <span className="mb-1 block text-sm text-muted">Quantity</span>
-                        <Input type="number" inputMode="decimal" min="0" step={qtyStep(l.item?.unit)} value={l.qty} disabled={locked}
-                               aria-invalid={bad.includes(l.id)} className={`min-h-11 w-full rounded-control border bg-surface px-3 text-base ${bad.includes(l.id) ? "border-error" : "border-rule-strong"}`}
-                               onChange={(e) => change((ls) => ls.map((x) => (x.id === l.id ? { ...x, qty: e.target.value } : x)))} />
+                        <QtyInput unit={l.item?.unit} value={l.qty} disabled={locked}
+                               aria-invalid={bad.includes(l.id)} className={bad.includes(l.id) ? "border-error" : ""}
+                               onChange={(qty) => change((ls) => ls.map((x) => (x.id === l.id ? { ...x, qty } : x)))} />
                       </label>
                       {!locked && <Button variant="danger" onClick={() => change((ls) => ls.filter((x) => x.id !== l.id))}>Remove</Button>}
                     </div>

@@ -72,10 +72,15 @@ def checklist(db: Session, actor: Actor, month: str) -> dict:
     def item(key, text, ok, detail="", blocking=True, link=None):
         items.append({"key": key, "label": text, "ok": ok, "detail": detail, "blocking": blocking, "link": link})
 
-    item("ended", "The month has ended", end < local_today(), "" if end < local_today() else f"It ends on {end:%d %b %Y}.")
+    today = local_today()
+    month_ended = end < today
+    item("ended", "The month has ended", month_ended,
+         "" if month_ended else f"It ends on {end:%d %b %Y}. Come back after that day — nothing to fix here yet.")
 
     open_earlier = sorted(m for m in active_months(db, actor) if m < month and not _is_closed(db, actor, "month", m))
-    item("earlier", "Earlier months are closed", not open_earlier, f"{label(open_earlier[0])} is still open." if open_earlier else "", link="/periods")
+    item("earlier", "Earlier months are closed", not open_earlier,
+         f"{label(open_earlier[0])} is still open." if open_earlier else "",
+         link=f"/periods/{open_earlier[0]}" if open_earlier else None)
 
     missing = []
     for direction in ("in", "out"):
@@ -83,7 +88,7 @@ def checklist(db: Session, actor: Actor, month: str) -> dict:
             if r["missing_proof"] and r["status"] == "posted" and not r["signoff"] and start <= r["date"] <= end and (r["source_type"], r["id"]) not in {(m["source_type"], m["id"]) for m in missing}:
                 missing.append(r)
     item("proof", "Every payment has proof, or has been accepted by an admin", not missing,
-         f"{len(missing)} still waiting." if missing else "", link="/missing-evidence")
+         f"{len(missing)} still waiting." if missing else "", link="/missing-evidence" if missing else None)
 
     tb = journal.balances(db, actor.branch, as_of=end)
     balanced = sum((d for d, _ in tb.values()), Decimal(0)) == sum((c for _, c in tb.values()), Decimal(0))
@@ -96,8 +101,17 @@ def checklist(db: Session, actor: Actor, month: str) -> dict:
         active = any(moved.get(code, (Decimal(0), Decimal(0))))
         signed = db.scalar(select(CashClose.close_date).where(
             CashClose.branch_id == actor.branch.id, CashClose.account == kind, CashClose.close_date == end))
-        item(f"cash_{kind}", f"The {kind} account was counted and signed on the last day", (not active) or bool(signed),
-             "" if not active or signed else "Count and sign on the last day of the month.", link="/cash-close")
+        done = (not active) or bool(signed)
+        if done:
+            item(f"cash_{kind}", f"The {kind} account was counted and signed on the last day", True, "")
+        elif not month_ended:
+            # Don't offer Fix it for a last day that has not happened yet (e.g. closing Nov on 5 Nov).
+            item(f"cash_{kind}", f"The {kind} account was counted and signed on the last day", False,
+                 f"After {end:%d %b %Y}, count and sign that day on Cash close.", blocking=False)
+        else:
+            item(f"cash_{kind}", f"The {kind} account was counted and signed on the last day", False,
+                 "Count and sign on the last day of the month.",
+                 link=f"/cash-close?on={end.isoformat()}")
 
     payroll = db.scalar(select(PayrollRun).where(PayrollRun.branch_id == actor.branch.id, PayrollRun.month == month, PayrollRun.status != "void"))
     item("payroll_draft", "Payroll for the month is not left as a draft", not (payroll and payroll.status == "draft"), "Approve or throw away the draft." if payroll and payroll.status == "draft" else "", link="/payroll")

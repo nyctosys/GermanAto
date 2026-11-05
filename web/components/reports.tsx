@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode } from "react";
-import { Segments, useQueryParam } from "@/components/search";
+import { Segments } from "@/components/search";
 import { Button, Card, Field, Input } from "@/components/ui";
 import { downloadCsv } from "@/lib/csv";
 import { money } from "@/lib/format";
@@ -13,18 +14,29 @@ export type Range = { from: string; to: string };
 
 /** The period every report is looked at over. It lives in the address, so a report can be shared as a link. */
 export function useRange(): [Range, ReactNode] {
-  const [from, setFrom] = useQueryParam("from");
-  const [to, setTo] = useQueryParam("to");
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const from = params.get("from") ?? "";
+  const to = params.get("to") ?? "";
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const range: Range = { from: from || iso(monthStart), to: to || iso(now) };
+
+  // Set from and to in one replace — two useQueryParam sets race and the second wins alone.
+  const setRange = (nextFrom: string, nextTo: string) => {
+    const p = new URLSearchParams(params);
+    if (nextFrom) p.set("from", nextFrom); else p.delete("from");
+    if (nextTo) p.set("to", nextTo); else p.delete("to");
+    const qs = p.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   const preset = (key: string) => {
     const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1), lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
     const [f, t] = key === "month" ? [monthStart, now] : key === "last" ? [lastStart, lastEnd] : key === "year" ? [new Date(now.getFullYear(), 0, 1), now] : [null, null];
     if (!f || !t) return;
-    setFrom(iso(f));
-    setTo(iso(t));
+    setRange(iso(f), iso(t));
   };
   const active = range.from === iso(monthStart) && range.to === iso(now) ? "month"
     : range.from === iso(new Date(now.getFullYear(), now.getMonth() - 1, 1)) && range.to === iso(new Date(now.getFullYear(), now.getMonth(), 0)) ? "last"
@@ -37,8 +49,8 @@ export function useRange(): [Range, ReactNode] {
           <Segments value={active} onChange={preset} options={[{ value: "month", label: "This month" }, { value: "last", label: "Last month" }, { value: "year", label: "This year" }, { value: "custom", label: "Custom" }]} />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="From"><Input type="date" value={range.from} max={range.to} onChange={(e) => setFrom(e.target.value)} /></Field>
-          <Field label="To"><Input type="date" value={range.to} min={range.from} max={iso(now)} onChange={(e) => setTo(e.target.value)} /></Field>
+          <Field label="From"><Input type="date" value={range.from} max={range.to} onChange={(e) => setRange(e.target.value, range.to)} /></Field>
+          <Field label="To"><Input type="date" value={range.to} min={range.from} max={iso(now)} onChange={(e) => setRange(range.from, e.target.value)} /></Field>
         </div>
       </div>
     </Card>

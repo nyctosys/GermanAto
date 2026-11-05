@@ -1,4 +1,5 @@
-import { Children, cloneElement, isValidElement, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes } from "react";
+import { Children, cloneElement, isValidElement, type ButtonHTMLAttributes, type ChangeEvent, type ClipboardEvent, type InputHTMLAttributes, type KeyboardEvent, type ReactElement, type ReactNode, type SelectHTMLAttributes } from "react";
+import { qtyInputMode, qtyMin, qtyStep, qtyWhole, sanitizeQty } from "@/lib/format";
 
 // Every control is at least 44px tall (a finger, not a cursor) and changes
 // only colour on hover/press, never size.
@@ -37,6 +38,63 @@ const TEXTY = new Set([undefined, "text", "search", "tel", "email", "url", "pass
 /** A text box never takes endless text: 160 characters unless the field sets its own limit. */
 export function Input({ maxLength, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={field} maxLength={maxLength ?? (TEXTY.has(props.type) ? 160 : undefined)} {...props} />;
+}
+
+type QtyInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "inputMode" | "step" | "onChange" | "value"> & {
+  unit?: string;
+  /** When set, the field is controlled; otherwise it is uncontrolled (forms that read FormData). */
+  value?: string | number;
+  onChange?: (value: string) => void;
+};
+
+/** Quantity field that refuses wrong keystrokes: pcs/set/pair/box = whole digits only; litre/kg/metre allow thousandths. */
+export function QtyInput({ unit, value, defaultValue, onChange, min, className = "", ...props }: QtyInputProps) {
+  const whole = qtyWhole(unit);
+  function change(e: ChangeEvent<HTMLInputElement>) {
+    const next = sanitizeQty(e.target.value, unit);
+    if (value === undefined) e.target.value = next; // keep uncontrolled inputs clean as you type
+    onChange?.(next);
+  }
+  function keyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const block = whole
+      ? e.key === "." || e.key === "," || e.key === "e" || e.key === "E" || e.key === "+" || e.key === "-"
+      : e.key === "e" || e.key === "E" || e.key === "+" || e.key === "-";
+    if (block) e.preventDefault();
+    props.onKeyDown?.(e);
+  }
+  function paste(e: ClipboardEvent<HTMLInputElement>) {
+    const text = e.clipboardData.getData("text");
+    const cleaned = sanitizeQty(text, unit);
+    if (cleaned === text) { props.onPaste?.(e); return; }
+    e.preventDefault();
+    if (value === undefined) {
+      const el = e.currentTarget;
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? el.value.length;
+      const next = sanitizeQty(`${el.value.slice(0, start)}${cleaned}${el.value.slice(end)}`, unit);
+      el.value = next;
+      onChange?.(next);
+    } else {
+      onChange?.(sanitizeQty(`${String(value ?? "").slice(0, e.currentTarget.selectionStart ?? 0)}${cleaned}${String(value ?? "").slice(e.currentTarget.selectionEnd ?? 0)}`, unit));
+    }
+    props.onPaste?.(e);
+  }
+  const mode = qtyInputMode(unit) as "numeric" | "decimal";
+  const shared = {
+    ...props,
+    type: "text" as const, // text + inputMode: native number inputs still allow "." on many browsers
+    inputMode: mode,
+    min: min ?? qtyMin(unit),
+    step: qtyStep(unit),
+    className: `${field} ${className}`,
+    onChange: change,
+    onKeyDown: keyDown,
+    onPaste: paste,
+  };
+  return value !== undefined
+    ? <input {...shared} value={String(value)} />
+    : <input key={unit} {...shared} defaultValue={defaultValue !== undefined ? sanitizeQty(String(defaultValue), unit) : undefined} />;
 }
 
 export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {

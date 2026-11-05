@@ -5,9 +5,9 @@ import { useParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { type Item, ItemForm } from "@/components/inventory";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, QtyInput, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
-import { money, qty, when } from "@/lib/format";
+import { money, qty, qtyWhole, when } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
 type Movement = { id: string; at: string; kind: string; qty: string; unit_cost: string; reason: string; user: string | null };
@@ -161,6 +161,10 @@ function Adjust({ item, onDone }: { item: Item; onDone: () => void }) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const amount = Number(f.get("qty"));
+    if (!(amount > 0) || (qtyWhole(item.unit) && !Number.isInteger(amount))) {
+      setError(qtyWhole(item.unit) ? `Enter a whole number of ${item.unit}` : "Enter a quantity greater than 0");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -186,7 +190,9 @@ function Adjust({ item, onDone }: { item: Item; onDone: () => void }) {
             ))}
           </div>
         </fieldset>
-        <Field label={`Quantity (${item.unit})`}><Input name="qty" type="number" inputMode="decimal" min={0.001} step="0.001" required /></Field>
+        <Field label={`Quantity (${item.unit})`} hint={qtyWhole(item.unit) ? "Whole numbers only — decimals are blocked." : "Part quantities are allowed (e.g. 0.5 litre)."}>
+          <QtyInput name="qty" unit={item.unit} required />
+        </Field>
         {direction === "in" && <Field label="Cost per unit (PKR)" hint="Leave blank to use the average cost."><Input name="unit_cost" type="number" inputMode="decimal" min={0} step="0.01" /></Field>}
         <div className="sm:col-span-2"><Field label="Reason" hint="Kept in the stock history and the audit log."><Input name="reason" required minLength={3} maxLength={300} placeholder="Stock count on 28 Oct" /></Field></div>
         <div className="flex flex-col gap-3 sm:col-span-2">

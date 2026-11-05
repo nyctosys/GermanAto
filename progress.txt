@@ -150,3 +150,6 @@
 ## Invoice totals + unused lines (5 Nov 2026)
 - Draft workshop invoice Total: labour/parts → Total → Advance applied → Balance due; Excess advance + Refund to customer when held > total. Unused RO lines listed. API adds `unused_lines` and `held_advances`.
 - With tax on: Tax ON badge; Labour/Parts → Subtotal → Sales tax (rate%) → Total → Advance applied → Balance due.
+
+## Month-end Fix it before month ends (5 Nov 2026)
+- Checklist cash/bank/wallet Fix it only after the last day has passed; before that those lines are non-blocking with no link. Earlier-month Fix it opens `/periods/{month}`. Cash close with a future `?on=` shows a notice and does not open a session.

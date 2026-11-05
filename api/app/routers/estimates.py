@@ -69,6 +69,12 @@ def _targets(db: Session, actor: Actor, lines: list[LineIn]) -> tuple[dict, dict
             raise HTTPException(422, "A labour code or item on this list wasn't found")
         if not target.is_active:
             raise HTTPException(422, f"{target.name} is inactive. Reactivate it or pick another.")
+        if l.kind == "part":
+            from app.stock import StockError, require_qty
+            try:
+                require_qty(l.qty, items[l.item_id].unit)
+            except StockError as e:
+                raise HTTPException(422, str(e))
     return codes, items
 
 

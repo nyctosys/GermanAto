@@ -130,6 +130,20 @@ def test_stock_moves_and_average_cost(admin):
     assert admin.get("/api/items", params={"stock": "low"}).json() == []
 
 
+def test_counted_units_refuse_fractional_quantities(admin):
+    """pcs/set/pair/box must be whole; litre may be part-filled."""
+    pcs = new_item(admin, opening_qty="5", opening_cost="100")
+    assert admin.post(f"/api/items/{pcs['id']}/adjust", json={"qty": "-0.005", "reason": "Stock count"}).status_code == 422
+    assert admin.post(f"/api/items/{pcs['id']}/adjust", json={"qty": "-1", "reason": "Stock count"}).status_code == 200
+    bad = admin.post("/api/items", json={"name": "Pad set", "unit": "set", "sale_price": "10", "opening_qty": "0.5",
+                                         "opening_cost": "1", "codes": [{"kind": "barcode", "code": "SET-FRAC-1"}]})
+    assert bad.status_code == 422
+    oil = admin.post("/api/items", json={"name": "Engine oil", "unit": "litre", "sale_price": "500", "opening_qty": "0.5",
+                                         "opening_cost": "400", "codes": [{"kind": "barcode", "code": "OIL-HALF-1"}]}).json()
+    assert Decimal(oil["on_hand"]) == Decimal("0.5")
+    assert admin.post(f"/api/items/{oil['id']}/adjust", json={"qty": "-0.25", "reason": "Used for top-up"}).status_code == 200
+
+
 def test_inventory_permissions(admin):
     make_user(admin, username="store", role="Inventory manager", password="store-pass-1")
     store = signed_in("store", "store-pass-1")

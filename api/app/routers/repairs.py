@@ -326,7 +326,7 @@ def return_part(ro_id: uuid.UUID, line_id: uuid.UUID, body: QtyIn, actor: Actor 
     Allowed through Ready so unused parts can be corrected before the invoice."""
     ro = _get_ro(db, actor, ro_id, lock=True)
     _require_working(db, ro)
-    _refuse_stage(ro, "return parts to stock", {"received", "in_repair", "testing", "ready"})
+    _refuse_stage(ro, "return parts to stock", {"received", "in_repair", "testing"})
     line = _line(ro, line_id)
     if body.qty > line.issued_qty:
         raise HTTPException(422, f"Only {line.issued_qty.normalize():f} were issued on this line")

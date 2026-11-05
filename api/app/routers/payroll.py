@@ -69,7 +69,7 @@ def give_advance(body: AdvanceIn, actor: Actor = Depends(can_pay), db: Session =
         raise HTTPException(422, f"That would put {given - recovered + body.amount:,.2f} of advances outstanding, more than a month's pay ({emp.monthly_salary:,.2f})")
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet payment")
-    assert_day_open(db, actor.branch.id, {body.account}, local_today())
+    closed = assert_day_open(db, actor.branch.id, {body.account}, local_today())
     e = MoneyEntry(number=next_number(db, actor.branch, "salary_advance"), kind="salary_advance", occurred_on=local_today(), account=body.account,
                    amount=body.amount, party=emp.full_name, reference=body.reference, note=body.note, employee_id=emp.id, **body.record_fields())
     db.add(e)
@@ -77,7 +77,15 @@ def give_advance(body: AdvanceIn, actor: Actor = Depends(can_pay), db: Session =
     attach_proofs(db, actor, body.proof_ids, "money_entries", e.id)
     posting.money_entry(db, actor.branch, e)
     db.commit()
-    return entry_out(db, e)
+    out = entry_out(db, e)
+    if closed:
+        out["post_closing"] = True
+        out["post_closing_accounts"] = closed
+        out["post_closing_message"] = (
+            f"Today was already signed for {', '.join(closed)}. "
+            "Sign a post-closing count on Cash close so the books match again."
+        )
+    return out
 
 
 @router.get("/salary-advances")
@@ -309,7 +317,7 @@ def pay_line(run_id: uuid.UUID, line_id: uuid.UUID, body: PayIn, actor: Actor = 
         raise HTTPException(409, "Already paid")
     if body.account != "cash" and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet payment")
-    assert_day_open(db, actor.branch.id, {body.account}, local_today())
+    closed = assert_day_open(db, actor.branch.id, {body.account}, local_today())
     emp = db.get(Employee, line.employee_id)
     e = MoneyEntry(number=next_number(db, actor.branch, "salary"), kind="salary", occurred_on=local_today(), account=body.account, amount=line.net_pay,
                    party=emp.full_name, reference=body.reference, note=body.note or f"Salary {run.month}",
@@ -323,4 +331,12 @@ def pay_line(run_id: uuid.UUID, line_id: uuid.UUID, body: PayIn, actor: Actor = 
     if all(l.net_pay <= 0 or l.id in paid_ids for l in run.lines):
         run.status = "paid"
     db.commit()
-    return run_out(db, run)
+    out = run_out(db, run)
+    if closed:
+        out["post_closing"] = True
+        out["post_closing_accounts"] = closed
+        out["post_closing_message"] = (
+            f"Today was already signed for {', '.join(closed)}. "
+            "Sign a post-closing count on Cash close so the books match again."
+        )
+    return out

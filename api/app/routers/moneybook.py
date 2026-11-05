@@ -75,7 +75,7 @@ def record_entry(body: EntryIn, actor: Actor = Depends(current_actor), db: Sessi
     when = body.occurred_on or local_today()
     if when > local_today():
         raise HTTPException(422, "The date is in the future")
-    assert_day_open(db, actor.branch.id, {body.account, body.to_account}, when)
+    closed = assert_day_open(db, actor.branch.id, {body.account, body.to_account}, when)
     touched = {body.account, body.to_account} - {None, "cash"}
     if touched and not body.reference and not body.proof_id:
         raise HTTPException(422, "Add the transaction reference or a screenshot for a bank or wallet movement")
@@ -92,7 +92,15 @@ def record_entry(body: EntryIn, actor: Actor = Depends(current_actor), db: Sessi
     attach_proofs(db, actor, body.proof_ids, "money_entries", e.id)
     posting.money_entry(db, actor.branch, e)
     db.commit()
-    return entry_out(db, e)
+    out = entry_out(db, e)
+    if closed:
+        out["post_closing"] = True
+        out["post_closing_accounts"] = closed
+        out["post_closing_message"] = (
+            f"This day was already signed for {', '.join(closed)}. "
+            "The original close is kept. Sign a post-closing count on Cash close so the books match again."
+        )
+    return out
 
 
 class VoidIn(BaseModel):
@@ -108,7 +116,7 @@ def void_entry(entry_id: uuid.UUID, body: VoidIn, actor: Actor = Depends(current
         raise HTTPException(403, "You don't have permission to do this")
     if e.status != "posted":
         raise HTTPException(409, "Already voided")
-    assert_day_open(db, actor.branch.id, {e.account, e.to_account}, e.occurred_on)
+    closed = assert_day_open(db, actor.branch.id, {e.account, e.to_account}, e.occurred_on)
     if e.payment_id:  # a voided refund means the advance is still held
         pay = db.get(Payment, e.payment_id)
         pay.refunded_amount = max(pay.refunded_amount - e.amount, Decimal(0))
@@ -120,7 +128,15 @@ def void_entry(entry_id: uuid.UUID, body: VoidIn, actor: Actor = Depends(current
     e.status, e.void_reason = "voided", body.reason
     posting.void_source(db, actor.branch, "money_entry", e.id, f"{e.number} voided")
     db.commit()
-    return entry_out(db, e)
+    out = entry_out(db, e)
+    if closed:
+        out["post_closing"] = True
+        out["post_closing_accounts"] = closed
+        out["post_closing_message"] = (
+            f"This day was already signed for {', '.join(closed)}. "
+            "Sign a post-closing count on Cash close so the books match again."
+        )
+    return out
 
 
 # --- the two pages ---------------------------------------------------------------------------------------
@@ -251,9 +267,9 @@ def money_out(date_from: date | None = None, date_to: date | None = None, source
 can_signoff = require("evidence-signoff")
 
 
-@router.get("/missing-evidence")
-def missing_evidence(include_signed: bool = False, actor: Actor = Depends(see_money), db: Session = Depends(get_db)):
-    """Every money record, in or out, that has a reason but no proof. A transfer appears once."""
+def missing_proof_summary(db: Session, actor: Actor) -> dict:
+    """Every posted money record with a reason but no proof. Transfers appear once.
+    Open = not yet accepted by an admin; signed_off = accepted (still listed when asked)."""
     seen, rows = set(), []
     for direction in ("in", "out"):
         for r in _gather(db, actor, direction):  # type: ignore[arg-type]
@@ -263,10 +279,21 @@ def missing_evidence(include_signed: bool = False, actor: Actor = Depends(see_mo
             seen.add(key)
             rows.append(r)
     open_rows = [r for r in rows if not r["signoff"]]
-    shown = rows if include_signed else open_rows
-    shown.sort(key=lambda r: (r["date"], r["number"]), reverse=True)
-    return {"rows": shown, "open": len(open_rows), "signed_off": len(rows) - len(open_rows),
+    return {"rows": rows, "open_rows": open_rows, "open": len(open_rows),
+            "signed_off": len(rows) - len(open_rows),
             "open_total": sum((r["amount"] for r in open_rows), Decimal(0))}
+
+
+@router.get("/missing-evidence")
+def missing_evidence(status: Literal["open", "accepted"] = "open", actor: Actor = Depends(see_money),
+                     db: Session = Depends(get_db)):
+    """Every money record, in or out, that has a reason but no proof. A transfer appears once.
+    Waiting (open) = not yet accepted; Accepted = signed off by an admin (still no proof on file)."""
+    summary = missing_proof_summary(db, actor)
+    shown = summary["open_rows"] if status == "open" else [r for r in summary["rows"] if r["signoff"]]
+    shown.sort(key=lambda r: (r["date"], r["number"]), reverse=True)
+    return {"rows": shown, "open": summary["open"], "signed_off": summary["signed_off"],
+            "open_total": summary["open_total"]}
 
 
 class SignoffIn(BaseModel):

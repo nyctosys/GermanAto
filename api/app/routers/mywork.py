@@ -107,11 +107,9 @@ def build(db: Session, actor: Actor) -> list[dict]:
             [{"label": "Cash, bank and wallet", "sub": f"Not yet counted today: {', '.join(open_accounts)}", "href": "/cash-close"}] if open_accounts else [], "/cash-close")
     if can("evidence-signoff"):
         from app.routers import moneybook
-        waiting = 0
-        for way in ("in", "out"):
-            waiting += moneybook.page(db, actor, way, date_from=today.replace(day=1), date_to=today, source=None, account=None, q="", missing_proof=False, limit=1)["missing_proof"]
+        waiting = moneybook.missing_proof_summary(db, actor)["open"]
         add("proof", "Payments with no proof", "Read the reason and accept it, or ask for the proof.",
-            [{"label": f"{waiting} record{'s' if waiting != 1 else ''} waiting", "sub": "Money in and out this month", "href": "/missing-evidence"}] if waiting else [], "/missing-evidence")
+            [{"label": f"{waiting} record{'s' if waiting != 1 else ''} waiting", "sub": "Waiting for an admin to accept them", "href": "/missing-evidence"}] if waiting else [], "/missing-evidence")
     if can("period-close"):
         from app.routers.periods import months_between
         first = db.scalar(select(func.min(Invoice.created_at)).where(Invoice.branch_id == b.id))

@@ -11,10 +11,18 @@ from sqlalchemy.orm import Session
 from app.models import Item, StockMovement
 
 ZERO = Decimal("0")
+# Counted off the shelf: whole numbers only. Measured units may use thousandths.
+COUNTED_UNITS = frozenset({"pcs", "set", "pair", "box"})
 
 
 class StockError(ValueError):
     pass
+
+
+def require_qty(qty: Decimal, unit: str, *, label: str = "Quantity") -> None:
+    """Pieces, sets, pairs and boxes must be whole; litre, kg and metre may be part-filled."""
+    if unit in COUNTED_UNITS and qty != qty.to_integral_value():
+        raise StockError(f"{label} must be a whole number of {unit}")
 
 
 def weighted_average(on_hand: Decimal, avg_cost: Decimal, qty_in: Decimal, unit_cost: Decimal) -> Decimal:
@@ -47,6 +55,7 @@ def move(db: Session, item_id: uuid.UUID, kind: str, qty: Decimal, *, unit_cost:
     item = db.scalar(select(Item).where(Item.id == item_id).with_for_update())
     if item is None:
         raise StockError("Item not found")
+    require_qty(qty, item.unit)
     current = on_hand(db, item.id)
 
     if qty < 0:

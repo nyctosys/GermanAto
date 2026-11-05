@@ -12,11 +12,11 @@ import { ProofLinks } from "@/components/payments";
 import { RO_STAGES, RoBadge, STAGE, stageActions, workStage, type RoLine, type RoStatus } from "@/components/repairs";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
-import { Badge, Button, Card, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
+import { Badge, Button, Card, ErrorState, Field, Input, Notice, QtyInput, Select, SkeletonRows } from "@/components/ui";
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, useApi } from "@/lib/api";
 import { money, qty, when } from "@/lib/format";
-import { linePrice, lineQty } from "@/lib/schemas";
+import { linePrice, lineQtyFor } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 type Activity = { id: string; kind: string; body: string; from_status: RoStatus | null; to_status: RoStatus | null; line_id: string | null;
@@ -129,7 +129,7 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
               <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Finish marking every line Done or Not done before moving to Ready.</p>
             )}
             {working && stage === "ready" && (
-              <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Ready: lines are locked. You can still return unused parts before making the invoice.</p>
+              <p className="border-t border-rule px-4 py-3 text-sm text-muted shell:px-5">Ready: lines are locked. Make the invoice, or move back to Testing if you still need to return unused parts.</p>
             )}
           </Card></div>
 
@@ -296,9 +296,9 @@ function LineRow({ l, techs, working, actions, busy, call }:
 
       {move && (
         <form className="flex flex-wrap items-end gap-2 rounded-control bg-paper-2 p-3"
-              onSubmit={async (e) => { e.preventDefault(); if (lineQty.safeParse(amount).success && (await call(`${url}/${move}`, "POST", { qty: amount }))) setMove(null); }}>
-          <Field label={move === "issue" ? "Quantity to issue" : "Quantity to return"} error={amount && !lineQty.safeParse(amount).success ? "More than 0" : undefined}>
-            <Input type="number" inputMode="decimal" min="0" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+              onSubmit={async (e) => { e.preventDefault(); if (lineQtyFor(l.item?.unit).safeParse(amount).success && (await call(`${url}/${move}`, "POST", { qty: amount }))) setMove(null); }}>
+          <Field label={move === "issue" ? "Quantity to issue" : "Quantity to return"} error={amount && !lineQtyFor(l.item?.unit).safeParse(amount).success ? "Enter a whole number" : undefined}>
+            <QtyInput unit={l.item?.unit} value={amount} onChange={setAmount} autoFocus />
           </Field>
           <Button type="submit" disabled={busy}>{move === "issue" ? "Issue" : "Return to stock"}</Button>
           <Button type="button" variant="secondary" onClick={() => setMove(null)}>Cancel</Button>
@@ -318,7 +318,7 @@ function ExtraWork({ busy, onAdd, embedded, suggestedReason, onDismiss }: {
   const [tried, setTried] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
   const total = rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.unit_price) || 0), 0);
-  const qtyBad = (r: ExtraDraft) => r.pick.kind === "part" && !lineQty.safeParse(r.qty).success;
+  const qtyBad = (r: ExtraDraft) => r.pick.kind === "part" && !lineQtyFor(r.pick.unit).safeParse(r.qty).success;
   const priceBad = (r: ExtraDraft) => !linePrice.safeParse(r.unit_price).success;
 
   function resetForm(keepReason = false) {
@@ -397,8 +397,8 @@ function ExtraWork({ busy, onAdd, embedded, suggestedReason, onDismiss }: {
                   <p className="text-sm text-muted">{r.pick.kind === "labour" ? "Labour" : "Part"} · {r.pick.code}</p>
                 </div>
                 {r.pick.kind === "part" && (
-                  <Field label="Qty" error={tried && qtyBad(r) ? "More than 0" : undefined}>
-                    <Input type="number" inputMode="decimal" min="0" step="any" value={r.qty} onChange={(e) => edit(r.key, { qty: e.target.value })} />
+                  <Field label="Qty" error={tried && qtyBad(r) ? "Enter a whole number" : undefined}>
+                    <QtyInput unit={r.pick.unit} value={r.qty} onChange={(qty) => edit(r.key, { qty })} />
                   </Field>
                 )}
                 <Field label="Price (Rs)" error={tried && priceBad(r) ? "Enter the price" : undefined}>

@@ -230,12 +230,17 @@ def _apply_po(db: Session, actor: Actor, po: PurchaseOrder, body: PoIn) -> None:
     if len(set(ids)) != len(ids):
         raise HTTPException(422, "An item is listed twice. Combine the quantities on one line.")
     items = {i.id: i for i in db.scalars(select(Item).where(Item.id.in_(ids), Item.branch_id == actor.branch.id))}
+    from app.stock import StockError, require_qty
     for l in body.lines:
         item = items.get(l.item_id)
         if not item:
             raise HTTPException(422, "An item on this order wasn't found")
         if not item.is_active:
             raise HTTPException(422, f"{item.name} is inactive. Reactivate it or remove the line.")
+        try:
+            require_qty(l.qty, item.unit)
+        except StockError as e:
+            raise HTTPException(422, str(e))
     if body.expected_on and body.expected_on < local_today() and po.status == "draft" and po.id is None:
         raise HTTPException(422, "The expected date is in the past")
     po.vendor_id, po.expected_on, po.notes = body.vendor_id, body.expected_on, body.notes
@@ -363,13 +368,18 @@ def receive(po_id: uuid.UUID, body: ReceiptIn, actor: Actor = Depends(can_receiv
         raise HTTPException(422, "Enter the quantity that arrived on at least one line")
     if len({l.po_line_id for l in taken}) != len(taken):
         raise HTTPException(422, "A line is listed twice")
+    from app.stock import StockError, require_qty
     for l in taken:
         pl = po_lines.get(l.po_line_id)
         if not pl:
             raise HTTPException(422, "A line isn't on this order")
+        item = db.get(Item, pl.item_id)
+        try:
+            require_qty(l.qty, item.unit)
+        except StockError as e:
+            raise HTTPException(422, str(e))
         outstanding = pl.qty - got.get(pl.id, Decimal(0))
         if l.qty > outstanding:
-            item = db.get(Item, pl.item_id)
             raise HTTPException(422, f"{item.name}: {l.qty.normalize():f} is more than the {outstanding.normalize():f} still expected")
 
     g = GoodsReceipt(number=next_number(db, actor.branch, "goods_receipt"), purchase_order_id=po.id, vendor_id=po.vendor_id,

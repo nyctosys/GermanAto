@@ -9,10 +9,10 @@ import { CatalogPicker } from "@/components/estimates";
 import { newRow, type PaymentRow, splitBodies, SplitPayments, splitValid } from "@/components/payments";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
-import { Button, Card, Checkbox, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
+import { Button, Card, Checkbox, ErrorState, Field, Input, Notice, PageHeader, QtyInput, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
-import { money, qty, qtyStep } from "@/lib/format";
-import { linePrice, lineQty } from "@/lib/schemas";
+import { money, qty } from "@/lib/format";
+import { linePrice, lineQtyFor } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
 type Line = { key: string; item_id: string; name: string; code: string; unit: string; on_hand: string; qty: string; unit_price: string };
@@ -62,7 +62,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
   const t = previewTotals(lines, discount, includeTax, rate);
   // A single payment left blank means the whole total; the common case is one tap.
   const payRows = rows.length === 1 && !rows[0].amount.trim() ? [{ ...rows[0], amount: String(t.total) }] : rows;
-  const lineBad = (l: Line) => !lineQty.safeParse(l.qty).success || !linePrice.safeParse(l.unit_price).success;
+  const lineBad = (l: Line) => !lineQtyFor(l.unit).safeParse(l.qty).success || !linePrice.safeParse(l.unit_price).success;
   const edit = (key: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
 
   async function save(issue: boolean) {
@@ -138,8 +138,8 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
                   <p className="flex flex-wrap gap-3 text-sm text-muted"><span>{l.code}</span>
                     <span className={Number(l.qty) > Number(l.on_hand) ? "text-error" : ""}>{qty(l.on_hand)} {l.unit} in stock</span></p>
                 </div>
-                <Field label="Qty" error={tried && !lineQty.safeParse(l.qty).success ? "More than 0" : undefined}>
-                  <Input type="number" inputMode="decimal" min="0" step={qtyStep(l.unit)} value={l.qty} onChange={(e) => edit(l.key, { qty: e.target.value })} />
+                <Field label="Qty" error={tried && !lineQtyFor(l.unit).safeParse(l.qty).success ? "Enter a whole number" : undefined}>
+                  <QtyInput unit={l.unit} value={l.qty} onChange={(qty) => edit(l.key, { qty })} />
                 </Field>
                 <Field label="Price (Rs)" error={tried && !linePrice.safeParse(l.unit_price).success ? "Enter the price" : undefined}>
                   <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_price} onChange={(e) => edit(l.key, { unit_price: e.target.value })} />

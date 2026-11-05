@@ -16,7 +16,7 @@ from app import messaging
 from app.models import Car, Customer, Visit  # noqa: F811
 from app.db import get_db, utcnow
 from app.models import (
-    AuditLog, Car, CreditNote, CreditNoteLine, Customer, Inspection, Invoice, InvoiceLine, JobCard, LabourCode, MoneyEntry, Payment, Quotation,
+    AuditLog, Car, CreditNote, CreditNoteLine, Customer, Inspection, Invoice, InvoiceLine, Item, JobCard, LabourCode, MoneyEntry, Payment, Quotation,
     RepairOrder, RepairOrderLine, StockMovement, User, Visit,
 )
 from app import posting
@@ -671,6 +671,12 @@ def issue_credit_note(invoice_id: uuid.UUID, body: CreditNoteIn, actor: Actor = 
             raise HTTPException(422, f"{src.description}: only {left.normalize():f} can still be credited")
         if l.restock and src.kind != "part":
             raise HTTPException(422, f"{src.description} is labour, so nothing goes back in stock")
+        if src.item_id:
+            from app.stock import StockError, require_qty
+            try:
+                require_qty(l.qty, db.get(Item, src.item_id).unit)  # pcs etc must be whole
+            except StockError as e:
+                raise HTTPException(422, str(e))
         lines.append(CreditNoteLine(position=n, invoice_line_id=src.id, kind=src.kind, labour_code_id=src.labour_code_id, item_id=src.item_id,
                                     description=src.description, qty=l.qty, unit_price=src.unit_price, restocked=l.restock))
     inv_t = totals(inv)

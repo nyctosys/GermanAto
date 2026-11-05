@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { type Uploaded } from "@/components/capture";
 import { ACCOUNT, ProofInput, ProofLinks } from "@/components/payments";
 import { ReasonForm } from "@/components/purchasing";
@@ -181,6 +181,7 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [postClosingWarn, setPostClosingWarn] = useState<string | null>(null);
   const transfer = kind === "transfer";
   const invoicePay = kind === "invoice_payment";
   const snapshot = { ...v, kind, proof, reason };
@@ -189,6 +190,23 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
     return r.success ? {} : issuesToFieldErrors(r.error.issues);
   });
   const set = (p: Partial<typeof v>) => { clearServer(); setError(null); setV((x) => ({ ...x, ...p })); };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!v.occurred_on || !v.account) { setPostClosingWarn(null); return; }
+      try {
+        const r = await api<{ already_closed: boolean }>(`/api/cash-closes/expected?account=${v.account}&on=${v.occurred_on}`);
+        if (cancelled) return;
+        setPostClosingWarn(r.already_closed
+          ? "This day is already signed for this account. Recording here is a post-closing transaction — the original close stays, and you must sign a post-closing count on Cash close afterwards."
+          : null);
+      } catch {
+        if (!cancelled) setPostClosingWarn(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [v.occurred_on, v.account]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -206,9 +224,12 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
         onDone();
         return;
       }
-      await api("/api/money-entries", { method: "POST", json: { kind, amount: v.amount.trim(), account: v.account, to_account: transfer ? v.to_account : null,
+      const res = await api<{ post_closing?: boolean; post_closing_message?: string }>("/api/money-entries", { method: "POST", json: { kind, amount: v.amount.trim(), account: v.account, to_account: transfer ? v.to_account : null,
         category_id: kind === "expense" ? v.category_id : null, party: v.party, reference: v.reference, note: v.note, occurred_on: v.occurred_on,
         proof_id: proof[0]?.id ?? null, proof_ids: proof.map((p) => p.id), no_proof_reason: proof.length ? "" : reason } });
+      if (res.post_closing && res.post_closing_message) {
+        // Keep the form message visible briefly via toast path is enough; still finish.
+      }
       onDone();
     } catch (err) {
       setError(applyApi(err));
@@ -270,8 +291,9 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
         <Field required={false} label="Transaction reference (bank or wallet)" error={errors.reference}><Input value={v.reference} onChange={(e) => set({ reference: e.target.value })} maxLength={60} /></Field>
         <div className="sm:col-span-2"><ProofInput proof={proof} setProof={(p) => { clearServer(); setError(null); setProof(p); }} reason={reason} setReason={(r) => { clearServer(); setError(null); setReason(r); }} error={errors.reason} /></div>
         <div className="flex flex-col gap-3 sm:col-span-2">
+          {postClosingWarn && <Notice tone="warning">{postClosingWarn} <Link href="/cash-close" className="underline">Open Cash close</Link> after you save.</Notice>}
           <Notice>{error}</Notice>
-          <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{busy ? "Recording" : "Record it"}</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
+          <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{busy ? "Recording" : postClosingWarn ? "Record post-closing entry" : "Record it"}</Button><Button type="button" variant="danger" onClick={onCancel}>Cancel</Button></div>
         </div>
       </form>
     </Card>
