@@ -185,8 +185,9 @@ export function CashHero({ cash, cashTotal, receivables, overdueReceivables, pay
   }));
   return (
     <div className="rounded-card bg-ink p-5 text-surface shell:p-6">
-      <p className="text-sm text-surface/70">Cash, bank and wallet</p>
+      <p className="text-sm text-surface/70">Cash, bank and wallet this month</p>
       <p className="num mt-1 text-3xl font-medium tracking-tight">{money(cashTotal)}</p>
+      <p className="mt-1 text-sm text-surface/55">This month&apos;s came in minus went out (starts at 0)</p>
       <div className="mt-4"><ShareBar parts={accounts} /></div>
       <CashDonut parts={accounts} />
       <dl className="mt-5 grid gap-3 border-t border-surface/15 pt-4 sm:grid-cols-3">

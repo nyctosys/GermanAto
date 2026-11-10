@@ -45,7 +45,13 @@ function List() {
         <Segments value={kind || "all"} onChange={(v) => setKind(v === "all" ? "" : v)}
                   options={[{ value: "all", label: "All" }, { value: "workshop", label: "Workshop" }, { value: "counter_sale", label: "Counter" }]} />
         <Segments value={status || "all"} onChange={(v) => setStatus(v === "all" ? "" : v)}
-                  options={[{ value: "all", label: "Any" }, { value: "unpaid", label: "Owing" }, { value: "paid", label: "Paid" }, { value: "draft", label: "Drafts" }]} />
+                  options={[
+                    { value: "all", label: "Any" },
+                    { value: "unpaid", label: "Unpaid" },
+                    { value: "partly_paid", label: "Partially paid" },
+                    { value: "paid", label: "Paid" },
+                    { value: "draft", label: "Drafts" },
+                  ]} />
       </div>
       <Card flush>
         {list.error ? <ErrorState message={list.error} onRetry={list.reload} />

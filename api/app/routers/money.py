@@ -27,6 +27,13 @@ def can_read_money(actor: Actor = Depends(current_actor)) -> Actor:
     return actor
 
 
+def can_create_category(actor: Actor = Depends(current_actor)) -> Actor:
+    """Settings manages the list; expenses can add a name while recording a daily expense."""
+    if not (actor.can("settings") or actor.can("expenses")):
+        raise HTTPException(403, "You don't have permission to do this")
+    return actor
+
+
 def account_out(a: Account, balance: Decimal | None = None) -> dict:
     data = {k: getattr(a, k) for k in ("id", "kind", "name", "opening_balance", "opening_date", "is_active", "version")}
     if balance is not None:
@@ -101,7 +108,7 @@ def _name_taken(db: Session, actor: Actor, name: str, except_id: uuid.UUID | Non
 
 
 @router.post("/expense-categories", status_code=201)
-def create_category(body: CategoryIn, actor: Actor = Depends(can_settings), db: Session = Depends(get_db)):
+def create_category(body: CategoryIn, actor: Actor = Depends(can_create_category), db: Session = Depends(get_db)):
     ensure_money_setup(db, actor.branch)
     if _name_taken(db, actor, body.name):
         raise HTTPException(409, "This category already exists")

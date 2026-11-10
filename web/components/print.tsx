@@ -125,7 +125,7 @@ export function PrintBar({ back, name, whatsapp, children }:
   );
 }
 
-export function Letterhead({ branch, title, right }: { branch: { name: string; address: string; phone: string }; title: string; right: ReactNode }) {
+export function Letterhead({ branch, title, right }: { branch: { name: string; address: string; phone: string; ntn?: string }; title: string; right: ReactNode }) {
   return (
     <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-ink pb-3">
       <div className="flex items-center gap-3">
@@ -133,6 +133,7 @@ export function Letterhead({ branch, title, right }: { branch: { name: string; a
         <div>
           <p className="text-xl font-bold tracking-tight">{branch.name.toUpperCase()}</p>
           <p className="text-muted">{[branch.address, branch.phone && phone(branch.phone)].filter(Boolean).join(", ")}</p>
+          {branch.ntn ? <p className="text-muted">NTN {branch.ntn}</p> : null}
         </div>
       </div>
       <div className="text-right">

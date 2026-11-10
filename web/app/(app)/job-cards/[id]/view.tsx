@@ -66,7 +66,7 @@ function Editor({ initial }: { initial: JobCard }) {
   }, [dirty]);
 
   const change = (fn: (ls: JobLine[]) => JobLine[]) => { setLines(fn); setDirty(true); };
-  const bad = lines.filter((l) => !lineQtyFor(l.item?.unit).safeParse(l.qty).success).map((l) => l.id);
+  const bad = lines.filter((l) => l.kind === "part" && !lineQtyFor(l.item?.unit).safeParse(l.qty).success).map((l) => l.id);
 
   async function save(): Promise<JobCard | null> {
     if (bad.length) { setError("Fix the quantities marked in red."); return null; }
@@ -75,7 +75,9 @@ function Editor({ initial }: { initial: JobCard }) {
     try {
       const saved = await api<JobCard>(`/api/job-cards/${card.id}`, { method: "PUT", json: {
         notes, version: card.version,
-        lines: lines.map(({ kind, labour_code_id, item_id, qty, note, proposed_price }) => ({ kind, labour_code_id, item_id, qty, note, proposed_price: proposed_price ?? null })),
+        lines: lines.map(({ kind, labour_code_id, item_id, qty, note, proposed_price }) => ({
+          kind, labour_code_id, item_id, qty: kind === "labour" ? "1" : qty, note, proposed_price: proposed_price ?? null,
+        })),
       } });
       setCard(saved);
       setLines(saved.lines);
@@ -131,7 +133,7 @@ function Editor({ initial }: { initial: JobCard }) {
             ) : (
               <ul>
                 {lines.map((l) => (
-                  <li key={l.id} className="grid gap-3 border-t border-rule px-4 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_7rem] shell:px-5">
+                  <li key={l.id} className={`grid gap-3 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5 ${l.kind === "part" ? "sm:grid-cols-[minmax(0,1fr)_7rem]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
                     <div className="min-w-0">
                       <p className="font-medium">{lineName(l)}</p>
                       <p className="flex flex-wrap gap-3 text-sm text-muted">
@@ -145,12 +147,14 @@ function Editor({ initial }: { initial: JobCard }) {
                              onChange={(e) => change((ls) => ls.map((x) => (x.id === l.id ? { ...x, note: e.target.value } : x)))} />
                     </div>
                     <div className="flex items-end gap-2 sm:flex-col sm:items-stretch">
-                      <label className="flex-1">
-                        <span className="mb-1 block text-sm text-muted">Quantity</span>
-                        <QtyInput unit={l.item?.unit} value={l.qty} disabled={locked}
-                               aria-invalid={bad.includes(l.id)} className={bad.includes(l.id) ? "border-error" : ""}
-                               onChange={(qty) => change((ls) => ls.map((x) => (x.id === l.id ? { ...x, qty } : x)))} />
-                      </label>
+                      {l.kind === "part" && (
+                        <label className="flex-1">
+                          <span className="mb-1 block text-sm text-muted">Quantity</span>
+                          <QtyInput unit={l.item?.unit} value={l.qty} disabled={locked}
+                                 aria-invalid={bad.includes(l.id)} className={bad.includes(l.id) ? "border-error" : ""}
+                                 onChange={(qty) => change((ls) => ls.map((x) => (x.id === l.id ? { ...x, qty } : x)))} />
+                        </label>
+                      )}
                       {!locked && <Button variant="danger" onClick={() => change((ls) => ls.filter((x) => x.id !== l.id))}>Remove</Button>}
                     </div>
                   </li>

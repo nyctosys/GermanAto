@@ -8,7 +8,7 @@ import { Grid, Letterhead, PrintBar } from "@/components/print";
 import { useApi } from "@/lib/api";
 import { day, money, phone, qty, when } from "@/lib/format";
 
-type Branch = { name: string; address: string; phone: string };
+type Branch = { name: string; address: string; phone: string; ntn: string };
 
 export default function PrintInvoice() {
   return <Suspense fallback={<p className="p-8">Loading</p>}><Doc /></Suspense>;
@@ -35,7 +35,7 @@ function A4({ inv, b }: { inv: Invoice; b: Branch }) {
                 whatsapp={{ phone: who.phone, text: `Hello ${who.name}, here is invoice ${inv.number} from ${b.name}. Total ${money(t.total)}${Number(t.balance) > 0 ? `, balance ${money(t.balance)}` : ", paid in full"}. Thank you.` }}>
         {inv.status !== "issued" && <p className="text-error">Draft: not issued yet.</p>}
       </PrintBar>
-      <Letterhead branch={b} title={title} right={<><p>No. <b>{inv.number}</b></p>{inv.kind === "counter_sale" && <p>Counter sale</p>}<p>Date {day(inv.issued_at ?? inv.created_at)}</p>{inv.visit && <p>Visit {inv.visit.number}</p>}</>} />
+      <Letterhead branch={{ ...b, ntn: inv.workshop_ntn || b.ntn }} title={title} right={<><p>No. <b>{inv.number}</b></p>{inv.kind === "counter_sale" && <p>Counter sale</p>}<p>Date {day(inv.issued_at ?? inv.created_at)}</p>{inv.visit && <p>Visit {inv.visit.number}</p>}</>} />
       <section className="mb-4 grid grid-cols-2 gap-6">
         <div><p className="font-bold">Bill to</p><p>{who.name}</p>{who.phone && <p>{phone(who.phone)}</p>}{who.number && <p className="text-muted">{who.number}</p>}</div>
         {inv.car && <div><p className="font-bold">Vehicle</p><p>{[inv.car.year, inv.car.make, inv.car.model].filter(Boolean).join(" ")}</p><p>Registration {inv.car.plate || "None"}</p>{inv.car.vin && <p>VIN / chassis {inv.car.vin}</p>}</div>}

@@ -76,6 +76,21 @@ def normalize_ntn(value: str) -> str:
     raise ValueError("A company NTN has 7 digits, e.g. 1234567-8")
 
 
+def normalize_ntn_options(value: str) -> str:
+    """Up to three workshop NTNs, one per line (commas also accepted)."""
+    out: list[str] = []
+    for part in re.split(r"[\n,;]+", value or ""):
+        part = part.strip()
+        if not part:
+            continue
+        n = normalize_ntn(part)
+        if n and n not in out:
+            out.append(n)
+        if len(out) >= 3:
+            break
+    return "\n".join(out)
+
+
 def _strip(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
@@ -99,6 +114,7 @@ Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
 Vin = Annotated[str, AfterValidator(normalize_vin)]
 Cnic = Annotated[str, AfterValidator(normalize_cnic)]
 Ntn = Annotated[str, AfterValidator(normalize_ntn)]
+NtnOptions = Annotated[str, AfterValidator(normalize_ntn_options)]
 Upper = Annotated[str, AfterValidator(lambda v: re.sub(r"\s+", " ", v).strip().upper())]
 
 

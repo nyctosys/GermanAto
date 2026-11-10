@@ -11,6 +11,7 @@ import { newRow, type PaymentRow, splitBodies, SplitPayments, splitValid } from 
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
 import { Button, Card, Checkbox, ErrorState, Field, Input, Notice, PageHeader, QtyInput, Select, SkeletonRows } from "@/components/ui";
+import { WorkshopNtnPick, ntnOptionsFrom } from "@/components/workshop-ntn";
 import { api, useApi } from "@/lib/api";
 import { money, qty } from "@/lib/format";
 import { linePrice, lineQtyFor } from "@/lib/schemas";
@@ -34,15 +35,17 @@ function Loader() {
   const { id } = useParams<{ id: string }>();
   const fresh = id === "new";
   const inv = useApi<Invoice>(fresh ? null : `/api/invoices/${id}`);
-  const branch = useApi<{ tax_rate: string }>("/api/branch");
+  const branch = useApi<{ tax_rate: string; ntn: string; ntn_options: string }>("/api/branch");
   if (inv.error || branch.error) return <Card flush><ErrorState message={(inv.error ?? branch.error)!} onRetry={() => { inv.reload(); branch.reload(); }} /></Card>;
   if ((!fresh && !inv.data) || !branch.data) return <Card flush><SkeletonRows rows={6} /></Card>;
-  return <Editor initial={inv.data} rate={Number(inv.data?.tax_rate ?? branch.data.tax_rate)} />;
+  return <Editor initial={inv.data} rate={Number(inv.data?.tax_rate ?? branch.data.tax_rate)} branch={branch.data} />;
 }
 
-function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
+function Editor({ initial, rate, branch }: { initial: Invoice | null; rate: number; branch: { ntn: string; ntn_options: string } }) {
   const router = useRouter();
   const { can } = useSession();
+  const ntnOptions = ntnOptionsFrom(branch);
+  const [workshopNtn, setWorkshopNtn] = useState(initial?.workshop_ntn || branch.ntn || ntnOptions[0] || "");
   const [who, setWho] = useState<"customer" | "walk_in">(initial?.customer || !initial ? (initial?.customer ? "customer" : "walk_in") : "walk_in");
   const [customer, setCustomer] = useState<Customer | null>(initial?.customer as Customer | null ?? null);
   const [carId, setCarId] = useState(initial?.car?.id ?? "");
@@ -93,7 +96,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
       const saved = initial
         ? await api<Invoice>(`/api/counter-sales/${initial.id}`, { method: "PUT", json: { ...body, version: initial.version } })
         : await api<Invoice>("/api/counter-sales", { method: "POST", json: body });
-      if (issue) await api(`/api/invoices/${saved.id}/issue`, { method: "POST", json: { version: saved.version, payments: splitBodies(payRows) } });
+      if (issue) await api(`/api/invoices/${saved.id}/issue`, { method: "POST", json: { version: saved.version, payments: splitBodies(payRows), workshop_ntn: workshopNtn } });
       router.push(issue ? `/invoices/${saved.id}` : `/counter-sales/${saved.id}`);
       if (!issue) setBusy(false);
     } catch (err) {
@@ -181,6 +184,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
         {can("invoice-issue") && can("payments-in") && lines.length > 0 && (
           <Card title="Payment">
             <SplitPayments total={t.total} rows={payRows} setRows={(fn) => setRows(() => fn(payRows))} tried={tried} />
+            {ntnOptions.length > 0 && <div className="mt-4"><WorkshopNtnPick options={ntnOptions} value={workshopNtn} onChange={setWorkshopNtn} /></div>}
           </Card>
         )}
         <Notice>{error}</Notice>

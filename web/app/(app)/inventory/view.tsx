@@ -32,6 +32,7 @@ function Inventory() {
     name: (i) => i.name,
     shelf: (i) => i.location || "",
     stock: (i) => Number(i.on_hand),
+    cost: (i) => Number(i.avg_cost),
     price: (i) => Number(i.sale_price),
   });
 
@@ -65,6 +66,7 @@ function Inventory() {
                   <SortTh label="Item" k="name" sort={sort} onSort={set} className="px-5 py-3 font-medium" />
                   <SortTh label="Shelf" k="shelf" sort={sort} onSort={set} className="px-3 py-3 font-medium" />
                   <SortTh label="In stock" k="stock" sort={sort} onSort={set} align="right" className="px-3 py-3 text-right font-medium" />
+                  <SortTh label="Purchase price" k="cost" sort={sort} onSort={set} align="right" className="px-3 py-3 text-right font-medium" />
                   <SortTh label="Sale price" k="price" sort={sort} onSort={set} align="right" className="px-5 py-3 text-right font-medium" />
                 </tr>
               </thead>
@@ -82,6 +84,7 @@ function Inventory() {
                         {qty(i.on_hand)} {i.unit}
                       </span>
                     </td>
+                    <td data-label="Purchase price" className="num px-3 py-3 text-right max-sm:px-0">{money(i.avg_cost)}</td>
                     <td data-label="Sale price" className="num px-5 py-3 text-right max-sm:px-0">{money(i.sale_price)}</td>
                   </tr>
                 ))}

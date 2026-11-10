@@ -99,6 +99,7 @@ def test_the_closing_pack_gathers_the_month(admin):
     ready_to_close(admin)
     pack = admin.get("/api/periods/2026-09/pack").json()
     assert D(str(pack["pnl"]["revenue"]["other"])) == 1000 and D(str(pack["pnl"]["total_expenses"])) == 300 and D(str(pack["pnl"]["net_profit"])) == 700
+    assert D(str(pack["cashflow"]["accounts"]["cash"]["opening"])) == 0
     assert D(str(pack["cashflow"]["accounts"]["cash"]["closing"])) == 700 and pack["cash_closes"][0]["counted"] == 700
     assert {e["source"] for e in pack["entries"]} == {"other_income", "expense"} and all(e["signoff"] for e in pack["entries"])
     assert pack["status"]["status"] == "open" and admin.get("/api/periods").json()["months"][-1]["period"] == "2026-09"
@@ -129,10 +130,11 @@ def test_profit_and_loss_adds_up_from_the_journal(admin):
 def test_cash_flow_reconciles_with_the_accounts(admin):
     a_busy_month(admin)
     cf = admin.get("/api/reports/cashflow").json()
-    accounts = {a["kind"]: a for a in admin.get("/api/accounts").json()}
     for kind, a in cf["accounts"].items():
-        assert D(str(a["closing"])) == D(str(accounts[kind]["balance"])) == D(str(a["opening"])) + D(str(a["in"])) - D(str(a["out"]))
-    assert D(str(cf["closing"])) == D(str(cf["opening"])) + D(str(cf["in"])) - D(str(cf["out"]))
+        assert D(str(a["opening"])) == 0  # each period starts clean; prior balances stay on prior months
+        assert D(str(a["closing"])) == D(str(a["in"])) - D(str(a["out"]))
+    assert D(str(cf["opening"])) == 0
+    assert D(str(cf["closing"])) == D(str(cf["in"])) - D(str(cf["out"]))
     assert "advance" in cf["accounts"]["cash"]["in_by_source"] or "payment" in cf["accounts"]["cash"]["in_by_source"]
 
 
@@ -226,7 +228,9 @@ def test_the_dashboard_shows_money_only_to_finance_users(admin):
     full = admin.get("/api/dashboard").json()
     assert full["workshop"]["cars_in"] == 1 and full["workshop"]["repair_orders"] == 1
     assert D(str(full["money"]["revenue_month"])) == 9000 and D(str(full["money"]["receivables"])) == 6530
-    assert full["alerts"]["missing_proof"] >= 1 and D(str(full["money"]["cash_total"])) == D(str(rows(admin)["1010"] + rows(admin)["1020"] + rows(admin)["1030"]))
+    cf = admin.get("/api/reports/cashflow").json()
+    assert full["alerts"]["missing_proof"] >= 1 and D(str(full["money"]["cash_total"])) == D(str(cf["closing"]))
+    assert D(str(full["money"]["cash"]["cash"])) == D(str(cf["accounts"]["cash"]["closing"]))
     _, inv = users(admin)
     plain = inv.get("/api/dashboard").json()
     assert "money" not in plain and "alerts" not in plain and plain["workshop"]["cars_in"] == 1

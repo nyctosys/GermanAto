@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Segments } from "@/components/search";
 import { Button, Card, Field, Input } from "@/components/ui";
-import { downloadCsv } from "@/lib/csv";
+import { asAmount, downloadReport, reportSheet, type ReportMeta } from "@/lib/report-xlsx";
+import { type Sheet } from "@/lib/xlsx";
 import { money } from "@/lib/format";
+import { useSession } from "@/lib/session";
 
 const iso = (d: Date) => d.toLocaleDateString("en-CA");
 
@@ -60,8 +62,50 @@ export function useRange(): [Range, ReactNode] {
 
 export const rangeQuery = (r: Range) => `date_from=${r.from}&date_to=${r.to}`;
 
-export function ExportButton({ name, headers, rows }: { name: string; headers: string[]; rows: (string | number | null | undefined)[][] }) {
-  return <Button variant="secondary" onClick={() => downloadCsv(`${name}.csv`, headers, rows)}>Download for Excel</Button>;
+export const periodLabel = (r: Range) => `${r.from} – ${r.to}`;
+
+/** Real .xlsx workbook. Pass sheets for multi-sheet reports, or headers+rows for a single titled sheet.
+ *  With `ledgerRange`, the month journal + general ledger + trial balance are put first (accountant form). */
+export function ExportButton({
+  name, title, period, headers, rows, sheets, amountCols, ledgerRange,
+}: {
+  name: string;
+  title?: string;
+  period?: string;
+  headers?: string[];
+  rows?: (string | number | null | undefined)[][];
+  sheets?: Sheet[];
+  /** 0-based column indexes to coerce to numbers (default: last column when headers+rows). */
+  amountCols?: number[];
+  /** When set, fetch the full month ledger and put it before any summary sheets. */
+  ledgerRange?: Range;
+}) {
+  const { branch } = useSession();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button variant="secondary" disabled={busy} onClick={() => {
+      void (async () => {
+        setBusy(true);
+        try {
+          let extra: Sheet[] = sheets ?? [];
+          if (!sheets?.length && headers) {
+            const cols = amountCols ?? (headers.length ? [headers.length - 1] : []);
+            const body = (rows ?? []).map((r) => r.map((c, i) => (cols.includes(i) ? asAmount(c) : c)));
+            const meta: ReportMeta = { title: title ?? name, branch: branch.name, period };
+            extra = [reportSheet("Report", meta, headers, body)];
+          }
+          if (ledgerRange) {
+            const { downloadFinanceWorkbook } = await import("@/lib/finance-export");
+            await downloadFinanceWorkbook(name, branch.name, ledgerRange.from, ledgerRange.to, extra);
+          } else {
+            downloadReport(name, extra);
+          }
+        } finally {
+          setBusy(false);
+        }
+      })();
+    }}>{busy ? "Preparing" : "Download for Excel"}</Button>
+  );
 }
 
 /** One number and what it is, optionally a link to the records behind it. */

@@ -130,6 +130,7 @@ Purchasing deliberately splits the work: the person who orders and counts the go
 ### Customers
 - Name, type (individual or company), mobile (required), other phone, email, CNIC (optional, individuals) or NTN (optional, companies), address, notes, "Don't send WhatsApp messages".
 - Phones are stored as `+92…` whatever the format typed (`0300-1234567`, `92300…`). CNIC, when given, is stored as `35202-1234567-1`. Company NTN is stored as 7 digits (or `1234567-8` with the check digit).
+- **Workshop NTN:** Branch settings holds up to three workshop NTNs. When issuing an invoice (or finishing a counter sale) the cashier can pick which one to print under the letterhead; if they leave it, the last-used NTN is applied and remembered.
 - **Duplicate phone:** saving a customer whose phone is already on file shows the existing record first. A second record is only made if you confirm it really is someone else (for example, family sharing a phone).
 - Inactive customers are hidden from searches but keep their history.
 - Numbers: `CUS-A1F3-000001`.
@@ -152,7 +153,7 @@ The car page lists, newest first: owners, visits, signed inspections, issued inv
 - **No price on the code.** The price is entered on each quotation (owner decision 6).
 
 ### Inventory
-- Each item has an internal number (`ITM-A1F3-000001`), name, brand, category, unit, fitment (the cars it fits: a seeded catalogue of common make + model names, plus every car on file as year + make + model; type to filter, e.g. `BM` for BMW), shelf location, **sale price** (set by hand), reorder level and quantity, and any number of **barcodes and manufacturer part numbers**. A scanned code finds its item wherever there is a search box.
+- Each item has an internal number (`ITM-A1F3-000001`), name, brand, category, unit, fitment (the cars it fits: a seeded catalogue of common make + model names, plus every car on file as year + make + model; type to filter, e.g. `BM` for BMW), shelf location, **sale price** (set by hand), reorder level and quantity, and any number of **barcodes and manufacturer part numbers**. A scanned code finds its item wherever there is a search box. The inventory list shows **purchase price** (average cost) beside sale price.
 - **Units:** pcs, set, pair and box are counted whole (API `require_qty`; every qty field uses `QtyInput` so decimals cannot be typed); litre, kg and metre may use thousandths.
 - **Stock is never typed in.** The quantity on hand is the sum of stock movements: opening stock, adjustments, goods received, parts issued and returned on repair orders, counter sales.
 - Stock can't go below zero. Two people taking the last unit at once can't both succeed.
@@ -202,7 +203,7 @@ Three kinds: **Workshop** (at check-in or during diagnosis), **Delivery** (befor
 - Add lines by typing a name or code, or by **scanning a part's barcode**.
 - When the search finds nothing, **Add to inventory** (needs `inventory`) opens a modal with the item form; saving adds the new part to the job card (or quotation picker). Labour codes are still added under Labour codes.
 - Each part shows how many are in stock; a shortage is flagged in red. Shortages don't stop the quotation.
-- Each line has a quantity and an optional note.
+- Parts have a quantity; labour is always one line (no quantity field). Optional note on each line.
 - **Make the quotation** saves the job card and creates the quotation from it.
 - One job card per visit. Numbers: `JC-A1F3-000001`.
 
@@ -214,7 +215,7 @@ Three kinds: **Workshop** (at check-in or during diagnosis), **Delivery** (befor
 
 ### Pricing (Draft)
 - Parts start at the item's sale price. **Labour prices are typed per line.**
-- Lines can be added or removed (codes and items only), quantities changed.
+- Lines can be added or removed (codes and items only); part quantities can be changed (labour has no quantity).
 - Discount (can't be more than the lines), **sales tax at the branch rate (17%) with an on/off switch**, validity date (7 days by default), notes for the customer.
 - Totals: labour, parts, discount, tax on the amount **before** the discount, total. A discount cuts what the customer pays; it does not cut sales tax. Line amounts keep paisa; the **total** (and tax with it) rounds to whole rupees so a payment of the amount on screen is never refused.
 
@@ -516,7 +517,7 @@ All under `/api`. Every route checks the permission named in [section 3](#3-sign
 | Repair order | `POST quotations/{id}/repair-order`, `GET repair-orders`, `GET repair-orders/{id}`, `POST repair-orders/{id}/status`, `POST …/lines`, `PATCH/DELETE …/lines/{line}`, `POST …/lines/{line}/issue`, `…/return`, `POST …/activity`, `GET technicians` |
 | Billing | `POST repair-orders/{id}/invoice`, `POST counter-sales`, `PUT counter-sales/{id}`, `GET invoices`, `GET/PUT invoices/{id}`, `POST invoices/{id}/refresh`, `…/issue`, `…/payments`, `…/void` |
 | Gate and record | `GET visits/{id}/gate-check`, `POST visits/{id}/gate-pass`, `GET visits/{id}/dossier` |
-| Money | `GET/PUT accounts`, `GET/POST expense-categories`, `PUT expense-categories/{id}`, `GET money-in`, `GET money-out`, `POST money-entries`, `POST money-entries/{id}/void`, `GET journal/trial-balance`, `GET journal/entries` |
+| Money | `GET/PUT accounts`, `GET/POST expense-categories`, `PUT expense-categories/{id}`, `GET money-in`, `GET money-out`, `POST money-entries`, `POST money-entries/{id}/void`, `GET journal/trial-balance`, `GET journal/entries`, `GET journal/ledger` |
 | Missing proof | `GET missing-evidence`, `POST missing-evidence/sign`, `POST missing-evidence/attach` |
 | Sync | `GET sync/status`, `POST sync/run`, `GET sync/conflicts`, `POST sync/conflicts/{id}/resolve`, `POST sync/tokens`; branch servers call `POST sync/push` and `GET sync/pull` with a token |
 | Messages | `GET messages`, `POST messages/send`, `POST messages/{id}/retry`, `POST messages/run-reminders`, `GET/PUT message-templates`, `PUT message-settings`; Twilio calls `POST webhooks/twilio/status` and `/inbound` |
@@ -611,7 +612,8 @@ Numbers: `PO-A1F3-000001`.
 - Every branch has three **accounts**: **Cash in hand**, **Bank account** and **Mobile wallet**. They are created the first time they are needed.
 - Each account has an **opening balance** and the date it applies from: what was in the account when you started using the system. Every later change to the account comes from money in and money out; nobody types a balance.
 - **Expense categories** are a managed list (tea, fuel, rent, electricity, repairs, equipment, stationery, internet, marketing, bank charges, taxes, other). Add one, rename one, or **retire** one: a retired category can't be chosen for new expenses but stays on the expenses already recorded. A name can't be used twice (capitals ignored).
-- The accountant can see accounts and categories; only people with `settings` change them.
+- While recording a daily expense, **+ Add a new category** lets someone with `expenses` (or `settings`) type a name on the spot; it joins the shared list and is selected. Rename and retire stay on Money settings (`settings` only).
+- The accountant can see accounts and categories; opening balances and rename/retire need `settings`.
 
 ### The journal (double-entry books)
 Every business event posts a **balanced journal entry** automatically, so the books are provable without anyone doing bookkeeping. Users never type journal entries; they record documents and payments, and the system posts the matching entry.
@@ -620,7 +622,7 @@ Every business event posts a **balanced journal entry** automatically, so the bo
 - **Chart of accounts** (created automatically): cash, bank, mobile wallet, receivables, inventory, payables, goods received not billed, customer advances, sales tax payable, owner capital and drawings, opening balance equity, revenue (labour, parts, other), cost of parts sold, operating expenses (by expense category), salaries, freight and purchase adjustments, stock write-offs.
 - **Opening balances.** Setting an account's opening balance posts an entry (money account against opening balance equity). Changing it later posts a reversal and a new entry, so the history of the correction is kept.
 - **What is in an account** is worked out from the journal: Money settings shows each account's balance now.
-- **Trial balance** (`GET /api/journal/trial-balance`, needs `reports-finance`) lists every account with debits and credits; the two totals are always equal. `GET /api/journal/entries` lists the entries behind it, filterable by the document that caused them.
+- **Trial balance** (`GET /api/journal/trial-balance`, needs `reports-finance`) lists every account with debits and credits; the two totals are always equal. `GET /api/journal/entries` lists the entries behind it (optional `date_from` / `date_to`, source filters). `GET /api/journal/ledger` returns one row per journal line for a period — used by Finance → Journal and its Excel export (Ledger + Trial balance sheets).
 
 ### What each event posts
 | Event | Debit | Credit |
@@ -767,7 +769,7 @@ Each day is worked out from the punches: the **first punch is in, the last is ou
 
 ### Dashboard
 **Where:** Dashboard (the first page).
-- **KPIs on top** (for people who may see the overview): cash/bank/wallet on a dark card with a share bar, month money as sparkline charts (revenue, profit, money in, money out), and workshop counts as chart tiles. No chart library: plain SVG in `web/components/dashboard-charts.tsx`.
+- **KPIs on top** (for people who may see the overview): cash/bank/wallet **this month** on a dark card (same figures as Finance → Cash flow for the month: start at 0, in − out only — not live account balances), month money as sparkline charts (revenue, profit, money in, money out), and workshop counts as chart tiles. No chart library: plain SVG in `web/components/dashboard-charts.tsx`.
 - **Needs attention:** payments with no proof waiting for an admin (same open count as Money → Missing proof, every unpaid-proof record, not only this month), invoices unpaid for over 30 days, vendor bills past due, items at or below their reorder level, and months not yet closed. Each line opens the screen that fixes it. "Nothing needs attention" when all is well.
 - **My work:** numbered columns for the car flow (quote → repair → release), then the other queues as cards.
 - **In the workshop:** cars in the workshop, open quotations (and how many wait for the customer), repair orders under way (ready, on hold), items low on stock.
@@ -775,23 +777,24 @@ Each day is worked out from the punches: the **first punch is in, the last is ou
 - People without finance permission see only the workshop and stock tiles.
 
 ### Finance reports
-**Where:** Reports → Finance reports (needs `reports-finance`). Choose **This month**, **Last month**, **This year** or a custom range; the range is in the address, so a report can be shared as a link. Each report has **Download for Excel**.
+**Where:** Reports → Finance reports (needs `reports-finance`). Choose **This month**, **Last month**, **This year** or a custom range; the range is in the address, so a report can be shared as a link. **Download for Excel** builds a real `.xlsx` for the accountant: first **Month journal** (Date, Voucher No., Particulars, Account code/name, Debit, Credit), then **General ledger** by account with running balance, then **Trial balance** as of the period end; summary sheets (P&L, cash flow, etc.) follow. Tabs: Profit and loss, Cash flow, **Journal**, Customers owe us, We owe vendors, Inventory asset, Discounts and voids. API: `GET /api/journal/ledger`, dated `entries`, `trial-balance`.
 | Report | What it shows |
 |---|---|
-| Profit and loss | Revenue (labour, parts, other), cost of parts sold, gross profit and margin, expenses by category, salaries, purchase adjustments, cash differences, net profit. Sales tax is shown separately: it belongs to the government, not to the business. Lines link to the records behind them. |
-| Cash flow | For the cash drawer, the bank and the wallet: at the start, what came in (by source), what went out (by source), at the end. The totals agree with each account's balance. |
+| Profit and loss | One **Revenue** total (not split by labour/parts). Discounts and advances for the period as before. **Inventory asset** card: stock at start, parts purchased into stock (asset, not expense), parts installed or sold (expense that month), stock at end — so month-end makes the purchase→asset→install→expense path clear. Then Cost of parts sold, gross/net profit. Labour vs parts is on the Workshop report. |
+| Cash flow | For the cash drawer, the bank and the wallet: **At the start is always 0** (a new month starts clean; last month's figures stay on last month's report), what came in (by source), what went out (by source), and at the end (this period's in − out only — prior balances are not brought into the month). |
 | Customers owe us | Every unpaid invoice, aged from the day it was issued (0-30, 31-60, 61-90, over 90 days). A customer who has overpaid shows as owed back. Totals equal the Receivables account. |
 | We owe vendors | Every unpaid bill, aged by how late it is (not yet due, then 1-30, 31-60, 61-90, over 90 days), plus goods received that are not yet billed. Totals equal Payables (2000) plus Goods received not billed (2100). |
-| Stock value | Each item's quantity, average cost and value; the total equals the Inventory account. |
+| Inventory asset | Parts on the shelf at cost (an **asset**, not an expense). Each item's quantity, average cost and value; the total equals the Inventory account. Profit and loss also shows opening → purchases into stock → installed/sold → closing for the period. |
 | Discounts and voids | Discounts given, by invoice and by the person who issued it; and every voided record with its reason. |
 
 ### Workshop report
 **Where:** Reports → Workshop report (needs `reports-ops`).
 - Cars checked in (by status) and the **average time in the workshop**.
 - Workshop revenue, **revenue per invoiced visit**, and counter-sale revenue (the two channels kept apart).
+- **Where revenue came from:** labour vs parts (and other income) from the books — the same totals that used to sit on the P&L — with Excel export.
 - **Quotations:** made, sent, approved and the **conversion rate**.
 - **Average time in each stage** of a repair order (time on hold is not counted).
-- **Top labour codes** and **top parts** by revenue.
+- **Top labour codes** and **top parts** by revenue (also Excel).
 - **Comebacks:** cars that returned within 30 days of leaving, linked to the visits.
 - Repair orders still open, by age.
 
@@ -908,7 +911,7 @@ A step-by-step manual with procedures (SOPs) for every area: start here, front d
 ### Printed documents and Excel
 - **Every printed document is laid out for A4 portrait**, 12 mm margins, black on white, table headings repeated on each page, and no table row, list item or heading split across a page break. This is applied by the bar at the top of every document (`web/components/print.tsx`). The gate pass and the payslip, which were A5, are now A4 too.
 - **Quotation terms and conditions.** A quotation prints on one sheet, followed by a page headed **TERMS & CONDITIONS** with a signature line. The standard text is the 15 clauses of the legacy system's quotation, word for word (`api/app/terms.py`). Administration → Branch settings has a box to change them (one clause per line); clearing the box and saving returns to the standard text. Invoices do not carry terms (as in the legacy system).
-- **Download for Excel** is on every printed document (quotation, invoice, purchase order, visit record, inspection, gate pass, payslip, closing pack). It makes a real `.xlsx` of what is on the page: headings, lines of text, numbered clauses and every table, one row each, with amounts as real numbers so Excel can add them up, bold headings, and A4 page setup. Code: `web/lib/xlsx.ts` (no spreadsheet library; it writes the file format directly with `fflate`).
+- **Download for Excel** is on every printed document (quotation, invoice, purchase order, visit record, inspection, gate pass, payslip, closing pack). It makes a real `.xlsx` of what is on the page: headings, lines of text, numbered clauses and every table, one row each, with amounts as real numbers so Excel can add them up, bold headings, and A4 page setup. Code: `web/lib/xlsx.ts` (no spreadsheet library; it writes the file format directly with `fflate`). Finance reports use the same format via `web/lib/report-xlsx.ts` (titled sheets with branch and period); they used to download CSV.
 
 ---
 

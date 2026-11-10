@@ -16,7 +16,7 @@ from app.auth import Actor, current_actor, require
 from app.db import get_db
 from app.models import AuditLog, Branch, User
 from app.terms import terms_of
-from app.validators import Email, Name, Phone, Text
+from app.validators import Email, Name, Ntn, NtnOptions, Phone, Text
 
 router = APIRouter(prefix="/api", tags=["branch"])
 
@@ -32,6 +32,8 @@ class BranchOut(BaseModel):
     phone: str
     email: str
     tax_rate: Decimal
+    ntn: str
+    ntn_options: str
     timezone: str
     currency: str
     quotation_terms: str
@@ -45,6 +47,8 @@ class BranchUpdate(BaseModel):
     phone: Phone = ""
     email: Email | None = None
     tax_rate: Decimal = Field(ge=0, le=100, decimal_places=2)
+    ntn: Ntn = ""
+    ntn_options: NtnOptions = ""
     timezone: str
     currency: str = Field(pattern=r"^[A-Z]{3}$")
     quotation_terms: Clauses = Field(default="", max_length=8000)
@@ -59,7 +63,7 @@ class BranchUpdate(BaseModel):
 
 
 def _out(branch: Branch) -> BranchOut:
-    return BranchOut(**{k: getattr(branch, k) for k in ("id", "code", "name", "address", "phone", "email", "tax_rate", "timezone", "currency",
+    return BranchOut(**{k: getattr(branch, k) for k in ("id", "code", "name", "address", "phone", "email", "tax_rate", "ntn", "ntn_options", "timezone", "currency",
                                                         "quotation_terms", "version")}, terms=terms_of(branch.quotation_terms))
 
 
@@ -75,6 +79,11 @@ def update_branch(body: BranchUpdate, actor: Actor = Depends(require("settings")
         raise HTTPException(409, "Someone else changed these settings. Reload and try again.")
     for key, value in body.model_dump(exclude={"version"}).items():
         setattr(branch, key, value if value is not None else "")
+    options = [x for x in branch.ntn_options.splitlines() if x]
+    if options and branch.ntn not in options:
+        branch.ntn = options[0]  # keep last-used inside the list; fall back to the first
+    elif not options:
+        branch.ntn = body.ntn or ""
     db.commit()
     return _out(branch)
 

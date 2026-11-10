@@ -266,7 +266,7 @@ function DraftEditor({ q, onSaved, onSend, busy, onLive }:
     setDirty(true);
   };
   const priceBad = (l: Draft) => !linePrice.safeParse(l.unit_price).success;
-  const qtyBad = (l: Draft) => !lineQtyFor(l.unit).safeParse(l.qty).success;
+  const qtyBad = (l: Draft) => l.kind === "part" && !lineQtyFor(l.unit).safeParse(l.qty).success;
   const preview = previewTotals(lines, discount, includeTax, Number(q.tax_rate));
   useEffect(() => { onLive({ ...preview, includeTax }); }, [preview.labour, preview.parts, preview.discount, preview.tax, preview.total, includeTax, onLive]);
 
@@ -280,7 +280,7 @@ function DraftEditor({ q, onSaved, onSend, busy, onLive }:
     try {
       const saved = await api<Quotation>(`/api/quotations/${q.id}`, { method: "PUT", json: {
         include_tax: includeTax, discount: discount || "0", valid_until: validUntil, notes, version: q.version,
-        lines: lines.map((l) => ({ kind: l.kind, labour_code_id: l.labour_code_id, item_id: l.item_id, qty: l.qty, unit_price: l.unit_price || "0" })),
+        lines: lines.map((l) => ({ kind: l.kind, labour_code_id: l.labour_code_id, item_id: l.item_id, qty: l.kind === "labour" ? "1" : l.qty, unit_price: l.unit_price || "0" })),
       } });
       setDirty(false);
       if (send) onSend(saved.version); else onSaved();
@@ -297,14 +297,16 @@ function DraftEditor({ q, onSaved, onSend, busy, onLive }:
         <div className="border-b border-rule p-4 shell:px-5"><CatalogPicker onPick={add} /></div>
         <ul>
           {lines.map((l) => (
-            <li key={l.id} className="grid gap-3 border-t border-rule px-4 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_6rem_9rem_auto] sm:items-end shell:px-5">
+            <li key={l.id} className={`grid gap-3 border-t border-rule px-4 py-3 first:border-t-0 sm:items-end shell:px-5 ${l.kind === "part" ? "sm:grid-cols-[minmax(0,1fr)_6rem_9rem_auto]" : "sm:grid-cols-[minmax(0,1fr)_9rem_auto]"}`}>
               <div className="min-w-0 self-center">
                 <p className="font-medium">{l.name}</p>
                 <p className="flex gap-3 text-sm text-muted"><span>{l.kind === "labour" ? "Labour" : "Part"}</span><span>{l.code}</span></p>
               </div>
-              <Field label="Qty" error={showErrors && qtyBad(l) ? "Enter a whole number" : undefined}>
-                <QtyInput unit={l.unit} value={l.qty} onChange={(qty) => edit(l.id, { qty })} />
-              </Field>
+              {l.kind === "part" && (
+                <Field label="Qty" error={showErrors && qtyBad(l) ? "Enter a whole number" : undefined}>
+                  <QtyInput unit={l.unit} value={l.qty} onChange={(qty) => edit(l.id, { qty })} />
+                </Field>
+              )}
               <Field label="Price (Rs)" error={showErrors && priceBad(l) ? "Enter the price" : undefined}>
                 <Input type="number" inputMode="decimal" min="0" step="any" value={l.unit_price} placeholder={l.kind === "labour" ? "Labour price" : ""}
                        onChange={(e) => edit(l.id, { unit_price: e.target.value })} />

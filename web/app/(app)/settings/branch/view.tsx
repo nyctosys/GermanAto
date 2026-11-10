@@ -8,7 +8,7 @@ import { api, useApi } from "@/lib/api";
 
 type Branch = {
   id: string; code: string; name: string; address: string; phone: string; email: string;
-  tax_rate: string; timezone: string; currency: string; quotation_terms: string; terms: string[]; version: number;
+  tax_rate: string; ntn: string; ntn_options: string; timezone: string; currency: string; quotation_terms: string; terms: string[]; version: number;
 };
 
 export default function BranchSettingsPage() {
@@ -32,9 +32,13 @@ function BranchSettings() {
     setSaved(false);
     setBusy(true);
     try {
+      const fd = new FormData(e.currentTarget);
+      const ntn_options = [1, 2, 3].map((i) => String(fd.get(`ntn_${i}`) ?? "").trim()).filter(Boolean).join("\n");
+      const body = Object.fromEntries(fd);
+      delete body.ntn_1; delete body.ntn_2; delete body.ntn_3;
       await api("/api/branch", {
         method: "PUT",
-        json: { ...Object.fromEntries(new FormData(e.currentTarget)), version: data.version },
+        json: { ...body, ntn_options, ntn: data.ntn || ntn_options.split("\n")[0] || "", version: data.version },
       });
       setSaved(true);
       reload();
@@ -69,6 +73,17 @@ function BranchSettings() {
               <Field label="Tax rate (%)" hint="Used when “Include tax” is ticked on a quotation or invoice.">
                 <Input name="tax_rate" type="number" inputMode="decimal" min={0} max={100} step="0.01" defaultValue={data.tax_rate} required />
               </Field>
+              <div className="sm:col-span-2 grid gap-4 sm:grid-cols-3">
+                {([1, 2, 3] as const).map((i) => {
+                  const opts = (data.ntn_options || "").split("\n").filter(Boolean);
+                  return (
+                    <Field key={i} label={`Workshop NTN ${i}`} hint={i === 1 ? "Up to three. Printed under the letterhead. When issuing, pick one — last used is remembered." : undefined}>
+                      <Input name={`ntn_${i}`} defaultValue={opts[i - 1] ?? ""} inputMode="numeric" maxLength={15} placeholder="1234567-8" />
+                    </Field>
+                  );
+                })}
+              </div>
+              {data.ntn && <p className="sm:col-span-2 text-sm text-muted">Last used when issuing: <span className="num font-medium text-ink">{data.ntn}</span></p>}
               <Field label="Currency"><Input name="currency" defaultValue={data.currency} pattern="[A-Z]{3}" required /></Field>
               <Field label="Timezone"><Input name="timezone" defaultValue={data.timezone} required /></Field>
               <div className="sm:col-span-2">

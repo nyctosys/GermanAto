@@ -171,3 +171,47 @@
 
 ## Counter sale Parts to order (10 Nov 2026)
 - When qty on a counter-sale line is above on-hand, reuse `PartsToOrder` with mode `counter` (Customer wants / Short by … / Make a purchase order draft). Same modal as quotation and repair order.
+
+## Expense category on the spot (11 Nov 2026)
+- Daily expense Category select has "+ Add a new category": type a name, Add category posts `/api/expense-categories` and selects it.
+- POST allowed for `expenses` or `settings`; rename/retire still `settings` only.
+
+## Inventory list purchase price (11 Nov 2026)
+- Inventory table adds a Purchase price column (`avg_cost`), sortable, between In stock and Sale price.
+
+## P&L revenue is one line (11 Nov 2026)
+- Profit and loss (screen, Excel, closing pack) shows a single Revenue total, not labour/parts lines.
+- Workshop report adds "Where revenue came from" (labour / parts / other from the books) with Excel export; channels stay as workshop vs counter.
+
+## Invoice list pay filters (11 Nov 2026)
+- Segments: Any, Unpaid, Partially paid, Paid, Drafts. API `status=unpaid|partly_paid|paid`; `owing` keeps unpaid+partly for Money in invoice picker.
+
+## P&L shows discounts in the issue month (11 Nov 2026)
+- Books still post revenue net of discount on issue. P&L (and Excel / closing pack) now also shows Revenue before discounts and Discounts given for invoices issued in that period.
+
+## P&L shows advances in the month taken (11 Nov 2026)
+- P&L lists advances received / refunded / applied for the period and held at end (Excel + closing pack too). They do not change net profit; revenue remains on invoice issue.
+
+## Inventory asset clear on reports (11 Nov 2026)
+- Finance tab renamed Inventory asset; P&L shows opening / purchased (asset) / issued (expense) / closing with Excel. Closing pack labels stock as Inventory asset and prints the month movement.
+
+## Cash flow starts each period at 0 (11 Nov 2026)
+- Finance → Cash flow: At the start is always 0; At the end = this period's in − out only. Prior balances (e.g. bank sitting from earlier months) are not brought into the month — no separate Cash on hand line.
+- Dashboard "Cash, bank and wallet this month" uses the same figure (this month's cashflow closing), not live account balances.
+
+## Branch/invoice NTN columns (11 Nov 2026)
+- Model had `branches.ntn` and `invoices.ntn` without a migration → `/api/auth/me` 500 (UndefinedColumn). Migration 0036 adds both.
+
+## Workshop NTN on invoices (11 Nov 2026)
+- Branch settings: up to three workshop NTNs. Issue / counter-sale finish lets you pick one (default = last used). Stamped on `invoices.workshop_ntn` and printed under the letterhead. Buyer NTN still under Bill to. Migration 0037.
+
+## Labour has no quantity field (11 Nov 2026)
+- Job card and quotation editors hide Qty for labour lines (always 1). Parts still have Qty. Repair-order extra work already did this.
+
+## Buyer NTN removed from invoices (11 Nov 2026)
+- Removed Buyer NTN card, print line under Bill to, and PUT /invoices/{id}/ntn. Workshop NTN (letterhead) stays. Company customer NTN on the customer record stays.
+
+## Finance Excel + month ledger (11 Nov 2026)
+- Finance "Download for Excel" is real `.xlsx` (title, branch, period, numeric amounts) via `report-xlsx.ts` — not CSV.
+- Accountant form first: Month journal (voucher lines), General ledger by account + running balance, Trial balance; then P&L/cash-flow/etc summary sheets (`finance-export.ts`).
+- New Finance tab **Journal**. API `GET /api/journal/ledger` and dated `entries`.

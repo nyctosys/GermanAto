@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense } from "react";
-import { ExportButton, rangeQuery, Stat, useRange } from "@/components/reports";
+import { ExportButton, Line, rangeQuery, Stat, useRange } from "@/components/reports";
 import { RequirePermission } from "@/components/shell";
 import { Card, EmptyState, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
 import { useApi } from "@/lib/api";
@@ -11,6 +11,7 @@ import { money, qty } from "@/lib/format";
 type Ops = {
   visits: { total: number; by_status: Record<string, number>; avg_turnaround_hours: number | null };
   revenue_by_channel: { workshop: string; counter_sale: string }; revenue_per_visit: string | null;
+  revenue_by_kind: { labour: string; parts: string; other: string; total: string };
   top_labour: { code: string; name: string; lines: number; revenue: string }[]; top_parts: { number: string; name: string; qty: string; revenue: string }[];
   comebacks: { visit_id: string; number: string; plate: string; previous: string; days: number }[];
   quotations: { made: number; sent: number; won: number; conversion_pct: number | null };
@@ -51,6 +52,32 @@ function Report({ o, name }: { o: Ops; name: string }) {
         <Stat label="Workshop revenue" value={money(o.revenue_by_channel.workshop)} hint={o.revenue_per_visit ? `${money(o.revenue_per_visit)} per invoiced visit` : undefined} href="/invoices?kind=workshop" />
         <Stat label="Counter sales" value={money(o.revenue_by_channel.counter_sale)} href="/invoices?kind=counter_sale" />
       </div>
+
+      <Card
+        title="Where revenue came from"
+        actions={
+          <ExportButton
+            name={`${name}-revenue`}
+            headers={["Source", "Amount"]}
+            rows={[
+              ["Labour", o.revenue_by_kind.labour],
+              ["Parts", o.revenue_by_kind.parts],
+              ...(Number(o.revenue_by_kind.other) !== 0 ? [["Other income", o.revenue_by_kind.other] as [string, string]] : []),
+              ["Total", o.revenue_by_kind.total],
+              ["Workshop channel", o.revenue_by_channel.workshop],
+              ["Counter sales channel", o.revenue_by_channel.counter_sale],
+            ]}
+          />
+        }
+      >
+        <dl>
+          <Line label="Labour" value={o.revenue_by_kind.labour} href="/invoices?kind=workshop" indent />
+          <Line label="Parts" value={o.revenue_by_kind.parts} href="/invoices" indent />
+          {Number(o.revenue_by_kind.other) !== 0 && <Line label="Other income" value={o.revenue_by_kind.other} href="/money-in?source=other_income" indent />}
+          <Line label="Total (same as P&L revenue)" value={o.revenue_by_kind.total} strong />
+        </dl>
+        <p className="mt-3 text-sm text-muted">These figures match the books. Workshop vs counter above is by invoice kind (before tax).</p>
+      </Card>
 
       <div className="grid gap-4 shell:grid-cols-2">
         <Card title="Quotations">

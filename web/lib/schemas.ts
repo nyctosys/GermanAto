@@ -47,7 +47,8 @@ const cnicOrEmpty = z.string().transform((v, ctx) => {
 
 const cnic = cnicOrEmpty.refine(Boolean, "Required");
 
-const ntnOrEmpty = z.string().transform((v, ctx) => {
+/** Empty, or 7 digits (optionally with check digit 1234567-8). */
+export const ntnOrEmpty = z.string().transform((v, ctx) => {
   const d = v.replace(/\D/g, "");
   if (!d) return "";
   if (d.length === 7) return d;

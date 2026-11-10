@@ -74,7 +74,7 @@ def build(db: Session, actor: Actor) -> list[dict]:
         rec = reports.receivables(db, b)
         add("payment", "Waiting for payment", "Take the payment and attach proof.",
             [{"label": r["number"], "sub": f"{r['customer']}, Rs {r['balance']:,.0f} owed, {r['days']} days", "href": f"/invoices/{r['id']}"} for r in rec["rows"] if r["balance"] > 0],
-            "/invoices?status=unpaid")
+            "/invoices?status=owing")
     if can("gate") or can("visits"):
         q = gate_queue(actor, db)
         add("gate", "Cars ready to leave", "Check the paperwork, then release the car with the gate pass.",

@@ -86,7 +86,9 @@ def dashboard(actor: Actor = Depends(require("dashboard")), db: Session = Depend
     stock = reports.stock_value(db, branch)
     out["stock"] = {"low_stock": stock["low_stock"], "items": len(stock["items"])}
     if actor.can("reports-finance"):
-        cash = {k: journal.money_balance(db, branch, k) for k in journal.MONEY_CODE}
+        # Same as Finance → Cash flow for this month: start at 0, show this month's in − out only.
+        cf = reports.cashflow(db, branch, month_start, today)
+        cash = {k: cf["accounts"][k]["closing"] for k in journal.MONEY_CODE}
         pnl = reports.pnl(db, branch, month_start, today)
         rec, pay = reports.receivables(db, branch), reports.payables(db, branch)
         mi = moneybook.page(db, actor, "in", date_from=month_start, date_to=today, source=None, account=None, q="", missing_proof=False, limit=1)
@@ -95,7 +97,7 @@ def dashboard(actor: Actor = Depends(require("dashboard")), db: Session = Depend
         from app.routers.periods import checklist, months_between
         first = db.scalar(select(func.min(journal.JournalEntry.entry_date)).where(journal.JournalEntry.branch_id == branch.id))
         unclosed = [m for m in months_between(first, today)[:-1] if m not in {p for (p,) in db.execute(select(journal.PeriodClose.period).where(journal.PeriodClose.branch_id == branch.id, journal.PeriodClose.kind == "month", journal.PeriodClose.status == "closed"))}] if first else []
-        out["money"] = {"cash": cash, "cash_total": sum(cash.values(), Decimal(0)), "money_in_month": mi["total"], "money_out_month": mo["total"],
+        out["money"] = {"cash": cash, "cash_total": cf["closing"], "money_in_month": mi["total"], "money_out_month": mo["total"],
                         "revenue_month": pnl["revenue"]["total"], "profit_month": pnl["net_profit"], "receivables": rec["total"],
                         "overdue_receivables": sum((r["balance"] for r in rec["rows"] if r["bucket"] in ("31-60", "61-90", "90+")), Decimal(0)),
                         "payables": pay["total"], "overdue_payables": sum((r["balance"] for r in pay["rows"] if r["days_overdue"] > 0), Decimal(0)),

@@ -13,6 +13,7 @@ import { Badge, Button, Card, Checkbox, ErrorState, Field, Input, Notice, QtyInp
 import { VehiclePanel } from "@/components/vehicle-panel";
 import { api, useApi } from "@/lib/api";
 import { money, phone, qty, qtyWhole, when } from "@/lib/format";
+import { WorkshopNtnPick, ntnOptionsFrom } from "@/components/workshop-ntn";
 import { linePrice, lineQtyFor } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
@@ -45,6 +46,9 @@ type LiveTotals = ReturnType<typeof previewTotals> & { includeTax: boolean };
 function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
   const router = useRouter();
   const { can } = useSession();
+  const branch = useApi<{ ntn: string; ntn_options: string }>("/api/branch");
+  const ntnOptions = ntnOptionsFrom(branch.data);
+  const [workshopNtn, setWorkshopNtn] = useState(inv.workshop_ntn || "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -57,6 +61,10 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
   const counter = inv.kind === "counter_sale";
   const previewTotal = live?.total ?? Number(inv.totals.total);
   const { balanceDue, excess } = advanceSplit(previewTotal, Number(inv.totals.advance_held));
+  useEffect(() => {
+    if (!branch.data || workshopNtn) return;
+    setWorkshopNtn(branch.data.ntn || ntnOptions[0] || "");
+  }, [branch.data, ntnOptions, workshopNtn]);
 
   async function call(path: string, json?: object, method = "POST") {
     setBusy(true);
@@ -113,6 +121,14 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
           {draft && !counter ? <WorkshopDraft inv={inv} busy={busy} call={call} onLive={setLive} />
             : <Lines inv={inv} />}
           {draft && counter && <Link href={`/counter-sales/${inv.id}`} className={`${linkButton} w-fit`}>Continue the sale</Link>}
+          {draft && !counter && ntnOptions.length > 0 && (
+            <Card title="Workshop NTN">
+              <WorkshopNtnPick options={ntnOptions} value={workshopNtn} onChange={setWorkshopNtn} />
+            </Card>
+          )}
+          {inv.status === "issued" && inv.workshop_ntn && (
+            <p className="text-sm text-muted">Workshop NTN on this invoice: <span className="num font-medium text-ink">{inv.workshop_ntn}</span></p>
+          )}
 
           {inv.credit_release && <Notice tone="warning">Released on credit by {inv.credit_release.by}: {inv.credit_release.reason}</Notice>}
           {paying && (
@@ -159,7 +175,7 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
               {Number(inv.totals.refundable) > 0 && can("credit-notes") && <Button onClick={() => setRefunding(true)}>Give money back</Button>}
               {inv.status === "issued" && Number(inv.totals.balance) > 0 && can("payments-in") && <Button onClick={() => setPaying(true)}>Take a payment</Button>}
               {draft && !counter && can("invoice-issue") && (
-                <Button id="act-issue" disabled={busy || excess > 0} onClick={() => call("/issue", { version: inv.version })}>Issue the invoice</Button>
+                <Button id="act-issue" disabled={busy || excess > 0} onClick={() => call("/issue", { version: inv.version, workshop_ntn: workshopNtn })}>Issue the invoice</Button>
               )}
               {draft && !counter && inv.kind === "workshop" && <Button variant="secondary" disabled={busy} onClick={() => call("/refresh")}>Refresh from the repair order</Button>}
               {draft && <Button variant="danger" onClick={() => setVoiding(true)}>Void this draft</Button>}

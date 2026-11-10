@@ -34,11 +34,24 @@ function Pack() {
 
       <Section title="1. Profit and loss">
         <Grid head={["", "Amount"]} right={[1]} rows={[
-          ["Revenue: labour", money(pnl.revenue.labour)], ["Revenue: parts", money(pnl.revenue.parts)], ["Other income", money(pnl.revenue.other)], [<b key="r">Total revenue</b>, <b key="rv">{money(pnl.revenue.total)}</b>],
+          ...(Number(pnl.revenue.discounts) !== 0
+            ? [["Revenue before discounts", money(pnl.revenue.before_discounts)], ["Discounts given", `-${money(pnl.revenue.discounts)}`]]
+            : []),
+          [<b key="r">Revenue</b>, <b key="rv">{money(pnl.revenue.total)}</b>],
+          ...(Number(pnl.revenue.other) !== 0 ? [["Other income (included above)", money(pnl.revenue.other)]] : []),
           ["Cost of parts sold", `-${money(pnl.cost_of_parts_sold)}`], [<b key="g">Gross profit</b>, <b key="gv">{money(pnl.gross_profit)}</b>],
           ...Object.entries(pnl.expenses_by_category).map(([k, v]) => [k, `-${money(v as string)}`]), ...Object.entries(pnl.other_costs).map(([k, v]) => [k, `-${money(v as string)}`]),
-          [<b key="e">Total expenses</b>, <b key="ev">-{money(pnl.total_expenses)}</b>], [<b key="n">Net profit</b>, <b key="nv">{money(pnl.net_profit)}</b>]]} />
-        <p className="text-muted">Sales tax collected for the government ({money(pnl.sales_tax_collected)}) is not included.</p>
+          [<b key="e">Total expenses</b>, <b key="ev">-{money(pnl.total_expenses)}</b>], [<b key="n">Net profit</b>, <b key="nv">{money(pnl.net_profit)}</b>],
+          ...(Number(pnl.advances?.received) || Number(pnl.advances?.refunded) || Number(pnl.advances?.applied) || Number(pnl.advances?.held_at_end)
+            ? [
+                ["Advances received this month (not income)", money(pnl.advances.received)],
+                ...(Number(pnl.advances.refunded) !== 0 ? [["Advances refunded", `-${money(pnl.advances.refunded)}`]] : []),
+                ...(Number(pnl.advances.applied) !== 0 ? [["Advances applied to invoices", `-${money(pnl.advances.applied)}`]] : []),
+                ["Advances still held", money(pnl.advances.held_at_end)],
+              ]
+            : []),
+        ]} />
+        <p className="text-muted">Sales tax collected for the government ({money(pnl.sales_tax_collected)}) is not included. Discounts and advances are shown for the same month they happened; advances are not income until the invoice is issued. Labour vs parts is on the Workshop report.</p>
         {p.months.length > 0 && <Grid head={["Month", "Revenue", "Expenses", "Net profit"]} right={[1, 2, 3]} rows={p.months.map((m: Any) => [m.month, money(m.revenue.total), money(m.total_expenses), money(m.net_profit)])} />}
       </Section>
 
@@ -46,6 +59,7 @@ function Pack() {
         <Grid head={["Account", "At the start", "Came in", "Went out", "At the end"]} right={[1, 2, 3, 4]}
               rows={[...Object.entries(cf.accounts).map(([k, a]: [string, any]) => [ACCOUNT[k], money(a.opening), money(a.in), money(a.out), money(a.closing)]), // eslint-disable-line @typescript-eslint/no-explicit-any
                      [<b key="t">Total</b>, money(cf.opening), money(cf.in), money(cf.out), <b key="c">{money(cf.closing)}</b>]]} />
+        <p className="text-muted">At the start is always 0 (new month begins clean). At the end is this period&apos;s in − out — prior balances are not brought into the month.</p>
         <Grid head={["Day", "Account", "Books said", "Counted", "Difference", "Reason"]} right={[2, 3, 4]}
               rows={p.cash_closes.map((c: Any) => [day(c.close_date), ACCOUNT[c.account], money(c.expected), money(c.counted), money(c.difference), c.reason])} />
       </Section>
@@ -54,7 +68,17 @@ function Pack() {
         <p className="text-muted">As of {day(p.receivables.as_of)} (later payments do not change these figures).</p>
         <Grid head={["Customers owe us", "Amount"]} right={[1]} rows={[...Object.entries(p.receivables.by_bucket).map(([k, v]) => [k === "credit" ? "Owed back" : `${k} days`, money(v as string)]), [<b key="t">Total</b>, <b key="v">{money(p.receivables.total)}</b>]]} />
         <Grid head={["We owe vendors", "Amount"]} right={[1]} rows={[...Object.entries(p.payables.by_bucket).map(([k, v]) => [k, money(v as string)]), [<b key="t">Total</b>, <b key="v">{money(p.payables.total)}</b>]]} />
-        <p>Stock at cost: <b>{money(p.stock.total)}</b></p>
+        <p>Inventory asset (parts on the shelf at cost): <b>{money(p.stock.total)}</b></p>
+        {p.pnl?.inventory && (
+          <Grid head={["Inventory asset this month", "Amount"]} right={[1]} rows={[
+            ["At the start", money(p.pnl.inventory.opening)],
+            ["Purchased into stock (asset)", money(p.pnl.inventory.purchased)],
+            ["Installed or sold (expense)", `-${money(p.pnl.inventory.issued)}`],
+            ...(Number(p.pnl.inventory.returned) !== 0 ? [["Returned to stock", money(p.pnl.inventory.returned)]] : []),
+            ...(Number(p.pnl.inventory.adjusted) !== 0 ? [["Adjustments", money(p.pnl.inventory.adjusted)]] : []),
+            [<b key="c">At the end (asset)</b>, <b key="cv">{money(p.pnl.inventory.closing)}</b>],
+          ]} />
+        )}
         {p.equity && <Grid head={["Equity", "Amount"]} right={[1]} rows={[
           ["Owner capital", money(p.equity.owner_capital)], ["Owner drawings", `-${money(p.equity.owner_drawings)}`],
           ["Retained earnings (cumulative net profit)", money(p.equity.retained_earnings)],

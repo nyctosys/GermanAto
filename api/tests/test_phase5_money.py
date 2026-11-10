@@ -44,7 +44,14 @@ def test_only_settings_users_change_money_setup(admin):
     admin.post("/api/users", json={"username": "acct", "full_name": "Acct", "password": "acct-pass-123", "role_id": roles["Accountant"], "branch_ids": [branch_id]})
     acct = signed_in("acct", "acct-pass-123")
     assert acct.get("/api/accounts").status_code == 200  # the accountant can see them
-    assert acct.post("/api/expense-categories", json={"name": "Anything"}).status_code == 403
+    # Expenses may add a category while recording; rename and retire stay with settings.
+    made = acct.post("/api/expense-categories", json={"name": "Anything"})
+    assert made.status_code == 201, made.json()
+    c = made.json()
+    assert acct.put(f"/api/expense-categories/{c['id']}", json={"name": "Renamed", "is_active": True, "version": c["version"]}).status_code == 403
+    admin.post("/api/users", json={"username": "till", "full_name": "Till", "password": "till-pass-123", "role_id": roles["Cashier"], "branch_ids": [branch_id]})
+    till = signed_in("till", "till-pass-123")
+    assert till.post("/api/expense-categories", json={"name": "Not allowed"}).status_code == 403
 
 
 # --- the journal ---------------------------------------------------------------------------------
@@ -107,6 +114,18 @@ def test_the_journal_is_for_finance_users_only(admin):
     branch_id = admin.get("/api/auth/me").json()["branch"]["id"]
     admin.post("/api/users", json={"username": "inv", "full_name": "Inv", "password": "inv-pass-1234", "role_id": roles["Inventory manager"], "branch_ids": [branch_id]})
     assert signed_in("inv", "inv-pass-1234").get("/api/journal/trial-balance").status_code == 403
+
+
+def test_journal_ledger_filters_by_period(admin):
+    cash = next(a for a in admin.get("/api/accounts").json() if a["kind"] == "cash")
+    admin.put(f"/api/accounts/{cash['id']}", json={"name": cash["name"], "opening_balance": "1000", "opening_date": date.today().isoformat(), "version": cash["version"]})
+    today = date.today().isoformat()
+    ledger = admin.get("/api/journal/ledger", params={"date_from": today, "date_to": today}).json()
+    assert ledger["from"] == today and any(r["account_code"] == "1010" for r in ledger["rows"])
+    assert D(str(ledger["debit"])) == D(str(ledger["credit"]))
+    assert admin.get("/api/journal/entries", params={"date_from": today, "date_to": today}).json()
+    assert admin.get("/api/journal/ledger", params={"date_from": "2099-01-01", "date_to": "2099-01-31"}).json()["rows"] == []
+    assert admin.get("/api/journal/ledger", params={"date_from": "2099-02-01", "date_to": "2099-01-01"}).status_code == 422
 
 
 # --- the journal follows the documents ---------------------------------------------------------------

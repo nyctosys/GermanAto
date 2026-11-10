@@ -266,6 +266,7 @@ export const CHAPTERS: Chapter[] = [
         steps: [
           "On a repair order that is Ready, press Make the invoice. The jobs marked Done and the parts really used come across. Lines not used appear under Not used on this invoice.",
           "Check the prices, the discount and the tax switch. With tax on, the Total shows Subtotal, Sales tax and Total, then Advance applied and Balance due.",
+          "If Branch settings has workshop NTNs, pick which one to print under the letterhead (or leave the last used). Then press Issue.",
           "If the advances are more than the invoice, Excess advance appears. An administrator must refund the excess (Confirm under Excess advance action) before Issue works.",
           "If the screen says the repair order changed, press Refresh from the repair order. Prices you edited are kept.",
           "Press Issue. Prices are now locked, and the advance applied is taken off automatically.",
@@ -396,11 +397,12 @@ export const CHAPTERS: Chapter[] = [
       {
         id: "expense", title: "Record an expense or owner drawing", who: "Accountant (expenses or payments-out permission)",
         steps: [
-          "Go to Money, then Money out, and press Record money out. Choose Expense, Owner drawings or Transfer.",
-          "For an expense, choose the category (tea, fuel, rent, electricity and so on), the account it was paid from, the amount and the date.",
+          "Go to Money, then Money out, and press Add a daily expense (or Record other money out for drawings and transfers).",
+          "For an expense, choose the category (tea, fuel, rent, electricity and so on). If yours is missing, choose + Add a new category, type the name and press Add category.",
+          "Choose the account it was paid from, the amount and the date.",
           "Attach the receipt photo, or write why there is none.",
         ],
-        avoid: ["A retired category cannot be chosen. Ask an administrator to add a new one under Money settings."],
+        avoid: ["A retired category cannot be chosen. To rename or retire a category, use Money settings."],
       },
       {
         id: "void-money", title: "Fix a wrong money record", who: "The person who made it, or the accountant",
@@ -489,7 +491,7 @@ export const CHAPTERS: Chapter[] = [
         id: "dashboard", title: "Daily review", who: "Owner or manager",
         steps: [
           "Open the Dashboard. Start with Needs attention: payments with no proof, invoices unpaid for over 30 days, bills past their due date, low stock, and months not closed. Each line opens the screen that fixes it.",
-          "Then read In the workshop (cars, quotations, repairs) and Money this month. Every tile opens the report behind it.",
+          "Cash, bank and wallet this month matches the cash flow report for the month (starts at 0; this month's came in minus went out). Then read In the workshop and Money this month. Every tile opens the report behind it.",
         ],
         right: ["The goal is a dashboard that says Nothing needs attention."],
       },
@@ -497,11 +499,14 @@ export const CHAPTERS: Chapter[] = [
         id: "reports", title: "Use the reports", who: "Accountant or owner (reports-finance or reports-ops permission)",
         steps: [
           "Go to Reports, then Finance reports. Choose This month, Last month, This year, or your own dates.",
-          "Pick a report: Profit and loss, Cash flow, Customers owe us, We owe vendors, Stock value, or Discounts and voids.",
-          "Press Download for Excel to save it as a spreadsheet. The dates are in the web address, so you can share the link.",
-          "The Workshop report shows cars, how many quotations were accepted, time spent in each stage, top jobs and parts, and cars that came back. The People report shows attendance, salary cost and advances.",
+          "Pick a report: Profit and loss, Cash flow, Journal (month ledger), Customers owe us, We owe vendors, Inventory asset, or Discounts and voids.",
+          "Cash flow starts each period at 0 (last month's figures stay on last month's report). At the end is this period's came in minus went out only — prior balances are not brought into the month.",
+          "Journal shows every bookkeeping line in the period (date, voucher, account, debit, credit).",
+          "On Profit and loss, Inventory asset shows stock at the start, purchases into stock (still an asset), parts installed or sold (expense that month), and stock at the end. Inventory asset lists every part on the shelf at cost.",
+          "Press Download for Excel for the accountant's workbook: Month journal, General ledger by account (with running balance), Trial balance, then the report summary. Real .xlsx, not CSV. The dates are in the web address.",
+          "The Workshop report shows cars, where revenue came from (labour vs parts), quotations, stages, top jobs and parts, and comebacks. The People report shows attendance, salary cost and advances.",
         ],
-        right: ["Customers owe us matches Receivables. We owe vendors matches Payables plus goods received not billed. Stock value matches Inventory."],
+        right: ["Buying parts is an asset, not an expense. Expense is Cost of parts sold when a part is installed or sold. Inventory asset matches the Inventory account."],
       },
       {
         id: "month-end", title: "Close a month", who: "Accountant (period-close permission)",
@@ -565,7 +570,7 @@ export const CHAPTERS: Chapter[] = [
       {
         id: "settings", title: "Branch and money settings", who: "Administrator (settings permission)",
         steps: [
-          "Branch settings: the workshop's name, address, phone and sales tax rate, and the terms and conditions printed on every quotation (one clause per line; clear the box and save to go back to the standard terms).",
+          "Branch settings: the workshop's name, address, phone, sales tax rate, up to three workshop NTNs (printed under the invoice letterhead; when you issue an invoice you can pick one, or the last used is kept), and the terms and conditions printed on every quotation (one clause per line; clear the box and save to go back to the standard terms).",
           "Money settings: the opening balance and date of the cash, bank and wallet accounts (what was there when you started), and the list of expense categories.",
         ],
         avoid: ["Set the opening balances once, at the start. Changing them later creates a reversal and a new entry."],

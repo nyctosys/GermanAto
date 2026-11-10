@@ -27,6 +27,8 @@ class Branch(Entity):
     phone: Mapped[str] = mapped_column(String(20), default="")
     email: Mapped[str] = mapped_column(String(120), default="")
     tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("17.00"))
+    ntn: Mapped[str] = mapped_column(String(15), default="")  # last-used workshop NTN (default when issuing)
+    ntn_options: Mapped[str] = mapped_column(Text, default="")  # up to 3 workshop NTNs, one per line; pick when issuing
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Karachi")
     currency: Mapped[str] = mapped_column(String(3), default="PKR")
     quotation_terms: Mapped[str] = mapped_column(Text, default="")  # one clause per line; blank = app.terms.DEFAULT_QUOTATION_TERMS
@@ -636,6 +638,8 @@ class Invoice(BranchScoped):
     car_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cars.id"), index=True)
     walk_in_name: Mapped[str] = mapped_column(String(120), default="")
     walk_in_phone: Mapped[str] = mapped_column(String(16), default="")
+    ntn: Mapped[str] = mapped_column(String(15), default="")  # buyer NTN on this invoice (editable even after issue)
+    workshop_ntn: Mapped[str] = mapped_column(String(15), default="")  # workshop NTN stamped at issue; printed under letterhead
     include_tax: Mapped[bool] = mapped_column(Boolean, default=True)
     tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2))
     discount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))

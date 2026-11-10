@@ -46,37 +46,70 @@ def invoice_balance_as_of(db: Session, inv: Invoice, as_of: date) -> Decimal | N
     return t - credited - (paid - refunded)
 
 
+def _customer_advances(db: Session, branch: Branch, start: date, end: date) -> dict:
+    """Advances taken / given back / applied in the period (liability 2200 — not income)."""
+    lo = datetime.combine(start, datetime.min.time()).astimezone()
+    hi = datetime.combine(end + timedelta(days=1), datetime.min.time()).astimezone()
+    received = sum((p.amount for p in db.scalars(
+        select(Payment).where(Payment.branch_id == branch.id, Payment.kind == "advance", Payment.status == "posted",
+                              Payment.received_at >= lo, Payment.received_at < hi))), Z)
+    refunded = sum((e.amount for e in db.scalars(
+        select(MoneyEntry).where(MoneyEntry.branch_id == branch.id, MoneyEntry.kind == "refund",
+                                 MoneyEntry.payment_id.is_not(None), MoneyEntry.status == "posted",
+                                 MoneyEntry.occurred_on >= start, MoneyEntry.occurred_on <= end))), Z)
+    held = lambda as_of: (lambda d, c: c - d)(*journal.balances(db, branch, as_of=as_of).get("2200", (Z, Z)))
+    held_start, held_end = held(start - timedelta(days=1)), held(end)
+    # What left advances this month onto invoices (received − refunded − rise in held).
+    applied = received - refunded - (held_end - held_start)
+    return {"received": received, "refunded": refunded, "applied": applied, "held_at_end": held_end}
+
+
 def pnl(db: Session, branch: Branch, start: date, end: date) -> dict:
-    """Profit and loss from the journal: revenue, cost of parts sold, expenses by category, salaries, net profit."""
+    """Profit and loss from the journal: revenue, cost of parts sold, expenses by category, salaries, net profit.
+
+    Invoice discounts are already netted into labour/parts revenue in the issue month. The statement
+    also shows discounts given that month so gross → discount → net revenue is clear. Customer advances
+    taken in the period are listed too (same month they were received) but are not income.
+    """
     b = journal.balances(db, branch, since=start, as_of=end)
     cr = lambda code: (b.get(code, (Z, Z))[1] - b.get(code, (Z, Z))[0])  # credit-normal accounts
     dr = lambda code: (b.get(code, (Z, Z))[0] - b.get(code, (Z, Z))[1])  # debit-normal accounts
     labour, parts, other = cr("4000"), cr("4100"), cr("4900")
-    revenue = labour + parts + other
+    revenue = labour + parts + other  # net of invoice discounts (books)
+    discounts_given = discounts_and_voids(db, branch, start, end)["discount_total"]
+    revenue_before_discounts = revenue + discounts_given
+    advances = _customer_advances(db, branch, start, end)
+    inventory = inventory_asset(db, branch, start, end)
     cogs = dr("5000")
     expenses = journal.category_totals(db, branch, start, end)
     other_costs = {"Salaries and wages": dr("6100"), "Freight and purchase adjustments": dr("6200"),
                    "Stock write-offs and corrections": dr("6900"), "Cash over and short": dr("6910")}
     other_costs = {k: v for k, v in other_costs.items() if v}
     total_expenses = sum(expenses.values(), Z) + sum(other_costs.values(), Z)
-    return {"from": start, "to": end, "revenue": {"labour": labour, "parts": parts, "other": other, "total": revenue},
+    return {"from": start, "to": end,
+            "revenue": {"labour": labour, "parts": parts, "other": other, "total": revenue,
+                        "before_discounts": revenue_before_discounts, "discounts": discounts_given},
+            "advances": advances,
+            "inventory": inventory,
             "cost_of_parts_sold": cogs, "gross_profit": revenue - cogs, "gross_margin_pct": float((revenue - cogs) / revenue * 100) if revenue else None,
             "expenses_by_category": expenses, "other_costs": other_costs, "total_expenses": total_expenses, "net_profit": revenue - cogs - total_expenses,
             "sales_tax_collected": cr("2300")}
 
 
 def cashflow(db: Session, branch: Branch, start: date, end: date) -> dict:
+    """This period's money movement only. At the start is always 0 (a new month starts clean;
+    last month's figures stay on last month's report). Closing is in − out for the period —
+    prior balances are not brought into this month."""
     moves = journal.money_movement(db, branch, start, end)
     out = {}
-    for kind, code in journal.MONEY_CODE.items():
-        opening_d, opening_c = journal.balances(db, branch, as_of=start - timedelta(days=1)).get(code, (Z, Z))
+    for kind in journal.MONEY_CODE:
         a = moves[kind]
-        opening = opening_d - opening_c
-        out[kind] = {"opening": opening, "in": a["in"], "out": a["out"], "closing": opening + a["in"] - a["out"],
+        out[kind] = {"opening": Z, "in": a["in"], "out": a["out"], "closing": a["in"] - a["out"],
                      "in_by_source": a["in_by_source"], "out_by_source": a["out_by_source"]}
     return {"from": start, "to": end, "accounts": out,
-            "opening": sum((a["opening"] for a in out.values()), Z), "in": sum((a["in"] for a in out.values()), Z),
-            "out": sum((a["out"] for a in out.values()), Z), "closing": sum((a["closing"] for a in out.values()), Z)}
+            "opening": Z, "in": sum((a["in"] for a in out.values()), Z),
+            "out": sum((a["out"] for a in out.values()), Z),
+            "closing": sum((a["closing"] for a in out.values()), Z)}
 
 
 def receivables(db: Session, branch: Branch, as_of: date | None = None) -> dict:
@@ -141,6 +174,30 @@ def stock_value(db: Session, branch: Branch, as_of: date | None = None) -> dict:
              for i, n, nm, u, rl, q, v in rows if q or v]
     return {"as_of": as_of or local_today(), "items": items, "total": sum((i["value"] for i in items), Z),
             "low_stock": sum(1 for i in items if i["low"])}
+
+
+def inventory_asset(db: Session, branch: Branch, start: date, end: date) -> dict:
+    """How the Inventory asset moved in the period: purchases stay on the shelf; install/sale becomes expense (COGS)."""
+    lo = datetime.combine(start, datetime.min.time()).astimezone()
+    hi = datetime.combine(end + timedelta(days=1), datetime.min.time()).astimezone()
+    opening = stock_value(db, branch, as_of=start - timedelta(days=1))["total"]
+    closing = stock_value(db, branch, as_of=end)["total"]
+    rows = db.execute(
+        select(StockMovement.kind, func.coalesce(func.sum(StockMovement.qty * StockMovement.unit_cost), 0))
+        .join(Item, Item.id == StockMovement.item_id)
+        .where(Item.branch_id == branch.id, StockMovement.created_at >= lo, StockMovement.created_at < hi)
+        .group_by(StockMovement.kind)
+    ).all()
+    by = {k: Decimal(v) for k, v in rows}
+    # qty is signed (+ in, − out), so value is signed the same way.
+    purchased = by.get("grn", Z) + by.get("opening", Z)  # goods received (and any opening stock booked in-period)
+    issued = -(by.get("issue", Z) + by.get("sale", Z))  # installed on cars or sold at the counter → expense
+    returned = by.get("return", Z) + by.get("credit", Z)
+    adjusted = by.get("adjustment", Z)
+    return {
+        "opening": opening, "purchased": purchased, "issued": issued, "returned": returned,
+        "adjusted": adjusted, "closing": closing,
+    }
 
 
 def discounts_and_voids(db: Session, branch: Branch, start: date, end: date) -> dict:
@@ -217,8 +274,11 @@ def operations(db: Session, branch: Branch, start: date, end: date) -> dict:
         days = (now - ro.created_at).days
         aging["0-2 days" if days <= 2 else "3-7 days" if days <= 7 else "8-14 days" if days <= 14 else "over 14 days"] += 1
 
+    # Same labour / parts / other split as the P&L books (shown on the workshop report, not on the P&L statement).
+    books = pnl(db, branch, start, end)["revenue"]
     return {"from": start, "to": end, "visits": {"total": len(visits), "by_status": dict(by_status), "avg_turnaround_hours": turnaround},
             "revenue_by_channel": channel, "revenue_per_visit": (channel["workshop"] / len(workshop)) if workshop else None,
+            "revenue_by_kind": {"labour": books["labour"], "parts": books["parts"], "other": books["other"], "total": books["total"]},
             "top_labour": [{"code": c, "name": n, "lines": k, "revenue": money(r)} for c, n, k, r in labour],
             "top_parts": [{"number": n, "name": nm, "qty": q, "revenue": money(r)} for n, nm, q, r in parts],
             "comebacks": comebacks, "quotations": {"made": len(quotes), "sent": len(sent), "won": len(won),

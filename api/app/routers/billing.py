@@ -16,7 +16,7 @@ from app import messaging
 from app.models import Car, Customer, Visit  # noqa: F811
 from app.db import get_db, utcnow
 from app.models import (
-    AuditLog, Car, CreditNote, CreditNoteLine, Customer, Inspection, Invoice, InvoiceLine, Item, JobCard, LabourCode, MoneyEntry, Payment, Quotation,
+    AuditLog, Branch, Car, CreditNote, CreditNoteLine, Customer, Inspection, Invoice, InvoiceLine, Item, JobCard, LabourCode, MoneyEntry, Payment, Quotation,
     RepairOrder, RepairOrderLine, StockMovement, User, Visit,
 )
 from app import posting
@@ -27,7 +27,7 @@ from app.routers.estimates import (
 from app.routers.repairs import _get_ro, _log, repair_order_out
 from app.routers.workshop import _get_visit, _require_open, get_visit, person
 from app.stock import StockError, move
-from app.validators import Phone, Text
+from app.validators import Ntn, Phone, Text
 from app.config import local_today
 
 router = APIRouter(prefix="/api", tags=["billing"])
@@ -36,6 +36,7 @@ can_issue = require("invoice-issue")
 can_take = require("payments-in")
 can_visit = require("visits")
 can_gate = require_any("visits", "gate")  # the guard holds only "gate"
+
 
 
 def _get_invoice(db: Session, actor: Actor, invoice_id: uuid.UUID, *, lock: bool = False) -> Invoice:
@@ -115,7 +116,7 @@ def invoice_out(db: Session, inv: Invoice) -> dict:
     return {
         "id": inv.id, "number": inv.number, "kind": inv.kind, "status": inv.status, "pay_status": pay_status(inv, b),
         "version": inv.version, "include_tax": inv.include_tax, "tax_rate": inv.tax_rate, "discount": inv.discount,
-        "notes": inv.notes, "created_at": inv.created_at, "issued_at": inv.issued_at,
+        "workshop_ntn": inv.workshop_ntn, "notes": inv.notes, "created_at": inv.created_at, "issued_at": inv.issued_at,
         "issued_by": issuer.full_name if issuer else None, "repair_order_id": inv.repair_order_id,
         "visit": v and {"id": v.id, "number": v.number, "status": v.status, "car_id": v.car_id, "customer_id": v.customer_id,
                         "buyer_id": v.buyer_id, "odometer_in": v.odometer_in},
@@ -189,9 +190,10 @@ def start_invoice(ro_id: uuid.UUID, actor: Actor = Depends(can_bill), db: Sessio
     if not lines:
         raise HTTPException(422, "Nothing on the repair order is marked done")
     q = db.get(Quotation, ro.quotation_id)
+    customer_id = v.buyer_id or v.customer_id
     inv = Invoice(number=next_number(db, actor.branch, "invoice"), kind="workshop", visit_id=v.id, repair_order_id=ro.id,
-                  customer_id=v.buyer_id or v.customer_id, car_id=v.car_id, include_tax=q.include_tax, tax_rate=q.tax_rate,
-                  discount=q.discount, lines=lines)
+                  customer_id=customer_id, car_id=v.car_id,
+                  include_tax=q.include_tax, tax_rate=q.tax_rate, discount=q.discount, lines=lines)
     db.add(inv)
     db.commit()
     return invoice_out(db, inv)
@@ -236,8 +238,10 @@ def start_inspection_invoice(visit_id: uuid.UUID, body: InspectionInvoiceIn, act
         db.add(code)
         db.flush()
     line = InvoiceLine(position=0, kind="labour", labour_code_id=code.id, description="Pre-purchase inspection", qty=1, unit_price=body.price)
-    inv = Invoice(number=next_number(db, actor.branch, "invoice"), kind="inspection", visit_id=v.id, customer_id=v.buyer_id or v.customer_id,
-                  car_id=v.car_id, include_tax=body.include_tax, tax_rate=actor.branch.tax_rate, notes=body.notes, lines=[line])
+    customer_id = v.buyer_id or v.customer_id
+    inv = Invoice(number=next_number(db, actor.branch, "invoice"), kind="inspection", visit_id=v.id, customer_id=customer_id,
+                  car_id=v.car_id, include_tax=body.include_tax,
+                  tax_rate=actor.branch.tax_rate, notes=body.notes, lines=[line])
     db.add(inv)
     db.commit()
     return invoice_out(db, inv)
@@ -296,8 +300,9 @@ def start_counter_sale(body: CounterSaleIn, actor: Actor = Depends(can_bill), db
 
 @router.get("/invoices")
 def list_invoices(kind: Literal["workshop", "counter_sale", "inspection", "all"] = "all",
-                  status: Literal["draft", "unpaid", "paid", "all"] = "all", q: str = "",
+                  status: Literal["draft", "unpaid", "partly_paid", "paid", "owing", "all"] = "all", q: str = "",
                   actor: Actor = Depends(can_bill), db: Session = Depends(get_db)):
+    """status: unpaid / partly_paid / paid are exact; owing means any balance still due (for money-in pickers)."""
     stmt = (select(Invoice, Customer).outerjoin(Customer, Customer.id == Invoice.customer_id)
             .outerjoin(Car, Car.id == Invoice.car_id)
             .where(Invoice.branch_id == actor.branch.id, Invoice.status != "void")
@@ -316,7 +321,13 @@ def list_invoices(kind: Literal["workshop", "counter_sale", "inspection", "all"]
     for inv, c in db.execute(stmt):
         b = balance_of(db, inv)
         ps = pay_status(inv, b)
-        if status == "unpaid" and ps == "paid" or status == "paid" and ps != "paid":
+        if status == "unpaid" and ps != "unpaid":
+            continue
+        if status == "partly_paid" and ps != "partly_paid":
+            continue
+        if status == "paid" and ps != "paid":
+            continue
+        if status == "owing" and ps == "paid":
             continue
         out.append({"id": inv.id, "number": inv.number, "kind": inv.kind, "status": inv.status, "pay_status": ps,
                     "total": b["total"], "balance": b["balance"], "created_at": inv.created_at, "issued_at": inv.issued_at,
@@ -398,6 +409,7 @@ def _record_payment(db: Session, actor: Actor, inv: Invoice, body: PaymentIn) ->
 
 class IssueIn(BaseModel):
     version: int
+    workshop_ntn: Ntn = ""  # blank = last-used (branch.ntn) or the first option
     payments: list[PaymentIn] = Field(default_factory=list, max_length=5)  # counter sales are paid on the spot
 
 
@@ -444,6 +456,14 @@ def issue_invoice(invoice_id: uuid.UUID, body: IssueIn, actor: Actor = Depends(c
                 move(db, l.item_id, "sale", -l.qty, reason=f"{inv.number}: counter sale", source_type="invoice_line", source_id=l.id)
             except StockError as e:
                 raise HTTPException(409, str(e))
+    branch = db.get(Branch, actor.branch.id)
+    options = [x for x in (branch.ntn_options or "").splitlines() if x]
+    chosen = body.workshop_ntn or branch.ntn or (options[0] if options else "")
+    if chosen and options and chosen not in options:
+        raise HTTPException(422, "Pick one of the workshop NTNs set in Branch settings")
+    inv.workshop_ntn = chosen
+    if chosen:
+        branch.ntn = chosen  # remember for the next invoice
     inv.status, inv.issued_at, inv.issued_by = "issued", utcnow(), actor.user.id
     db.flush()
     posting.invoice_issued(db, actor.branch, inv)

@@ -183,7 +183,7 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
   const kinds = (direction === "in" ? IN_KINDS : OUT_KINDS).filter((k) => (only ? k === only : direction === "out" && k === "expense" ? false : true))
     .filter((k) => (k === "expense" ? can("expenses") : k === "transfer" ? can("payments-out") : k === "drawings" ? can("payments-out") : can("payments-in")));
   const cats = useApi<Category[]>("/api/expense-categories");
-  const owing = useApi<{ id: string; number: string; customer: string; balance: string }[]>(direction === "in" ? "/api/invoices?status=unpaid" : null);
+  const owing = useApi<{ id: string; number: string; customer: string; balance: string }[]>(direction === "in" ? "/api/invoices?status=owing" : null);
   const [invoiceId, setInvoiceId] = useState("");
   const [invoiceError, setInvoiceError] = useState<string | undefined>();
   const [kind, setKind] = useState(kinds[0] ?? "other_income");
@@ -195,6 +195,11 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [postClosingWarn, setPostClosingWarn] = useState<string | null>(null);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const ADD_CATEGORY = "__add_category";
   const transfer = kind === "transfer";
   const invoicePay = kind === "invoice_payment";
   const snapshot = { ...v, kind, proof, reason };
@@ -203,6 +208,22 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
     return r.success ? {} : issuesToFieldErrors(r.error.issues);
   });
   const set = (p: Partial<typeof v>) => { clearServer(); setError(null); setV((x) => ({ ...x, ...p })); };
+
+  async function addCategory() {
+    if (!newCategory.trim()) { setCategoryError("Type the name first."); return; }
+    setCategoryBusy(true);
+    setCategoryError(null);
+    try {
+      const c = await api<Category>("/api/expense-categories", { method: "POST", json: { name: newCategory.trim() }, toast: "Category added" });
+      cats.reload();
+      set({ category_id: c.id });
+      setAddingCategory(false);
+      setNewCategory("");
+    } catch (err) {
+      setCategoryError((err as Error).message);
+    }
+    setCategoryBusy(false);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -293,10 +314,47 @@ function EntryForm({ direction, only, onDone, onCancel }: { direction: "in" | "o
         )}
         {kind === "expense" && (
           <Field required label="Category" error={errors.category_id}>
-            <Select value={v.category_id} onChange={(e) => set({ category_id: e.target.value })}>
-              <option value="">Choose a category</option>
-              {cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
+            <div className="flex flex-col gap-2">
+              <Select
+                value={addingCategory ? ADD_CATEGORY : v.category_id}
+                onChange={(e) => {
+                  if (e.target.value === ADD_CATEGORY) {
+                    setAddingCategory(true);
+                    setCategoryError(null);
+                    setNewCategory("");
+                    return;
+                  }
+                  setAddingCategory(false);
+                  setCategoryError(null);
+                  set({ category_id: e.target.value });
+                }}
+              >
+                <option value="">Choose a category</option>
+                {cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {(can("expenses") || can("settings")) && <option value={ADD_CATEGORY}>+ Add a new category</option>}
+              </Select>
+              {addingCategory && (
+                <div className="flex flex-col gap-2 rounded-control border border-rule bg-paper-3 p-3">
+                  <Input
+                    aria-label="New category name"
+                    value={newCategory}
+                    maxLength={80}
+                    placeholder="Type the category name"
+                    autoFocus
+                    onChange={(e) => { setNewCategory(e.target.value); setCategoryError(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addCategory(); } }}
+                  />
+                  {categoryError && <p role="alert" className="text-sm text-error">{categoryError}</p>}
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" disabled={categoryBusy} onClick={() => void addCategory()}>
+                      {categoryBusy ? "Adding" : "Add category"}
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => { setAddingCategory(false); setNewCategory(""); setCategoryError(null); }}>Cancel</Button>
+                  </div>
+                  <p className="text-sm text-muted">It joins the list for everyone. Rename or retire categories in Money settings.</p>
+                </div>
+              )}
+            </div>
           </Field>
         )}
         {!transfer && <Field label={direction === "in" ? "Received from (optional)" : "Paid to (optional)"} error={errors.party}><Input value={v.party} onChange={(e) => set({ party: e.target.value })} maxLength={120} /></Field>}
