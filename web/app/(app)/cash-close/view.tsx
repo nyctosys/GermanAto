@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, moneyDiff, moneyExact, today } from "@/lib/format";
@@ -68,6 +69,14 @@ function Body() {
   const missed = useApi<MissedDay[]>("/api/cash-closes/missed");
   const [sessionDay, setSessionDay] = useState<string | null>(onParam && onParam <= today() ? onParam : null);
   const [pickingMissed, setPickingMissed] = useState(false);
+  const { sort, set } = useTableSort();
+  const historyRows = sortRows(history.data ?? [], sort, {
+    day: (c) => c.close_date,
+    account: (c) => c.account,
+    expected: (c) => Number(c.expected),
+    counted: (c) => Number(c.counted),
+    difference: (c) => Number(c.difference),
+  });
   const reload = () => { status.reload(); history.reload(); missed.reload(); };
 
   useEffect(() => {
@@ -322,12 +331,14 @@ function Body() {
           : !history.data.length ? <EmptyState title="No closes yet">Each signed count appears here and cannot be changed.</EmptyState> : (
             <table className="table-stack w-full">
               <thead><tr className="text-left text-sm text-muted">
-                <th className="px-4 py-2 font-normal shell:px-5">Day</th><th className="px-4 py-2 font-normal">Account</th>
-                <th className="px-4 py-2 text-right font-normal">Books said</th><th className="px-4 py-2 text-right font-normal">Counted</th>
-                <th className="px-4 py-2 text-right font-normal shell:pr-5">Difference</th>
+                <SortTh label="Day" k="day" sort={sort} onSort={set} className="px-4 py-2 font-normal shell:px-5" />
+                <SortTh label="Account" k="account" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Books said" k="expected" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+                <SortTh label="Counted" k="counted" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+                <SortTh label="Difference" k="difference" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal shell:pr-5" />
               </tr></thead>
               <tbody>
-                {history.data.map((c) => (
+                {historyRows.map((c) => (
                   <tr key={c.id} className="border-t border-rule">
                     <td className="px-4 py-3 shell:px-5 max-sm:px-0">
                       <span className="font-medium">{day(c.close_date)}</span>

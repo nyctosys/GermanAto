@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui";
 
 export type InvoiceLine = {
   id: string; kind: "labour" | "part"; labour_code_id: string | null; item_id: string | null; qty: string;
-  labour_code?: { code: string; name: string }; item?: { number: string; name: string; unit: string; sale_price: string; on_hand: string; short: string };
+  labour_code?: { code: string; name: string }; item?: { number: string; name: string; unit: string; sale_price: string; on_hand: string; short: string; reorder_level?: string; avg_cost?: string };
   description: string; unit_price: string; amount: string; in_quote: boolean; repair_order_line_id: string | null;
   approval?: { method: string; reason: string; proof_url: string | null; proof_urls?: string[] } | null;
 };
@@ -46,6 +46,7 @@ export function previewTotals(
   rate: number,
 ) {
   const r2 = (n: number) => Math.round(n * 100) / 100;
+  const rupees = (n: number) => Math.round(n);
   let labour = 0;
   let parts = 0;
   for (const l of lines) {
@@ -55,6 +56,9 @@ export function previewTotals(
   }
   const subtotal = r2(labour + parts);
   const disc = Math.min(Number(discount) || 0, subtotal);
-  const tax = includeTax ? r2((subtotal - disc) * rate / 100) : 0;
-  return { labour, parts, subtotal, discount: disc, tax, total: r2(subtotal - disc + tax) };
+  const net = r2(subtotal - disc);
+  if (!includeTax) return { labour, parts, subtotal, discount: disc, tax: 0, total: rupees(net) };
+  // Tax on the lines before the discount, then round the payable total to whole rupees.
+  const total = rupees(net + r2(subtotal * rate / 100));
+  return { labour, parts, subtotal, discount: disc, tax: r2(total - net), total };
 }

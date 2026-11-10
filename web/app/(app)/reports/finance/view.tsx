@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { ExportButton, Line, rangeQuery, type Range, Stat, useRange } from "@/components/reports";
 import { Segments, useQueryParam } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Badge, Card, EmptyState, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { day, money, qty } from "@/lib/format";
@@ -133,26 +134,7 @@ function Aging({ kind }: { kind: "receivables" | "payables" }) {
             <Stat label="Total" value={money(r.total)} />
             {order.filter((b) => r.by_bucket[b]).map((b) => <Stat key={b} label={names[b]} value={money(r.by_bucket[b])} tone={["61-90", "90+"].includes(b) ? "warning" : undefined} />)}
           </div>
-          <Card title={rec ? "Unpaid invoices" : "Unpaid bills"} actions={r.rows.length ? <ExportButton name={`${kind}-${r.as_of}`} headers={[rec ? "Invoice" : "Bill", rec ? "Customer" : "Vendor", rec ? "Issued" : "Due", "Age", "Balance"]}
-            rows={r.rows.map((x) => [x.number, x.customer ?? x.vendor, x.issued_on ?? x.due_on, x.bucket, x.balance])} /> : undefined} flush>
-            {!r.rows.length ? <EmptyState title="Nothing outstanding">{rec ? "Every invoice is settled." : "Every bill is paid and every delivery is billed."}</EmptyState> : (
-              <table className="table-stack w-full">
-                <thead><tr className="text-left text-sm text-muted"><th className="px-4 py-2 font-normal shell:px-5">{rec ? "Invoice" : "Bill or receipt"}</th><th className="px-4 py-2 font-normal">{rec ? "Customer" : "Vendor"}</th>
-                  <th className="px-4 py-2 font-normal">{rec ? "Issued" : "Due"}</th><th className="px-4 py-2 font-normal">Age</th><th className="px-4 py-2 text-right font-normal shell:pr-5">Balance</th></tr></thead>
-                <tbody>
-                  {r.rows.map((x) => (
-                    <tr key={x.id} className="border-t border-rule">
-                      <td className="px-4 py-3 shell:px-5 max-sm:px-0"><Link href={rec ? `/invoices/${x.id}` : x.kind === "grn" ? `/purchase-orders/${x.purchase_order_id}` : `/bills/${x.id}`} className="font-medium underline">{x.number}</Link></td>
-                      <td data-label={rec ? "Customer" : "Vendor"} className="px-4 py-3 max-sm:px-0">{x.customer ?? x.vendor}</td>
-                      <td data-label={rec ? "Issued" : "Due"} className="px-4 py-3 max-sm:px-0">{day((x.issued_on ?? x.due_on)!)}</td>
-                      <td data-label="Age" className="px-4 py-3 max-sm:px-0"><Badge tone={["61-90", "90+"].includes(x.bucket) ? "error" : x.bucket === "31-60" || x.bucket === "not billed" ? "warning" : "neutral"}>{names[x.bucket]}</Badge></td>
-                      <td data-label="Balance" className="num px-4 py-3 text-right shell:pr-5 max-sm:px-0">{money(x.balance)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <AgingTable rec={rec} asOf={r.as_of} kind={kind} names={names} rows={r.rows} />
         </>
       )}
     </Load>
@@ -167,24 +149,82 @@ function Stock() {
       {(s) => (
         <>
           <div className="grid gap-4 sm:grid-cols-3"><Stat label="Stock at cost" value={money(s.total)} /><Stat label="Items in stock" value={s.items.length} /><Stat label="Low on stock" value={s.low_stock} tone={s.low_stock ? "warning" : undefined} href="/inventory?stock=low" /></div>
-          <Card title="By item" actions={<ExportButton name="stock-value" headers={["Item", "Number", "On hand", "Average cost", "Value"]} rows={s.items.map((i) => [i.name, i.number, i.on_hand, i.avg_cost, i.value])} />} flush>
-            <table className="table-stack w-full">
-              <thead><tr className="text-left text-sm text-muted"><th className="px-4 py-2 font-normal shell:px-5">Item</th><th className="px-4 py-2 text-right font-normal">On hand</th><th className="px-4 py-2 text-right font-normal">Average cost</th><th className="px-4 py-2 text-right font-normal shell:pr-5">Value</th></tr></thead>
-              <tbody>
-                {s.items.map((i) => (
-                  <tr key={i.id} className="border-t border-rule">
-                    <td className="px-4 py-3 shell:px-5 max-sm:px-0"><Link href={`/inventory/${i.id}`} className="font-medium underline">{i.name}</Link><span className="block text-sm text-muted">{i.number}{i.low ? ", low" : ""}</span></td>
-                    <td data-label="On hand" className="num px-4 py-3 text-right max-sm:px-0">{qty(i.on_hand)} {i.unit}</td>
-                    <td data-label="Average cost" className="num px-4 py-3 text-right max-sm:px-0">{money(i.avg_cost)}</td>
-                    <td data-label="Value" className="num px-4 py-3 text-right shell:pr-5 max-sm:px-0">{money(i.value)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
+          <StockTable items={s.items} />
         </>
       )}
     </Load>
+  );
+}
+
+function AgingTable({ rec, asOf, kind, names, rows }: {
+  rec: boolean; asOf: string; kind: "receivables" | "payables"; names: Record<string, string>; rows: Rec["rows"];
+}) {
+  const { sort, set } = useTableSort();
+  const sorted = sortRows(rows, sort, {
+    number: (x) => x.number,
+    party: (x) => x.customer ?? x.vendor ?? "",
+    date: (x) => x.issued_on ?? x.due_on ?? "",
+    age: (x) => x.bucket,
+    balance: (x) => Number(x.balance),
+  });
+  return (
+    <Card title={rec ? "Unpaid invoices" : "Unpaid bills"} actions={rows.length ? <ExportButton name={`${kind}-${asOf}`} headers={[rec ? "Invoice" : "Bill", rec ? "Customer" : "Vendor", rec ? "Issued" : "Due", "Age", "Balance"]}
+      rows={rows.map((x) => [x.number, x.customer ?? x.vendor, x.issued_on ?? x.due_on, x.bucket, x.balance])} /> : undefined} flush>
+      {!rows.length ? <EmptyState title="Nothing outstanding">{rec ? "Every invoice is settled." : "Every bill is paid and every delivery is billed."}</EmptyState> : (
+        <table className="table-stack w-full">
+          <thead><tr className="text-left text-sm text-muted">
+            <SortTh label={rec ? "Invoice" : "Bill or receipt"} k="number" sort={sort} onSort={set} className="px-4 py-2 font-normal shell:px-5" />
+            <SortTh label={rec ? "Customer" : "Vendor"} k="party" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+            <SortTh label={rec ? "Issued" : "Due"} k="date" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+            <SortTh label="Age" k="age" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+            <SortTh label="Balance" k="balance" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal shell:pr-5" />
+          </tr></thead>
+          <tbody>
+            {sorted.map((x) => (
+              <tr key={x.id} className="border-t border-rule">
+                <td className="px-4 py-3 shell:px-5 max-sm:px-0"><Link href={rec ? `/invoices/${x.id}` : x.kind === "grn" ? `/purchase-orders/${x.purchase_order_id}` : `/bills/${x.id}`} className="font-medium underline">{x.number}</Link></td>
+                <td data-label={rec ? "Customer" : "Vendor"} className="px-4 py-3 max-sm:px-0">{x.customer ?? x.vendor}</td>
+                <td data-label={rec ? "Issued" : "Due"} className="px-4 py-3 max-sm:px-0">{day((x.issued_on ?? x.due_on)!)}</td>
+                <td data-label="Age" className="px-4 py-3 max-sm:px-0"><Badge tone={["61-90", "90+"].includes(x.bucket) ? "error" : x.bucket === "31-60" || x.bucket === "not billed" ? "warning" : "neutral"}>{names[x.bucket]}</Badge></td>
+                <td data-label="Balance" className="num px-4 py-3 text-right shell:pr-5 max-sm:px-0">{money(x.balance)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
+  );
+}
+
+function StockTable({ items }: { items: Stk["items"] }) {
+  const { sort, set } = useTableSort();
+  const sorted = sortRows(items, sort, {
+    name: (i) => i.name,
+    on_hand: (i) => Number(i.on_hand),
+    avg_cost: (i) => Number(i.avg_cost),
+    value: (i) => Number(i.value),
+  });
+  return (
+    <Card title="By item" actions={<ExportButton name="stock-value" headers={["Item", "Number", "On hand", "Average cost", "Value"]} rows={items.map((i) => [i.name, i.number, i.on_hand, i.avg_cost, i.value])} />} flush>
+      <table className="table-stack w-full">
+        <thead><tr className="text-left text-sm text-muted">
+          <SortTh label="Item" k="name" sort={sort} onSort={set} className="px-4 py-2 font-normal shell:px-5" />
+          <SortTh label="On hand" k="on_hand" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+          <SortTh label="Average cost" k="avg_cost" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+          <SortTh label="Value" k="value" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal shell:pr-5" />
+        </tr></thead>
+        <tbody>
+          {sorted.map((i) => (
+            <tr key={i.id} className="border-t border-rule">
+              <td className="px-4 py-3 shell:px-5 max-sm:px-0"><Link href={`/inventory/${i.id}`} className="font-medium underline">{i.name}</Link><span className="block text-sm text-muted">{i.number}{i.low ? ", low" : ""}</span></td>
+              <td data-label="On hand" className="num px-4 py-3 text-right max-sm:px-0">{qty(i.on_hand)} {i.unit}</td>
+              <td data-label="Average cost" className="num px-4 py-3 text-right max-sm:px-0">{money(i.avg_cost)}</td>
+              <td data-label="Value" className="num px-4 py-3 text-right shell:pr-5 max-sm:px-0">{money(i.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 

@@ -5,6 +5,7 @@ import { type Uploaded } from "@/components/capture";
 import { ACCOUNT, ProofInput, ProofLinks } from "@/components/payments";
 import { ReasonForm } from "@/components/purchasing";
 import { SearchInput, useQueryParam } from "@/components/search";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { day, money, today } from "@/lib/format";
@@ -48,6 +49,15 @@ export function MoneyBook({ direction }: { direction: "in" | "out" }) {
   const sources = direction === "in" ? IN_SOURCES : OUT_SOURCES;
   const day0 = today();
   const todays = useApi<Page>(direction === "out" ? `/api/money-out?${new URLSearchParams({ source: "expense", date_from: day0, date_to: day0 })}` : null);
+  const { sort, set } = useTableSort();
+  const rows = sortRows(list.data?.rows ?? [], sort, {
+    number: (r) => r.number,
+    party: (r) => r.party || "",
+    account: (r) => r.account,
+    proof: (r) => (r.proof_url || r.proof_urls?.length ? "1" : r.no_proof_reason || ""),
+    amount: (r) => Number(r.amount),
+    date: (r) => r.date,
+  });
   const canRecord = direction === "in" ? can("payments-in") : can("expenses") || can("payments-out");
 
   async function void_(reason: string) {
@@ -135,11 +145,14 @@ export function MoneyBook({ direction }: { direction: "in" | "out" }) {
           : (
             <table className="table-stack w-full">
               <thead><tr className="text-left text-sm text-muted">
-                <th className="px-4 py-2 font-normal shell:px-5">Record</th><th className="px-4 py-2 font-normal">From or to</th><th className="px-4 py-2 font-normal">Account</th>
-                <th className="px-4 py-2 font-normal">Proof</th><th className="px-4 py-2 text-right font-normal shell:pr-5">Amount</th>
+                <SortTh label="Record" k="number" sort={sort} onSort={set} className="px-4 py-2 font-normal shell:px-5" />
+                <SortTh label="From or to" k="party" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Account" k="account" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Proof" k="proof" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Amount" k="amount" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal shell:pr-5" />
               </tr></thead>
               <tbody>
-                {list.data.rows.map((r) => (
+                {rows.map((r) => (
                   <tr key={`${r.source}-${r.id}`} className={`border-t border-rule ${r.status === "voided" ? "text-muted" : ""}`}>
                     <td className="px-4 py-3 shell:px-5 max-sm:px-0">
                       {r.link ? <Link href={r.link} className={`font-medium underline ${r.status === "voided" ? "line-through" : ""}`}>{r.number}</Link> : <span className={`font-medium ${r.status === "voided" ? "line-through" : ""}`}>{r.number}</span>}

@@ -280,10 +280,11 @@ export const CHAPTERS: Chapter[] = [
           "Go to Invoices and counter sales and press New counter sale.",
           "Choose Walk-in, or pick a customer. You can also pick one of their cars.",
           "Scan or search each part. Check the price and the stock. Counter sales are for parts only. Labour goes through a visit.",
-          "Add a discount if agreed. Choose how the customer pays. If they pay part cash and part transfer, press Split the payment. The payments must add up to the total.",
+          "If the customer wants more than you have in stock, a Parts to order card appears. Press Make a purchase order draft, choose the vendor, check quantity and cost, and save the draft.",
+          "Add a discount if agreed (it does not reduce sales tax). Choose how the customer pays. If they pay part cash and part transfer, press Split the payment. The payments must add up to the total.",
           "Attach proof or a reason for each payment. Press Take Rs ... and finish. Print the A4 invoice.",
         ],
-        right: ["Stock, invoice and payment are all saved together. If anything fails, nothing is saved."],
+        right: ["Stock, invoice and payment are all saved together. If anything fails, nothing is saved.", "A discount cuts the bill; sales tax stays on the full parts amount."],
       },
       {
         id: "gate-pass", title: "Let the car leave (gate pass)", who: "Front desk or cashier",

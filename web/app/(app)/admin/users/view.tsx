@@ -3,6 +3,7 @@
 import { PhoneInput } from "@/components/phone-input";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import {
   Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows,
 } from "@/components/ui";
@@ -30,6 +31,14 @@ function Users() {
   const users = useApi<User[]>("/api/users");
   const roles = useApi<Role[]>("/api/roles");
   const [editing, setEditing] = useState<User | "new" | null>(null);
+  const { sort, set } = useTableSort();
+  const rows = sortRows(users.data ?? [], sort, {
+    name: (u) => u.full_name,
+    role: (u) => u.role_name,
+    phone: (u) => u.phone || "",
+    login: (u) => u.last_login_at || "",
+    status: (u) => (!u.is_active ? "disabled" : u.locked ? "locked" : "active"),
+  });
 
   return (
     <>
@@ -58,16 +67,16 @@ function Users() {
             <table className="table-stack w-full text-left">
               <thead className="border-b border-rule text-sm text-muted">
                 <tr>
-                  <th className="px-5 py-3 font-medium">Name</th>
-                  <th className="px-3 py-3 font-medium">Role</th>
-                  <th className="px-3 py-3 font-medium">Phone</th>
-                  <th className="px-3 py-3 font-medium">Last sign-in</th>
-                  <th className="px-3 py-3 font-medium">Status</th>
+                  <SortTh label="Name" k="name" sort={sort} onSort={set} className="px-5 py-3 font-medium" />
+                  <SortTh label="Role" k="role" sort={sort} onSort={set} className="px-3 py-3 font-medium" />
+                  <SortTh label="Phone" k="phone" sort={sort} onSort={set} className="px-3 py-3 font-medium" />
+                  <SortTh label="Last sign-in" k="login" sort={sort} onSort={set} className="px-3 py-3 font-medium" />
+                  <SortTh label="Status" k="status" sort={sort} onSort={set} className="px-3 py-3 font-medium" />
                   <th className="px-5 py-3"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
-                {users.data.map((u) => (
+                {rows.map((u) => (
                   <tr key={u.id} className="border-t border-rule first:border-t-0">
                     <td className="px-5 py-3 max-sm:px-0">
                       <span className="block font-medium">{u.full_name}</span>

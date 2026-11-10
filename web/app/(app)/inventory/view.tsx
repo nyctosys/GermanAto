@@ -6,6 +6,7 @@ import { Suspense, useState, type FormEvent } from "react";
 import { type Item, ItemForm } from "@/components/inventory";
 import { SearchBox, Segments, useQueryParam } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Badge, Button, Card, EmptyState, ErrorState, Notice, PageHeader, SkeletonRows } from "@/components/ui";
 import { api, ApiError, useApi } from "@/lib/api";
 import { money, qty } from "@/lib/format";
@@ -26,6 +27,13 @@ function Inventory() {
   const [stock, setStock] = useQueryParam("stock");
   const list = useApi<Item[]>(`/api/items?${new URLSearchParams({ q, stock: stock || "all", limit: "200" })}`);
   const [adding, setAdding] = useState<{ code?: string } | null>(null);
+  const { sort, set } = useTableSort();
+  const rows = sortRows(list.data ?? [], sort, {
+    name: (i) => i.name,
+    shelf: (i) => i.location || "",
+    stock: (i) => Number(i.on_hand),
+    price: (i) => Number(i.sale_price),
+  });
 
   return (
     <>
@@ -54,14 +62,14 @@ function Inventory() {
             <table className="table-stack w-full text-left">
               <thead className="border-b border-rule text-sm text-muted">
                 <tr>
-                  <th className="px-5 py-3 font-medium">Item</th>
-                  <th className="px-3 py-3 font-medium">Shelf</th>
-                  <th className="px-3 py-3 text-right font-medium">In stock</th>
-                  <th className="px-5 py-3 text-right font-medium">Sale price</th>
+                  <SortTh label="Item" k="name" sort={sort} onSort={set} className="px-5 py-3 font-medium" />
+                  <SortTh label="Shelf" k="shelf" sort={sort} onSort={set} className="px-3 py-3 font-medium" />
+                  <SortTh label="In stock" k="stock" sort={sort} onSort={set} align="right" className="px-3 py-3 text-right font-medium" />
+                  <SortTh label="Sale price" k="price" sort={sort} onSort={set} align="right" className="px-5 py-3 text-right font-medium" />
                 </tr>
               </thead>
               <tbody>
-                {list.data.map((i) => (
+                {rows.map((i) => (
                   <tr key={i.id} className="cursor-pointer border-t border-rule first:border-t-0 hover:bg-paper-2" onClick={() => router.push(`/inventory/${i.id}`)}>
                     <td className="px-5 py-3 max-sm:px-0">
                       <Link href={`/inventory/${i.id}`} className="block font-medium underline" onClick={(e) => e.stopPropagation()}>{i.name}</Link>

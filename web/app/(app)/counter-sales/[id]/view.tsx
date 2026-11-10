@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { type Invoice, previewTotals } from "@/components/billing";
 import { type Customer, CustomerPicker } from "@/components/customers";
 import { CatalogPicker } from "@/components/estimates";
+import { PartsToOrder, type StockNeedLine } from "@/components/parts-to-order";
 import { newRow, type PaymentRow, splitBodies, SplitPayments, splitValid } from "@/components/payments";
 import { Segments } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
@@ -15,7 +16,7 @@ import { money, qty } from "@/lib/format";
 import { linePrice, lineQtyFor } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
 
-type Line = { key: string; item_id: string; name: string; code: string; unit: string; on_hand: string; qty: string; unit_price: string };
+type Line = { key: string; item_id: string; name: string; code: string; unit: string; on_hand: string; qty: string; unit_price: string; avg_cost?: string; reorder_level?: string };
 type CustomerWithCars = Customer & { cars: { id: string; plate: string; make: string; model: string; until: string | null }[] };
 
 export default function CounterSalePage() {
@@ -50,6 +51,7 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
   const [lines, setLines] = useState<Line[]>(() => (initial?.lines ?? []).map((l) => ({
     key: l.id, item_id: l.item_id!, name: l.description, code: l.item!.number, unit: l.item!.unit, on_hand: l.item!.on_hand,
     qty: String(Number(l.qty)), unit_price: String(Number(l.unit_price)),
+    avg_cost: l.item!.avg_cost, reorder_level: l.item!.reorder_level,
   })));
   const [includeTax, setIncludeTax] = useState(initial?.include_tax ?? true);
   const [discount, setDiscount] = useState(initial && Number(initial.discount) ? String(Number(initial.discount)) : "");
@@ -64,6 +66,14 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
   const payRows = rows.length === 1 && !rows[0].amount.trim() ? [{ ...rows[0], amount: String(t.total) }] : rows;
   const lineBad = (l: Line) => !lineQtyFor(l.unit).safeParse(l.qty).success || !linePrice.safeParse(l.unit_price).success;
   const edit = (key: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const stockLines: StockNeedLine[] = lines.map((l) => ({
+    id: l.key, kind: "part", item_id: l.item_id, qty: l.qty, description: l.name,
+    item: {
+      number: l.code, name: l.name, unit: l.unit, on_hand: l.on_hand,
+      short: String(Math.max(Number(l.qty) - Number(l.on_hand), 0)),
+      avg_cost: l.avg_cost, reorder_level: l.reorder_level,
+    },
+  }));
 
   async function save(issue: boolean) {
     setTried(true);
@@ -150,6 +160,11 @@ function Editor({ initial, rate }: { initial: Invoice | null; rate: number }) {
           </ul>
           {!lines.length && <p className="px-4 py-6 text-muted shell:px-5">Scan a barcode or search for the part above.</p>}
         </Card>
+        <PartsToOrder
+          mode="counter"
+          lines={stockLines}
+          hint="The customer wants more than you have in stock. Save a draft, then send it from Purchase orders."
+        />
 
         <div className="shell:hidden">        <Card title="Total">
           <dl>

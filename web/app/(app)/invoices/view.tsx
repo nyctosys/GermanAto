@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { PayBadge, type PayStatus } from "@/components/billing";
 import { SearchBox, Segments, useQueryParam } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Card, EmptyState, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { day, money } from "@/lib/format";
@@ -29,6 +30,14 @@ function List() {
   const [status, setStatus] = useQueryParam("status");
   const [q] = useQueryParam("q");
   const list = useApi<Row[]>(`/api/invoices?${new URLSearchParams({ kind: kind || "all", status: status || "all", q })}`);
+  const { sort, set } = useTableSort();
+  const rows = sortRows(list.data ?? [], sort, {
+    number: (r) => r.number,
+    customer: (r) => r.customer,
+    status: (r) => r.pay_status,
+    total: (r) => Number(r.total),
+    balance: (r) => Number(r.balance),
+  });
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -46,12 +55,14 @@ function List() {
           ) : (
             <table className="table-stack w-full">
               <thead><tr className="text-left text-sm text-muted">
-                <th className="px-4 py-2 font-normal shell:px-5">Invoice</th><th className="px-4 py-2 font-normal">Customer</th>
-                <th className="px-4 py-2 font-normal">Status</th><th className="px-4 py-2 text-right font-normal">Total</th>
-                <th className="px-4 py-2 text-right font-normal shell:pr-5">Balance</th>
+                <SortTh label="Invoice" k="number" sort={sort} onSort={set} className="px-4 py-2 font-normal shell:px-5" />
+                <SortTh label="Customer" k="customer" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Status" k="status" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Total" k="total" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+                <SortTh label="Balance" k="balance" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal shell:pr-5" />
               </tr></thead>
               <tbody>
-                {list.data.map((r) => (
+                {rows.map((r) => (
                   <tr key={r.id} className="border-t border-rule">
                     <td className="px-4 py-3 shell:px-5 max-sm:px-0">
                       <Link href={r.status === "draft" && r.kind === "counter_sale" ? `/counter-sales/${r.id}` : `/invoices/${r.id}`} className="font-medium underline">{r.number}</Link>

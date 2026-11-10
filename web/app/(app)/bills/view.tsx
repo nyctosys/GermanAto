@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { BillBadge } from "@/components/purchasing";
 import { Segments, useQueryParam } from "@/components/search";
 import { PURCHASING, RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Badge, Card, EmptyState, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { day, money } from "@/lib/format";
@@ -28,6 +29,15 @@ function List() {
   const [status, setStatus] = useQueryParam("status");
   const list = useApi<Row[]>(`/api/bills?status=${status || "owing"}`);
   const owed = list.data?.reduce((s, b) => s + Number(b.balance), 0) ?? 0;
+  const { sort, set } = useTableSort();
+  const rows = sortRows(list.data ?? [], sort, {
+    number: (b) => b.number,
+    vendor: (b) => b.vendor.name,
+    due: (b) => b.due_on,
+    status: (b) => b.pay_state,
+    total: (b) => Number(b.total),
+    balance: (b) => Number(b.balance),
+  });
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -41,12 +51,15 @@ function List() {
           : (
             <table className="table-stack w-full">
               <thead><tr className="text-left text-sm text-muted">
-                <th className="px-4 py-2 font-normal shell:px-5">Bill</th><th className="px-4 py-2 font-normal">Vendor</th>
-                <th className="px-4 py-2 font-normal">Due</th><th className="px-4 py-2 font-normal">Status</th>
-                <th className="px-4 py-2 text-right font-normal">Total</th><th className="px-4 py-2 text-right font-normal shell:pr-5">Balance</th>
+                <SortTh label="Bill" k="number" sort={sort} onSort={set} className="px-4 py-2 font-normal shell:px-5" />
+                <SortTh label="Vendor" k="vendor" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Due" k="due" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Status" k="status" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Total" k="total" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+                <SortTh label="Balance" k="balance" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal shell:pr-5" />
               </tr></thead>
               <tbody>
-                {list.data.map((b) => (
+                {rows.map((b) => (
                   <tr key={b.id} className="border-t border-rule">
                     <td className="px-4 py-3 shell:px-5 max-sm:px-0">
                       <Link href={`/bills/${b.id}`} className="font-medium underline">{b.number}</Link>

@@ -216,7 +216,7 @@ Three kinds: **Workshop** (at check-in or during diagnosis), **Delivery** (befor
 - Parts start at the item's sale price. **Labour prices are typed per line.**
 - Lines can be added or removed (codes and items only), quantities changed.
 - Discount (can't be more than the lines), **sales tax at the branch rate (17%) with an on/off switch**, validity date (7 days by default), notes for the customer.
-- Totals: labour, parts, discount, tax on the amount after discount, total.
+- Totals: labour, parts, discount, tax on the amount **before** the discount, total. A discount cuts what the customer pays; it does not cut sales tax. Line amounts keep paisa; the **total** (and tax with it) rounds to whole rupees so a payment of the amount on screen is never refused.
 
 ### Statuses
 
@@ -313,8 +313,8 @@ One timeline of everything that happened, newest first, with who and when:
 For parts sold over the counter, with no car in the workshop (a walk-in buys a headlight).
 
 1. **Customer:** Walk-in (name and mobile optional) or a customer on file, optionally for one of their cars (the sale then shows in that car's history).
-2. **Parts:** scan or search. **Parts only**: labour goes through a visit. Each line shows stock; price starts at the sale price.
-3. Discount and tax switch; the total updates as you type.
+2. **Parts:** scan or search. **Parts only**: labour goes through a visit. Each line shows stock; price starts at the sale price. If the qty is more than you have, a **Parts to order** card appears with **Make a purchase order draft** (same flow as on a quotation or repair order).
+3. Discount and tax switch; the total updates as you type. Tax is on the parts before the discount.
 4. **Payment:** the amount starts at the total. **Split the payment** to take part in cash and part by transfer; the payments must add up to the total, each with proof or a reason.
 5. **Take Rs … and finish** does it all in one step: takes the parts out of stock, issues the invoice and records the payments. If anything fails (not enough stock, payments don't add up), nothing is changed.
 
@@ -448,7 +448,7 @@ cd web && pnpm exec tsc --noEmit && pnpm lint
 | `events.py` | One flush hook writes the audit log and the sync outbox for every ORM change |
 | `auth.py`, `permissions.py` | Sessions, `require("permission")`, the permission list and default roles |
 | `stock.py` | `move()`: the only way stock changes (locks the item, weighted average cost, posts the inventory journal entry) |
-| `journal.py`, `posting.py`, `pricing.py`, `money_setup.py` | Double-entry journal; one posting function per business event; shared totals and rounding; accounts created on first use |
+| `journal.py`, `posting.py`, `pricing.py`, `money_setup.py` | Double-entry journal; one posting function per business event; shared totals and rounding (tax on lines **before** discount; line amounts keep paisa; quotation/invoice **total and tax round to whole rupees** so the figure on screen is payable); accounts created on first use |
 | `attendance.py`, `reports.py` | Attendance summary rules; every report figure (routers are thin wrappers) |
 | `messaging.py` | Templates, queue, Twilio provider, webhook signature check, reminders |
 | `sync.py`, `sync_worker.py` | Applying incoming changes with conflict detection; the push/pull worker |

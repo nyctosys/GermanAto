@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { SearchBox, useQueryParam } from "@/components/search";
 import { PURCHASING, RequirePermission } from "@/components/shell";
 import { type Vendor, VendorForm } from "@/components/purchasing";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Button, Card, EmptyState, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { money, phone } from "@/lib/format";
@@ -28,6 +29,12 @@ function List() {
   const [adding, setAdding] = useState(false);
   const list = useApi<Vendor[]>(`/api/vendors?${new URLSearchParams({ q })}`);
   const owed = list.data?.reduce((s, v) => s + Number(v.owed ?? 0), 0) ?? 0;
+  const { sort, set } = useTableSort();
+  const rows = sortRows(list.data ?? [], sort, {
+    name: (v) => v.name,
+    phone: (v) => v.phone || "",
+    owed: (v) => Number(v.owed ?? 0),
+  });
   return (
     <>
       <PageHeader title="Vendors" description={list.data ? `We owe ${money(owed)} in total.` : "Who we buy from, and what we owe them."}
@@ -41,11 +48,12 @@ function List() {
           : (
             <table className="table-stack w-full">
               <thead><tr className="text-left text-sm text-muted">
-                <th className="px-4 py-2 font-normal shell:px-5">Vendor</th><th className="px-4 py-2 font-normal">Phone</th>
-                <th className="px-4 py-2 text-right font-normal shell:pr-5">We owe</th>
+                <SortTh label="Vendor" k="name" sort={sort} onSort={set} className="px-4 py-2 font-normal shell:px-5" />
+                <SortTh label="Phone" k="phone" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="We owe" k="owed" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal shell:pr-5" />
               </tr></thead>
               <tbody>
-                {list.data.map((v) => (
+                {rows.map((v) => (
                   <tr key={v.id} className="border-t border-rule">
                     <td className="px-4 py-3 shell:px-5 max-sm:px-0">
                       <Link href={`/vendors/${v.id}`} className="font-medium underline">{v.name}</Link>

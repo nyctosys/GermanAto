@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { type Item, ItemForm } from "@/components/inventory";
 import { RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, QtyInput, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { money, qty, qtyWhole, when } from "@/lib/format";
@@ -74,6 +75,13 @@ function ItemDetail() {
   const { can } = useSession();
   const { data, error, reload } = useApi<Detail>(`/api/items/${id}`);
   const [mode, setMode] = useState<"view" | "edit" | "adjust">("view");
+  const { sort, set } = useTableSort();
+  const movements = sortRows(data?.movements ?? [], sort, {
+    when: (m) => m.at,
+    what: (m) => KINDS[m.kind] ?? m.kind,
+    qty: (m) => Number(m.qty),
+    cost: (m) => Number(m.unit_cost),
+  });
 
   if (error) return <Card flush><ErrorState message={error} onRetry={reload} /></Card>;
   if (!data) return <Card flush><SkeletonRows rows={6} /></Card>;
@@ -131,11 +139,15 @@ function ItemDetail() {
           {!data.movements.length ? <EmptyState title="No movements yet">Opening stock, goods received, parts issued and adjustments appear here.</EmptyState> : (
             <table className="table-stack w-full text-left">
               <thead className="border-b border-rule text-sm text-muted">
-                <tr><th className="px-5 py-3 font-medium">When</th><th className="px-3 py-3 font-medium">What</th>
-                  <th className="px-3 py-3 text-right font-medium">Qty</th><th className="px-5 py-3 text-right font-medium">Cost each</th></tr>
+                <tr>
+                  <SortTh label="When" k="when" sort={sort} onSort={set} className="px-5 py-3 font-medium" />
+                  <SortTh label="What" k="what" sort={sort} onSort={set} className="px-3 py-3 font-medium" />
+                  <SortTh label="Qty" k="qty" sort={sort} onSort={set} align="right" className="px-3 py-3 text-right font-medium" />
+                  <SortTh label="Cost each" k="cost" sort={sort} onSort={set} align="right" className="px-5 py-3 text-right font-medium" />
+                </tr>
               </thead>
               <tbody>
-                {data.movements.map((m) => (
+                {movements.map((m) => (
                   <tr key={m.id} className="border-t border-rule align-top first:border-t-0">
                     <td data-label="When" className="px-5 py-3 max-sm:px-0">{when(m.at)}<span className="block text-sm text-muted">{m.user ?? "System"}</span></td>
                     <td data-label="What" className="px-3 py-3 max-sm:px-0">{KINDS[m.kind] ?? m.kind}{m.reason && <span className="block text-sm text-muted">{m.reason}</span>}</td>

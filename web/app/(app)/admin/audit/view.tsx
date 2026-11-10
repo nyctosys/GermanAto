@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Button, Card, EmptyState, ErrorState, Field, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { when } from "@/lib/format";
@@ -76,6 +77,12 @@ function AuditList({ action }: { action: string }) {
   const [busy, setBusy] = useState(false);
   const entries = [...(first.data ?? []), ...older];
   const lastPageSize = older.length ? older.length % PAGE || PAGE : first.data?.length ?? 0;
+  const { sort, set } = useTableSort();
+  const rows = sortRows(entries, sort, {
+    when: (e) => e.at,
+    who: (e) => e.user ?? "System",
+    what: (e) => `${ACTIONS[e.action] ?? e.action} ${recordName(e.entity_type)}`,
+  });
 
   async function loadOlder() {
     const params = new URLSearchParams({ limit: String(PAGE), before: entries[entries.length - 1].at, ...(action && { action }) });
@@ -102,14 +109,14 @@ function AuditList({ action }: { action: string }) {
             <table className="table-stack w-full text-left">
               <thead className="border-b border-rule text-sm text-muted">
                 <tr>
-                  <th className="px-5 py-3 font-medium">When</th>
-                  <th className="px-3 py-3 font-medium">Who</th>
-                  <th className="px-3 py-3 font-medium">What</th>
+                  <SortTh label="When" k="when" sort={sort} onSort={set} className="px-5 py-3 font-medium" />
+                  <SortTh label="Who" k="who" sort={sort} onSort={set} className="px-3 py-3 font-medium" />
+                  <SortTh label="What" k="what" sort={sort} onSort={set} className="px-3 py-3 font-medium" />
                   <th className="px-5 py-3 font-medium">Details</th>
                 </tr>
               </thead>
               <tbody>
-                {entries.map((e) => (
+                {rows.map((e) => (
                   <tr key={e.id} className="border-t border-rule align-top first:border-t-0">
                     <td data-label="When" className="num px-5 py-3 max-sm:px-0">{when(e.at)}</td>
                     <td data-label="Who" className="px-3 py-3 max-sm:px-0">{e.user ?? "System"}</td>

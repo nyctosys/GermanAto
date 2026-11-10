@@ -24,20 +24,29 @@ export type StockNeedLine = {
   };
 };
 
-/** Quotation: out / short / low. Repair: still-to-issue lines that are short or low on stock (already issued lines stay out). */
-export function stockNeeds(lines: StockNeedLine[], mode: "quotation" | "repair" = "quotation") {
+export type StockNeedMode = "quotation" | "repair" | "counter";
+
+/** Quotation: out / short / low. Repair: still-to-issue short or low. Counter: customer qty above what is in stock. */
+export function stockNeeds(lines: StockNeedLine[], mode: StockNeedMode = "quotation") {
   return lines.filter((l) => {
     if (l.declined || l.kind !== "part" || !l.item) return false;
     const need = Number(l.qty);
     const onHand = Number(l.item.on_hand);
     if (mode === "repair") return need > 0 && (onHand < need || !!l.item.low_stock);
+    if (mode === "counter") return need > onHand;
     return onHand <= 0 || Number(l.item.short) > 0 || !!l.item.low_stock;
   });
 }
 
-function stockTag(l: StockNeedLine, mode: "quotation" | "repair"): string {
+function shortBy(l: StockNeedLine, mode: StockNeedMode): number {
   const onHand = Number(l.item!.on_hand);
-  const short = mode === "repair" ? Math.max(Number(l.qty) - onHand, 0) : Number(l.item!.short);
+  if (mode === "repair" || mode === "counter") return Math.max(Number(l.qty) - onHand, 0);
+  return Number(l.item!.short);
+}
+
+function stockTag(l: StockNeedLine, mode: StockNeedMode): string {
+  const onHand = Number(l.item!.on_hand);
+  const short = shortBy(l, mode);
   if (onHand <= 0) return "Out of stock";
   if (short > 0) return `Short by ${qty(short)}`;
   return "Low stock";
@@ -71,18 +80,19 @@ function draftFromNeeds(lines: StockNeedLine[]): DraftLine[] {
 
 /** Parts that need ordering, with a purchase-order draft button. */
 export function PartsToOrder({ lines, hint, mode = "quotation" }: {
-  lines: StockNeedLine[]; hint?: string; mode?: "quotation" | "repair";
+  lines: StockNeedLine[]; hint?: string; mode?: StockNeedMode;
 }) {
   const { can } = useSession();
   const [open, setOpen] = useState(false);
   const needs = stockNeeds(lines, mode);
   if (!needs.length) return null;
+  const needLabel = mode === "repair" ? "Still to issue" : mode === "counter" ? "Customer wants" : "Need";
   return (
     <>
       <Card title="Parts to order" flush>
         <ul>
           {needs.map((l) => {
-            const short = mode === "repair" ? Math.max(Number(l.qty) - Number(l.item!.on_hand), 0) : Number(l.item!.short);
+            const short = shortBy(l, mode);
             return (
               <li key={l.id} className="flex flex-wrap items-baseline justify-between gap-2 border-t border-rule px-4 py-3 first:border-t-0 shell:px-5">
                 <div className="min-w-0">
@@ -90,7 +100,7 @@ export function PartsToOrder({ lines, hint, mode = "quotation" }: {
                   <p className="flex flex-wrap gap-3 text-sm text-muted">
                     <span>{l.item!.number}</span>
                     <span>{qty(l.item!.on_hand)} {l.item!.unit} in stock</span>
-                    <span>{mode === "repair" ? "Still to issue" : "Need"} {qty(l.qty)}</span>
+                    <span>{needLabel} {qty(l.qty)}</span>
                   </p>
                 </div>
                 <Badge tone={Number(l.item!.on_hand) <= 0 || short > 0 ? "error" : "warning"}>{stockTag(l, mode)}</Badge>

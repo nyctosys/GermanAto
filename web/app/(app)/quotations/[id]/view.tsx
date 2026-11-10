@@ -321,7 +321,7 @@ function DraftEditor({ q, onSaved, onSend, busy, onLive }:
           <Field label="Valid until"><Input type="date" value={validUntil} onChange={(e) => { setValidUntil(e.target.value); setDirty(true); }} /></Field>
           <div className="sm:col-span-2">
             <Checkbox checked={includeTax} onChange={(e) => { setIncludeTax(e.target.checked); setDirty(true); }}
-                      label={`Add ${Number(q.tax_rate)}% sales tax`} hint="On parts and labour, after the discount." />
+                      label={`Add ${Number(q.tax_rate)}% sales tax`} hint="On parts and labour, before the discount." />
           </div>
           <div className="sm:col-span-2">
             <Field label="Notes for the customer (optional)">
@@ -453,7 +453,7 @@ function AdvanceForm({ q, onDone, onCancel }: { q: Quotation; onDone: () => void
   }
   return (
     <PaymentForm title="Take an advance" hint={`Quotation total ${money(q.totals.total)}. Still to take at most ${money(q.totals.balance)}.`} busy={busy} onSubmit={submit} onCancel={onCancel}
-                 max={Number(q.totals.balance)}
+                 max={Math.round(Number(q.totals.balance))}
                  maxError={`An advance cannot be more than the quotation total. ${money(q.totals.balance)} can still be taken`}
                  note={<p className="text-sm text-muted">An advance is the customer&apos;s money until the invoice uses it. A refund needs an admin&apos;s approval.</p>} />
   );

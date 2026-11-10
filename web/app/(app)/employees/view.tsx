@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { EmployeeForm, type Employee } from "@/components/hr";
 import { SearchBox, useQueryParam } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Button, Card, EmptyState, ErrorState, PageHeader, SkeletonRows } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { money, phone } from "@/lib/format";
@@ -25,6 +26,12 @@ function List() {
   const [q] = useQueryParam("q");
   const [adding, setAdding] = useState(false);
   const list = useApi<Employee[]>(`/api/employees?${new URLSearchParams({ q })}`, { swr: true });
+  const { sort, set } = useTableSort();
+  const rows = sortRows(list.data ?? [], sort, {
+    name: (e) => e.full_name,
+    phone: (e) => e.phone || "",
+    salary: (e) => Number(e.monthly_salary),
+  });
   return (
     <>
       <PageHeader title="Employees" description="Everyone who works here: their pay, their shift and their number on the attendance device."
@@ -37,10 +44,12 @@ function List() {
           : (
             <table className="table-stack w-full">
               <thead><tr className="text-left text-sm text-muted">
-                <th className="px-4 py-2 font-normal shell:px-5">Employee</th><th className="px-4 py-2 font-normal">Phone</th><th className="px-4 py-2 text-right font-normal shell:pr-5">Salary</th>
+                <SortTh label="Employee" k="name" sort={sort} onSort={set} className="px-4 py-2 font-normal shell:px-5" />
+                <SortTh label="Phone" k="phone" sort={sort} onSort={set} className="px-4 py-2 font-normal" />
+                <SortTh label="Salary" k="salary" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal shell:pr-5" />
               </tr></thead>
               <tbody>
-                {list.data.map((e) => (
+                {rows.map((e) => (
                   <tr key={e.id} className="border-t border-rule">
                     <td className="px-4 py-3 shell:px-5 max-sm:px-0">
                       <Link href={`/employees/${e.id}`} className="font-medium underline">{e.full_name}</Link>

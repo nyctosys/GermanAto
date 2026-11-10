@@ -39,8 +39,8 @@ def test_quotation_prices_send_approve_and_totals(admin):
              for l, p in zip(q["lines"], ["4000", "1500"])]
     q = admin.put(f"/api/quotations/{q['id']}", json={"lines": lines, "include_tax": True, "discount": "1000",
                                                      "valid_until": q["valid_until"], "version": q["version"]}).json()
-    t = q["totals"]  # 4000 + 2 x 1500 = 7000, less 1000, plus 17% = 7020
-    assert (Decimal(t["subtotal"]), Decimal(t["tax"]), Decimal(t["total"])) == (7000, 1020, 7020)
+    t = q["totals"]  # 4000 + 2 x 1500 = 7000; tax on 7000 (1190), less 1000 discount = 7190
+    assert (Decimal(t["subtotal"]), Decimal(t["tax"]), Decimal(t["total"])) == (7000, 1190, 7190)
 
     q = admin.post(f"/api/quotations/{q['id']}/send", json={"version": q["version"]}).json()
     assert q["status"] == "sent"
@@ -50,7 +50,8 @@ def test_quotation_prices_send_approve_and_totals(admin):
     q = admin.post(f"/api/quotations/{q['id']}/approve",
                    json={**approve, "no_proof_reason": "Customer approved on a call", "declined_line_ids": [part]}).json()
     assert q["status"] == "approved" and q["approval"]["by"] == "Administrator"
-    assert Decimal(q["totals"]["total"]) == Decimal("3510.00")  # the declined part drops out: (4000 - 1000) x 1.17
+    # Declined part drops out: labour 4000, tax on 4000 (680), less 1000 discount = 3680
+    assert Decimal(q["totals"]["total"]) == Decimal("3680.00")
 
     rev = admin.post(f"/api/quotations/{q['id']}/revise").json()
     assert rev["revision"] == 2 and rev["number"] == q["number"] and rev["status"] == "draft"

@@ -116,8 +116,8 @@ function View({ inv, reload }: { inv: Invoice; reload: () => void }) {
 
           {inv.credit_release && <Notice tone="warning">Released on credit by {inv.credit_release.by}: {inv.credit_release.reason}</Notice>}
           {paying && (
-            <PaymentForm title="Take a payment" hint={`Balance ${money(inv.totals.balance)}.`} suggested={String(Number(inv.totals.balance))} busy={busy}
-                         max={Number(inv.totals.balance)}
+            <PaymentForm title="Take a payment" hint={`Balance ${money(inv.totals.balance)}.`} suggested={String(Math.round(Number(inv.totals.balance)))} busy={busy}
+                         max={Math.round(Number(inv.totals.balance))}
                          maxError={`That is more than the balance of ${money(inv.totals.balance)}`}
                          onCancel={() => setPaying(false)} onSubmit={async (b: PaymentBody) => {
                            setBusy(true);

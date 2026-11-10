@@ -156,3 +156,18 @@
 
 ## Month-end Fix it before month ends (5 Nov 2026)
 - Checklist cash/bank/wallet Fix it only after the last day has passed; before that those lines are non-blocking with no link. Earlier-month Fix it opens `/periods/{month}`. Cash close with a future `?on=` shows a notice and does not open a session.
+
+## Invoice/quotation total rounds to whole rupees (7 Nov 2026)
+- Cause: 17% tax often left a .50 total (e.g. 10588.50) while the UI showed Rs 10,589; paying 10589 was refused.
+- Fix: `pricing.totals` rounds the final total to whole rupees (tax adjusts with it); payment form suggests/caps at `Math.round(balance)`.
+
+## Table column sort (7 Nov 2026)
+- Shared `SortTh` / `sortRows` / `useTableSort` in `web/components/sort.tsx`. Dual caret beside the label (click cycles asc ? desc ? off). Wired on list tables, money book, audit, cash-close history, stock movements and report tables. Print layouts and document line tables left alone.
+
+## Discount must not cut sales tax (10 Nov 2026)
+- Counter sale: Rs 1,800 + 17% = 2,106; a Rs 6 discount was dropping tax to 305 and total to 2,099.
+- Fix: `pricing.totals` and `previewTotals` tax the lines **before** the discount, then subtract it. Same bill with Rs 6 off is tax 306, total 2,100.
+- Quotation/invoice/counter sale all share that path; tests and the guide/manual say "before the discount".
+
+## Counter sale Parts to order (10 Nov 2026)
+- When qty on a counter-sale line is above on-hand, reuse `PartsToOrder` with mode `counter` (Customer wants / Short by … / Make a purchase order draft). Same modal as quotation and repair order.

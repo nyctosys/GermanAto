@@ -82,7 +82,7 @@ A workshop tool that gets out of the way. Surfaces are white on a light ash floo
 | Ghost button | Cloud Gray fill, Carbon text, no border. Hover Car Silver with a visible border. A quiet action, but always a visible pill: bare text is reserved for links, which are underlined. |
 | Inputs and selects | White, 1px Silver Fog border, 4px radius, min-height 44px, 16px text. Focus: Carbon border plus focus ring. Invalid: error border plus a message under the field. |
 | Panels (cards) | White on the Light Ash page, 12px radius, **no border, no shadow**. Header separated from the body by a Cloud Gray rule. |
-| Tables | Pewter 14px heads in sentence case, Cloud Gray row rules, rows at least 48px. Under 640px each row becomes a labelled stack. |
+| Tables | Pewter 14px heads in sentence case, Cloud Gray row rules, rows at least 48px. Under 640px each row becomes a labelled stack. Sortable list heads use `SortTh`: label + a small dual caret (▲▼) to the right; click cycles ascending → descending → off. Active direction is Carbon, the other stays muted. |
 | Badges | Soft status fill with its text colour, 4px radius, 14px/500. |
 | Sidebar | White, no border, separated from the Light Ash content by colour. The current item gets a Light Ash fill, Carbon text at 500, and a 3px GermanATO Red bar on its left edge (the only red outside a button). |
 | Drawer (under 960px) | Slides in from the left and leaves the same way, over a scrim. Escape and a tap outside close it. |

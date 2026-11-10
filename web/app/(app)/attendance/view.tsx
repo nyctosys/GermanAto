@@ -6,6 +6,7 @@ import { MarkForm, PunchForm } from "@/components/hr";
 import { NextStep } from "@/components/next-step";
 import { useQueryParam } from "@/components/search";
 import { RequirePermission } from "@/components/shell";
+import { SortTh, sortRows, useTableSort } from "@/components/sort";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Notice, PageHeader, Select, SkeletonRows } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { when } from "@/lib/format";
@@ -32,6 +33,15 @@ function Body() {
   const month = monthParam || now;
   const list = useApi<{ month: string; employees: Row[] }>(`/api/attendance?month=${month}`);
   const absent = (list.data?.employees ?? []).filter((r) => r.absent > 0);
+  const { sort, set } = useTableSort();
+  const rows = sortRows(list.data?.employees ?? [], sort, {
+    name: (r) => r.employee.full_name,
+    present: (r) => r.present,
+    late: (r) => r.late,
+    absent: (r) => r.absent,
+    leave: (r) => r.paid_leave + r.unpaid_leave,
+    hours: (r) => Number(r.hours),
+  });
   return (
     <div className="space-y-4">
       {absent.length > 0 && <NextStep who="Manager or accountant" target="act-by-hand" open={false} label="Fix a day by hand">{absent.map((r) => r.employee.full_name).join(", ")} {absent.length === 1 ? "is" : "are"} shown absent. If the device missed them, add a missed punch or mark the day present.</NextStep>}
@@ -40,11 +50,15 @@ function Body() {
           : !list.data.employees.length ? <EmptyState title="Nobody was employed this month">Add people under Employees.</EmptyState> : (
             <table className="table-stack w-full">
               <thead><tr className="text-left text-sm text-muted">
-                <th className="px-4 py-2 font-normal shell:px-5">Employee</th><th className="px-4 py-2 text-right font-normal">Present</th><th className="px-4 py-2 text-right font-normal">Late</th>
-                <th className="px-4 py-2 text-right font-normal">Absent</th><th className="px-4 py-2 text-right font-normal">Leave</th><th className="px-4 py-2 text-right font-normal shell:pr-5">Hours</th>
+                <SortTh label="Employee" k="name" sort={sort} onSort={set} className="px-4 py-2 font-normal shell:px-5" />
+                <SortTh label="Present" k="present" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+                <SortTh label="Late" k="late" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+                <SortTh label="Absent" k="absent" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+                <SortTh label="Leave" k="leave" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal" />
+                <SortTh label="Hours" k="hours" sort={sort} onSort={set} align="right" className="px-4 py-2 text-right font-normal shell:pr-5" />
               </tr></thead>
               <tbody>
-                {list.data.employees.map((r) => (
+                {rows.map((r) => (
                   <tr key={r.employee.id} className="border-t border-rule">
                     <td className="px-4 py-3 shell:px-5 max-sm:px-0"><Link href={`/employees/${r.employee.id}?month=${month}`} className="font-medium underline">{r.employee.full_name}</Link><span className="block text-sm text-muted">{r.working_days} working days</span></td>
                     <td data-label="Present" className="num px-4 py-3 text-right max-sm:px-0">{r.present}</td>
