@@ -11,6 +11,7 @@ import { useApi } from "@/lib/api";
 import { day, money, qty } from "@/lib/format";
 import { asAmount, reportSheet } from "@/lib/report-xlsx";
 import { useSession } from "@/lib/session";
+import type { Cell } from "@/lib/xlsx";
 
 const TABS = [
   ["pnl", "Profit and loss"], ["cashflow", "Cash flow"], ["journal", "Journal"],
@@ -79,19 +80,25 @@ function Pnl({ range }: { range: Range }) {
         const inv = p.inventory;
         const statementRows: [string, string][] = [
           ...(hasDisc
-            ? [["Revenue before discounts", p.revenue.before_discounts], ["Discounts given", `-${p.revenue.discounts}`], ["Revenue", p.revenue.total]]
-            : [["Revenue", p.revenue.total]]),
-          ...(Number(p.revenue.other) !== 0 ? [["Other income (in revenue)", p.revenue.other]] : []),
+            ? ([
+                ["Revenue before discounts", p.revenue.before_discounts],
+                ["Discounts given", `-${p.revenue.discounts}`],
+                ["Revenue", p.revenue.total],
+              ] as [string, string][])
+            : ([["Revenue", p.revenue.total]] as [string, string][])),
+          ...(Number(p.revenue.other) !== 0
+            ? ([["Other income (in revenue)", p.revenue.other]] as [string, string][])
+            : []),
           ["Cost of parts sold", `-${p.cost_of_parts_sold}`], ["Gross profit", p.gross_profit],
           ...Object.entries(p.expenses_by_category).map(([k, v]) => [k, `-${v}`] as [string, string]),
           ...Object.entries(p.other_costs).map(([k, v]) => [k, `-${v}`] as [string, string]),
           ["Total expenses", `-${p.total_expenses}`], ["Net profit", p.net_profit],
-          ...(hasAdv ? [
+          ...(hasAdv ? ([
             ["Advances received (not income)", p.advances.received],
             ["Advances refunded", `-${p.advances.refunded}`],
             ["Advances applied to invoices", `-${p.advances.applied}`],
             ["Advances still held at period end", p.advances.held_at_end],
-          ] as [string, string][] : []),
+          ] as [string, string][]) : []),
         ];
         const invRows: [string, string][] = [
           ["At the start (asset)", inv.opening], ["Purchased into stock (still an asset)", inv.purchased],
@@ -166,14 +173,15 @@ function Cashflow({ range }: { range: Range }) {
         const summary = [
           ["At the start", c.opening], ["Came in", c.in], ["Went out", `-${c.out}`], ["At the end", c.closing],
         ];
-        const byAccount: (string | number | null)[][] = [];
+        const byAccount: Cell[][] = [];
         for (const [k, a] of Object.entries(c.accounts)) {
-          byAccount.push([ACCOUNT[k], "At the start", asAmount(a.opening)]);
-          byAccount.push([ACCOUNT[k], "Came in", asAmount(a.in)]);
-          for (const [s, v] of Object.entries(a.in_by_source)) byAccount.push([ACCOUNT[k], `  In: ${SOURCE[s] ?? s}`, asAmount(v)]);
-          byAccount.push([ACCOUNT[k], "Went out", asAmount(`-${a.out}`)]);
-          for (const [s, v] of Object.entries(a.out_by_source)) byAccount.push([ACCOUNT[k], `  Out: ${SOURCE[s] ?? s}`, asAmount(`-${v}`)]);
-          byAccount.push([ACCOUNT[k], "At the end", asAmount(a.closing)]);
+          const account = ACCOUNT[k] ?? k;
+          byAccount.push([account, "At the start", asAmount(a.opening)]);
+          byAccount.push([account, "Came in", asAmount(a.in)]);
+          for (const [s, v] of Object.entries(a.in_by_source)) byAccount.push([account, `  In: ${SOURCE[s] ?? s}`, asAmount(v)]);
+          byAccount.push([account, "Went out", asAmount(`-${a.out}`)]);
+          for (const [s, v] of Object.entries(a.out_by_source)) byAccount.push([account, `  Out: ${SOURCE[s] ?? s}`, asAmount(`-${v}`)]);
+          byAccount.push([account, "At the end", asAmount(a.closing)]);
         }
         const meta = { branch: branch.name, period };
         const sheets = [

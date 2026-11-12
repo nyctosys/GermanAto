@@ -37,7 +37,7 @@ export function monthJournalSheet(meta: ReportMeta, ledger: LedgerApi): Sheet {
   ]);
   return reportSheet(
     "Month journal",
-    { title: "Month journal (full ledger)", ...meta },
+    { ...meta, title: "Month journal (full ledger)" },
     ["Date", "Voucher No.", "Particulars", "Account code", "Account name", "Debit (Rs)", "Credit (Rs)"],
     rows,
     {
@@ -69,7 +69,7 @@ export function generalLedgerSheet(meta: ReportMeta, ledger: LedgerApi): Sheet {
   }
   return reportSheet(
     "General ledger",
-    { title: "General ledger by account", ...meta },
+    { ...meta, title: "General ledger by account" },
     ["Account code", "Account name", "Date", "Voucher No.", "Particulars", "Debit (Rs)", "Credit (Rs)", "Balance (Rs)"],
     rows,
     { widths: [12, 24, 12, 16, 40, 14, 14, 14] },
