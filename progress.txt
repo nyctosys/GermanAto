@@ -215,3 +215,7 @@
 - Finance "Download for Excel" is real `.xlsx` (title, branch, period, numeric amounts) via `report-xlsx.ts` — not CSV.
 - Accountant form first: Month journal (voucher lines), General ledger by account + running balance, Trial balance; then P&L/cash-flow/etc summary sheets (`finance-export.ts`).
 - New Finance tab **Journal**. API `GET /api/journal/ledger` and dated `entries`.
+
+## Ease-of-use fixes (newcomer walkthrough)
+- Never say "sent" for WhatsApp unless the message status proves it; a queued message is not delivered.
+- A NextStep button with the same label as the real button must do the action (omit open={false}); keep open={false} only with a different label such as "Review and issue".

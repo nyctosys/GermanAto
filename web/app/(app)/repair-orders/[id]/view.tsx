@@ -97,7 +97,7 @@ function View({ ro, techs, onChange }: { ro: RepairOrder; techs: { id: string; n
               ? <NextStep who="Technician" target="act-work" open={false} label="Go to the jobs">Mark the remaining lines Done or Not done.</NextStep>
               : <NextStep who="Technician or manager" target="act-move" label="Move to ready">Check the work. If it is right, move the car to ready.</NextStep>)
             : stage === "ready"
-              ? <NextStep who="Cashier" target="act-invoice" open={false} label="Make the invoice">The repair is finished. Make the invoice.</NextStep>
+              ? <NextStep who="Cashier" target="act-invoice" label="Make the invoice">The repair is finished. Make the invoice.</NextStep>
               : null)}
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">

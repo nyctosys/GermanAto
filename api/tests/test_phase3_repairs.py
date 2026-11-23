@@ -125,3 +125,26 @@ def test_workshop_list_carries_each_cars_progress(admin):
     admin.post(f"/api/quotations/{q['id']}/repair-order")
     row = next(v for v in admin.get("/api/visits").json() if v["id"] == visit["id"])
     assert row["progress"]["repair_order"]["status"] == "received"
+
+
+def test_a_sent_quotation_says_whether_whatsapp_reached_the_customer(admin):
+    from app import messaging
+    _, _, _, q = approved_quote(admin)  # sent with no WhatsApp provider connected
+    assert q["status"] == "sent" and q["whatsapp"] == "queued"
+
+    class Sender:
+        def send(self, to, body):
+            return "SM1"
+    messaging._override = Sender()
+    try:
+        admin.post("/api/messages/send")
+        assert admin.get(f"/api/quotations/{q['id']}").json()["whatsapp"] == "sent"
+    finally:
+        messaging._override = None
+
+
+def test_an_empty_job_card_reports_no_lines_on_the_workshop_list(admin):
+    visit, _, _ = checked_in(admin)
+    admin.post(f"/api/visits/{visit['id']}/job-card")
+    row = next(v for v in admin.get("/api/visits").json() if v["id"] == visit["id"])
+    assert row["progress"]["job_card"]["lines"] == 0

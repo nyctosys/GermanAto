@@ -19,6 +19,7 @@ import { api, useApi } from "@/lib/api";
 import { day, money, qty, when } from "@/lib/format";
 import { linePrice, lineQtyFor } from "@/lib/schemas";
 import { useSession } from "@/lib/session";
+import { toast } from "@/lib/toast";
 
 type LiveTotals = ReturnType<typeof previewTotals> & { includeTax: boolean };
 
@@ -27,6 +28,7 @@ type Quotation = {
   discount: string; valid_until: string; notes: string; sent_at: string | null; created_at: string; job_card_id: string;
   approval: { at: string; by: string | null; method: string; note: string; no_proof_reason: string; proof_url: string | null; proof_urls?: string[] } | null;
   rejected_reason: string;
+  whatsapp?: string | null;
   visit: { id: string; number: string; status: string; car_id: string; customer_id: string; buyer_id: string | null };
   lines: QuoteLine[];
   totals: Record<"labour" | "parts" | "subtotal" | "discount" | "tax" | "total" | "advance" | "balance", string>;
@@ -35,6 +37,13 @@ type Quotation = {
   repair_order: { id: string; number: string } | null;
 };
 
+const reachedCustomer = (s?: string | null) => s === "sent" || s === "delivered" || s === "read";
+const WHATSAPP_GAP: Record<string, string> = {
+  queued: "The customer has not received this: WhatsApp is waiting to send it.",
+  failed: "The customer has not received this: WhatsApp could not deliver it.",
+  skipped: "The customer has not received this: they have no WhatsApp number or opted out.",
+  none: "The customer has not received this: the WhatsApp message is switched off.",
+};
 const METHOD: Record<string, string> = { in_person: "In person", whatsapp: "WhatsApp reply", phone: "Phone call" };
 
 export default function QuotationPage() {
@@ -70,7 +79,8 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ id: string }>(`/api/quotations/${q.id}/${path}`, { method: "POST", json });
+      const r = await api<{ id: string; whatsapp?: string | null }>(`/api/quotations/${q.id}/${path}`, { method: "POST", json, toast: path === "send" ? false : undefined });
+      if (path === "send") toast.success(reachedCustomer(r.whatsapp) ? "Sent to the customer on WhatsApp" : "Prices locked. WhatsApp did not go out.");
       if (r.id !== q.id) router.push(`/quotations/${r.id}`);
       else reload();
     } catch (err) {
@@ -114,10 +124,11 @@ function QuotationView({ q, reload }: { q: Quotation; reload: () => void }) {
               : null;
             const act = q.status === "draft" ? ["act-send-quote", "Review and send", false] as const
               : q.status === "sent" ? ["act-approve", "Record approval", true] as const
-              : q.status === "approved" ? ["act-ro", "Make the repair order", false] as const
+              : q.status === "approved" ? ["act-ro", "Make the repair order", true] as const
               : ["act-revise", "Revise", true] as const;
             return next && <NextStep who={q.status === "approved" ? "Manager" : "Front desk"} target={act[0]} label={act[1]} open={act[2]}>{next}</NextStep>;
           })()}
+          {q.status === "sent" && !reachedCustomer(q.whatsapp) && <div className="mb-4"><Notice tone="warning">{WHATSAPP_GAP[q.whatsapp ?? "none"] ?? WHATSAPP_GAP.none} Print it or call them with the price.</Notice></div>}
           {draft ? <DraftEditor q={q} onSaved={reload} onSend={(v) => act("send", { version: v })} busy={busy} onLive={setLive} />
             : <LinesTable q={q} />}
           {q.status === "approved" && q.approval && (

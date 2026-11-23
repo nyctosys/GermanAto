@@ -16,7 +16,7 @@ from app import messaging
 from app.models import Car, Customer, Visit  # noqa: F811
 from app.db import get_db, utcnow
 from app.models import (
-    InspectionRepairLink, Car, Customer, Item, ItemCode, JobCard, JobCardLine, LabourCode, Payment, Quotation, QuotationLine, RepairOrder, User, Visit,
+    InspectionRepairLink, Car, Customer, Item, ItemCode, JobCard, JobCardLine, LabourCode, Message, Payment, Quotation, QuotationLine, RepairOrder, User, Visit,
 )
 from app import posting
 from app.numbering import next_number
@@ -242,6 +242,7 @@ def quotation_out(db: Session, q: Quotation) -> dict:
             "note": q.approval_note, "no_proof_reason": q.no_proof_reason,
             **proof_payload(db, "quotations", q.id, q.approval_proof_id)},
         "rejected_reason": q.rejected_reason,
+        "whatsapp": db.scalar(select(Message.status).where(Message.dedupe_key == f"quote:{q.id}")),  # None: no message was made
         "visit": {"id": v.id, "number": v.number, "status": v.status, "car_id": v.car_id, "customer_id": v.customer_id,
                   "buyer_id": v.buyer_id},
         "lines": lines, "totals": {**t, "advance": advance, "balance": t["total"] - advance},

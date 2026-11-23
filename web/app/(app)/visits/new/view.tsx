@@ -62,7 +62,7 @@ function FindCar({ onPick }: { onPick: (c: Car) => void }) {
       )}
       <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-rule pt-4">
         <p className="text-sm text-muted">Not found? A new customer or car must be added first.</p>
-        <Link href="/customers" className="inline-flex min-h-11 items-center rounded-control border border-rule-strong bg-surface px-4 font-medium hover:bg-paper">Add a new customer and car</Link>
+        <Link href="/customers?add=1" className="inline-flex min-h-11 items-center rounded-control border border-rule-strong bg-surface px-4 font-medium hover:bg-paper">Add a new customer and car</Link>
       </div>
     </Card>
   );

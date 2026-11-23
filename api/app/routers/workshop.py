@@ -265,7 +265,7 @@ def list_visits(status: Literal["open", "closed", "cancelled", "all"] = "open", 
                               Car.make.ilike(like), Car.model.ilike(like)))
     rows = db.execute(stmt).all()
     ids = [v.id for v, _, _ in rows]
-    cards = {j.visit_id: {"id": j.id} for j in db.scalars(select(JobCard).where(JobCard.visit_id.in_(ids)))}
+    cards = {j.visit_id: {"id": j.id, "lines": len(j.lines)} for j in db.scalars(select(JobCard).where(JobCard.visit_id.in_(ids)))}
     signed: dict = {}
     for i in db.scalars(select(Inspection).where(Inspection.visit_id.in_(ids))):
         signed.setdefault(i.visit_id, []).append({"id": i.id, "status": i.status, "supersedes_id": i.supersedes_id})

@@ -11,7 +11,7 @@ import { useSession } from "@/lib/session";
 type Dash = {
   workshop: { cars_in: number; open_quotes: number; quotes_waiting: number; repair_orders: number; ready_for_pickup: number; on_hold: number };
   stock: { low_stock: number; items: number };
-  money?: { cash: Record<string, string>; cash_total: string; money_in_month: string; money_out_month: string; revenue_month: string; profit_month: string;
+  money?: { cash: Record<string, string>; cash_total: string; opening_in_month?: string; money_in_month: string; money_out_month: string; revenue_month: string; profit_month: string;
     receivables: string; overdue_receivables: string; payables: string; overdue_payables: string; stock_value: string };
   alerts?: { missing_proof: number; unclosed_months: string[]; low_stock: number; overdue_bills: number; overdue_invoices: number };
 };
@@ -68,7 +68,7 @@ export default function Dashboard() {
         <section aria-label="Key figures" className="mb-6 space-y-4">
           {m && (
             <CashHero
-              cash={m.cash} cashTotal={m.cash_total}
+              cash={m.cash} cashTotal={m.cash_total} openingInMonth={m.opening_in_month}
               receivables={m.receivables} overdueReceivables={m.overdue_receivables}
               payables={m.payables} overduePayables={m.overdue_payables}
               stockValue={m.stock_value}

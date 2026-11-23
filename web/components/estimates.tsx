@@ -3,6 +3,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useId, useState } from "react";
 import { type Item, ItemForm } from "@/components/inventory";
+import { type LabourCode, LabourCodeForm } from "@/components/labour-code-form";
 import { Badge, Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { money, qty } from "@/lib/format";
@@ -23,7 +24,7 @@ export type QuoteStatus = "draft" | "sent" | "approved" | "rejected" | "expired"
 
 export const QUOTE_STATUS: Record<QuoteStatus, { label: string; tone: "neutral" | "success" | "warning" | "error" | "accent" }> = {
   draft: { label: "Draft", tone: "warning" },
-  sent: { label: "Sent, waiting for the customer", tone: "accent" },
+  sent: { label: "Waiting for the customer", tone: "accent" },
   approved: { label: "Approved", tone: "success" },
   rejected: { label: "Rejected", tone: "error" },
   expired: { label: "Expired", tone: "neutral" },
@@ -46,10 +47,12 @@ function itemToPick(i: Item): Pick {
   };
 }
 
+const labourToPick = (c: LabourCode): Pick => ({ kind: "labour", id: c.id, code: c.code, name: c.name, category: c.category });
+
 /**
  * Add work to a job card or quotation: labour codes and stock items only, never
  * free text. Type to search, or scan a barcode (the scanner types it and Enter).
- * When nothing matches, inventory staff can add the part here in a modal.
+ * When nothing matches, staff with the permission can add the labour code or part here in a modal.
  */
 export function CatalogPicker({ onPick, partsOnly }: { onPick: (p: Pick) => void; partsOnly?: boolean }) {
   const { can } = useSession();
@@ -57,9 +60,10 @@ export function CatalogPicker({ onPick, partsOnly }: { onPick: (p: Pick) => void
   const [results, setResults] = useState<Pick[]>([]);
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<"part" | "labour" | null>(null);
   const listId = useId();
   const canAddPart = can("inventory");
+  const canAddLabour = can("labour-codes") && !partsOnly;
 
   useEffect(() => {
     if (!q.trim()) return;
@@ -114,28 +118,42 @@ export function CatalogPicker({ onPick, partsOnly }: { onPick: (p: Pick) => void
           )) : (
             <li className="px-3 py-3">
               <p className="text-muted">Nothing matches “{q.trim()}”.</p>
-              {canAddPart ? (
-                <Button type="button" variant="secondary" className="mt-2"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => { setOpen(false); setAdding(true); }}>
-                  Add to inventory
-                </Button>
+              {canAddPart || canAddLabour ? (
+                <span className="mt-2 flex flex-wrap gap-2">
+                  {canAddLabour && (
+                    <Button type="button" variant="secondary" onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { setOpen(false); setAdding("labour"); }}>Add as labour</Button>
+                  )}
+                  {canAddPart && (
+                    <Button type="button" variant="secondary" onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { setOpen(false); setAdding("part"); }}>Add as a part</Button>
+                  )}
+                </span>
               ) : (
-                <p className="mt-1 text-sm text-muted">Ask someone with inventory permission to add the part, or add a labour code under Labour codes.</p>
+                <p className="mt-1 text-sm text-muted">Ask someone who manages labour codes or inventory to add it.</p>
               )}
             </li>
           )}
         </ul>
       )}
       {adding && createPortal(
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-ink/40 p-4" role="dialog" aria-modal="true" aria-label="Add to inventory">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-ink/40 p-4" role="dialog" aria-modal="true" aria-label={adding === "labour" ? "Add a labour code" : "Add to inventory"}>
           <div className="my-8 w-full max-w-3xl rounded-card bg-surface p-5">
-            <h2 className="mb-4 text-lg font-semibold">Add to inventory</h2>
-            <ItemForm
-              presetName={q.trim()}
-              onCancel={() => setAdding(false)}
-              onSaved={(item) => { setAdding(false); pick(itemToPick(item)); }}
-            />
+            <h2 className="mb-4 text-lg font-semibold">{adding === "labour" ? "Add a labour code" : "Add to inventory"}</h2>
+            {adding === "labour" ? (
+              <LabourCodeForm
+                code={null}
+                presetName={q.trim()}
+                onCancel={() => setAdding(null)}
+                onSaved={(c) => { setAdding(null); pick(labourToPick(c)); }}
+              />
+            ) : (
+              <ItemForm
+                presetName={q.trim()}
+                onCancel={() => setAdding(null)}
+                onSaved={(item) => { setAdding(null); pick(itemToPick(item)); }}
+              />
+            )}
           </div>
         </div>,
         document.body,

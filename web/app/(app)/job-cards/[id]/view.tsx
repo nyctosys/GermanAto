@@ -109,7 +109,7 @@ function Editor({ initial }: { initial: JobCard }) {
   const shortages = lines.filter((l) => l.item && Number(l.qty) > Number(l.item.on_hand));
   return (
     <>
-      {initial.visit && <VisitProgress visitId={initial.visit.id} />}
+      {initial.visit && <VisitProgress key={card.version} visitId={initial.visit.id} />}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1>Job card</h1>
@@ -120,7 +120,7 @@ function Editor({ initial }: { initial: JobCard }) {
 
       {!locked && (lines.length === 0
         ? <NextStep who="Front desk" target="act-add-work" open={false} label="Add work">Add the work to be done: search for a labour code or a part.</NextStep>
-        : <NextStep who="Front desk" target="act-quote" open={false} label="Make the quotation">The list is ready? Make the quotation to price it for the customer.</NextStep>)}
+        : <NextStep who="Front desk" target="act-quote" label="Make the quotation">The list is ready? Make the quotation to price it for the customer.</NextStep>)}
 
       <div className="grid gap-4 shell:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="space-y-4">

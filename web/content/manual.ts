@@ -191,9 +191,10 @@ export const CHAPTERS: Chapter[] = [
         steps: [
           "On the visit, press Start the job card. You can also send repairs from a signed inspection.",
           "Add each job by typing its name or code. For a part, you can scan its barcode. You can only add labour codes and parts that are already in the system.",
-          "If nothing matches, press Add to inventory (needs inventory permission): a window opens to create the part, then it is added to the job card.",
+          "If nothing matches, press Add as labour or Add as a part (each needs its permission): a window opens to create it, then it is added to the job card.",
           "Set the quantity. Add a note if needed. A red stock number means there is not enough in stock. You can still make the quotation.",
           "Press Make the quotation.",
+          "When you send a quotation, check the message on screen. If it says WhatsApp did not go out, print the quotation or call the customer with the price.",
         ],
         avoid: ["You cannot type a free-text labour job. Missing labour codes still have to be added under Labour codes first."],
       },

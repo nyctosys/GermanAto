@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app import attendance, journal, reports
 from app.auth import Actor, current_actor, require
 from app.db import get_db
-from app.models import Item, MoneyEntry, Quotation, RepairOrder, Visit
+from app.models import Account, Item, MoneyEntry, Quotation, RepairOrder, Visit
 from app.routers import moneybook
 from app.pricing import totals
 from app.config import local_today
@@ -97,7 +97,10 @@ def dashboard(actor: Actor = Depends(require("dashboard")), db: Session = Depend
         from app.routers.periods import checklist, months_between
         first = db.scalar(select(func.min(journal.JournalEntry.entry_date)).where(journal.JournalEntry.branch_id == branch.id))
         unclosed = [m for m in months_between(first, today)[:-1] if m not in {p for (p,) in db.execute(select(journal.PeriodClose.period).where(journal.PeriodClose.branch_id == branch.id, journal.PeriodClose.kind == "month", journal.PeriodClose.status == "closed"))}] if first else []
-        out["money"] = {"cash": cash, "cash_total": cf["closing"], "money_in_month": mi["total"], "money_out_month": mo["total"],
+        out["money"] = {"cash": cash, "cash_total": cf["closing"],
+                        "opening_in_month": sum((a.opening_balance for a in db.scalars(select(Account).where(
+                            Account.branch_id == branch.id, Account.opening_date >= month_start, Account.opening_date <= today))), Decimal(0)),
+                        "money_in_month": mi["total"], "money_out_month": mo["total"],
                         "revenue_month": pnl["revenue"]["total"], "profit_month": pnl["net_profit"], "receivables": rec["total"],
                         "overdue_receivables": sum((r["balance"] for r in rec["rows"] if r["bucket"] in ("31-60", "61-90", "90+")), Decimal(0)),
                         "payables": pay["total"], "overdue_payables": sum((r["balance"] for r in pay["rows"] if r["days_overdue"] > 0), Decimal(0)),

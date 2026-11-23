@@ -24,7 +24,8 @@ function Customers() {
   const router = useRouter();
   const [q] = useQueryParam("q");
   const list = useApi<Customer[]>(`/api/customers?${new URLSearchParams({ q, limit: "100" })}`, { swr: true });
-  const [adding, setAdding] = useState(false);
+  const [add] = useQueryParam("add");
+  const [adding, setAdding] = useState(add === "1");
 
   return (
     <>

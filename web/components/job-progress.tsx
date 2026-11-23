@@ -64,7 +64,7 @@ export type Progress = {
   kind?: string;
   inspections?: { id?: string; status: string; supersedes_id?: string | null }[];
   status: string;
-  job_card: { id?: string } | null;
+  job_card: { id?: string; lines?: number } | null;
   quotations: { id?: string; status: string }[];
   repair_order: { id?: string; status: string } | null;
   invoice: { id?: string; status: string; paid?: boolean } | null;
@@ -93,8 +93,8 @@ export function stepsOf(v: Progress): Step[] {
   const ro = to("/repair-orders", v.repair_order?.id);
   return [
     { key: "checkin", label: "Checked in", done: true, href: visit },
-    { key: "jobcard", label: "Job card", done: !!v.job_card, href: to("/job-cards", v.job_card?.id) ?? at("the-job") },
-    { key: "quotation", label: "Quotation sent", done: !!q && q.status !== "draft", href: quote ?? at("the-job") },
+    { key: "jobcard", label: "Job card", done: !!v.job_card && (v.job_card.lines ?? 1) > 0, href: to("/job-cards", v.job_card?.id) ?? at("the-job") },
+    { key: "quotation", label: "Quoted", done: !!q && q.status !== "draft", href: quote ?? at("the-job") },
     { key: "approved", label: "Approved", done: q?.status === "approved" || q?.status === "converted" || !!v.repair_order, href: quote ?? at("the-job") },
     { key: "repair", label: "Repair", done: !!v.repair_order && v.repair_order.status !== "received", href: ro ?? visit },
     { key: "ready", label: "Ready", done: ["ready", "delivered"].includes(v.repair_order?.status ?? ""), href: ro ?? visit },
